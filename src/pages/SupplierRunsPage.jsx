@@ -5,6 +5,7 @@ import SupplierRunCard from "../components/SupplierRunCard";
 import SupplierRunForm from "../components/SupplierRunForm";
 
 export default function SupplierRunsPage({
+  mode = "add",
   supplierRuns,
   onAddSupplierRun,
   onToggleSupplierRunItem,
@@ -45,16 +46,17 @@ export default function SupplierRunsPage({
     <PageContainer>
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">
-          Supplier Runs
+          Driver / Supplier Runs
         </p>
 
         <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
-          Driver Pickup Board
+          {mode === "check" ? "Check POs" : "Add POs"}
         </h2>
 
         <p className="mt-2 text-slate-500">
-          Dispatch can add pickup POs here. Drivers can check off
-          items as they load them from the supplier.
+          {mode === "check"
+            ? "Drivers can check off pickup items as they load them from the supplier."
+            : "Dispatch can add pickup POs before the driver leaves or while they are already on the road."}
         </p>
       </div>
 
@@ -66,9 +68,9 @@ export default function SupplierRunsPage({
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+      {mode === "add" ? (
         <SupplierRunForm onSubmit={handleSubmit} />
-
+      ) : (
         <section>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -120,7 +122,7 @@ export default function SupplierRunsPage({
             </div>
           ) : null}
         </section>
-      </div>
+      )}
     </PageContainer>
   );
 }

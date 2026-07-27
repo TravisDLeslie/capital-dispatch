@@ -18,8 +18,15 @@ const navigationItems = [
   },
   {
     group: "Driver",
-    id: "supplier-runs",
-    label: "Supplier Runs",
+    subtitle: "Supplier Runs",
+    id: "supplier-runs-add",
+    label: "Add POs",
+  },
+  {
+    group: "Driver",
+    subtitle: "Supplier Runs",
+    id: "supplier-runs-check",
+    label: "Check POs",
   },
 ];
 
@@ -105,7 +112,7 @@ export default function AppHeader({ currentPage, onPageChange }) {
                   className={getNavButtonClass(item, isActive)}
                 >
                   <span className="mr-1 text-[0.68rem] uppercase tracking-wide opacity-75">
-                    {item.group}
+                    {item.subtitle || item.group}
                   </span>
                   {item.label}
                 </button>
@@ -122,6 +129,12 @@ export default function AppHeader({ currentPage, onPageChange }) {
                   <p className="mb-2 px-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
                     {group}
                   </p>
+
+                  {group === "Driver" ? (
+                    <p className="mb-2 px-2 text-sm font-black text-blue-800">
+                      Supplier Runs
+                    </p>
+                  ) : null}
 
                   <div className="space-y-2">
                     {navigationItems

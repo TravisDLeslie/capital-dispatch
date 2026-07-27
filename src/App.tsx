@@ -236,9 +236,22 @@ export default function App() {
           />
         );
 
-      case "supplier-runs":
+      case "supplier-runs-add":
         return (
           <SupplierRunsPage
+            mode="add"
+            supplierRuns={supplierRuns}
+            onAddSupplierRun={handleAddSupplierRun}
+            onToggleSupplierRunItem={
+              handleToggleSupplierRunItem
+            }
+          />
+        );
+
+      case "supplier-runs-check":
+        return (
+          <SupplierRunsPage
+            mode="check"
             supplierRuns={supplierRuns}
             onAddSupplierRun={handleAddSupplierRun}
             onToggleSupplierRunItem={
