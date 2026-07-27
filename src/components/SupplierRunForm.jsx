@@ -7,6 +7,7 @@ function createEmptyPickupItem() {
   return {
     id: createId(),
     description: "",
+    saved: false,
     pickedUp: false,
   };
 }
@@ -45,6 +46,7 @@ export default function SupplierRunForm({ onSubmit }) {
           ? {
               ...item,
               description,
+              saved: false,
             }
           : item,
       ),
@@ -70,6 +72,46 @@ export default function SupplierRunForm({ onSubmit }) {
 
       return currentItems.filter((item) => item.id !== itemId);
     });
+
+    clearError();
+  }
+
+  function saveItem(itemId) {
+    const item = items.find(
+      (pickupItem) => pickupItem.id === itemId,
+    );
+
+    if (!item?.description.trim()) {
+      setError("Enter an item description before saving it.");
+      return;
+    }
+
+    setItems((currentItems) =>
+      currentItems.map((pickupItem) =>
+        pickupItem.id === itemId
+          ? {
+              ...pickupItem,
+              description: pickupItem.description.trim(),
+              saved: true,
+            }
+          : pickupItem,
+      ),
+    );
+
+    clearError();
+  }
+
+  function editItem(itemId) {
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              saved: false,
+            }
+          : item,
+      ),
+    );
 
     clearError();
   }
@@ -106,6 +148,15 @@ export default function SupplierRunForm({ onSubmit }) {
 
     if (pickupItems.length === 0) {
       setError("Add at least one item for the driver to pick up.");
+      return;
+    }
+
+    const unsavedItem = items.find(
+      (item) => item.description.trim() && !item.saved,
+    );
+
+    if (unsavedItem) {
+      setError("Save each pickup item before sending the PO to the driver.");
       return;
     }
 
@@ -255,9 +306,17 @@ export default function SupplierRunForm({ onSubmit }) {
                 className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
               >
                 <div className="mb-3 flex items-center justify-between">
-                  <h4 className="font-bold text-slate-900">
-                    Item {index + 1}
-                  </h4>
+                  <div>
+                    <h4 className="font-bold text-slate-900">
+                      Item {index + 1}
+                    </h4>
+
+                    {item.saved ? (
+                      <p className="mt-1 text-sm font-semibold text-emerald-700">
+                        ✓ Item saved
+                      </p>
+                    ) : null}
+                  </div>
 
                   <button
                     type="button"
@@ -269,16 +328,44 @@ export default function SupplierRunForm({ onSubmit }) {
                   </button>
                 </div>
 
-                <input
-                  type="text"
-                  value={item.description}
-                  onChange={(event) =>
-                    updateItem(item.id, event.target.value)
-                  }
-                  disabled={isSubmitting}
-                  placeholder="Example: 2 units LVL, hangers, trim pack"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-                />
+                {item.saved ? (
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="font-bold text-slate-900">
+                      {item.description}
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => editItem(item.id)}
+                      disabled={isSubmitting}
+                      className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      type="text"
+                      value={item.description}
+                      onChange={(event) =>
+                        updateItem(item.id, event.target.value)
+                      }
+                      disabled={isSubmitting}
+                      placeholder="Example: 2 units LVL, hangers, trim pack"
+                      className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => saveItem(item.id)}
+                      disabled={isSubmitting}
+                      className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    >
+                      Save Item
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
 
