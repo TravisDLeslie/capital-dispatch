@@ -10,6 +10,7 @@ import {
   subscribeToCheckIns,
   updateCheckInAssignment,
 } from "./utils/checkInStorage";
+import { getFirebaseErrorMessage } from "./utils/firebaseErrorMessages";
 import { isFirebaseConfigured } from "./utils/firebase";
 
 type CheckIn = {
@@ -48,9 +49,7 @@ export default function App() {
         console.error("Unable to load check-ins:", error);
 
         if (isMounted) {
-          setSyncError(
-            "Unable to load Firebase records. Check the Firebase settings and connection.",
-          );
+          setSyncError(getFirebaseErrorMessage(error));
         }
       } finally {
         if (isMounted) {
@@ -72,9 +71,7 @@ export default function App() {
           console.error("Unable to sync check-ins:", error);
 
           if (isMounted) {
-            setSyncError(
-              "Unable to sync Firebase records. Check Firestore access and connection.",
-            );
+            setSyncError(getFirebaseErrorMessage(error));
             setIsLoading(false);
           }
         },

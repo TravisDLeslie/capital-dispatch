@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { locations, vendors } from "../data/options";
+import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
 
 function createEmptyMaterial() {
@@ -224,9 +225,7 @@ export default function CheckInForm({ onSubmit }) {
       resetForm();
     } catch (submitError) {
       console.error("Unable to save check-in:", submitError);
-      setError(
-        "Unable to save this check-in. Check Firebase and try again.",
-      );
+      setError(getFirebaseErrorMessage(submitError));
     } finally {
       setIsSubmitting(false);
     }
