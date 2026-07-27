@@ -3,6 +3,7 @@ import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
 import SupplierRunForm from "../components/SupplierRunForm";
+import { getTodayHeading } from "../utils/dateHelpers";
 
 function groupRunsByVendor(supplierRuns) {
   return supplierRuns.reduce((groups, supplierRun) => {
@@ -77,6 +78,10 @@ export default function SupplierRunsPage({
         <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
           {mode === "check" ? "Check POs" : "Add POs"}
         </h2>
+
+        <div className="mt-3 inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white">
+          {getTodayHeading()}
+        </div>
 
         <p className="mt-2 text-slate-500">
           {mode === "check"
