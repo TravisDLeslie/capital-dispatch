@@ -5,5 +5,9 @@ service cloud.firestore {
     match /checkIns/{checkInId} {
       allow read, create, update, delete: if true;
     }
+
+    match /supplierRuns/{supplierRunId} {
+      allow read, create, update, delete: if true;
+    }
   }
 }

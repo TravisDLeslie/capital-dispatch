@@ -1,15 +1,23 @@
 const navigationItems = [
   {
+    group: "Receiving",
     id: "check-in",
     label: "Check In",
   },
   {
+    group: "Receiving",
     id: "today",
     label: "Today's Check-Ins",
   },
   {
+    group: "Receiving",
     id: "search",
     label: "Search PO",
+  },
+  {
+    group: "Driver",
+    id: "supplier-runs",
+    label: "Supplier Runs",
   },
 ];
 
@@ -43,10 +51,15 @@ export default function AppHeader({ currentPage, onPageChange }) {
                   onClick={() => onPageChange(item.id)}
                   className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition ${
                     isActive
-                      ? "bg-emerald-700 text-white shadow-sm"
+                      ? item.group === "Driver"
+                        ? "bg-blue-700 text-white shadow-sm"
+                        : "bg-emerald-700 text-white shadow-sm"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
                   }`}
                 >
+                  <span className="mr-1 text-[0.68rem] uppercase tracking-wide opacity-75">
+                    {item.group}
+                  </span>
                   {item.label}
                 </button>
               );

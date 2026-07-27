@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import AppHeader from "./components/AppHeader";
 import CheckInPage from "./pages/CheckInPage";
 import SearchPage from "./pages/SearchPage";
+import SupplierRunsPage from "./pages/SupplierRunsPage";
 import TodayPage from "./pages/TodayPage";
 import {
   addCheckIn,
@@ -12,6 +13,11 @@ import {
 } from "./utils/checkInStorage";
 import { getFirebaseErrorMessage } from "./utils/firebaseErrorMessages";
 import { isFirebaseConfigured } from "./utils/firebase";
+import {
+  addSupplierRun,
+  subscribeToSupplierRuns,
+  updateSupplierRunItems,
+} from "./utils/supplierRunStorage";
 
 type CheckIn = {
   id: string;
@@ -25,17 +31,34 @@ type OrderAssignment = {
   jobName?: string;
 };
 
+type SupplierRunItem = {
+  id: string;
+  description: string;
+  pickedUp: boolean;
+};
+
+type SupplierRun = {
+  id: string;
+  items?: SupplierRunItem[];
+  status?: string;
+  [key: string]: unknown;
+};
+
 export default function App() {
   const [currentPage, setCurrentPage] =
     useState("check-in");
 
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [supplierRuns, setSupplierRuns] = useState<
+    SupplierRun[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState("");
 
   useEffect(() => {
     let isMounted = true;
     let unsubscribeFromCheckIns = () => {};
+    let unsubscribeFromSupplierRuns = () => {};
 
     async function loadCheckIns() {
       try {
@@ -76,13 +99,41 @@ export default function App() {
           }
         },
       );
+
+      unsubscribeFromSupplierRuns = subscribeToSupplierRuns(
+        (savedSupplierRuns: SupplierRun[]) => {
+          if (isMounted) {
+            setSupplierRuns(savedSupplierRuns);
+            setSyncError("");
+          }
+        },
+        (error: Error) => {
+          console.error("Unable to sync supplier runs:", error);
+
+          if (isMounted) {
+            setSyncError(getFirebaseErrorMessage(error));
+            setIsLoading(false);
+          }
+        },
+      );
     } else {
       loadCheckIns();
+      subscribeToSupplierRuns(
+        (savedSupplierRuns: SupplierRun[]) => {
+          if (isMounted) {
+            setSupplierRuns(savedSupplierRuns);
+          }
+        },
+        (error: Error) => {
+          console.error("Unable to load supplier runs:", error);
+        },
+      );
     }
 
     return () => {
       isMounted = false;
       unsubscribeFromCheckIns();
+      unsubscribeFromSupplierRuns();
     };
   }, []);
 
@@ -119,6 +170,48 @@ export default function App() {
     setSyncError("");
   }
 
+  async function handleAddSupplierRun(
+    supplierRun: SupplierRun,
+  ) {
+    const updatedSupplierRuns =
+      await addSupplierRun(supplierRun);
+
+    setSupplierRuns(updatedSupplierRuns);
+    setSyncError("");
+  }
+
+  async function handleToggleSupplierRunItem(
+    supplierRunId: string,
+    itemId: string,
+  ) {
+    const supplierRun = supplierRuns.find(
+      (currentSupplierRun) =>
+        currentSupplierRun.id === supplierRunId,
+    );
+
+    if (!supplierRun || !Array.isArray(supplierRun.items)) {
+      return;
+    }
+
+    const updatedItems = supplierRun.items.map((item) =>
+      item.id === itemId
+        ? {
+            ...item,
+            pickedUp: !item.pickedUp,
+          }
+        : item,
+    );
+
+    const updatedSupplierRuns =
+      await updateSupplierRunItems(
+        supplierRunId,
+        updatedItems,
+      );
+
+    setSupplierRuns(updatedSupplierRuns);
+    setSyncError("");
+  }
+
   function renderCurrentPage() {
     switch (currentPage) {
       case "today":
@@ -139,6 +232,17 @@ export default function App() {
             onDeleteCheckIn={handleDeleteCheckIn}
             onUpdateAssignment={
               handleUpdateAssignment
+            }
+          />
+        );
+
+      case "supplier-runs":
+        return (
+          <SupplierRunsPage
+            supplierRuns={supplierRuns}
+            onAddSupplierRun={handleAddSupplierRun}
+            onToggleSupplierRunItem={
+              handleToggleSupplierRunItem
             }
           />
         );

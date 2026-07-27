@@ -22,8 +22,8 @@ export default function CheckInPage({
     };
   }, [successMessage]);
 
-  function handleSubmit(checkIn) {
-    onAddCheckIn(checkIn);
+  async function handleSubmit(checkIn) {
+    await onAddCheckIn(checkIn);
 
     setSuccessMessage(
       `PO ${checkIn.poNumber} was checked in successfully.`,

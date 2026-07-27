@@ -3,7 +3,8 @@
 ## Firebase setup
 
 This app saves receiving PO check-ins to a Firestore collection named
-`checkIns` when Firebase environment values are configured.
+`checkIns` and driver pickup runs to `supplierRuns` when Firebase
+environment values are configured.
 
 1. Create a Firebase project.
 2. Add a Web App in Firebase Project Settings.
@@ -14,8 +15,9 @@ This app saves receiving PO check-ins to a Firestore collection named
 
 For open shared access, publish the rules in `firestore.rules`.
 Those rules let anyone with the app read, add, edit, and delete PO
-records. Before using this for private or sensitive information, add
-Firebase Authentication and tighten the rules to signed-in users.
+records and supplier runs. Before using this for private or sensitive
+information, add Firebase Authentication and tighten the rules to
+signed-in users.
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
