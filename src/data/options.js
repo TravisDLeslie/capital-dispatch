@@ -26,13 +26,13 @@ export const locations = [
 ];
 
 export const receivingTeamMembers = [
-  "Rory",
-  "Justin",
-  "Isiah",
-  "Shane",
-  "Dane",
-  "Travis",
-  "Tim",
   "Austin",
+  "Dane",
+  "Isiah",
+  "Justin",
   "Pete",
+  "Rory",
+  "Shane",
+  "Tim",
+  "Travis",
 ];
