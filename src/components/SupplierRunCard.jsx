@@ -7,6 +7,7 @@ import {
 export default function SupplierRunCard({
   supplierRun,
   onToggleItem,
+  isCompletedSection = false,
 }) {
   const items = Array.isArray(supplierRun.items)
     ? supplierRun.items
@@ -18,13 +19,16 @@ export default function SupplierRunCard({
 
   const isComplete =
     items.length > 0 && pickedUpCount === items.length;
+  const remainingCount = items.length - pickedUpCount;
+  const progressPercent =
+    items.length > 0 ? (pickedUpCount / items.length) * 100 : 0;
 
   return (
     <article
-      className={`rounded-xl border bg-white p-4 shadow-sm transition ${
+      className={`rounded-xl border p-4 shadow-sm transition ${
         isComplete
-          ? "border-emerald-200"
-          : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+          ? "border-emerald-200 bg-white"
+          : "border-blue-200 bg-white hover:border-blue-300 hover:shadow-md"
       }`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -34,15 +38,15 @@ export default function SupplierRunCard({
               {supplierRun.poNumber}
             </h2>
 
-            <span className="rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-800">
-              {supplierRun.vendor}
-            </span>
-
             {isComplete ? (
               <span className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-black uppercase tracking-wide text-emerald-800">
                 Complete
               </span>
-            ) : null}
+            ) : (
+              <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-black uppercase tracking-wide text-amber-800">
+                Needs Pickup
+              </span>
+            )}
           </div>
 
           <p className="mt-1 text-sm font-semibold text-slate-500">
@@ -51,8 +55,37 @@ export default function SupplierRunCard({
           </p>
         </div>
 
-        <div className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-black text-slate-700">
-          {pickedUpCount}/{items.length} picked up
+        <div
+          className={`rounded-xl px-3 py-2 text-sm font-black ${
+            isComplete
+              ? "bg-emerald-100 text-emerald-800"
+              : "bg-blue-100 text-blue-800"
+          }`}
+        >
+          {isComplete
+            ? "All picked up"
+            : `${remainingCount} left`}
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <div className="mb-1 flex items-center justify-between text-xs font-bold text-slate-500">
+          <span>
+            {pickedUpCount}/{items.length} picked up
+          </span>
+
+          {!isComplete ? (
+            <span>{remainingCount} remaining</span>
+          ) : null}
+        </div>
+
+        <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+          <div
+            className={`h-full rounded-full ${
+              isComplete ? "bg-emerald-500" : "bg-blue-600"
+            }`}
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
       </div>
 
@@ -63,7 +96,7 @@ export default function SupplierRunCard({
             className={`flex items-start gap-3 rounded-xl border px-4 py-3 transition ${
               item.pickedUp
                 ? "border-emerald-200 bg-emerald-50"
-                : "border-slate-200 bg-slate-50"
+                : "border-blue-200 bg-blue-50/60"
             }`}
           >
             <input
@@ -96,7 +129,8 @@ export default function SupplierRunCard({
 
       {supplierRun.completedAt ? (
         <p className="mt-3 text-xs font-bold text-emerald-700">
-          Completed {formatFullDate(supplierRun.completedAt)} at{" "}
+          {isCompletedSection ? "Finished" : "Completed"}{" "}
+          {formatFullDate(supplierRun.completedAt)} at{" "}
           {formatTime(supplierRun.completedAt)}
         </p>
       ) : null}
