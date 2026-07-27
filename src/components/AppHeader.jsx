@@ -28,6 +28,12 @@ const navigationItems = [
     id: "supplier-runs-check",
     label: "Check POs",
   },
+  {
+    group: "Driver",
+    subtitle: "Supplier Runs",
+    id: "supplier-runs-history",
+    label: "History",
+  },
 ];
 
 function getNavButtonClass(item, isActive, isMobile = false) {

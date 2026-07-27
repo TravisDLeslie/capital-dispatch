@@ -264,6 +264,18 @@ export default function App() {
           />
         );
 
+      case "supplier-runs-history":
+        return (
+          <SupplierRunsPage
+            mode="history"
+            supplierRuns={supplierRuns}
+            onAddSupplierRun={handleAddSupplierRun}
+            onToggleSupplierRunItem={
+              handleToggleSupplierRunItem
+            }
+          />
+        );
+
       case "check-in":
       default:
         return (

@@ -3,7 +3,10 @@ import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
 import SupplierRunForm from "../components/SupplierRunForm";
-import { getTodayHeading } from "../utils/dateHelpers";
+import {
+  getTodayHeading,
+  isToday,
+} from "../utils/dateHelpers";
 
 function groupRunsByVendor(supplierRuns) {
   return supplierRuns.reduce((groups, supplierRun) => {
@@ -57,11 +60,26 @@ export default function SupplierRunsPage({
     );
   }
 
-  const openRuns = supplierRuns.filter(
+  const dailyRuns = supplierRuns.filter(
+    (supplierRun) =>
+      supplierRun.status !== "complete" ||
+      isToday(supplierRun.completedAt || supplierRun.updatedAt),
+  );
+
+  const historyRuns = supplierRuns.filter(
+    (supplierRun) =>
+      supplierRun.status === "complete" &&
+      !isToday(supplierRun.completedAt || supplierRun.updatedAt),
+  );
+
+  const visibleRuns =
+    mode === "history" ? historyRuns : dailyRuns;
+
+  const openRuns = visibleRuns.filter(
     (supplierRun) => supplierRun.status !== "complete",
   );
 
-  const completeRuns = supplierRuns.filter(
+  const completeRuns = visibleRuns.filter(
     (supplierRun) => supplierRun.status === "complete",
   );
 
@@ -75,6 +93,7 @@ export default function SupplierRunsPage({
         : 0),
     0,
   );
+  const historyRunGroups = groupRunsByVendor(historyRuns);
 
   return (
     <PageContainer>
@@ -84,7 +103,11 @@ export default function SupplierRunsPage({
         </p>
 
         <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
-          {mode === "check" ? "Check POs" : "Add POs"}
+          {mode === "history"
+            ? "History"
+            : mode === "check"
+              ? "Check POs"
+              : "Add POs"}
         </h2>
 
         <div className="mt-3 inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white">
@@ -92,9 +115,11 @@ export default function SupplierRunsPage({
         </div>
 
         <p className="mt-2 text-slate-500">
-          {mode === "check"
-            ? "Drivers can check off pickup items as they load them from the supplier."
-            : "Dispatch can add pickup POs before the driver leaves or while they are already on the road."}
+          {mode === "history"
+            ? "Older completed supplier pickups stay here so the daily driver board stays focused."
+            : mode === "check"
+              ? "Drivers can check off today's pickup items as they load them from the supplier."
+              : "Dispatch can add pickup POs before the driver leaves or while they are already on the road."}
         </p>
       </div>
 
@@ -108,6 +133,62 @@ export default function SupplierRunsPage({
 
       {mode === "add" ? (
         <SupplierRunForm onSubmit={handleSubmit} />
+      ) : mode === "history" ? (
+        <section>
+          <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+              Completed Before Today
+            </p>
+
+            <p className="mt-1 text-3xl font-black text-slate-900">
+              {historyRuns.length}
+            </p>
+          </div>
+
+          {historyRuns.length === 0 ? (
+            <EmptyState
+              title="No older completed supplier runs"
+              description="Completed pickups will move here after today."
+            />
+          ) : (
+            <div className="space-y-5">
+              {historyRunGroups.map((group) => (
+                <div
+                  key={group.vendor}
+                  className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4"
+                >
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                        Supplier
+                      </p>
+
+                      <h4 className="text-lg font-black tracking-tight text-slate-800">
+                        {group.vendor}
+                      </h4>
+                    </div>
+
+                    <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-600 shadow-sm">
+                      {group.runs.length}{" "}
+                      {group.runs.length === 1 ? "PO" : "POs"}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {group.runs.map((supplierRun) => (
+                      <SupplierRunCard
+                        key={supplierRun.id}
+                        supplierRun={supplierRun}
+                        onToggleItem={onToggleSupplierRunItem}
+                        isCompletedSection
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       ) : (
         <section>
           <div className="mb-5 grid gap-3 sm:grid-cols-3">
@@ -142,10 +223,10 @@ export default function SupplierRunsPage({
             </div>
           </div>
 
-          {supplierRuns.length === 0 ? (
+          {visibleRuns.length === 0 ? (
             <EmptyState
-              title="No supplier runs yet"
-              description="Add a PO pickup and it will appear here for the driver."
+              title="No supplier runs for today"
+              description="New pickups and today's completed POs will appear here."
             />
           ) : null}
 
@@ -199,7 +280,7 @@ export default function SupplierRunsPage({
                 ))}
               </div>
             </div>
-          ) : supplierRuns.length > 0 ? (
+          ) : visibleRuns.length > 0 ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-5">
               <p className="text-lg font-black text-emerald-900">
                 All supplier POs are checked off.
@@ -216,11 +297,11 @@ export default function SupplierRunsPage({
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-black tracking-tight text-slate-800">
-                    Completed Stops
+                    Completed Today
                   </h3>
 
                   <p className="mt-1 text-sm font-semibold text-slate-500">
-                    Finished pickups stay here with pickup times.
+                    Older completed pickups move to History after today.
                   </p>
                 </div>
               </div>
