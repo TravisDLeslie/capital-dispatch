@@ -35,6 +35,7 @@ type SupplierRunItem = {
   id: string;
   description: string;
   pickedUp: boolean;
+  pickedUpAt?: string | null;
 };
 
 type SupplierRun = {
@@ -193,11 +194,14 @@ export default function App() {
       return;
     }
 
+    const checkedAt = new Date().toISOString();
+
     const updatedItems = supplierRun.items.map((item) =>
       item.id === itemId
         ? {
             ...item,
             pickedUp: !item.pickedUp,
+            pickedUpAt: !item.pickedUp ? checkedAt : null,
           }
         : item,
     );

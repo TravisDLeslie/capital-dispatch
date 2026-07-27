@@ -73,18 +73,33 @@ export default function SupplierRunCard({
               className="mt-1 h-5 w-5 shrink-0 accent-blue-700"
             />
 
-            <span
-              className={`min-w-0 flex-1 text-base font-semibold ${
-                item.pickedUp
-                  ? "text-emerald-800 line-through decoration-2"
-                  : "text-slate-800"
-              }`}
-            >
-              {item.description}
+            <span className="min-w-0 flex-1">
+              <span
+                className={`block text-base font-semibold ${
+                  item.pickedUp
+                    ? "text-emerald-800 line-through decoration-2"
+                    : "text-slate-800"
+                }`}
+              >
+                {item.description}
+              </span>
+
+              {item.pickedUp && item.pickedUpAt ? (
+                <span className="mt-1 block text-xs font-bold text-emerald-700">
+                  Picked up {formatTime(item.pickedUpAt)}
+                </span>
+              ) : null}
             </span>
           </label>
         ))}
       </div>
+
+      {supplierRun.completedAt ? (
+        <p className="mt-3 text-xs font-bold text-emerald-700">
+          Completed {formatFullDate(supplierRun.completedAt)} at{" "}
+          {formatTime(supplierRun.completedAt)}
+        </p>
+      ) : null}
 
       {supplierRun.updatedAt ? (
         <p className="mt-3 text-xs font-semibold text-slate-400">

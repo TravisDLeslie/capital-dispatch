@@ -111,6 +111,7 @@ export async function updateSupplierRunItems(
   const status = items.every((item) => item.pickedUp)
     ? "complete"
     : "open";
+  const completedAt = status === "complete" ? updatedAt : null;
 
   const updatedSupplierRuns = currentSupplierRuns.map(
     (supplierRun) =>
@@ -120,6 +121,7 @@ export async function updateSupplierRunItems(
             items,
             status,
             updatedAt,
+            completedAt,
           }
         : supplierRun,
   );
@@ -131,6 +133,7 @@ export async function updateSupplierRunItems(
         items,
         status,
         updatedAt,
+        completedAt,
       },
     );
   }
