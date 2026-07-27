@@ -213,6 +213,12 @@ export default function CheckInCard({
             </span>
           ))
         )}
+
+        {checkIn.checkedInBy ? (
+          <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700">
+            Checked in by {checkIn.checkedInBy}
+          </span>
+        ) : null}
       </div>
 
       <div className="mt-3 border-t border-slate-100 pt-3">

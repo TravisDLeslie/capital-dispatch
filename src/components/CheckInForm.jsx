@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { locations, vendors } from "../data/options";
+import {
+  locations,
+  receivingTeamMembers,
+  vendors,
+} from "../data/options";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
 
@@ -31,6 +35,7 @@ export default function CheckInForm({ onSubmit }) {
   const [poNumber, setPoNumber] = useState("");
   const [vendor, setVendor] = useState("");
   const [poLocation, setPoLocation] = useState("");
+  const [checkedInBy, setCheckedInBy] = useState("");
 
   const [materials, setMaterials] = useState([
     createEmptyMaterial(),
@@ -146,6 +151,7 @@ export default function CheckInForm({ onSubmit }) {
     setPoNumber("");
     setVendor("");
     setPoLocation("");
+    setCheckedInBy("");
     setMaterials([createEmptyMaterial()]);
     setMaterialsSkipped(false);
     setError("");
@@ -173,6 +179,11 @@ export default function CheckInForm({ onSubmit }) {
 
     if (!matchedLocation) {
       setError("Select a location for the PO.");
+      return;
+    }
+
+    if (!receivingTeamMembers.includes(checkedInBy)) {
+      setError("Select who checked in this PO.");
       return;
     }
 
@@ -208,6 +219,7 @@ export default function CheckInForm({ onSubmit }) {
       poNumber,
       vendor: matchedVendor,
       poLocation: matchedLocation,
+      checkedInBy,
 
       orderAssignment: null,
       assignedAt: null,
@@ -332,58 +344,88 @@ export default function CheckInForm({ onSubmit }) {
           </div>
         </div>
 
-        <div>
-          <label
-            htmlFor="po-location-select"
-            className="mb-2 block text-sm font-bold text-slate-700"
-          >
-            PO Location
-          </label>
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <label
+              htmlFor="po-location-select"
+              className="mb-2 block text-sm font-bold text-slate-700"
+            >
+              PO Location
+            </label>
 
-          <select
-            id="po-location-select"
-            value={poLocation}
-            onChange={(event) => {
-              setPoLocation(event.target.value);
-              clearError();
-            }}
-            disabled={isSubmitting}
-            className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:hidden"
-          >
-            <option value="">Select a location...</option>
+            <select
+              id="po-location-select"
+              value={poLocation}
+              onChange={(event) => {
+                setPoLocation(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:hidden"
+            >
+              <option value="">Select a location...</option>
 
-            {locations.map((location) => (
-              <option key={location} value={location}>
-                {location}
-              </option>
-            ))}
-          </select>
+              {locations.map((location) => (
+                <option key={location} value={location}>
+                  {location}
+                </option>
+              ))}
+            </select>
 
-          <input
-            id="po-location-search"
-            type="text"
-            list="location-options"
-            autoComplete="off"
-            value={poLocation}
-            onChange={(event) => {
-              setPoLocation(event.target.value);
-              clearError();
-            }}
-            disabled={isSubmitting}
-            placeholder="Where was this PO placed?"
-            aria-label="PO Location"
-            className="hidden w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:block"
-          />
+            <input
+              id="po-location-search"
+              type="text"
+              list="location-options"
+              autoComplete="off"
+              value={poLocation}
+              onChange={(event) => {
+                setPoLocation(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              placeholder="Where was this PO placed?"
+              aria-label="PO Location"
+              className="hidden w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:block"
+            />
 
-          <datalist id="location-options">
-            {locations.map((location) => (
-              <option key={location} value={location} />
-            ))}
-          </datalist>
+            <datalist id="location-options">
+              {locations.map((location) => (
+                <option key={location} value={location} />
+              ))}
+            </datalist>
 
-          <p className="mt-2 text-sm text-slate-500">
-            The entire PO will be tied to this location.
-          </p>
+            <p className="mt-2 text-sm text-slate-500">
+              The entire PO will be tied to this location.
+            </p>
+          </div>
+
+          <div>
+            <label
+              htmlFor="checked-in-by"
+              className="mb-2 block text-sm font-bold text-slate-700"
+            >
+              Checked In By
+            </label>
+
+            <select
+              id="checked-in-by"
+              value={checkedInBy}
+              onChange={(event) => {
+                setCheckedInBy(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+            >
+              <option value="">Select a team member...</option>
+
+              {receivingTeamMembers.map((teamMember) => (
+                <option key={teamMember} value={teamMember}>
+                  {teamMember}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <section>

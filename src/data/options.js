@@ -24,3 +24,15 @@ export const locations = [
   "Pop Room",
   "Undetermined",
 ];
+
+export const receivingTeamMembers = [
+  "Rory",
+  "Justin",
+  "Isiah",
+  "Shane",
+  "Dane",
+  "Travis",
+  "Tim",
+  "Austin",
+  "Pete",
+];
