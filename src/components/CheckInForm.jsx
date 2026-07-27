@@ -277,14 +277,36 @@ export default function CheckInForm({ onSubmit }) {
 
           <div>
             <label
-              htmlFor="vendor"
+              htmlFor="vendor-select"
               className="mb-2 block text-sm font-bold text-slate-700"
             >
               Vendor
             </label>
 
+            <select
+              id="vendor-select"
+              value={vendor}
+              onChange={(event) => {
+                setVendor(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:hidden"
+            >
+              <option value="">Select a vendor...</option>
+
+              {vendors.map((vendorOption) => (
+                <option
+                  key={vendorOption}
+                  value={vendorOption}
+                >
+                  {vendorOption}
+                </option>
+              ))}
+            </select>
+
             <input
-              id="vendor"
+              id="vendor-search"
               type="text"
               list="vendor-options"
               autoComplete="off"
@@ -295,7 +317,8 @@ export default function CheckInForm({ onSubmit }) {
               }}
               disabled={isSubmitting}
               placeholder="Start typing a vendor..."
-              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+              aria-label="Vendor"
+              className="hidden w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:block"
             />
 
             <datalist id="vendor-options">
@@ -311,14 +334,33 @@ export default function CheckInForm({ onSubmit }) {
 
         <div>
           <label
-            htmlFor="poLocation"
+            htmlFor="po-location-select"
             className="mb-2 block text-sm font-bold text-slate-700"
           >
             PO Location
           </label>
 
+          <select
+            id="po-location-select"
+            value={poLocation}
+            onChange={(event) => {
+              setPoLocation(event.target.value);
+              clearError();
+            }}
+            disabled={isSubmitting}
+            className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:hidden"
+          >
+            <option value="">Select a location...</option>
+
+            {locations.map((location) => (
+              <option key={location} value={location}>
+                {location}
+              </option>
+            ))}
+          </select>
+
           <input
-            id="poLocation"
+            id="po-location-search"
             type="text"
             list="location-options"
             autoComplete="off"
@@ -329,7 +371,8 @@ export default function CheckInForm({ onSubmit }) {
             }}
             disabled={isSubmitting}
             placeholder="Where was this PO placed?"
-            className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+            aria-label="PO Location"
+            className="hidden w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:block"
           />
 
           <datalist id="location-options">
