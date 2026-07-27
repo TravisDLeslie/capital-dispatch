@@ -44,6 +44,20 @@ function getNavButtonClass(item, isActive, isMobile = false) {
   }`;
 }
 
+function getCurrentPageLabel(currentPage) {
+  const currentItem = navigationItems.find(
+    (item) => item.id === currentPage,
+  );
+
+  if (!currentItem) {
+    return "Check In";
+  }
+
+  return currentItem.subtitle
+    ? `${currentItem.subtitle} / ${currentItem.label}`
+    : currentItem.label;
+}
+
 export default function AppHeader({ currentPage, onPageChange }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -73,7 +87,7 @@ export default function AppHeader({ currentPage, onPageChange }) {
           <button
             type="button"
             onClick={() => setIsMenuOpen((current) => !current)}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 md:hidden"
+            className="flex shrink-0 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-700 shadow-sm transition hover:bg-slate-100"
             aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMenuOpen}
           >
@@ -98,31 +112,15 @@ export default function AppHeader({ currentPage, onPageChange }) {
                 }`}
               />
             </span>
+
+            <span className="hidden text-sm font-black sm:block">
+              {getCurrentPageLabel(currentPage)}
+            </span>
           </button>
-
-          <nav className="hidden gap-2 overflow-x-auto md:flex">
-            {navigationItems.map((item) => {
-              const isActive = currentPage === item.id;
-
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handlePageChange(item.id)}
-                  className={getNavButtonClass(item, isActive)}
-                >
-                  <span className="mr-1 text-[0.68rem] uppercase tracking-wide opacity-75">
-                    {item.subtitle || item.group}
-                  </span>
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
         </div>
 
         {isMenuOpen ? (
-          <nav className="pb-4 md:hidden">
+          <nav className="pb-4">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
               {["Receiving", "Driver"].map((group) => (
                 <div key={group} className="mb-3 last:mb-0">

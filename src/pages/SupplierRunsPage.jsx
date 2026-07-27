@@ -4,6 +4,28 @@ import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
 import SupplierRunForm from "../components/SupplierRunForm";
 
+function groupRunsByVendor(supplierRuns) {
+  return supplierRuns.reduce((groups, supplierRun) => {
+    const vendor = supplierRun.vendor || "Unknown Supplier";
+    const existingGroup = groups.find(
+      (group) => group.vendor === vendor,
+    );
+
+    if (existingGroup) {
+      existingGroup.runs.push(supplierRun);
+      return groups;
+    }
+
+    return [
+      ...groups,
+      {
+        vendor,
+        runs: [supplierRun],
+      },
+    ];
+  }, []);
+}
+
 export default function SupplierRunsPage({
   mode = "add",
   supplierRuns,
@@ -41,6 +63,9 @@ export default function SupplierRunsPage({
   const completeRuns = supplierRuns.filter(
     (supplierRun) => supplierRun.status === "complete",
   );
+
+  const openRunGroups = groupRunsByVendor(openRuns);
+  const completeRunGroups = groupRunsByVendor(completeRuns);
 
   return (
     <PageContainer>
@@ -81,6 +106,9 @@ export default function SupplierRunsPage({
               <p className="mt-1 text-sm font-semibold text-slate-500">
                 {openRuns.length} open{" "}
                 {openRuns.length === 1 ? "run" : "runs"}
+                {" across "}
+                {openRunGroups.length}{" "}
+                {openRunGroups.length === 1 ? "stop" : "stops"}
               </p>
             </div>
           </div>
@@ -93,13 +121,39 @@ export default function SupplierRunsPage({
           ) : null}
 
           {openRuns.length > 0 ? (
-            <div className="space-y-3">
-              {openRuns.map((supplierRun) => (
-                <SupplierRunCard
-                  key={supplierRun.id}
-                  supplierRun={supplierRun}
-                  onToggleItem={onToggleSupplierRunItem}
-                />
+            <div className="space-y-5">
+              {openRunGroups.map((group) => (
+                <div
+                  key={group.vendor}
+                  className="rounded-2xl border border-blue-100 bg-blue-50/70 p-3 sm:p-4"
+                >
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">
+                        Stop
+                      </p>
+
+                      <h4 className="text-xl font-black tracking-tight text-slate-900">
+                        {group.vendor}
+                      </h4>
+                    </div>
+
+                    <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-blue-800 shadow-sm">
+                      {group.runs.length}{" "}
+                      {group.runs.length === 1 ? "PO" : "POs"}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {group.runs.map((supplierRun) => (
+                      <SupplierRunCard
+                        key={supplierRun.id}
+                        supplierRun={supplierRun}
+                        onToggleItem={onToggleSupplierRunItem}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           ) : null}
@@ -110,13 +164,33 @@ export default function SupplierRunsPage({
                 Completed
               </h3>
 
-              <div className="space-y-3">
-                {completeRuns.map((supplierRun) => (
-                  <SupplierRunCard
-                    key={supplierRun.id}
-                    supplierRun={supplierRun}
-                    onToggleItem={onToggleSupplierRunItem}
-                  />
+              <div className="space-y-5">
+                {completeRunGroups.map((group) => (
+                  <div
+                    key={group.vendor}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4"
+                  >
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="text-lg font-black tracking-tight text-slate-800">
+                        {group.vendor}
+                      </h4>
+
+                      <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-600 shadow-sm">
+                        {group.runs.length}{" "}
+                        {group.runs.length === 1 ? "PO" : "POs"}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {group.runs.map((supplierRun) => (
+                        <SupplierRunCard
+                          key={supplierRun.id}
+                          supplierRun={supplierRun}
+                          onToggleItem={onToggleSupplierRunItem}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
