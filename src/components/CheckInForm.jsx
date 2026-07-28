@@ -36,6 +36,7 @@ export default function CheckInForm({ onSubmit }) {
   const [vendor, setVendor] = useState("");
   const [poLocation, setPoLocation] = useState("");
   const [checkedInBy, setCheckedInBy] = useState("");
+  const [notes, setNotes] = useState("");
 
   const [materials, setMaterials] = useState([
     createEmptyMaterial(),
@@ -152,6 +153,7 @@ export default function CheckInForm({ onSubmit }) {
     setVendor("");
     setPoLocation("");
     setCheckedInBy("");
+    setNotes("");
     setMaterials([createEmptyMaterial()]);
     setMaterialsSkipped(false);
     setError("");
@@ -213,6 +215,7 @@ export default function CheckInForm({ onSubmit }) {
       id: material.id,
       description: material.description.trim(),
     }));
+    const cleanedNotes = notes.trim();
 
     const newCheckIn = {
       id: createId(),
@@ -220,6 +223,7 @@ export default function CheckInForm({ onSubmit }) {
       vendor: matchedVendor,
       poLocation: matchedLocation,
       checkedInBy,
+      notes: cleanedNotes,
 
       orderAssignment: null,
       assignedAt: null,
@@ -426,6 +430,28 @@ export default function CheckInForm({ onSubmit }) {
               ))}
             </select>
           </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="receiving-notes"
+            className="mb-2 block text-sm font-bold text-slate-700"
+          >
+            Notes
+          </label>
+
+          <textarea
+            id="receiving-notes"
+            value={notes}
+            onChange={(event) => {
+              setNotes(event.target.value);
+              clearError();
+            }}
+            disabled={isSubmitting}
+            rows={4}
+            placeholder="Example: damaged items, only received 3 of 4 boards..."
+            className="w-full resize-y rounded-xl border border-slate-300 px-4 py-4 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+          />
         </div>
 
         <section>

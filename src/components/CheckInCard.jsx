@@ -221,6 +221,18 @@ export default function CheckInCard({
         ) : null}
       </div>
 
+      {checkIn.notes ? (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+            Notes
+          </p>
+
+          <p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-amber-900">
+            {checkIn.notes}
+          </p>
+        </div>
+      ) : null}
+
       <div className="mt-3 border-t border-slate-100 pt-3">
         {!isEditing ? (
           <div className="flex items-start justify-between gap-4">

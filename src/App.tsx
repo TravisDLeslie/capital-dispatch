@@ -296,28 +296,30 @@ export default function App() {
         onPageChange={setCurrentPage}
       />
 
-      <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6 lg:px-8">
-        {!isFirebaseConfigured ? (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-            Firebase is not configured yet. Add your Vite
-            Firebase environment values to use Firestore.
-          </div>
-        ) : null}
+      <main className="md:pl-72">
+        <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6 lg:px-8">
+          {!isFirebaseConfigured ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+              Firebase is not configured yet. Add your Vite
+              Firebase environment values to use Firestore.
+            </div>
+          ) : null}
 
-        {syncError ? (
-          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            {syncError}
-          </div>
-        ) : null}
+          {syncError ? (
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+              {syncError}
+            </div>
+          ) : null}
 
-        {isLoading ? (
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
-            Loading receiving records...
-          </div>
-        ) : null}
-      </div>
+          {isLoading ? (
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
+              Loading receiving records...
+            </div>
+          ) : null}
+        </div>
 
-      {renderCurrentPage()}
+        {renderCurrentPage()}
+      </main>
     </div>
   );
 }
