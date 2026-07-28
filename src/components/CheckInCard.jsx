@@ -118,139 +118,212 @@ export default function CheckInCard({
     setIsEditing(false);
   }
 
-  function renderAssignmentDetails() {
+  function getAssignmentHeading() {
     if (savedAssignment?.type === "stock") {
-      return (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-md bg-blue-100 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-blue-800">
-            Stock
-          </span>
-
-          <p className="text-sm font-semibold text-slate-600">
-            Capital Lumber inventory
-          </p>
-        </div>
-      );
+      return "Stock";
     }
 
     if (savedAssignment?.type === "customer") {
-      return (
-        <div className="min-w-0">
-          <p className="font-bold text-slate-900">
-            {savedAssignment.businessName}
-          </p>
-
-          {savedAssignment.orderedBy ||
-          savedAssignment.jobName ? (
-            <p className="mt-0.5 text-sm text-slate-500">
-              {savedAssignment.orderedBy
-                ? `Ordered by ${savedAssignment.orderedBy}`
-                : ""}
-
-              {savedAssignment.orderedBy &&
-              savedAssignment.jobName
-                ? " • "
-                : ""}
-
-              {savedAssignment.jobName || ""}
-            </p>
-          ) : null}
-        </div>
-      );
+      return savedAssignment.businessName;
     }
 
-    return (
-      <p className="text-sm font-semibold text-amber-700">
-        Not assigned — link a customer or mark as stock
-      </p>
-    );
+    return "Not assigned";
   }
 
-  return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-black tracking-tight text-slate-900">
-              {checkIn.poNumber}
-            </h2>
+  function getAssignmentSubheading() {
+    if (savedAssignment?.type === "stock") {
+      return "Capital Lumber inventory";
+    }
 
-            <span className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800">
-              {checkIn.vendor}
-            </span>
+    if (savedAssignment?.type === "customer") {
+      return [
+        savedAssignment.orderedBy
+          ? `Ordered by ${savedAssignment.orderedBy}`
+          : "",
+        savedAssignment.jobName || "",
+      ]
+        .filter(Boolean)
+        .join(" • ");
+    }
+
+    return "Link a customer or mark as stock";
+  }
+
+  const visibleMaterials = materials.slice(0, 3);
+  const hiddenMaterialCount = Math.max(
+    materials.length - visibleMaterials.length,
+    0,
+  );
+
+  return (
+    <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-200/60 transition hover:border-slate-300 sm:p-7">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
+          <h2 className="text-5xl font-black leading-none tracking-tight text-slate-950 sm:text-6xl">
+            {checkIn.poNumber}
+          </h2>
+
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-2xl text-blue-700">
+              ▣
+            </div>
+
+            <div className="min-w-0">
+              <p className="truncate text-xl font-black text-slate-950">
+                {checkIn.vendor}
+              </p>
+
+              <p className="mt-1 text-lg font-semibold text-slate-500">
+                Vendor
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="shrink-0 text-right">
-          <p className="text-sm font-bold text-slate-700">
-            {formatTime(checkIn.checkedInAt)}
-          </p>
+        <div className="flex shrink-0 items-start gap-3 text-left lg:text-right">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-slate-300 text-xl text-slate-600">
+            ◷
+          </div>
 
-          <p className="mt-0.5 text-xs text-slate-500">
-            {showFullDate
-              ? formatFullDate(checkIn.checkedInAt)
-              : formatShortDate(checkIn.checkedInAt)}
-          </p>
+          <div>
+            <p className="text-2xl font-black text-slate-950">
+              {formatTime(checkIn.checkedInAt)}
+            </p>
+
+            <p className="mt-1 text-lg font-semibold text-slate-500">
+              {showFullDate
+                ? formatFullDate(checkIn.checkedInAt)
+                : formatShortDate(checkIn.checkedInAt)}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
-          📍 {checkIn.poLocation || "No location recorded"}
-        </span>
+      {!isEditing ? (
+        <>
+          <div className="mt-8">
+            <h3 className="text-3xl font-black tracking-tight text-slate-950">
+              {getAssignmentHeading()}
+            </h3>
 
-        {checkIn.materialsSkipped ? (
-          <span className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">
-            Materials skipped
-          </span>
-        ) : (
-          materials.map((material) => (
-            <span
-              key={material.id}
-              className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm text-slate-600"
-            >
-              {material.description}
-            </span>
-          ))
-        )}
+            <p className="mt-2 text-xl font-semibold text-slate-500">
+              {getAssignmentSubheading()}
+            </p>
+          </div>
 
-        {checkIn.checkedInBy ? (
-          <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-bold text-emerald-700">
-            Checked in by {checkIn.checkedInBy}
-          </span>
-        ) : null}
-      </div>
+          <div className="mt-7 border-t border-slate-200 pt-6">
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="flex items-center gap-4">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-3xl text-orange-600">
+                  ◆
+                </div>
 
-      {checkIn.notes ? (
-        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
-            Notes
-          </p>
+                <div className="min-w-0">
+                  <p className="text-xl font-black text-slate-950">
+                    {checkIn.poLocation || "No location recorded"}
+                  </p>
 
-          <p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-amber-900">
-            {checkIn.notes}
-          </p>
-        </div>
-      ) : null}
+                  <p className="mt-1 text-lg font-semibold text-slate-500">
+                    Location
+                  </p>
+                </div>
+              </div>
 
-      <div className="mt-3 border-t border-slate-100 pt-3">
-        {!isEditing ? (
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              {renderAssignmentDetails()}
+              <div className="flex items-center gap-4 border-t border-slate-200 pt-5 md:border-l md:border-t-0 md:pl-8 md:pt-0">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-3xl text-emerald-700">
+                  ✓
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-xl font-black text-slate-950">
+                    {checkIn.checkedInBy
+                      ? `Checked in by ${checkIn.checkedInBy}`
+                      : "Checked in"}
+                  </p>
+
+                  <p className="mt-1 text-lg font-semibold text-slate-500">
+                    {formatTime(checkIn.checkedInAt)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-7 border-t border-slate-200 pt-6">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl text-slate-700">□</span>
+
+              <h3 className="text-xl font-black text-slate-950">
+                Items
+              </h3>
             </div>
 
+            {checkIn.materialsSkipped ? (
+              <p className="mt-4 text-lg font-semibold text-amber-700">
+                Materials skipped
+              </p>
+            ) : materials.length > 0 ? (
+              <div className="mt-4 space-y-2">
+                {visibleMaterials.map((material) => (
+                  <p
+                    key={material.id}
+                    className="flex gap-3 text-lg font-semibold text-slate-800"
+                  >
+                    <span className="text-slate-500">•</span>
+                    <span>{material.description}</span>
+                  </p>
+                ))}
+
+                {hiddenMaterialCount > 0 ? (
+                  <p className="pt-1 text-lg font-black text-blue-700">
+                    + {hiddenMaterialCount} more{" "}
+                    {hiddenMaterialCount === 1 ? "item" : "items"}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-4 text-lg font-semibold text-slate-500">
+                No materials recorded
+              </p>
+            )}
+          </div>
+
+          {checkIn.notes ? (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+                Notes
+              </p>
+
+              <p className="mt-2 whitespace-pre-wrap text-base font-semibold text-amber-950">
+                {checkIn.notes}
+              </p>
+            </div>
+          ) : null}
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={openEditor}
-              aria-label="Edit PO assignment"
-              title="Edit PO assignment"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-lg text-slate-600 transition hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700"
+              className="inline-flex items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-8 py-4 text-lg font-black text-slate-900 transition hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-800"
             >
-              ✎
+              <span>✎</span>
+              Edit
             </button>
+
+            {onDelete ? (
+              <button
+                type="button"
+                onClick={() => onDelete(checkIn.id)}
+                className="inline-flex items-center justify-center gap-3 rounded-xl border border-red-300 bg-white px-8 py-4 text-lg font-black text-red-600 transition hover:bg-red-50 hover:text-red-700"
+              >
+                <span>⌫</span>
+                Delete
+              </button>
+            ) : null}
           </div>
-        ) : (
+        </>
+      ) : (
+        <div className="mt-8 border-t border-slate-200 pt-6">
           <form onSubmit={handleAssignmentSave}>
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
@@ -410,20 +483,8 @@ export default function CheckInCard({
               </button>
             </div>
           </form>
-        )}
-      </div>
-
-      {onDelete ? (
-        <div className="mt-3 flex justify-end">
-          <button
-            type="button"
-            onClick={() => onDelete(checkIn.id)}
-            className="text-xs font-bold text-red-500 transition hover:text-red-700"
-          >
-            Delete
-          </button>
         </div>
-      ) : null}
+      )}
     </article>
   );
 }
