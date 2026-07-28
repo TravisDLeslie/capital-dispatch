@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   formatFullDate,
   formatShortDate,
@@ -7,6 +8,8 @@ import {
 export default function SupplierRunCard({
   supplierRun,
   onToggleItem,
+  onUpdateItemDescription,
+  onDelete,
   isCompletedSection = false,
 }) {
   const items = Array.isArray(supplierRun.items)
@@ -22,6 +25,39 @@ export default function SupplierRunCard({
   const remainingCount = items.length - pickedUpCount;
   const progressPercent =
     items.length > 0 ? (pickedUpCount / items.length) * 100 : 0;
+  const [editingItemId, setEditingItemId] = useState("");
+  const [editingDescription, setEditingDescription] =
+    useState("");
+  const [editError, setEditError] = useState("");
+
+  function startEditingItem(item) {
+    setEditingItemId(item.id);
+    setEditingDescription(item.description || "");
+    setEditError("");
+  }
+
+  function cancelEditingItem() {
+    setEditingItemId("");
+    setEditingDescription("");
+    setEditError("");
+  }
+
+  async function saveItemDescription(itemId) {
+    const cleanedDescription = editingDescription.trim();
+
+    if (!cleanedDescription) {
+      setEditError("Enter an item description before saving.");
+      return;
+    }
+
+    await onUpdateItemDescription(
+      supplierRun.id,
+      itemId,
+      cleanedDescription,
+    );
+
+    cancelEditingItem();
+  }
 
   return (
     <article
@@ -90,41 +126,103 @@ export default function SupplierRunCard({
       </div>
 
       <div className="mt-4 space-y-2">
-        {items.map((item) => (
-          <label
-            key={item.id}
-            className={`flex items-start gap-3 rounded-xl border px-4 py-3 transition ${
-              item.pickedUp
-                ? "border-emerald-200 bg-emerald-50"
-                : "border-blue-200 bg-blue-50/60"
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={Boolean(item.pickedUp)}
-              onChange={() => onToggleItem(supplierRun.id, item.id)}
-              className="mt-1 h-5 w-5 shrink-0 accent-blue-700"
-            />
+        {items.map((item) => {
+          const isEditing = editingItemId === item.id;
 
-            <span className="min-w-0 flex-1">
-              <span
-                className={`block text-base font-semibold ${
-                  item.pickedUp
-                    ? "text-emerald-800 line-through decoration-2"
-                    : "text-slate-800"
-                }`}
-              >
-                {item.description}
-              </span>
+          return (
+            <div
+              key={item.id}
+              className={`rounded-xl border px-4 py-3 transition ${
+                item.pickedUp
+                  ? "border-emerald-200 bg-emerald-50"
+                  : "border-blue-200 bg-blue-50/60"
+              }`}
+            >
+              {!isEditing ? (
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(item.pickedUp)}
+                    onChange={() =>
+                      onToggleItem(supplierRun.id, item.id)
+                    }
+                    className="mt-1 h-5 w-5 shrink-0 accent-blue-700"
+                  />
 
-              {item.pickedUp && item.pickedUpAt ? (
-                <span className="mt-1 block text-xs font-bold text-emerald-700">
-                  Picked up {formatTime(item.pickedUpAt)}
-                </span>
-              ) : null}
-            </span>
-          </label>
-        ))}
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={`block text-base font-semibold ${
+                        item.pickedUp
+                          ? "text-emerald-800 line-through decoration-2"
+                          : "text-slate-800"
+                      }`}
+                    >
+                      {item.description}
+                    </span>
+
+                    {item.pickedUp && item.pickedUpAt ? (
+                      <span className="mt-1 block text-xs font-bold text-emerald-700">
+                        Picked up {formatTime(item.pickedUpAt)}
+                      </span>
+                    ) : null}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => startEditingItem(item)}
+                    className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                  >
+                    Edit
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <label
+                    htmlFor={`supplier-item-${supplierRun.id}-${item.id}`}
+                    className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
+                  >
+                    Edit Item
+                  </label>
+
+                  <textarea
+                    id={`supplier-item-${supplierRun.id}-${item.id}`}
+                    value={editingDescription}
+                    onChange={(event) => {
+                      setEditingDescription(event.target.value);
+                      setEditError("");
+                    }}
+                    rows={3}
+                    className="w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  />
+
+                  {editError ? (
+                    <p className="mt-2 text-sm font-semibold text-red-600">
+                      {editError}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-3 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={cancelEditingItem}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100"
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => saveItemDescription(item.id)}
+                      className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-bold text-white transition hover:bg-blue-800"
+                    >
+                      Save Item
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {supplierRun.completedAt ? (
@@ -141,6 +239,16 @@ export default function SupplierRunCard({
           {formatTime(supplierRun.updatedAt)}
         </p>
       ) : null}
+
+      <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">
+        <button
+          type="button"
+          onClick={() => onDelete(supplierRun.id)}
+          className="text-xs font-bold text-red-500 transition hover:text-red-700"
+        >
+          Delete PO
+        </button>
+      </div>
     </article>
   );
 }

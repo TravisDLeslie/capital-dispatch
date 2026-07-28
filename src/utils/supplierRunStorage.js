@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -107,11 +108,17 @@ export async function updateSupplierRunItems(
   items,
 ) {
   const currentSupplierRuns = getLocalSupplierRuns();
+  const currentSupplierRun = currentSupplierRuns.find(
+    (supplierRun) => supplierRun.id === supplierRunId,
+  );
   const updatedAt = new Date().toISOString();
   const status = items.every((item) => item.pickedUp)
     ? "complete"
     : "open";
-  const completedAt = status === "complete" ? updatedAt : null;
+  const completedAt =
+    status === "complete"
+      ? currentSupplierRun?.completedAt || updatedAt
+      : null;
 
   const updatedSupplierRuns = currentSupplierRuns.map(
     (supplierRun) =>
@@ -135,6 +142,24 @@ export async function updateSupplierRunItems(
         updatedAt,
         completedAt,
       },
+    );
+  }
+
+  saveLocalSupplierRuns(updatedSupplierRuns);
+
+  return updatedSupplierRuns;
+}
+
+export async function deleteSupplierRun(supplierRunId) {
+  const currentSupplierRuns = getLocalSupplierRuns();
+
+  const updatedSupplierRuns = currentSupplierRuns.filter(
+    (supplierRun) => supplierRun.id !== supplierRunId,
+  );
+
+  if (db) {
+    await deleteDoc(
+      doc(db, SUPPLIER_RUNS_COLLECTION, supplierRunId),
     );
   }
 

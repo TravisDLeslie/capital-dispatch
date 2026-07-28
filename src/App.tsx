@@ -15,6 +15,7 @@ import { getFirebaseErrorMessage } from "./utils/firebaseErrorMessages";
 import { isFirebaseConfigured } from "./utils/firebase";
 import {
   addSupplierRun,
+  deleteSupplierRun,
   subscribeToSupplierRuns,
   updateSupplierRunItems,
 } from "./utils/supplierRunStorage";
@@ -216,6 +217,55 @@ export default function App() {
     setSyncError("");
   }
 
+  async function handleUpdateSupplierRunItemDescription(
+    supplierRunId: string,
+    itemId: string,
+    description: string,
+  ) {
+    const supplierRun = supplierRuns.find(
+      (currentSupplierRun) =>
+        currentSupplierRun.id === supplierRunId,
+    );
+
+    if (!supplierRun || !Array.isArray(supplierRun.items)) {
+      return;
+    }
+
+    const updatedItems = supplierRun.items.map((item) =>
+      item.id === itemId
+        ? {
+            ...item,
+            description,
+          }
+        : item,
+    );
+
+    const updatedSupplierRuns =
+      await updateSupplierRunItems(
+        supplierRunId,
+        updatedItems,
+      );
+
+    setSupplierRuns(updatedSupplierRuns);
+    setSyncError("");
+  }
+
+  async function handleDeleteSupplierRun(supplierRunId: string) {
+    const shouldDelete = window.confirm(
+      "Are you sure you want to delete this supplier PO?",
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    const updatedSupplierRuns =
+      await deleteSupplierRun(supplierRunId);
+
+    setSupplierRuns(updatedSupplierRuns);
+    setSyncError("");
+  }
+
   function renderCurrentPage() {
     switch (currentPage) {
       case "today":
@@ -249,6 +299,10 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onUpdateSupplierRunItemDescription={
+              handleUpdateSupplierRunItemDescription
+            }
+            onDeleteSupplierRun={handleDeleteSupplierRun}
           />
         );
 
@@ -261,6 +315,10 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onUpdateSupplierRunItemDescription={
+              handleUpdateSupplierRunItemDescription
+            }
+            onDeleteSupplierRun={handleDeleteSupplierRun}
           />
         );
 
@@ -273,6 +331,10 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onUpdateSupplierRunItemDescription={
+              handleUpdateSupplierRunItemDescription
+            }
+            onDeleteSupplierRun={handleDeleteSupplierRun}
           />
         );
 

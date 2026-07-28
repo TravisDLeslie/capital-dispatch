@@ -35,6 +35,8 @@ export default function SupplierRunsPage({
   supplierRuns,
   onAddSupplierRun,
   onToggleSupplierRunItem,
+  onUpdateSupplierRunItemDescription,
+  onDeleteSupplierRun,
 }) {
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -180,6 +182,10 @@ export default function SupplierRunsPage({
                         key={supplierRun.id}
                         supplierRun={supplierRun}
                         onToggleItem={onToggleSupplierRunItem}
+                        onUpdateItemDescription={
+                          onUpdateSupplierRunItemDescription
+                        }
+                        onDelete={onDeleteSupplierRun}
                         isCompletedSection
                       />
                     ))}
@@ -273,6 +279,10 @@ export default function SupplierRunsPage({
                           key={supplierRun.id}
                           supplierRun={supplierRun}
                           onToggleItem={onToggleSupplierRunItem}
+                          onUpdateItemDescription={
+                            onUpdateSupplierRunItemDescription
+                          }
+                          onDelete={onDeleteSupplierRun}
                         />
                       ))}
                     </div>
@@ -329,6 +339,10 @@ export default function SupplierRunsPage({
                           key={supplierRun.id}
                           supplierRun={supplierRun}
                           onToggleItem={onToggleSupplierRunItem}
+                          onUpdateItemDescription={
+                            onUpdateSupplierRunItemDescription
+                          }
+                          onDelete={onDeleteSupplierRun}
                           isCompletedSection
                         />
                       ))}
