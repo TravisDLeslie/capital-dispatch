@@ -1,5 +1,14 @@
 import { useState } from "react";
 import {
+  Building2,
+  CircleCheckBig,
+  Clock3,
+  MapPin,
+  Package,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+import {
   formatFullDate,
   formatShortDate,
   formatTime,
@@ -156,41 +165,45 @@ export default function CheckInCard({
   );
 
   return (
-    <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-200/60 transition hover:border-slate-300 sm:p-7">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
-          <h2 className="text-5xl font-black leading-none tracking-tight text-slate-950 sm:text-6xl">
+    <article className="rounded-[28px] border border-[#DCE4EF] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.10)] transition hover:border-slate-300 sm:p-8 xl:p-12">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-5 sm:flex-row sm:items-start sm:gap-10">
+          <h2 className="text-5xl font-black leading-none tracking-tight text-[#0F172A] sm:text-6xl">
             {checkIn.poNumber}
           </h2>
 
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-2xl text-blue-700">
-              ▣
-            </div>
+          <div className="flex min-w-0 items-start gap-4">
+            <Building2
+              aria-hidden="true"
+              className="mt-0.5 h-12 w-12 shrink-0 text-[#1D64C8]"
+              strokeWidth={2.4}
+            />
 
             <div className="min-w-0">
-              <p className="truncate text-xl font-black text-slate-950">
+              <p className="truncate text-2xl font-black text-[#0F172A]">
                 {checkIn.vendor}
               </p>
 
-              <p className="mt-1 text-lg font-semibold text-slate-500">
+              <p className="mt-1 text-xl font-medium text-[#64748B]">
                 Vendor
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-start gap-3 text-left lg:text-right">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-slate-300 text-xl text-slate-600">
-            ◷
-          </div>
+        <div className="flex shrink-0 items-start gap-4 text-left lg:text-right">
+          <Clock3
+            aria-hidden="true"
+            className="mt-1 h-9 w-9 shrink-0 text-slate-700"
+            strokeWidth={2.2}
+          />
 
           <div>
-            <p className="text-2xl font-black text-slate-950">
+            <p className="text-2xl font-black text-[#0F172A]">
               {formatTime(checkIn.checkedInAt)}
             </p>
 
-            <p className="mt-1 text-lg font-semibold text-slate-500">
+            <p className="mt-1 text-xl font-medium text-[#64748B]">
               {showFullDate
                 ? formatFullDate(checkIn.checkedInAt)
                 : formatShortDate(checkIn.checkedInAt)}
@@ -201,47 +214,56 @@ export default function CheckInCard({
 
       {!isEditing ? (
         <>
-          <div className="mt-8">
-            <h3 className="text-3xl font-black tracking-tight text-slate-950">
+          <div className="mt-14">
+            <h3 className="text-3xl font-black tracking-tight text-[#0F172A] sm:text-4xl">
               {getAssignmentHeading()}
             </h3>
 
-            <p className="mt-2 text-xl font-semibold text-slate-500">
+            <p className="mt-3 text-2xl font-medium text-[#64748B]">
               {getAssignmentSubheading()}
             </p>
           </div>
 
-          <div className="mt-7 border-t border-slate-200 pt-6">
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-3xl text-orange-600">
-                  ◆
+          <div className="mt-9 border-t border-[#DCE4EF] pt-8">
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="flex items-center gap-6">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#E98413]">
+                  <MapPin
+                    aria-hidden="true"
+                    className="h-11 w-11"
+                    fill="currentColor"
+                    strokeWidth={1.8}
+                  />
                 </div>
 
                 <div className="min-w-0">
-                  <p className="text-xl font-black text-slate-950">
+                  <p className="text-xl font-black text-[#0F172A]">
                     {checkIn.poLocation || "No location recorded"}
                   </p>
 
-                  <p className="mt-1 text-lg font-semibold text-slate-500">
+                  <p className="mt-2 text-xl font-medium text-[#64748B]">
                     Location
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 border-t border-slate-200 pt-5 md:border-l md:border-t-0 md:pl-8 md:pt-0">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-3xl text-emerald-700">
-                  ✓
+              <div className="flex items-center gap-6 border-t border-[#DCE4EF] pt-6 md:border-l md:border-t-0 md:pl-10 md:pt-0">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-[#079455]">
+                  <CircleCheckBig
+                    aria-hidden="true"
+                    className="h-11 w-11"
+                    strokeWidth={2.3}
+                  />
                 </div>
 
                 <div className="min-w-0">
-                  <p className="text-xl font-black text-slate-950">
+                  <p className="text-xl font-black text-[#0F172A]">
                     {checkIn.checkedInBy
                       ? `Checked in by ${checkIn.checkedInBy}`
                       : "Checked in"}
                   </p>
 
-                  <p className="mt-1 text-lg font-semibold text-slate-500">
+                  <p className="mt-2 text-xl font-medium text-[#64748B]">
                     {formatTime(checkIn.checkedInAt)}
                   </p>
                 </div>
@@ -249,40 +271,44 @@ export default function CheckInCard({
             </div>
           </div>
 
-          <div className="mt-7 border-t border-slate-200 pt-6">
+          <div className="mt-9 border-t border-[#DCE4EF] pt-8">
             <div className="flex items-center gap-3">
-              <span className="text-2xl text-slate-700">□</span>
+              <Package
+                aria-hidden="true"
+                className="h-8 w-8 text-slate-700"
+                strokeWidth={2.1}
+              />
 
-              <h3 className="text-xl font-black text-slate-950">
+              <h3 className="text-2xl font-black text-[#0F172A]">
                 Items
               </h3>
             </div>
 
             {checkIn.materialsSkipped ? (
-              <p className="mt-4 text-lg font-semibold text-amber-700">
+              <p className="mt-5 text-lg font-semibold text-amber-700">
                 Materials skipped
               </p>
             ) : materials.length > 0 ? (
-              <div className="mt-4 space-y-2">
+              <div className="mt-5 space-y-3">
                 {visibleMaterials.map((material) => (
                   <p
                     key={material.id}
-                    className="flex gap-3 text-lg font-semibold text-slate-800"
+                    className="flex gap-4 text-xl font-medium text-[#0F172A]"
                   >
-                    <span className="text-slate-500">•</span>
+                    <span className="text-[#64748B]">•</span>
                     <span>{material.description}</span>
                   </p>
                 ))}
 
                 {hiddenMaterialCount > 0 ? (
-                  <p className="pt-1 text-lg font-black text-blue-700">
+                  <p className="pt-1 text-xl font-black text-[#1D64C8]">
                     + {hiddenMaterialCount} more{" "}
                     {hiddenMaterialCount === 1 ? "item" : "items"}
                   </p>
                 ) : null}
               </div>
             ) : (
-              <p className="mt-4 text-lg font-semibold text-slate-500">
+              <p className="mt-5 text-lg font-semibold text-[#64748B]">
                 No materials recorded
               </p>
             )}
@@ -300,13 +326,17 @@ export default function CheckInCard({
             </div>
           ) : null}
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={openEditor}
-              className="inline-flex items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-8 py-4 text-lg font-black text-slate-900 transition hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-800"
+              className="inline-flex items-center justify-center gap-4 rounded-[14px] border border-[#DCE4EF] bg-white px-9 py-4 text-xl font-black text-[#0F172A] transition hover:border-[#1D64C8] hover:bg-blue-50 hover:text-[#1D64C8]"
             >
-              <span>✎</span>
+              <Pencil
+                aria-hidden="true"
+                className="h-7 w-7"
+                strokeWidth={2.4}
+              />
               Edit
             </button>
 
@@ -314,9 +344,13 @@ export default function CheckInCard({
               <button
                 type="button"
                 onClick={() => onDelete(checkIn.id)}
-                className="inline-flex items-center justify-center gap-3 rounded-xl border border-red-300 bg-white px-8 py-4 text-lg font-black text-red-600 transition hover:bg-red-50 hover:text-red-700"
+                className="inline-flex items-center justify-center gap-4 rounded-[14px] border border-[#EF2B2D] bg-white px-9 py-4 text-xl font-black text-[#EF2B2D] transition hover:bg-red-50"
               >
-                <span>⌫</span>
+                <Trash2
+                  aria-hidden="true"
+                  className="h-7 w-7"
+                  strokeWidth={2.4}
+                />
                 Delete
               </button>
             ) : null}
