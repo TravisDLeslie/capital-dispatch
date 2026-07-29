@@ -11,6 +11,8 @@ function createEmptyMaterial() {
   return {
     id: createId(),
     description: "",
+    location: "",
+    locationPhoto: null,
     saved: false,
   };
 }
@@ -54,7 +56,7 @@ function loadImage(dataUrl) {
 async function createLocationPhoto(file) {
   const originalDataUrl = await readFileAsDataUrl(file);
   const image = await loadImage(originalDataUrl);
-  const maxWidth = 1000;
+  const maxWidth = 720;
   const scale = Math.min(maxWidth / image.width, 1);
   const width = Math.round(image.width * scale);
   const height = Math.round(image.height * scale);
@@ -65,10 +67,10 @@ async function createLocationPhoto(file) {
   canvas.height = height;
   context.drawImage(image, 0, 0, width, height);
 
-  let quality = 0.72;
+  let quality = 0.68;
   let dataUrl = canvas.toDataURL("image/jpeg", quality);
 
-  while (dataUrl.length > 700000 && quality > 0.38) {
+  while (dataUrl.length > 240000 && quality > 0.34) {
     quality -= 0.08;
     dataUrl = canvas.toDataURL("image/jpeg", quality);
   }
@@ -87,9 +89,8 @@ export default function CheckInForm({ onSubmit }) {
   const [poLocation, setPoLocation] = useState("");
   const [checkedInBy, setCheckedInBy] = useState("");
   const [notes, setNotes] = useState("");
-  const [locationPhoto, setLocationPhoto] = useState(null);
-  const [isProcessingPhoto, setIsProcessingPhoto] =
-    useState(false);
+  const [processingPhotoMaterialId, setProcessingPhotoMaterialId] =
+    useState("");
 
   const [materials, setMaterials] = useState([
     createEmptyMaterial(),
@@ -105,6 +106,21 @@ export default function CheckInForm({ onSubmit }) {
 
   function handlePoChange(event) {
     setPoNumber(formatPoNumber(event.target.value));
+    clearError();
+  }
+
+  function handlePoLocationChange(value) {
+    setPoLocation(value);
+    setMaterials((currentMaterials) =>
+      currentMaterials.map((material) =>
+        material.location
+          ? material
+          : {
+              ...material,
+              location: value,
+            },
+      ),
+    );
     clearError();
   }
 
@@ -125,6 +141,23 @@ export default function CheckInForm({ onSubmit }) {
     clearError();
   }
 
+  function updateMaterialLocation(materialId, value) {
+    setMaterials((currentMaterials) =>
+      currentMaterials.map((material) =>
+        material.id === materialId
+          ? {
+              ...material,
+              location: value,
+              saved: false,
+            }
+          : material,
+      ),
+    );
+
+    setMaterialsSkipped(false);
+    clearError();
+  }
+
   function saveMaterial(materialId) {
     const material = materials.find(
       (item) => item.id === materialId,
@@ -135,12 +168,18 @@ export default function CheckInForm({ onSubmit }) {
       return;
     }
 
+    if (!findMatchingOption(material.location, locations)) {
+      setError("Select a location for this material before saving it.");
+      return;
+    }
+
     setMaterials((currentMaterials) =>
       currentMaterials.map((item) =>
         item.id === materialId
           ? {
               ...item,
               description: item.description.trim(),
+              location: findMatchingOption(item.location, locations),
               saved: true,
             }
           : item,
@@ -168,7 +207,10 @@ export default function CheckInForm({ onSubmit }) {
   function addMaterial() {
     setMaterials((currentMaterials) => [
       ...currentMaterials,
-      createEmptyMaterial(),
+      {
+        ...createEmptyMaterial(),
+        location: poLocation,
+      },
     ]);
 
     setMaterialsSkipped(false);
@@ -207,13 +249,13 @@ export default function CheckInForm({ onSubmit }) {
     setPoLocation("");
     setCheckedInBy("");
     setNotes("");
-    setLocationPhoto(null);
+    setProcessingPhotoMaterialId("");
     setMaterials([createEmptyMaterial()]);
     setMaterialsSkipped(false);
     setError("");
   }
 
-  async function handleLocationPhotoChange(event) {
+  async function handleMaterialPhotoChange(materialId, event) {
     const file = event.target.files?.[0];
 
     if (!file) {
@@ -226,27 +268,52 @@ export default function CheckInForm({ onSubmit }) {
       return;
     }
 
-    setIsProcessingPhoto(true);
+    setProcessingPhotoMaterialId(materialId);
     clearError();
 
     try {
       const photo = await createLocationPhoto(file);
-      setLocationPhoto(photo);
+      setMaterials((currentMaterials) =>
+        currentMaterials.map((material) =>
+          material.id === materialId
+            ? {
+                ...material,
+                locationPhoto: photo,
+                saved: false,
+              }
+            : material,
+        ),
+      );
     } catch (photoError) {
       console.error("Unable to prepare photo:", photoError);
       setError("Unable to prepare that photo. Try taking it again.");
-      setLocationPhoto(null);
     } finally {
-      setIsProcessingPhoto(false);
+      setProcessingPhotoMaterialId("");
       event.target.value = "";
     }
+  }
+
+  function removeMaterialPhoto(materialId) {
+    setMaterials((currentMaterials) =>
+      currentMaterials.map((material) =>
+        material.id === materialId
+          ? {
+              ...material,
+              locationPhoto: null,
+              saved: false,
+            }
+          : material,
+      ),
+    );
+
+    clearError();
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (isProcessingPhoto) {
-      setError("Wait for the location photo to finish preparing.");
+    if (processingPhotoMaterialId) {
+      setError("Wait for the material photo to finish preparing.");
       return;
     }
 
@@ -302,6 +369,10 @@ export default function CheckInForm({ onSubmit }) {
     const cleanedMaterials = enteredMaterials.map((material) => ({
       id: material.id,
       description: material.description.trim(),
+      location:
+        findMatchingOption(material.location, locations) ||
+        matchedLocation,
+      locationPhoto: material.locationPhoto,
     }));
     const cleanedNotes = notes.trim();
 
@@ -312,7 +383,6 @@ export default function CheckInForm({ onSubmit }) {
       poLocation: matchedLocation,
       checkedInBy,
       notes: cleanedNotes,
-      locationPhoto,
 
       orderAssignment: null,
       assignedAt: null,
@@ -449,10 +519,9 @@ export default function CheckInForm({ onSubmit }) {
             <select
               id="po-location-select"
               value={poLocation}
-              onChange={(event) => {
-                setPoLocation(event.target.value);
-                clearError();
-              }}
+              onChange={(event) =>
+                handlePoLocationChange(event.target.value)
+              }
               disabled={isSubmitting}
               className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:hidden"
             >
@@ -471,10 +540,9 @@ export default function CheckInForm({ onSubmit }) {
               list="location-options"
               autoComplete="off"
               value={poLocation}
-              onChange={(event) => {
-                setPoLocation(event.target.value);
-                clearError();
-              }}
+              onChange={(event) =>
+                handlePoLocationChange(event.target.value)
+              }
               disabled={isSubmitting}
               placeholder="Where was this PO placed?"
               aria-label="PO Location"
@@ -488,7 +556,8 @@ export default function CheckInForm({ onSubmit }) {
             </datalist>
 
             <p className="mt-2 text-sm text-slate-500">
-              The entire PO will be tied to this location.
+              Used as the default for each material. You can change
+              individual material locations below.
             </p>
           </div>
 
@@ -542,76 +611,6 @@ export default function CheckInForm({ onSubmit }) {
             className="w-full resize-y rounded-xl border border-slate-300 px-4 py-4 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
           />
         </div>
-
-        <section className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-slate-700">
-                Location Photo
-              </h3>
-
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                Please take a wide photo showing where the material
-                was placed.
-              </p>
-            </div>
-
-            {locationPhoto ? (
-              <button
-                type="button"
-                onClick={() => setLocationPhoto(null)}
-                disabled={isSubmitting || isProcessingPhoto}
-                className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-50"
-              >
-                Remove Photo
-              </button>
-            ) : null}
-          </div>
-
-          <div className="mt-4">
-            <label
-              htmlFor="location-photo"
-              className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white px-4 py-5 text-center transition hover:border-emerald-500 hover:bg-emerald-50"
-            >
-              <span className="text-base font-black text-slate-900">
-                {locationPhoto
-                  ? "Retake Location Photo"
-                  : "Snap Location Photo"}
-              </span>
-
-              <span className="mt-1 text-sm font-semibold text-slate-500">
-                Use a wide angle so the yard location is easy to
-                recognize.
-              </span>
-            </label>
-
-            <input
-              id="location-photo"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleLocationPhotoChange}
-              disabled={isSubmitting || isProcessingPhoto}
-              className="sr-only"
-            />
-          </div>
-
-          {isProcessingPhoto ? (
-            <p className="mt-3 text-sm font-semibold text-slate-500">
-              Preparing photo...
-            </p>
-          ) : null}
-
-          {locationPhoto ? (
-            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <img
-                src={locationPhoto.dataUrl}
-                alt="Material location preview"
-                className="h-48 w-full object-cover"
-              />
-            </div>
-          ) : null}
-        </section>
 
         <section>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -687,43 +686,211 @@ export default function CheckInForm({ onSubmit }) {
                   </div>
 
                   {material.saved ? (
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="font-bold text-slate-900">
-                        {material.description}
-                      </p>
+                    <div className="space-y-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-bold text-slate-900">
+                            {material.description}
+                          </p>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          editMaterial(material.id)
-                        }
-                        className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
-                      >
-                        Edit
-                      </button>
+                          <p className="mt-1 text-sm font-semibold text-slate-600">
+                            Location: {material.location}
+                          </p>
+
+                          {material.locationPhoto ? (
+                            <p className="mt-1 text-sm font-semibold text-emerald-700">
+                              Wide location photo attached
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            editMaterial(material.id)
+                          }
+                          className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+                        >
+                          Edit
+                        </button>
+                      </div>
+
+                      {material.locationPhoto ? (
+                        <div className="overflow-hidden rounded-xl border border-emerald-200 bg-white">
+                          <img
+                            src={material.locationPhoto.dataUrl}
+                            alt={`Location for material ${index + 1}`}
+                            className="h-36 w-full object-cover"
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-3 sm:flex-row">
-                      <input
-                        id={`material-${material.id}`}
-                        type="text"
-                        value={material.description}
-                        onChange={(event) =>
-                          updateMaterial(
-                            material.id,
-                            event.target.value,
-                          )
-                        }
-                        placeholder="Example: 2x4-8 SPF Studs"
-                        className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
-                      />
+                    <div className="space-y-4">
+                      <div>
+                        <label
+                          htmlFor={`material-${material.id}`}
+                          className="mb-2 block text-sm font-bold text-slate-700"
+                        >
+                          Material
+                        </label>
+
+                        <input
+                          id={`material-${material.id}`}
+                          type="text"
+                          value={material.description}
+                          onChange={(event) =>
+                            updateMaterial(
+                              material.id,
+                              event.target.value,
+                            )
+                          }
+                          placeholder="Example: 2x4-8 SPF Studs"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`material-location-${material.id}`}
+                          className="mb-2 block text-sm font-bold text-slate-700"
+                        >
+                          Material Location
+                        </label>
+
+                        <select
+                          id={`material-location-${material.id}`}
+                          value={material.location}
+                          onChange={(event) =>
+                            updateMaterialLocation(
+                              material.id,
+                              event.target.value,
+                            )
+                          }
+                          disabled={isSubmitting}
+                          className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:hidden"
+                        >
+                          <option value="">
+                            Select a material location...
+                          </option>
+
+                          {locations.map((location) => (
+                            <option
+                              key={location}
+                              value={location}
+                            >
+                              {location}
+                            </option>
+                          ))}
+                        </select>
+
+                        <input
+                          id={`material-location-search-${material.id}`}
+                          type="text"
+                          list="location-options"
+                          autoComplete="off"
+                          value={material.location}
+                          onChange={(event) =>
+                            updateMaterialLocation(
+                              material.id,
+                              event.target.value,
+                            )
+                          }
+                          disabled={isSubmitting}
+                          placeholder="Where is this material?"
+                          aria-label={`Location for material ${index + 1}`}
+                          className="hidden w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:block"
+                        />
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-sm font-bold text-slate-700">
+                              Material Location Photo
+                            </p>
+
+                            <p className="mt-1 text-sm font-semibold text-slate-500">
+                              Please take a wide photo showing
+                              where this material was placed.
+                            </p>
+                          </div>
+
+                          {material.locationPhoto ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeMaterialPhoto(material.id)
+                              }
+                              disabled={
+                                isSubmitting ||
+                                Boolean(processingPhotoMaterialId)
+                              }
+                              className="rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50"
+                            >
+                              Remove Photo
+                            </button>
+                          ) : null}
+                        </div>
+
+                        <label
+                          htmlFor={`material-photo-${material.id}`}
+                          className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center transition hover:border-emerald-500 hover:bg-emerald-50"
+                        >
+                          <span className="text-sm font-black text-slate-900">
+                            {material.locationPhoto
+                              ? "Retake Wide Photo"
+                              : "Snap Wide Photo"}
+                          </span>
+
+                          <span className="mt-1 text-xs font-semibold text-slate-500">
+                            Wide angle is best so the yard spot is
+                            easy to recognize.
+                          </span>
+                        </label>
+
+                        <input
+                          id={`material-photo-${material.id}`}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(event) =>
+                            handleMaterialPhotoChange(
+                              material.id,
+                              event,
+                            )
+                          }
+                          disabled={
+                            isSubmitting ||
+                            Boolean(processingPhotoMaterialId)
+                          }
+                          className="sr-only"
+                        />
+
+                        {processingPhotoMaterialId ===
+                        material.id ? (
+                          <p className="mt-3 text-sm font-semibold text-slate-500">
+                            Preparing photo...
+                          </p>
+                        ) : null}
+
+                        {material.locationPhoto ? (
+                          <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
+                            <img
+                              src={material.locationPhoto.dataUrl}
+                              alt={`Location preview for material ${index + 1}`}
+                              className="h-36 w-full object-cover"
+                            />
+                          </div>
+                        ) : null}
+                      </div>
 
                       <button
                         type="button"
                         onClick={() =>
                           saveMaterial(material.id)
                         }
-                        className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-800"
+                        className="w-full rounded-xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-800"
                       >
                         Save Material
                       </button>
@@ -754,7 +921,7 @@ export default function CheckInForm({ onSubmit }) {
 
         <button
           type="submit"
-          disabled={isSubmitting || isProcessingPhoto}
+          disabled={isSubmitting || Boolean(processingPhotoMaterialId)}
           className="w-full rounded-xl bg-emerald-700 px-6 py-4 text-lg font-black text-white shadow-md transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
           {isSubmitting ? "Saving..." : "Complete Check In"}

@@ -65,7 +65,7 @@ export default function CheckInCard({
   const [assignmentError, setAssignmentError] = useState("");
   const [isViewingMaterials, setIsViewingMaterials] =
     useState(false);
-  const [isViewingPhoto, setIsViewingPhoto] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState(null);
 
   function openEditor() {
     const currentAssignment = getSavedAssignment(checkIn);
@@ -367,23 +367,41 @@ export default function CheckInCard({
             ) : materials.length > 0 ? (
               <div className="mt-3 space-y-1.5">
                 {mobileVisibleMaterials.map((material) => (
-                  <p
+                  <div
                     key={material.id}
                     className="flex gap-3 text-base font-medium text-[#0F172A] lg:hidden"
                   >
                     <span className="text-[#64748B]">•</span>
-                    <span>{material.description}</span>
-                  </p>
+                    <span className="min-w-0">
+                      <span>{material.description}</span>
+
+                      {material.location ? (
+                        <span className="mt-0.5 block text-sm font-semibold text-[#64748B]">
+                          {material.location}
+                          {material.locationPhoto ? " • Photo" : ""}
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
                 ))}
 
                 {visibleMaterials.map((material) => (
-                  <p
+                  <div
                     key={`desktop-${material.id}`}
                     className="hidden gap-3 text-base font-medium text-[#0F172A] lg:flex lg:text-[17px] lg:leading-tight"
                   >
                     <span className="text-[#64748B]">•</span>
-                    <span>{material.description}</span>
-                  </p>
+                    <span className="min-w-0">
+                      <span>{material.description}</span>
+
+                      {material.location ? (
+                        <span className="mt-0.5 block text-sm font-semibold text-[#64748B]">
+                          {material.location}
+                          {material.locationPhoto ? " • Photo" : ""}
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
                 ))}
 
                 {mobileHiddenMaterialCount > 0 ? (
@@ -451,7 +469,14 @@ export default function CheckInCard({
 
                 <button
                   type="button"
-                  onClick={() => setIsViewingPhoto(true)}
+                  onClick={() =>
+                    setViewingPhoto({
+                      dataUrl: checkIn.locationPhoto.dataUrl,
+                      title: "Location Photo",
+                      subtitle:
+                        "Wide photo of where the material was placed",
+                    })
+                  }
                   className="rounded-lg border border-[#DCE4EF] bg-white px-3 py-2 text-sm font-black text-[#0F172A] transition hover:border-[#1D64C8] hover:text-[#1D64C8]"
                 >
                   View
@@ -460,7 +485,14 @@ export default function CheckInCard({
 
               <button
                 type="button"
-                onClick={() => setIsViewingPhoto(true)}
+                onClick={() =>
+                  setViewingPhoto({
+                    dataUrl: checkIn.locationPhoto.dataUrl,
+                    title: "Location Photo",
+                    subtitle:
+                      "Wide photo of where the material was placed",
+                  })
+                }
                 className="block w-full overflow-hidden rounded-xl"
               >
                 <img
@@ -716,6 +748,37 @@ export default function CheckInCard({
                     <p className="mt-1 text-base font-bold leading-snug text-[#0F172A]">
                       {material.description}
                     </p>
+
+                    {material.location ? (
+                      <p className="mt-2 text-sm font-semibold text-[#64748B]">
+                        Location: {material.location}
+                      </p>
+                    ) : null}
+
+                    {material.locationPhoto?.dataUrl ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setViewingPhoto({
+                            dataUrl:
+                              material.locationPhoto.dataUrl,
+                            title: `Item ${index + 1} Location Photo`,
+                            subtitle: material.description,
+                          })
+                        }
+                        className="mt-3 block w-full overflow-hidden rounded-xl border border-[#DCE4EF] bg-white text-left"
+                      >
+                        <img
+                          src={material.locationPhoto.dataUrl}
+                          alt={`Location for item ${index + 1}`}
+                          className="h-32 w-full object-cover"
+                        />
+
+                        <span className="block px-3 py-2 text-sm font-black text-[#1D64C8]">
+                          View photo
+                        </span>
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -724,7 +787,7 @@ export default function CheckInCard({
         </div>
       ) : null}
 
-      {isViewingPhoto && checkIn.locationPhoto?.dataUrl ? (
+      {viewingPhoto?.dataUrl ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-3 sm:p-6"
           role="dialog"
@@ -742,13 +805,19 @@ export default function CheckInCard({
                   id={`photo-title-${checkIn.id}`}
                   className="mt-1 text-xl font-black text-[#0F172A]"
                 >
-                  Location Photo
+                  {viewingPhoto.title || "Location Photo"}
                 </h3>
+
+                {viewingPhoto.subtitle ? (
+                  <p className="mt-1 text-sm font-semibold text-[#64748B]">
+                    {viewingPhoto.subtitle}
+                  </p>
+                ) : null}
               </div>
 
               <button
                 type="button"
-                onClick={() => setIsViewingPhoto(false)}
+                onClick={() => setViewingPhoto(null)}
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#DCE4EF] text-[#64748B] transition hover:border-slate-400 hover:text-[#0F172A]"
                 aria-label="Close location photo"
               >
@@ -762,7 +831,7 @@ export default function CheckInCard({
 
             <div className="max-h-[74vh] overflow-auto bg-slate-950">
               <img
-                src={checkIn.locationPhoto.dataUrl}
+                src={viewingPhoto.dataUrl}
                 alt={`Material location for PO ${checkIn.poNumber}`}
                 className="h-auto w-full"
               />
