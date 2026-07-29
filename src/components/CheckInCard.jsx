@@ -178,13 +178,7 @@ export default function CheckInCard({
             {checkIn.poNumber}
           </h2>
 
-          <div className="flex shrink-0 items-start gap-2.5 text-right">
-            <Clock3
-              aria-hidden="true"
-              className="mt-0.5 h-7 w-7 shrink-0 text-slate-700"
-              strokeWidth={2.2}
-            />
-
+          <div className="flex shrink-0 items-start text-right">
             <div>
               <p className="text-lg font-black leading-tight text-[#0F172A]">
                 {formatTime(checkIn.checkedInAt)}
