@@ -838,7 +838,7 @@ export default function CheckInCard({
                         />
 
                         <span className="block px-3 py-2 text-sm font-black text-[#1D64C8]">
-                          View photo
+                          View location photo
                         </span>
                       </button>
                     ) : null}

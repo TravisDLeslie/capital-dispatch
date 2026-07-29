@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, ChevronDown } from "lucide-react";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
@@ -497,8 +497,14 @@ export default function SupplierRunsPage({
                                       : "POs"}
                                   </span>
 
-                                  <span className="rounded-lg border border-blue-100 bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
-                                    {stopIsOpen ? "Hide" : "Open"}
+                                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm">
+                                    <ChevronDown
+                                      aria-hidden="true"
+                                      className={`h-5 w-5 transition-transform ${
+                                        stopIsOpen ? "rotate-180" : ""
+                                      }`}
+                                      strokeWidth={2.6}
+                                    />
                                   </span>
                                 </div>
                               </button>
@@ -508,7 +514,7 @@ export default function SupplierRunsPage({
                                   href={getDirectionsUrl(supplierAddress)}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:mx-0 sm:my-3 sm:mr-3"
+                                  className="mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:mx-0 sm:my-6 sm:mr-6"
                                 >
                                   Directions
                                   <ArrowUpRight
@@ -644,8 +650,14 @@ export default function SupplierRunsPage({
                                       : "POs"}
                                   </span>
 
-                                  <span className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
-                                    {stopIsOpen ? "Hide" : "Open"}
+                                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
+                                    <ChevronDown
+                                      aria-hidden="true"
+                                      className={`h-5 w-5 transition-transform ${
+                                        stopIsOpen ? "rotate-180" : ""
+                                      }`}
+                                      strokeWidth={2.6}
+                                    />
                                   </span>
                                 </div>
                               </button>
