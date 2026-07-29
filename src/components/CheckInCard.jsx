@@ -379,6 +379,7 @@ export default function CheckInCard({
                         <span className="mt-0.5 block text-sm font-semibold text-[#64748B]">
                           {material.location}
                           {material.locationPhoto ? " • Photo" : ""}
+                          {material.damagePhoto ? " • Damage" : ""}
                         </span>
                       ) : null}
                     </span>
@@ -398,6 +399,7 @@ export default function CheckInCard({
                         <span className="mt-0.5 block text-sm font-semibold text-[#64748B]">
                           {material.location}
                           {material.locationPhoto ? " • Photo" : ""}
+                          {material.damagePhoto ? " • Damage" : ""}
                         </span>
                       ) : null}
                     </span>
@@ -755,6 +757,18 @@ export default function CheckInCard({
                       </p>
                     ) : null}
 
+                    <p
+                      className={`mt-2 text-sm font-black ${
+                        material.conditionGood === false
+                          ? "text-red-700"
+                          : "text-emerald-700"
+                      }`}
+                    >
+                      {material.conditionGood === false
+                        ? "Damage noted"
+                        : "Good condition"}
+                    </p>
+
                     {material.locationPhoto?.dataUrl ? (
                       <button
                         type="button"
@@ -776,6 +790,30 @@ export default function CheckInCard({
 
                         <span className="block px-3 py-2 text-sm font-black text-[#1D64C8]">
                           View photo
+                        </span>
+                      </button>
+                    ) : null}
+
+                    {material.damagePhoto?.dataUrl ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setViewingPhoto({
+                            dataUrl: material.damagePhoto.dataUrl,
+                            title: `Item ${index + 1} Damage Photo`,
+                            subtitle: material.description,
+                          })
+                        }
+                        className="mt-3 block w-full overflow-hidden rounded-xl border border-red-200 bg-white text-left"
+                      >
+                        <img
+                          src={material.damagePhoto.dataUrl}
+                          alt={`Damage for item ${index + 1}`}
+                          className="h-32 w-full object-cover"
+                        />
+
+                        <span className="block px-3 py-2 text-sm font-black text-red-700">
+                          View damage photo
                         </span>
                       </button>
                     ) : null}
