@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ArrowUpRight } from "lucide-react";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
@@ -57,6 +58,12 @@ function groupRunsByDriverAndVendor(supplierRuns) {
       },
     ];
   }, []);
+}
+
+function getDirectionsUrl(address) {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+    address,
+  )}`;
 }
 
 export default function SupplierRunsPage({
@@ -118,6 +125,16 @@ export default function SupplierRunsPage({
       itemCount: items.length,
       remainingItems,
     };
+  }
+
+  function getVendorGroupAddress(vendorGroup) {
+    const runWithAddress = vendorGroup.runs.find(
+      (supplierRun) =>
+        typeof supplierRun.supplierAddress === "string" &&
+        supplierRun.supplierAddress.trim(),
+    );
+
+    return runWithAddress?.supplierAddress?.trim() || "";
   }
 
   function getDriverGroupStats(driverGroup) {
@@ -433,6 +450,8 @@ export default function SupplierRunsPage({
                     <div className="space-y-3 border-l-4 border-blue-200 pl-3">
                       {driverGroup.vendorGroups.map((vendorGroup) => {
                         const stats = getVendorGroupStats(vendorGroup);
+                        const supplierAddress =
+                          getVendorGroupAddress(vendorGroup);
                         const stopIsOpen = isStopOpen(
                           driverGroup.driver,
                           vendorGroup.vendor,
@@ -443,45 +462,63 @@ export default function SupplierRunsPage({
                             key={vendorGroup.vendor}
                             className="overflow-hidden rounded-xl border border-slate-200 bg-white"
                           >
-                            <button
-                              type="button"
-                              onClick={() =>
-                                toggleStop(
-                                  driverGroup.driver,
-                                  vendorGroup.vendor,
-                                )
-                              }
-                              className="flex w-full flex-col gap-3 px-4 py-3 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
-                              aria-expanded={stopIsOpen}
-                            >
-                              <div className="min-w-0">
-                                <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                                  Supplier Stop
-                                </p>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleStop(
+                                    driverGroup.driver,
+                                    vendorGroup.vendor,
+                                  )
+                                }
+                                className="flex min-w-0 flex-1 flex-col gap-3 px-4 py-3 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
+                                aria-expanded={stopIsOpen}
+                              >
+                                <div className="min-w-0">
+                                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                                    Supplier Stop
+                                  </p>
 
-                                <h5 className="truncate text-xl font-black text-slate-900">
-                                  {vendorGroup.vendor}
-                                </h5>
+                                  <h5 className="truncate text-xl font-black text-slate-900">
+                                    {vendorGroup.vendor}
+                                  </h5>
 
-                                <p className="mt-1 text-sm font-semibold text-slate-500">
-                                  {stats.remainingItems} left of{" "}
-                                  {stats.itemCount} items
-                                </p>
-                              </div>
+                                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                                    {stats.remainingItems} left of{" "}
+                                    {stats.itemCount} items
+                                  </p>
+                                </div>
 
-                              <div className="flex shrink-0 items-center gap-2">
-                                <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-black text-blue-800 shadow-sm">
-                                  {stats.poCount}{" "}
-                                  {stats.poCount === 1
-                                    ? "PO"
-                                    : "POs"}
-                                </span>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-black text-blue-800 shadow-sm">
+                                    {stats.poCount}{" "}
+                                    {stats.poCount === 1
+                                      ? "PO"
+                                      : "POs"}
+                                  </span>
 
-                                <span className="rounded-lg border border-blue-100 bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
-                                  {stopIsOpen ? "Hide" : "Open"}
-                                </span>
-                              </div>
-                            </button>
+                                  <span className="rounded-lg border border-blue-100 bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
+                                    {stopIsOpen ? "Hide" : "Open"}
+                                  </span>
+                                </div>
+                              </button>
+
+                              {supplierAddress ? (
+                                <a
+                                  href={getDirectionsUrl(supplierAddress)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:mx-0 sm:my-3 sm:mr-3"
+                                >
+                                  Directions
+                                  <ArrowUpRight
+                                    aria-hidden="true"
+                                    className="h-4 w-4"
+                                    strokeWidth={2.6}
+                                  />
+                                </a>
+                              ) : null}
+                            </div>
 
                             {stopIsOpen ? (
                               <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-3">
@@ -559,6 +596,8 @@ export default function SupplierRunsPage({
                     <div className="space-y-4">
                       {driverGroup.vendorGroups.map((vendorGroup) => {
                         const stats = getVendorGroupStats(vendorGroup);
+                        const supplierAddress =
+                          getVendorGroupAddress(vendorGroup);
                         const stopIsOpen = isStopOpen(
                           driverGroup.driver,
                           vendorGroup.vendor,
@@ -570,45 +609,63 @@ export default function SupplierRunsPage({
                             key={vendorGroup.vendor}
                             className="overflow-hidden rounded-xl border border-slate-200 bg-white"
                           >
-                            <button
-                              type="button"
-                              onClick={() =>
-                                toggleStop(
-                                  driverGroup.driver,
-                                  vendorGroup.vendor,
-                                  "complete",
-                                )
-                              }
-                              className="flex w-full flex-col gap-3 px-4 py-3 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
-                              aria-expanded={stopIsOpen}
-                            >
-                              <div className="min-w-0">
-                                <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                                  Supplier Stop
-                                </p>
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleStop(
+                                    driverGroup.driver,
+                                    vendorGroup.vendor,
+                                    "complete",
+                                  )
+                                }
+                                className="flex min-w-0 flex-1 flex-col gap-3 px-4 py-3 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
+                                aria-expanded={stopIsOpen}
+                              >
+                                <div className="min-w-0">
+                                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                                    Supplier Stop
+                                  </p>
 
-                                <h5 className="truncate text-lg font-black text-slate-800">
-                                  {vendorGroup.vendor}
-                                </h5>
+                                  <h5 className="truncate text-lg font-black text-slate-800">
+                                    {vendorGroup.vendor}
+                                  </h5>
 
-                                <p className="mt-1 text-sm font-semibold text-emerald-700">
-                                  Complete • {stats.itemCount} items
-                                </p>
-                              </div>
+                                  <p className="mt-1 text-sm font-semibold text-emerald-700">
+                                    Complete • {stats.itemCount} items
+                                  </p>
+                                </div>
 
-                              <div className="flex shrink-0 items-center gap-2">
-                                <span className="rounded-lg bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm">
-                                  {stats.poCount}{" "}
-                                  {stats.poCount === 1
-                                    ? "PO"
-                                    : "POs"}
-                                </span>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <span className="rounded-lg bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm">
+                                    {stats.poCount}{" "}
+                                    {stats.poCount === 1
+                                      ? "PO"
+                                      : "POs"}
+                                  </span>
 
-                                <span className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
-                                  {stopIsOpen ? "Hide" : "Open"}
-                                </span>
-                              </div>
-                            </button>
+                                  <span className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
+                                    {stopIsOpen ? "Hide" : "Open"}
+                                  </span>
+                                </div>
+                              </button>
+
+                              {supplierAddress ? (
+                                <a
+                                  href={getDirectionsUrl(supplierAddress)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:mx-0 sm:my-3 sm:mr-3"
+                                >
+                                  Directions
+                                  <ArrowUpRight
+                                    aria-hidden="true"
+                                    className="h-4 w-4"
+                                    strokeWidth={2.6}
+                                  />
+                                </a>
+                              ) : null}
+                            </div>
 
                             {stopIsOpen ? (
                               <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-3">

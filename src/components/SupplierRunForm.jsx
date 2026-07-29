@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   favoriteSouthDrivers,
   southDrivers,
+  supplierAddresses,
   vendors,
 } from "../data/options";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
@@ -32,9 +33,16 @@ function findMatchingVendor(value) {
   );
 }
 
+function findSupplierAddress(value) {
+  const matchedVendor = findMatchingVendor(value);
+
+  return matchedVendor ? supplierAddresses[matchedVendor] || "" : "";
+}
+
 export default function SupplierRunForm({ onSubmit }) {
   const [poNumber, setPoNumber] = useState("");
   const [vendor, setVendor] = useState("");
+  const [supplierAddress, setSupplierAddress] = useState("");
   const [driver, setDriver] = useState("");
   const [items, setItems] = useState([createEmptyPickupItem()]);
   const [error, setError] = useState("");
@@ -42,6 +50,18 @@ export default function SupplierRunForm({ onSubmit }) {
 
   function clearError() {
     setError("");
+  }
+
+  function updateVendor(value) {
+    setVendor(value);
+
+    const address = findSupplierAddress(value);
+
+    if (address) {
+      setSupplierAddress(address);
+    }
+
+    clearError();
   }
 
   function updateItem(itemId, description) {
@@ -124,6 +144,7 @@ export default function SupplierRunForm({ onSubmit }) {
   function resetForm() {
     setPoNumber("");
     setVendor("");
+    setSupplierAddress("");
     setDriver("");
     setItems([createEmptyPickupItem()]);
     setError("");
@@ -176,6 +197,7 @@ export default function SupplierRunForm({ onSubmit }) {
       id: createId(),
       poNumber,
       vendor: matchedVendor,
+      supplierAddress: supplierAddress.trim(),
       driver,
       items: pickupItems,
       status: "open",
@@ -254,10 +276,7 @@ export default function SupplierRunForm({ onSubmit }) {
             <select
               id="supplier-run-vendor-select"
               value={vendor}
-              onChange={(event) => {
-                setVendor(event.target.value);
-                clearError();
-              }}
+              onChange={(event) => updateVendor(event.target.value)}
               disabled={isSubmitting}
               className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 md:hidden"
             >
@@ -279,10 +298,7 @@ export default function SupplierRunForm({ onSubmit }) {
               list="supplier-run-vendor-options"
               autoComplete="off"
               value={vendor}
-              onChange={(event) => {
-                setVendor(event.target.value);
-                clearError();
-              }}
+              onChange={(event) => updateVendor(event.target.value)}
               disabled={isSubmitting}
               placeholder="Start typing a vendor..."
               aria-label="Vendor"
@@ -341,6 +357,34 @@ export default function SupplierRunForm({ onSubmit }) {
               </optgroup>
             </select>
           </div>
+        </div>
+
+        <div>
+          <label
+            htmlFor="supplier-run-address"
+            className="mb-2 block text-sm font-bold text-slate-700"
+          >
+            Supplier Address
+          </label>
+
+          <input
+            id="supplier-run-address"
+            type="text"
+            autoComplete="street-address"
+            value={supplierAddress}
+            onChange={(event) => {
+              setSupplierAddress(event.target.value);
+              clearError();
+            }}
+            disabled={isSubmitting}
+            placeholder="Optional: address for driver directions"
+            className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+          />
+
+          <p className="mt-2 text-sm font-semibold text-slate-500">
+            Known supplier addresses fill automatically and can be
+            edited.
+          </p>
         </div>
 
         <section>

@@ -45,6 +45,7 @@ type SupplierRunItem = {
 type SupplierRun = {
   id: string;
   driver?: string;
+  supplierAddress?: string;
   items?: SupplierRunItem[];
   status?: string;
   [key: string]: unknown;
@@ -52,7 +53,7 @@ type SupplierRun = {
 
 function canDeletePo(label: string) {
   const enteredCode = window.prompt(
-    `Enter delete code ${DELETE_PO_CODE} to delete ${label}.`,
+    `Enter the internal delete code to delete ${label}.`,
   );
 
   if (enteredCode === null) {

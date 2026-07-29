@@ -13,6 +13,18 @@ export const vendors = [
   "Idaho Fence",
 ];
 
+export const supplierAddresses = {
+  Boise: "4300 S Enterprise St, Boise, ID 83705",
+  Weyerhaeuser: "2600 E Amity Rd, Boise, ID 83716",
+  Orepac: "5500 S Federal Way, Boise, ID 83716",
+  "JM Thomas": "1625 Yamhill Rd, Boise, ID 83716",
+  Woodgrain: "1835 W Commerce Ave, Boise, ID 83705",
+  "Idaho Fence": "225 N Meridian Rd, Meridian, ID 83642",
+  Rugby: "12040 W Executive Dr, Boise, ID 83713",
+  Basalite: "1300 E Franklin Rd, Meridian, ID 83642",
+  Handy: "700 E King St, Meridian, ID 83642",
+};
+
 export const locations = [
   "Building C - Bay 1 Floor",
   "Building C - Bay 1 Rack",
