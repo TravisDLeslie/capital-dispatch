@@ -83,11 +83,14 @@ export default function DeliveryOrderForm({
   const [orderNumber, setOrderNumber] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [address, setAddress] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
   const [driver, setDriver] = useState("");
   const [unloadType, setUnloadType] = useState("Forklift");
   const [hasHardware, setHasHardware] = useState(false);
-  const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [deliveryLocationNotes, setDeliveryLocationNotes] =
+    useState("");
+  const [generalNotes, setGeneralNotes] = useState("");
   const [items, setItems] = useState([createEmptyDeliveryItem()]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,11 +103,19 @@ export default function DeliveryOrderForm({
     setOrderNumber(initialDelivery.orderNumber || "");
     setCustomerName(initialDelivery.customerName || "");
     setAddress(initialDelivery.address || "");
-    setPhoneNumber(initialDelivery.phoneNumber || "");
+    setContactName(initialDelivery.contactName || "");
+    setContactPhone(
+      initialDelivery.contactPhone || initialDelivery.phoneNumber || "",
+    );
     setDriver(initialDelivery.driver || "");
     setUnloadType(initialDelivery.unloadType || "Forklift");
     setHasHardware(Boolean(initialDelivery.hasHardware));
-    setDeliveryNotes(initialDelivery.deliveryNotes || "");
+    setDeliveryLocationNotes(
+      initialDelivery.deliveryLocationNotes ||
+        initialDelivery.deliveryNotes ||
+        "",
+    );
+    setGeneralNotes(initialDelivery.generalNotes || "");
     setItems(createItemsFromDelivery(initialDelivery));
     setError("");
   }, [initialDelivery]);
@@ -195,11 +206,13 @@ export default function DeliveryOrderForm({
     setOrderNumber("");
     setCustomerName("");
     setAddress("");
-    setPhoneNumber("");
+    setContactName("");
+    setContactPhone("");
     setDriver("");
     setUnloadType("Forklift");
     setHasHardware(false);
-    setDeliveryNotes("");
+    setDeliveryLocationNotes("");
+    setGeneralNotes("");
     setItems([createEmptyDeliveryItem()]);
     setError("");
   }
@@ -261,7 +274,9 @@ export default function DeliveryOrderForm({
       orderNumber: orderNumber.trim(),
       customerName: customerName.trim(),
       address: address.trim(),
-      phoneNumber: phoneNumber.trim(),
+      contactName: contactName.trim(),
+      contactPhone: contactPhone.trim(),
+      phoneNumber: contactPhone.trim(),
       driver,
       unloadType,
       hasHardware,
@@ -271,7 +286,9 @@ export default function DeliveryOrderForm({
       hardwarePhoto: hasHardware
         ? initialDelivery?.hardwarePhoto || null
         : null,
-      deliveryNotes: deliveryNotes.trim(),
+      deliveryLocationNotes: deliveryLocationNotes.trim(),
+      generalNotes: generalNotes.trim(),
+      deliveryNotes: deliveryLocationNotes.trim(),
       items: deliveryItems,
       deliveryPhoto: initialDelivery?.deliveryPhoto || null,
       deliveredAt: initialDelivery?.deliveredAt || null,
@@ -352,7 +369,7 @@ export default function DeliveryOrderForm({
               className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
             >
               <UserRound className="h-4 w-4" aria-hidden="true" />
-              Customer
+              Customer / Company
             </label>
 
             <input
@@ -415,7 +432,7 @@ export default function DeliveryOrderForm({
           </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.35fr)]">
+        <div className="grid gap-5 lg:grid-cols-3">
           <div>
             <label
               htmlFor="delivery-address"
@@ -442,24 +459,48 @@ export default function DeliveryOrderForm({
 
           <div>
             <label
-              htmlFor="delivery-phone"
+              htmlFor="delivery-contact-name"
               className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
             >
-              <Phone className="h-4 w-4" aria-hidden="true" />
-              Phone
+              <UserRound className="h-4 w-4" aria-hidden="true" />
+              Contact Name
             </label>
 
             <input
-              id="delivery-phone"
-              type="tel"
-              autoComplete="tel"
-              value={phoneNumber}
+              id="delivery-contact-name"
+              type="text"
+              autoComplete="name"
+              value={contactName}
               onChange={(event) => {
-                setPhoneNumber(formatPhoneNumber(event.target.value));
+                setContactName(event.target.value);
                 clearError();
               }}
               disabled={isSubmitting}
-              placeholder="Customer phone"
+              placeholder="Who will be on site?"
+              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="delivery-contact-phone"
+              className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
+            >
+              <Phone className="h-4 w-4" aria-hidden="true" />
+              Contact Phone
+            </label>
+
+            <input
+              id="delivery-contact-phone"
+              type="tel"
+              autoComplete="tel"
+              value={contactPhone}
+              onChange={(event) => {
+                setContactPhone(formatPhoneNumber(event.target.value));
+                clearError();
+              }}
+              disabled={isSubmitting}
+              placeholder="Contact phone"
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
           </div>
@@ -533,26 +574,50 @@ export default function DeliveryOrderForm({
           </span>
         </label>
 
-        <div>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div>
           <label
-            htmlFor="delivery-notes"
+            htmlFor="delivery-location-notes"
             className="mb-2 block text-sm font-bold text-slate-700"
           >
-            Delivery Notes
+            Delivery Location Notes
           </label>
 
           <textarea
-            id="delivery-notes"
-            value={deliveryNotes}
+            id="delivery-location-notes"
+            value={deliveryLocationNotes}
             onChange={(event) => {
-              setDeliveryNotes(event.target.value);
+              setDeliveryLocationNotes(event.target.value);
               clearError();
             }}
             disabled={isSubmitting}
             rows={3}
-            placeholder='Example: Place on driveway, call "John" before leaving.'
+            placeholder="Example: Place on driveway, leave by garage."
             className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
           />
+          </div>
+
+          <div>
+            <label
+              htmlFor="delivery-general-notes"
+              className="mb-2 block text-sm font-bold text-slate-700"
+            >
+              General Notes
+            </label>
+
+            <textarea
+              id="delivery-general-notes"
+              value={generalNotes}
+              onChange={(event) => {
+                setGeneralNotes(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              rows={3}
+              placeholder='Example: Call "John" before leaving.'
+              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+            />
+          </div>
         </div>
 
         <section>

@@ -75,11 +75,15 @@ type Delivery = {
   orderNumber: string;
   customerName: string;
   address: string;
+  contactName?: string;
+  contactPhone?: string;
   phoneNumber?: string;
   driver: string;
   unloadType: string;
   hasHardware?: boolean;
   hardwareChecked?: boolean;
+  deliveryLocationNotes?: string;
+  generalNotes?: string;
   deliveryNotes?: string;
   items: DeliveryItem[];
   deliveryPhoto?: unknown | null;

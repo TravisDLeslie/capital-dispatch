@@ -178,6 +178,13 @@ export default function DeliveryHistoryPage({ deliveries }) {
             const items = Array.isArray(delivery.items)
               ? delivery.items
               : [];
+            const contactPhone =
+              delivery.contactPhone || delivery.phoneNumber || "";
+            const deliveryLocationNotes =
+              delivery.deliveryLocationNotes ||
+              delivery.deliveryNotes ||
+              "";
+            const generalNotes = delivery.generalNotes || "";
 
             return (
               <article
@@ -219,7 +226,7 @@ export default function DeliveryHistoryPage({ deliveries }) {
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <div className="mt-5 grid gap-4 lg:grid-cols-3">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
                       <MapPin
@@ -236,30 +243,58 @@ export default function DeliveryHistoryPage({ deliveries }) {
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
+                      <UserRound
+                        className="h-4 w-4 text-[#FC2C38]"
+                        aria-hidden="true"
+                      />
+                      Contact
+                    </p>
+
+                    <p className="text-sm font-semibold text-slate-600">
+                      {delivery.contactName || "No contact name added"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
                       <Phone
                         className="h-4 w-4 text-[#FC2C38]"
                         aria-hidden="true"
                       />
-                      Phone
+                      Contact Phone
                     </p>
 
                     <p className="text-sm font-semibold text-slate-600">
-                      {delivery.phoneNumber || "No phone added"}
+                      {contactPhone || "No contact phone added"}
                     </p>
                   </div>
                 </div>
 
-                {delivery.deliveryNotes ? (
-                  <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4">
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                {deliveryLocationNotes ? (
+                  <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
                     <p className="text-sm font-black text-slate-900">
-                      Notes
+                      Delivery Location Notes
                     </p>
 
                     <p className="mt-1 text-sm font-semibold text-slate-700">
-                      {delivery.deliveryNotes}
+                      {deliveryLocationNotes}
                     </p>
                   </div>
                 ) : null}
+
+                {generalNotes ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-black text-slate-900">
+                      General Notes
+                    </p>
+
+                    <p className="mt-1 text-sm font-semibold text-slate-700">
+                      {generalNotes}
+                    </p>
+                  </div>
+                ) : null}
+                </div>
 
                 <div className="mt-5">
                   <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">

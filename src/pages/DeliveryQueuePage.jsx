@@ -9,6 +9,7 @@ import {
   Phone,
   ShieldAlert,
   Truck,
+  UserRound,
 } from "lucide-react";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
@@ -315,6 +316,13 @@ export default function DeliveryQueuePage({
                     : [];
                   const isUpdating =
                     updatingDeliveryId === delivery.id;
+                  const contactPhone =
+                    delivery.contactPhone || delivery.phoneNumber || "";
+                  const deliveryLocationNotes =
+                    delivery.deliveryLocationNotes ||
+                    delivery.deliveryNotes ||
+                    "";
+                  const generalNotes = delivery.generalNotes || "";
 
                   return (
                     <article
@@ -340,16 +348,16 @@ export default function DeliveryQueuePage({
                               {delivery.unloadType}
                             </span>
 
-                            {delivery.phoneNumber ? (
+                            {contactPhone ? (
                               <a
-                                href={`tel:${delivery.phoneNumber.replace(/\D/g, "")}`}
+                                href={`tel:${contactPhone.replace(/\D/g, "")}`}
                                 className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-700 transition hover:text-[#FC2C38]"
                               >
                                 <Phone
                                   className="h-4 w-4"
                                   aria-hidden="true"
                                 />
-                                {delivery.phoneNumber}
+                                {contactPhone}
                               </a>
                             ) : null}
                           </div>
@@ -397,14 +405,46 @@ export default function DeliveryQueuePage({
                         </p>
                       </div>
 
-                      {delivery.deliveryNotes ? (
-                        <div className="mt-4 rounded-2xl border border-red-100 bg-white p-4">
-                          <p className="text-sm font-black text-slate-900">
-                            Notes
+                      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
+                            <UserRound
+                              className="h-4 w-4 text-[#FC2C38]"
+                              aria-hidden="true"
+                            />
+                            Contact
+                          </p>
+
+                          <p className="text-sm font-semibold text-slate-600">
+                            {delivery.contactName || "No contact name added"}
                           </p>
 
                           <p className="mt-1 text-sm font-semibold text-slate-600">
-                            {delivery.deliveryNotes}
+                            {contactPhone || "No contact phone added"}
+                          </p>
+                        </div>
+
+                        {deliveryLocationNotes ? (
+                          <div className="rounded-2xl border border-red-100 bg-white p-4">
+                            <p className="text-sm font-black text-slate-900">
+                              Delivery Location Notes
+                            </p>
+
+                            <p className="mt-1 text-sm font-semibold text-slate-600">
+                              {deliveryLocationNotes}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {generalNotes ? (
+                        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                          <p className="text-sm font-black text-slate-900">
+                            General Notes
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold text-slate-600">
+                            {generalNotes}
                           </p>
                         </div>
                       ) : null}
@@ -521,7 +561,8 @@ export default function DeliveryQueuePage({
                         </ul>
                       </div>
 
-                      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                      <div className="mt-4 space-y-3">
+                        <div className="grid gap-3 lg:grid-cols-2">
                         <label className="flex cursor-pointer flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-red-200 hover:bg-red-50">
                           <span className="flex items-center gap-2 text-sm font-black text-slate-900">
                             <Camera
@@ -545,7 +586,7 @@ export default function DeliveryQueuePage({
                               );
                               event.target.value = "";
                             }}
-                            className="text-sm font-semibold text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-black file:text-white"
+                            className="max-w-full text-sm font-semibold text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-black file:text-white"
                           />
 
                           {delivery.deliveryPhoto ? (
@@ -564,12 +605,13 @@ export default function DeliveryQueuePage({
                           photo={delivery.deliveryPhoto}
                           label="delivery photo"
                         />
+                        </div>
 
                         <button
                           type="button"
                           onClick={() => handleCompleteDelivery(delivery)}
                           disabled={isUpdating}
-                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-5 py-4 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 sm:px-5 sm:py-4"
                         >
                           <CheckCircle2
                             className="h-5 w-5"
