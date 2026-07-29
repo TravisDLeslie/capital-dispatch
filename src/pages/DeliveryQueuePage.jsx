@@ -489,7 +489,7 @@ export default function DeliveryQueuePage({
                             </label>
                           </div>
 
-                          <label className="mt-4 flex cursor-pointer flex-col gap-3 rounded-2xl border border-red-200 bg-white p-4 transition hover:bg-red-50">
+                          <label className="mt-4 flex min-w-0 cursor-pointer flex-col gap-3 rounded-2xl border border-red-200 bg-white p-4 transition hover:bg-red-50">
                             <span className="flex items-center gap-2 text-sm font-black text-slate-900">
                               <Camera
                                 className="h-4 w-4 text-[#FC2C38]"
@@ -512,8 +512,12 @@ export default function DeliveryQueuePage({
                                 );
                                 event.target.value = "";
                               }}
-                              className="text-sm font-semibold text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#FC2C38] file:px-4 file:py-2 file:text-sm file:font-black file:text-white"
+                              className="sr-only"
                             />
+
+                            <span className="inline-flex w-full items-center justify-center rounded-xl bg-[#FC2C38] px-4 py-2.5 text-sm font-black text-white">
+                              Take / Upload Hardware Photo
+                            </span>
 
                             {delivery.hardwarePhoto ? (
                               <span className="text-sm font-bold text-emerald-700">
@@ -563,7 +567,7 @@ export default function DeliveryQueuePage({
 
                       <div className="mt-4 space-y-3">
                         <div className="grid gap-3 lg:grid-cols-2">
-                        <label className="flex cursor-pointer flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-red-200 hover:bg-red-50">
+                        <label className="flex min-w-0 cursor-pointer flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-red-200 hover:bg-red-50">
                           <span className="flex items-center gap-2 text-sm font-black text-slate-900">
                             <Camera
                               className="h-4 w-4 text-[#FC2C38]"
@@ -586,17 +590,20 @@ export default function DeliveryQueuePage({
                               );
                               event.target.value = "";
                             }}
-                            className="max-w-full text-sm font-semibold text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-sm file:font-black file:text-white"
+                            className="sr-only"
                           />
+
+                          <span className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-black text-white">
+                            Take / Upload Delivery Photo
+                          </span>
 
                           {delivery.deliveryPhoto ? (
                             <span className="text-sm font-bold text-emerald-700">
                               Delivery photo saved
                             </span>
                           ) : (
-                            <span className="text-sm font-semibold text-slate-500">
-                              Take a clear photo after dropping off the
-                              material.
+                            <span className="max-w-full text-wrap text-xs font-semibold leading-5 text-slate-500">
+                              Take a clear photo after drop-off.
                             </span>
                           )}
                         </label>
