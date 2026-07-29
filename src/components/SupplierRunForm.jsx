@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { vendors } from "../data/options";
+import {
+  favoriteSouthDrivers,
+  southDrivers,
+  vendors,
+} from "../data/options";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
 
@@ -31,6 +35,7 @@ function findMatchingVendor(value) {
 export default function SupplierRunForm({ onSubmit }) {
   const [poNumber, setPoNumber] = useState("");
   const [vendor, setVendor] = useState("");
+  const [driver, setDriver] = useState("");
   const [items, setItems] = useState([createEmptyPickupItem()]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -119,6 +124,7 @@ export default function SupplierRunForm({ onSubmit }) {
   function resetForm() {
     setPoNumber("");
     setVendor("");
+    setDriver("");
     setItems([createEmptyPickupItem()]);
     setError("");
   }
@@ -135,6 +141,11 @@ export default function SupplierRunForm({ onSubmit }) {
 
     if (!matchedVendor) {
       setError("Select a vendor from the vendor list.");
+      return;
+    }
+
+    if (!southDrivers.includes(driver)) {
+      setError("Select the driver for this South PO.");
       return;
     }
 
@@ -165,6 +176,7 @@ export default function SupplierRunForm({ onSubmit }) {
       id: createId(),
       poNumber,
       vendor: matchedVendor,
+      driver,
       items: pickupItems,
       status: "open",
       createdAt: now,
@@ -195,17 +207,17 @@ export default function SupplierRunForm({ onSubmit }) {
         </p>
 
         <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
-          Add Supplier Run
+          Add South PO
         </h2>
 
         <p className="mt-2 text-slate-500">
-          Add the PO, supplier, and items before the driver leaves
-          or while they are already on the road.
+          Add the PO, supplier, driver, and items before the
+          driver leaves or while they are already on the road.
         </p>
       </div>
 
       <div className="space-y-7">
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid gap-5 lg:grid-cols-3">
           <div>
             <label
               htmlFor="supplier-run-po"
@@ -285,6 +297,49 @@ export default function SupplierRunForm({ onSubmit }) {
                 />
               ))}
             </datalist>
+          </div>
+
+          <div>
+            <label
+              htmlFor="supplier-run-driver"
+              className="mb-2 block text-sm font-bold text-slate-700"
+            >
+              Driver
+            </label>
+
+            <select
+              id="supplier-run-driver"
+              value={driver}
+              onChange={(event) => {
+                setDriver(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+            >
+              <option value="">Select a driver...</option>
+
+              <optgroup label="Favorites">
+                {favoriteSouthDrivers.map((driverOption) => (
+                  <option key={driverOption} value={driverOption}>
+                    {driverOption}
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="All Drivers">
+                {southDrivers
+                  .filter(
+                    (driverOption) =>
+                      !favoriteSouthDrivers.includes(driverOption),
+                  )
+                  .map((driverOption) => (
+                    <option key={driverOption} value={driverOption}>
+                      {driverOption}
+                    </option>
+                  ))}
+              </optgroup>
+            </select>
           </div>
         </div>
 
@@ -394,7 +449,7 @@ export default function SupplierRunForm({ onSubmit }) {
           disabled={isSubmitting}
           className="w-full rounded-xl bg-blue-700 px-6 py-4 text-lg font-black text-white shadow-md transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          {isSubmitting ? "Saving Run..." : "Send to Driver"}
+          {isSubmitting ? "Saving South PO..." : "Send to Driver"}
         </button>
       </div>
     </form>

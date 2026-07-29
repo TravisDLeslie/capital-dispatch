@@ -1,4 +1,5 @@
 import { useState } from "react";
+import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 
 const navigationItems = [
   {
@@ -18,19 +19,19 @@ const navigationItems = [
   },
   {
     group: "Driver",
-    subtitle: "Supplier Runs",
+    subtitle: "South",
     id: "supplier-runs-add",
     label: "Add POs",
   },
   {
     group: "Driver",
-    subtitle: "Supplier Runs",
+    subtitle: "South",
     id: "supplier-runs-check",
     label: "Check POs",
   },
   {
     group: "Driver",
-    subtitle: "Supplier Runs",
+    subtitle: "South",
     id: "supplier-runs-history",
     label: "History",
   },
@@ -81,7 +82,7 @@ export default function AppHeader({ currentPage, onPageChange }) {
 
         {group === "Driver" ? (
           <p className="mb-2 px-2 text-sm font-black text-blue-800">
-            Supplier Runs
+            South
           </p>
         ) : null}
 
@@ -122,15 +123,17 @@ export default function AppHeader({ currentPage, onPageChange }) {
         <button
           type="button"
           onClick={() => handlePageChange("check-in")}
-          className="mb-8 text-left"
+          className="mb-8 block text-left"
         >
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">
-            Capital Lumber
-          </p>
+          <img
+            src={capitalLumberLogo}
+            alt="Capital Lumber Co."
+            className="h-auto w-44"
+          />
 
-          <h1 className="text-2xl font-black tracking-tight text-slate-900">
+          <p className="mt-2 text-sm font-black tracking-tight text-slate-900">
             Dispatch CL
-          </h1>
+          </p>
         </button>
 
         <nav>{renderNavigation()}</nav>
@@ -142,15 +145,17 @@ export default function AppHeader({ currentPage, onPageChange }) {
             <button
               type="button"
               onClick={() => handlePageChange("check-in")}
-              className="text-left"
+              className="min-w-0 text-left"
             >
-              <p className="text-xs font-bold uppercase tracking-[0.22em] text-emerald-700">
-                Capital Lumber
-              </p>
+              <img
+                src={capitalLumberLogo}
+                alt="Capital Lumber Co."
+                className="h-auto w-36 max-w-[52vw]"
+              />
 
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">
+              <p className="mt-1 text-sm font-black tracking-tight text-slate-900">
                 Dispatch CL
-              </h1>
+              </p>
             </button>
 
             <button

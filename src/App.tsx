@@ -37,10 +37,12 @@ type SupplierRunItem = {
   description: string;
   pickedUp: boolean;
   pickedUpAt?: string | null;
+  pickupPhoto?: unknown | null;
 };
 
 type SupplierRun = {
   id: string;
+  driver?: string;
   items?: SupplierRunItem[];
   status?: string;
   [key: string]: unknown;
@@ -185,6 +187,7 @@ export default function App() {
   async function handleToggleSupplierRunItem(
     supplierRunId: string,
     itemId: string,
+    pickupPhoto?: unknown,
   ) {
     const supplierRun = supplierRuns.find(
       (currentSupplierRun) =>
@@ -203,6 +206,7 @@ export default function App() {
             ...item,
             pickedUp: !item.pickedUp,
             pickedUpAt: !item.pickedUp ? checkedAt : null,
+            pickupPhoto: !item.pickedUp ? pickupPhoto : null,
           }
         : item,
     );

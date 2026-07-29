@@ -39,3 +39,20 @@ export const receivingTeamMembers = [
   "Tim",
   "Travis",
 ];
+
+export const favoriteSouthDrivers = [
+  "Austin",
+  "Nolan",
+  "Pete",
+];
+
+export const southDrivers = [
+  ...favoriteSouthDrivers,
+  "Dane",
+  "Isiah",
+  "Justin",
+  "Rory",
+  "Shane",
+  "Tim",
+  "Travis",
+];
