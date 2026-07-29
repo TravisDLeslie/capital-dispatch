@@ -174,7 +174,7 @@ export default function CheckInCard({
     <article className="rounded-[22px] border border-[#DCE4EF] bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition hover:border-slate-300 sm:p-6 lg:rounded-[24px] lg:px-8 lg:py-7">
       <div className="lg:hidden">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-          <h2 className="min-w-0 text-4xl font-black leading-none tracking-tight text-[#0F172A]">
+          <h2 className="min-w-0 whitespace-nowrap text-[26px] font-black leading-none tracking-tight text-[#0F172A]">
             {checkIn.poNumber}
           </h2>
 
@@ -267,7 +267,7 @@ export default function CheckInCard({
       {!isEditing ? (
         <>
           <div className="mt-6 border-t border-[#DCE4EF] pt-5 lg:mt-7 lg:border-t-0 lg:pt-0">
-            <h3 className="text-2xl font-bold tracking-tight text-[#0F172A] sm:text-3xl lg:text-[28px] lg:font-black lg:leading-tight">
+            <h3 className="text-2xl font-bold tracking-tight text-[#0F172A] sm:text-3xl lg:text-[24px] lg:font-black lg:leading-tight">
               {getAssignmentHeading()}
             </h3>
 
