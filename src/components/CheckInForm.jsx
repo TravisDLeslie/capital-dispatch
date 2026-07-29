@@ -13,6 +13,7 @@ function createEmptyMaterial() {
     description: "",
     location: "",
     locationPhoto: null,
+    notes: "",
     conditionGood: true,
     damagePhoto: null,
     saved: false,
@@ -90,7 +91,6 @@ export default function CheckInForm({ onSubmit }) {
   const [vendor, setVendor] = useState("");
   const [poLocation, setPoLocation] = useState("");
   const [checkedInBy, setCheckedInBy] = useState("");
-  const [notes, setNotes] = useState("");
   const [processingPhotoMaterialId, setProcessingPhotoMaterialId] =
     useState("");
 
@@ -160,6 +160,23 @@ export default function CheckInForm({ onSubmit }) {
     clearError();
   }
 
+  function updateMaterialNotes(materialId, value) {
+    setMaterials((currentMaterials) =>
+      currentMaterials.map((material) =>
+        material.id === materialId
+          ? {
+              ...material,
+              notes: value,
+              saved: false,
+            }
+          : material,
+      ),
+    );
+
+    setMaterialsSkipped(false);
+    clearError();
+  }
+
   function updateMaterialCondition(materialId, conditionGood) {
     setMaterials((currentMaterials) =>
       currentMaterials.map((material) =>
@@ -207,6 +224,7 @@ export default function CheckInForm({ onSubmit }) {
               ...item,
               description: item.description.trim(),
               location: findMatchingOption(item.location, locations),
+              notes: item.notes.trim(),
               saved: true,
             }
           : item,
@@ -275,7 +293,6 @@ export default function CheckInForm({ onSubmit }) {
     setVendor("");
     setPoLocation("");
     setCheckedInBy("");
-    setNotes("");
     setProcessingPhotoMaterialId("");
     setMaterials([createEmptyMaterial()]);
     setMaterialsSkipped(false);
@@ -410,8 +427,8 @@ export default function CheckInForm({ onSubmit }) {
       locationPhoto: material.locationPhoto,
       conditionGood: material.conditionGood !== false,
       damagePhoto: material.damagePhoto,
+      notes: material.notes.trim(),
     }));
-    const cleanedNotes = notes.trim();
 
     const newCheckIn = {
       id: createId(),
@@ -419,7 +436,7 @@ export default function CheckInForm({ onSubmit }) {
       vendor: matchedVendor,
       poLocation: matchedLocation,
       checkedInBy,
-      notes: cleanedNotes,
+      notes: "",
 
       orderAssignment: null,
       assignedAt: null,
@@ -627,28 +644,6 @@ export default function CheckInForm({ onSubmit }) {
           </div>
         </div>
 
-        <div>
-          <label
-            htmlFor="receiving-notes"
-            className="mb-2 block text-sm font-bold text-slate-700"
-          >
-            Notes
-          </label>
-
-          <textarea
-            id="receiving-notes"
-            value={notes}
-            onChange={(event) => {
-              setNotes(event.target.value);
-              clearError();
-            }}
-            disabled={isSubmitting}
-            rows={4}
-            placeholder="Example: damaged items, only received 3 of 4 boards..."
-            className="w-full resize-y rounded-xl border border-slate-300 px-4 py-4 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
-          />
-        </div>
-
         <section>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -737,6 +732,12 @@ export default function CheckInForm({ onSubmit }) {
                           {material.locationPhoto ? (
                             <p className="mt-1 text-sm font-semibold text-emerald-700">
                               Wide location photo attached
+                            </p>
+                          ) : null}
+
+                          {material.notes ? (
+                            <p className="mt-1 text-sm font-semibold text-slate-600">
+                              Note: {material.notes}
                             </p>
                           ) : null}
 
@@ -1061,6 +1062,30 @@ export default function CheckInForm({ onSubmit }) {
                             ) : null}
                           </div>
                         ) : null}
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`material-notes-${material.id}`}
+                          className="mb-2 block text-sm font-bold text-slate-700"
+                        >
+                          Material Notes
+                        </label>
+
+                        <textarea
+                          id={`material-notes-${material.id}`}
+                          value={material.notes}
+                          onChange={(event) =>
+                            updateMaterialNotes(
+                              material.id,
+                              event.target.value,
+                            )
+                          }
+                          disabled={isSubmitting}
+                          rows={3}
+                          placeholder="Example: damaged corner, only received 3 of 4 boards..."
+                          className="w-full resize-y rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                        />
                       </div>
 
                       <button

@@ -380,6 +380,7 @@ export default function CheckInCard({
                           {material.location}
                           {material.locationPhoto ? " • Photo" : ""}
                           {material.damagePhoto ? " • Damage" : ""}
+                          {material.notes ? " • Note" : ""}
                         </span>
                       ) : null}
                     </span>
@@ -400,6 +401,7 @@ export default function CheckInCard({
                           {material.location}
                           {material.locationPhoto ? " • Photo" : ""}
                           {material.damagePhoto ? " • Damage" : ""}
+                          {material.notes ? " • Note" : ""}
                         </span>
                       ) : null}
                     </span>
@@ -755,6 +757,18 @@ export default function CheckInCard({
                       <p className="mt-2 text-sm font-semibold text-[#64748B]">
                         Location: {material.location}
                       </p>
+                    ) : null}
+
+                    {material.notes ? (
+                      <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">
+                          Notes
+                        </p>
+
+                        <p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-amber-950">
+                          {material.notes}
+                        </p>
+                      </div>
                     ) : null}
 
                     <p
