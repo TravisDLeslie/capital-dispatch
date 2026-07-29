@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Building2,
+  ChevronRight,
   CircleCheckBig,
   Clock3,
   MapPin,
@@ -159,14 +160,65 @@ export default function CheckInCard({
   }
 
   const visibleMaterials = materials.slice(0, 3);
+  const mobileVisibleMaterials = materials.slice(0, 2);
   const hiddenMaterialCount = Math.max(
     materials.length - visibleMaterials.length,
     0,
   );
+  const mobileHiddenMaterialCount = Math.max(
+    materials.length - mobileVisibleMaterials.length,
+    0,
+  );
 
   return (
-    <article className="rounded-[24px] border border-[#DCE4EF] bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.09)] transition hover:border-slate-300 sm:p-6 lg:px-8 lg:py-7">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+    <article className="rounded-[22px] border border-[#DCE4EF] bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition hover:border-slate-300 sm:p-6 lg:rounded-[24px] lg:px-8 lg:py-7">
+      <div className="lg:hidden">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+          <h2 className="min-w-0 text-[38px] font-black leading-none tracking-tight text-[#0F172A]">
+            {checkIn.poNumber}
+          </h2>
+
+          <div className="flex shrink-0 items-start gap-2.5 text-right">
+            <Clock3
+              aria-hidden="true"
+              className="mt-0.5 h-7 w-7 shrink-0 text-slate-700"
+              strokeWidth={2.2}
+            />
+
+            <div>
+              <p className="text-lg font-black leading-tight text-[#0F172A]">
+                {formatTime(checkIn.checkedInAt)}
+              </p>
+
+              <p className="mt-1 text-base font-medium leading-tight text-[#64748B]">
+                {showFullDate
+                  ? formatFullDate(checkIn.checkedInAt)
+                  : formatShortDate(checkIn.checkedInAt)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 flex min-w-0 items-start gap-3">
+          <Building2
+            aria-hidden="true"
+            className="h-10 w-10 shrink-0 text-[#1D64C8]"
+            strokeWidth={2.1}
+          />
+
+          <div className="min-w-0">
+            <p className="truncate text-xl font-black leading-tight text-[#0F172A]">
+              {checkIn.vendor}
+            </p>
+
+            <p className="mt-1 text-lg font-medium leading-tight text-[#64748B]">
+              Vendor
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="hidden gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:gap-7 lg:gap-8">
           <h2 className="text-3xl font-extrabold leading-none tracking-tight text-[#0F172A] sm:text-4xl lg:text-[46px] lg:font-black lg:leading-none">
             {checkIn.poNumber}
@@ -214,7 +266,7 @@ export default function CheckInCard({
 
       {!isEditing ? (
         <>
-          <div className="mt-8 lg:mt-7">
+          <div className="mt-6 border-t border-[#DCE4EF] pt-5 lg:mt-7 lg:border-t-0 lg:pt-0">
             <h3 className="text-2xl font-bold tracking-tight text-[#0F172A] sm:text-3xl lg:text-[28px] lg:font-black lg:leading-tight">
               {getAssignmentHeading()}
             </h3>
@@ -224,7 +276,7 @@ export default function CheckInCard({
             </p>
           </div>
 
-          <div className="mt-6 border-t border-[#DCE4EF] pt-5">
+          <div className="mt-5 rounded-[18px] border border-[#DCE4EF] px-4 py-4 lg:mt-6 lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-0 lg:py-0 lg:pt-5">
             <div className="grid gap-4 md:grid-cols-2 lg:gap-6">
               <div className="flex items-center gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#E98413]">
@@ -237,14 +289,24 @@ export default function CheckInCard({
                 </div>
 
                 <div className="min-w-0">
-                  <p className="text-lg font-black text-[#0F172A] lg:text-[20px] lg:leading-tight">
+                  <p className="text-base font-medium text-[#64748B] lg:hidden">
+                    Location
+                  </p>
+
+                  <p className="mt-1 text-lg font-black text-[#0F172A] lg:mt-0 lg:text-[20px] lg:leading-tight">
                     {checkIn.poLocation || "No location recorded"}
                   </p>
 
-                  <p className="mt-1 text-base font-medium text-[#64748B] lg:text-[18px] lg:leading-tight">
+                  <p className="mt-1 hidden text-[18px] font-medium leading-tight text-[#64748B] lg:block">
                     Location
                   </p>
                 </div>
+
+                <ChevronRight
+                  aria-hidden="true"
+                  className="ml-auto h-6 w-6 text-[#64748B] lg:hidden"
+                  strokeWidth={2.5}
+                />
               </div>
 
               <div className="flex items-center gap-4 border-t border-[#DCE4EF] pt-4 md:border-l md:border-t-0 md:pl-7 md:pt-0">
@@ -257,7 +319,17 @@ export default function CheckInCard({
                 </div>
 
                 <div className="min-w-0">
-                  <p className="text-lg font-black text-[#0F172A] lg:text-[20px] lg:leading-tight">
+                  <p className="text-base font-medium text-[#64748B] lg:hidden">
+                    Checked In By
+                  </p>
+
+                  <p className="mt-1 text-lg font-black text-[#0F172A] lg:hidden">
+                    {checkIn.checkedInBy
+                      ? checkIn.checkedInBy
+                      : "Checked in"}
+                  </p>
+
+                  <p className="hidden text-[20px] font-black leading-tight text-[#0F172A] lg:block">
                     {checkIn.checkedInBy
                       ? `Checked in by ${checkIn.checkedInBy}`
                       : "Checked in"}
@@ -267,11 +339,17 @@ export default function CheckInCard({
                     {formatTime(checkIn.checkedInAt)}
                   </p>
                 </div>
+
+                <ChevronRight
+                  aria-hidden="true"
+                  className="ml-auto h-6 w-6 text-[#64748B] lg:hidden"
+                  strokeWidth={2.5}
+                />
               </div>
             </div>
           </div>
 
-          <div className="mt-6 border-t border-[#DCE4EF] pt-5">
+          <div className="mt-4 rounded-[18px] border border-[#DCE4EF] px-4 py-4 lg:mt-6 lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-0 lg:py-0 lg:pt-5">
             <div className="flex items-center gap-3">
               <Package
                 aria-hidden="true"
@@ -290,20 +368,46 @@ export default function CheckInCard({
               </p>
             ) : materials.length > 0 ? (
               <div className="mt-3 space-y-1.5">
-                {visibleMaterials.map((material) => (
+                {mobileVisibleMaterials.map((material) => (
                   <p
                     key={material.id}
-                    className="flex gap-3 text-base font-medium text-[#0F172A] lg:text-[17px] lg:leading-tight"
+                    className="flex gap-3 text-base font-medium text-[#0F172A] lg:hidden"
                   >
                     <span className="text-[#64748B]">•</span>
                     <span>{material.description}</span>
                   </p>
                 ))}
 
+                {visibleMaterials.map((material) => (
+                  <p
+                    key={`desktop-${material.id}`}
+                    className="hidden gap-3 text-base font-medium text-[#0F172A] lg:flex lg:text-[17px] lg:leading-tight"
+                  >
+                    <span className="text-[#64748B]">•</span>
+                    <span>{material.description}</span>
+                  </p>
+                ))}
+
+                {mobileHiddenMaterialCount > 0 ? (
+                  <p className="flex items-center pt-3 text-base font-black text-[#1D64C8] lg:hidden">
+                    + {mobileHiddenMaterialCount} more{" "}
+                    {mobileHiddenMaterialCount === 1
+                      ? "item"
+                      : "items"}
+                    <ChevronRight
+                      aria-hidden="true"
+                      className="ml-auto h-6 w-6 text-[#64748B]"
+                      strokeWidth={2.5}
+                    />
+                  </p>
+                ) : null}
+
                 {hiddenMaterialCount > 0 ? (
-                  <p className="pt-1 text-base font-black text-[#1D64C8] lg:text-[17px]">
+                  <p className="hidden pt-1 text-base font-black text-[#1D64C8] lg:block lg:text-[17px]">
                     + {hiddenMaterialCount} more{" "}
-                    {hiddenMaterialCount === 1 ? "item" : "items"}
+                    {hiddenMaterialCount === 1
+                      ? "item"
+                      : "items"}
                   </p>
                 ) : null}
               </div>
@@ -326,11 +430,11 @@ export default function CheckInCard({
             </div>
           ) : null}
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <div className="mt-4 flex gap-3 border-t border-[#DCE4EF] pt-4 sm:justify-end lg:mt-6 lg:border-t-0 lg:pt-0">
             <button
               type="button"
               onClick={openEditor}
-              className="inline-flex items-center justify-center gap-2.5 rounded-xl border border-[#DCE4EF] bg-white px-6 py-2.5 text-base font-black text-[#0F172A] transition hover:border-[#1D64C8] hover:bg-blue-50 hover:text-[#1D64C8]"
+              className="inline-flex flex-1 items-center justify-center gap-2.5 rounded-xl border border-[#DCE4EF] bg-white px-5 py-3 text-base font-black text-[#0F172A] transition hover:border-[#1D64C8] hover:bg-blue-50 hover:text-[#1D64C8] sm:flex-none sm:px-6 sm:py-2.5"
             >
               <Pencil
                 aria-hidden="true"
@@ -344,7 +448,7 @@ export default function CheckInCard({
               <button
                 type="button"
                 onClick={() => onDelete(checkIn.id)}
-                className="inline-flex items-center justify-center gap-2.5 rounded-xl border border-[#EF2B2D] bg-white px-6 py-2.5 text-base font-black text-[#EF2B2D] transition hover:bg-red-50"
+                className="inline-flex flex-1 items-center justify-center gap-2.5 rounded-xl border border-[#EF2B2D] bg-white px-5 py-3 text-base font-black text-[#EF2B2D] transition hover:bg-red-50 sm:flex-none sm:px-6 sm:py-2.5"
               >
                 <Trash2
                   aria-hidden="true"
