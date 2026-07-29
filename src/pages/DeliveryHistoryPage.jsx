@@ -36,6 +36,40 @@ function formatCompletedAt(value) {
   }).format(new Date(value));
 }
 
+function PhotoPreview({ photo, label, isHardware = false }) {
+  if (!photo?.dataUrl) {
+    return null;
+  }
+
+  return (
+    <a
+      href={photo.dataUrl}
+      target="_blank"
+      rel="noreferrer"
+      className={`block overflow-hidden rounded-2xl border bg-white transition ${
+        isHardware
+          ? "border-red-200 hover:bg-red-50"
+          : "border-slate-200 hover:bg-slate-50"
+      }`}
+    >
+      <img
+        src={photo.dataUrl}
+        alt={label}
+        className="h-40 w-full object-cover"
+      />
+
+      <span
+        className={`flex items-center gap-2 px-3 py-2 text-sm font-black ${
+          isHardware ? "text-[#FC2C38]" : "text-slate-700"
+        }`}
+      >
+        <Camera className="h-4 w-4" aria-hidden="true" />
+        View {label}
+      </span>
+    </a>
+  );
+}
+
 export default function DeliveryHistoryPage({ deliveries }) {
   const [searchValue, setSearchValue] = useState("");
 
@@ -250,30 +284,17 @@ export default function DeliveryHistoryPage({ deliveries }) {
                   </ul>
                 </div>
 
-                <div className="mt-5 flex flex-wrap gap-3">
-                  {delivery.deliveryPhoto?.dataUrl ? (
-                    <a
-                      href={delivery.deliveryPhoto.dataUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
-                    >
-                      <Camera className="h-4 w-4" aria-hidden="true" />
-                      View delivery photo
-                    </a>
-                  ) : null}
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <PhotoPreview
+                    photo={delivery.deliveryPhoto}
+                    label="delivery photo"
+                  />
 
-                  {delivery.hardwarePhoto?.dataUrl ? (
-                    <a
-                      href={delivery.hardwarePhoto.dataUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-[#FC2C38] transition hover:bg-red-100"
-                    >
-                      <Camera className="h-4 w-4" aria-hidden="true" />
-                      View hardware photo
-                    </a>
-                  ) : null}
+                  <PhotoPreview
+                    photo={delivery.hardwarePhoto}
+                    label="hardware photo"
+                    isHardware
+                  />
                 </div>
               </article>
             );

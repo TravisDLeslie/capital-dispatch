@@ -29,13 +29,41 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = dataUrl;
+  });
+}
+
 async function createPhotoFromFile(file) {
-  const dataUrl = await readFileAsDataUrl(file);
+  const originalDataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(originalDataUrl);
+  const maxWidth = 720;
+  const scale = Math.min(maxWidth / image.width, 1);
+  const width = Math.round(image.width * scale);
+  const height = Math.round(image.height * scale);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(image, 0, 0, width, height);
+
+  let quality = 0.68;
+  let dataUrl = canvas.toDataURL("image/jpeg", quality);
+
+  while (dataUrl.length > 240000 && quality > 0.34) {
+    quality -= 0.08;
+    dataUrl = canvas.toDataURL("image/jpeg", quality);
+  }
 
   return {
     name: file.name,
-    type: file.type,
-    size: file.size,
+    type: "image/jpeg",
     dataUrl,
     capturedAt: new Date().toISOString(),
   };
@@ -63,6 +91,31 @@ function groupDeliveriesByDriver(deliveries) {
   }, []);
 }
 
+function PhotoPreview({ photo, label }) {
+  if (!photo?.dataUrl) {
+    return null;
+  }
+
+  return (
+    <a
+      href={photo.dataUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="block overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-red-200"
+    >
+      <img
+        src={photo.dataUrl}
+        alt={label}
+        className="h-40 w-full object-cover"
+      />
+
+      <span className="block px-3 py-2 text-sm font-black text-slate-700">
+        View {label}
+      </span>
+    </a>
+  );
+}
+
 export default function DeliveryQueuePage({
   deliveries,
   onUpdateDelivery,
@@ -70,11 +123,28 @@ export default function DeliveryQueuePage({
 }) {
   const [error, setError] = useState("");
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
+  const [selectedDriver, setSelectedDriver] = useState("All");
 
   const openDeliveries = deliveries.filter(
     (delivery) => delivery.status !== "complete",
   );
-  const driverGroups = groupDeliveriesByDriver(openDeliveries);
+  const driverNames = [
+    ...new Set(
+      openDeliveries.map(
+        (delivery) => delivery.driver || "Unassigned Driver",
+      ),
+    ),
+  ].sort((firstDriver, secondDriver) =>
+    firstDriver.localeCompare(secondDriver),
+  );
+  const filteredDeliveries =
+    selectedDriver === "All"
+      ? openDeliveries
+      : openDeliveries.filter(
+          (delivery) =>
+            (delivery.driver || "Unassigned Driver") === selectedDriver,
+        );
+  const driverGroups = groupDeliveriesByDriver(filteredDeliveries);
 
   async function handlePhotoChange(deliveryId, file, photoField) {
     if (!file) {
@@ -168,10 +238,47 @@ export default function DeliveryQueuePage({
         </div>
       ) : null}
 
+      {driverNames.length > 0 ? (
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="mb-3 text-sm font-black text-slate-900">
+            Filter by driver
+          </p>
+
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {["All", ...driverNames].map((driverName) => {
+              const isSelected = selectedDriver === driverName;
+
+              return (
+                <button
+                  key={driverName}
+                  type="button"
+                  onClick={() => setSelectedDriver(driverName)}
+                  className={`shrink-0 rounded-full px-4 py-2 text-sm font-black transition ${
+                    isSelected
+                      ? "bg-[#FC2C38] text-white shadow-sm"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+                  }`}
+                >
+                  {driverName}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       {driverGroups.length === 0 ? (
         <EmptyState
-          title="No deliveries waiting"
-          description="Open delivery orders will appear here by driver."
+          title={
+            openDeliveries.length === 0
+              ? "No deliveries waiting"
+              : "No deliveries for this driver"
+          }
+          description={
+            openDeliveries.length === 0
+              ? "Open delivery orders will appear here by driver."
+              : "Choose another driver or switch back to All."
+          }
         />
       ) : (
         <div className="space-y-6">
@@ -378,6 +485,13 @@ export default function DeliveryQueuePage({
                               </span>
                             )}
                           </label>
+
+                          <div className="mt-4">
+                            <PhotoPreview
+                              photo={delivery.hardwarePhoto}
+                              label="hardware photo"
+                            />
+                          </div>
                         </div>
                       ) : null}
 
@@ -445,6 +559,11 @@ export default function DeliveryQueuePage({
                             </span>
                           )}
                         </label>
+
+                        <PhotoPreview
+                          photo={delivery.deliveryPhoto}
+                          label="delivery photo"
+                        />
 
                         <button
                           type="button"
