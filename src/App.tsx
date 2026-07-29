@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import AppHeader from "./components/AppHeader";
 import CheckInPage from "./pages/CheckInPage";
+import DeliveryHistoryPage from "./pages/DeliveryHistoryPage";
+import DeliveryQueuePage from "./pages/DeliveryQueuePage";
+import DeliveriesPage from "./pages/DeliveriesPage";
 import SearchPage from "./pages/SearchPage";
 import SupplierRunsPage from "./pages/SupplierRunsPage";
 import TodayPage from "./pages/TodayPage";
@@ -19,6 +22,12 @@ import {
   subscribeToSupplierRuns,
   updateSupplierRunItems,
 } from "./utils/supplierRunStorage";
+import {
+  addDelivery,
+  deleteDelivery,
+  subscribeToDeliveries,
+  updateDelivery,
+} from "./utils/deliveryStorage";
 
 const DELETE_PO_CODE = "3105";
 
@@ -54,7 +63,35 @@ type SupplierRun = {
   [key: string]: unknown;
 };
 
-function canDeletePo(label: string) {
+type DeliveryItem = {
+  id: string;
+  quantity?: string;
+  description: string;
+  delivered: boolean;
+};
+
+type Delivery = {
+  id: string;
+  orderNumber: string;
+  customerName: string;
+  address: string;
+  phoneNumber?: string;
+  driver: string;
+  unloadType: string;
+  hasHardware?: boolean;
+  hardwareChecked?: boolean;
+  deliveryNotes?: string;
+  items: DeliveryItem[];
+  deliveryPhoto?: unknown | null;
+  hardwarePhoto?: unknown | null;
+  deliveredAt?: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  [key: string]: unknown;
+};
+
+function canDeleteRecord(label: string) {
   const enteredCode = window.prompt(
     `Enter the internal delete code to delete ${label}.`,
   );
@@ -64,7 +101,7 @@ function canDeletePo(label: string) {
   }
 
   if (enteredCode.trim() !== DELETE_PO_CODE) {
-    window.alert("Incorrect delete code. This PO was not deleted.");
+    window.alert("Incorrect delete code. Nothing was deleted.");
     return false;
   }
 
@@ -79,6 +116,11 @@ export default function App() {
   const [supplierRuns, setSupplierRuns] = useState<
     SupplierRun[]
   >([]);
+  const [deliveries, setDeliveries] = useState<
+    Delivery[]
+  >([]);
+  const [editingDeliveryId, setEditingDeliveryId] =
+    useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState("");
 
@@ -86,6 +128,7 @@ export default function App() {
     let isMounted = true;
     let unsubscribeFromCheckIns = () => {};
     let unsubscribeFromSupplierRuns = () => {};
+    let unsubscribeFromDeliveries = () => {};
 
     async function loadCheckIns() {
       try {
@@ -143,6 +186,23 @@ export default function App() {
           }
         },
       );
+
+      unsubscribeFromDeliveries = subscribeToDeliveries(
+        (savedDeliveries: Delivery[]) => {
+          if (isMounted) {
+            setDeliveries(savedDeliveries);
+            setSyncError("");
+          }
+        },
+        (error: Error) => {
+          console.error("Unable to sync deliveries:", error);
+
+          if (isMounted) {
+            setSyncError(getFirebaseErrorMessage(error));
+            setIsLoading(false);
+          }
+        },
+      );
     } else {
       loadCheckIns();
       subscribeToSupplierRuns(
@@ -155,12 +215,23 @@ export default function App() {
           console.error("Unable to load supplier runs:", error);
         },
       );
+      subscribeToDeliveries(
+        (savedDeliveries: Delivery[]) => {
+          if (isMounted) {
+            setDeliveries(savedDeliveries);
+          }
+        },
+        (error: Error) => {
+          console.error("Unable to load deliveries:", error);
+        },
+      );
     }
 
     return () => {
       isMounted = false;
       unsubscribeFromCheckIns();
       unsubscribeFromSupplierRuns();
+      unsubscribeFromDeliveries();
     };
   }, []);
 
@@ -192,7 +263,7 @@ export default function App() {
         ? `PO ${checkIn.poNumber}`
         : "this check-in";
 
-    if (!canDeletePo(poNumber)) {
+    if (!canDeleteRecord(poNumber)) {
       return;
     }
 
@@ -209,6 +280,55 @@ export default function App() {
 
     setSupplierRuns(updatedSupplierRuns);
     setSyncError("");
+  }
+
+  async function handleAddDelivery(delivery: Delivery) {
+    const updatedDeliveries = await addDelivery(delivery);
+
+    setDeliveries(updatedDeliveries);
+    setSyncError("");
+  }
+
+  async function handleUpdateDelivery(
+    deliveryId: string,
+    deliveryUpdates: Partial<Delivery>,
+  ) {
+    const updatedDeliveries = await updateDelivery(
+      deliveryId,
+      deliveryUpdates,
+    );
+
+    setDeliveries(updatedDeliveries);
+    setSyncError("");
+  }
+
+  async function handleDeleteDelivery(deliveryId: string) {
+    const delivery = deliveries.find(
+      (currentDelivery) => currentDelivery.id === deliveryId,
+    );
+    const orderLabel =
+      typeof delivery?.orderNumber === "string"
+        ? `order ${delivery.orderNumber}`
+        : "this delivery order";
+
+    if (!canDeleteRecord(orderLabel)) {
+      return;
+    }
+
+    const updatedDeliveries = await deleteDelivery(deliveryId);
+
+    setDeliveries(updatedDeliveries);
+    setEditingDeliveryId("");
+    setSyncError("");
+  }
+
+  function handleEditDelivery(deliveryId: string) {
+    setEditingDeliveryId(deliveryId);
+    setCurrentPage("deliveries-add");
+  }
+
+  function handleCancelEditDelivery() {
+    setEditingDeliveryId("");
   }
 
   async function handleToggleSupplierRunItem(
@@ -299,7 +419,7 @@ export default function App() {
         ? `PO ${supplierRun.poNumber}`
         : "this South PO";
 
-    if (!canDeletePo(poNumber)) {
+    if (!canDeleteRecord(poNumber)) {
       return;
     }
 
@@ -380,6 +500,33 @@ export default function App() {
             }
             onDeleteSupplierRun={handleDeleteSupplierRun}
           />
+        );
+
+      case "deliveries-add":
+        return (
+          <DeliveriesPage
+            deliveries={deliveries}
+            onAddDelivery={handleAddDelivery}
+            onUpdateDelivery={handleUpdateDelivery}
+            onDeleteDelivery={handleDeleteDelivery}
+            editingDeliveryId={editingDeliveryId}
+            onEditDelivery={handleEditDelivery}
+            onCancelEditDelivery={handleCancelEditDelivery}
+          />
+        );
+
+      case "deliveries-queue":
+        return (
+          <DeliveryQueuePage
+            deliveries={deliveries}
+            onUpdateDelivery={handleUpdateDelivery}
+            onEditDelivery={handleEditDelivery}
+          />
+        );
+
+      case "deliveries-history":
+        return (
+          <DeliveryHistoryPage deliveries={deliveries} />
         );
 
       case "check-in":

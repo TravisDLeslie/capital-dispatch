@@ -424,7 +424,7 @@ export default function SupplierRunsPage({
                       className="rounded-2xl border border-blue-200 bg-blue-50/80 p-3 shadow-sm ring-1 ring-blue-100 sm:p-4"
                     >
                       <div className="mb-4 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
                           <div className="flex min-w-0 items-center gap-3">
                             <div
                               className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-black ${driverAvatar.colorClass}`}
@@ -444,44 +444,44 @@ export default function SupplierRunsPage({
                             </div>
                           </div>
 
-                        <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-blue-800 shadow-sm">
-                          {driverGroup.vendorGroups.reduce(
-                            (count, vendorGroup) =>
-                              count + vendorGroup.runs.length,
-                            0,
-                          )}{" "}
-                          POs
-                        </div>
-                      </div>
-                      </div>
-
-                      <div className="mb-4 rounded-xl border border-blue-100 bg-white px-4 py-3 shadow-sm">
-                        <div className="mb-2 flex items-center justify-between gap-3 text-sm font-black">
-                          <span className="text-slate-900">
-                            Driver Progress
-                          </span>
-
-                          <span className="text-emerald-700">
-                            {driverStats.progressPercent}%
-                          </span>
+                          <div className="rounded-xl bg-blue-50 px-3 py-2 text-sm font-black text-blue-800">
+                            {driverGroup.vendorGroups.reduce(
+                              (count, vendorGroup) =>
+                                count + vendorGroup.runs.length,
+                              0,
+                            )}{" "}
+                            POs
+                          </div>
                         </div>
 
-                        <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full bg-emerald-600 transition-all"
-                            style={{
-                              width: `${driverStats.progressPercent}%`,
-                            }}
-                          />
-                        </div>
+                        <div className="mt-4">
+                          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.12em]">
+                            <span className="text-slate-500">
+                              Route Progress
+                            </span>
 
-                        <p className="mt-2 text-xs font-bold text-slate-500">
-                          {driverStats.pickedUpItems}/
-                          {driverStats.itemCount} items picked up
-                          {driverStats.remainingItems > 0
-                            ? ` • ${driverStats.remainingItems} left`
-                            : " • complete"}
-                        </p>
+                            <span className="text-emerald-700">
+                              {driverStats.progressPercent}%
+                            </span>
+                          </div>
+
+                          <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className="h-full rounded-full bg-emerald-600 transition-all"
+                              style={{
+                                width: `${driverStats.progressPercent}%`,
+                              }}
+                            />
+                          </div>
+
+                          <p className="mt-2 text-xs font-bold text-slate-500">
+                            {driverStats.pickedUpItems}/
+                            {driverStats.itemCount} items picked up
+                            {driverStats.remainingItems > 0
+                              ? ` • ${driverStats.remainingItems} left`
+                              : " • complete"}
+                          </p>
+                        </div>
                       </div>
 
                     <div className="space-y-3 border-l-4 border-blue-200 pl-3">

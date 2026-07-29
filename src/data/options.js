@@ -68,3 +68,13 @@ export const southDrivers = [
   "Tim",
   "Travis",
 ];
+
+export const favoriteDeliveryDrivers = favoriteSouthDrivers;
+
+export const deliveryDrivers = southDrivers;
+
+export const deliveryUnloadTypes = [
+  "Hand unload",
+  "Dump",
+  "Forklift",
+];

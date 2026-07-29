@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ChevronDown, Package, PackageCheck, Truck } from "lucide-react";
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 
 const navigationItems = [
@@ -18,29 +19,43 @@ const navigationItems = [
     label: "Search PO",
   },
   {
-    group: "Driver",
-    subtitle: "South",
+    group: "South",
     id: "supplier-runs-add",
     label: "Add POs",
   },
   {
-    group: "Driver",
-    subtitle: "South",
+    group: "South",
     id: "supplier-runs-check",
     label: "Check POs",
   },
   {
-    group: "Driver",
-    subtitle: "South",
+    group: "South",
     id: "supplier-runs-history",
+    label: "History",
+  },
+  {
+    group: "Deliveries",
+    id: "deliveries-add",
+    label: "Add Orders",
+  },
+  {
+    group: "Deliveries",
+    id: "deliveries-queue",
+    label: "To Be Delivered",
+  },
+  {
+    group: "Deliveries",
+    id: "deliveries-history",
     label: "History",
   },
 ];
 
 function getNavButtonClass(item, isActive, isMobile = false) {
   const activeClass =
-    item.group === "Driver"
+    item.group === "South"
       ? "bg-blue-700 text-white shadow-sm"
+      : item.group === "Deliveries"
+        ? "bg-[#FC2C38] text-white shadow-sm"
       : "bg-emerald-700 text-white shadow-sm";
 
   const inactiveClass =
@@ -60,36 +75,112 @@ function getCurrentPageLabel(currentPage) {
     return "Check In";
   }
 
-  return currentItem.subtitle
-    ? `${currentItem.subtitle} / ${currentItem.label}`
-    : currentItem.label;
+  return `${currentItem.group} / ${currentItem.label}`;
+}
+
+function getNavGroupIcon(group) {
+  if (group === "South") {
+    return Truck;
+  }
+
+  if (group === "Deliveries") {
+    return PackageCheck;
+  }
+
+  return Package;
 }
 
 export default function AppHeader({ currentPage, onPageChange }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [openNavGroups, setOpenNavGroups] = useState({
+    Receiving: true,
+    South: true,
+    Deliveries: true,
+  });
+
+  useEffect(() => {
+    const currentItem = navigationItems.find(
+      (item) => item.id === currentPage,
+    );
+
+    if (!currentItem) {
+      return;
+    }
+
+    setOpenNavGroups((currentOpenNavGroups) => ({
+      ...currentOpenNavGroups,
+      [currentItem.group]: true,
+    }));
+  }, [currentPage]);
 
   function handlePageChange(pageId) {
     onPageChange(pageId);
     setIsMenuOpen(false);
   }
 
+  function toggleNavGroup(group) {
+    setOpenNavGroups((currentOpenNavGroups) => ({
+      ...currentOpenNavGroups,
+      [group]: !currentOpenNavGroups[group],
+    }));
+  }
+
   function renderNavigation() {
-    return ["Receiving", "Driver"].map((group) => (
-      <div key={group} className="mb-3 last:mb-0">
-        <p className="mb-2 px-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-          {group}
-        </p>
+    return ["Receiving", "South", "Deliveries"].map((group) => {
+      const groupItems = navigationItems.filter(
+        (item) => item.group === group,
+      );
+      const isGroupOpen = openNavGroups[group];
+      const NavGroupIcon = getNavGroupIcon(group);
+      const hasGroupItems = groupItems.length > 0;
+      const groupColorClass =
+        group === "South"
+          ? "text-blue-800"
+          : group === "Deliveries"
+            ? "text-[#FC2C38]"
+            : "text-emerald-800";
 
-        {group === "Driver" ? (
-          <p className="mb-2 px-2 text-sm font-black text-blue-800">
-            South
-          </p>
-        ) : null}
+      return (
+        <div
+          key={group}
+          className="mb-5 border-b border-slate-200 pb-4 last:mb-0 last:border-b-0 last:pb-0"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (hasGroupItems) {
+                toggleNavGroup(group);
+              }
+            }}
+            className={`mb-3 flex w-full items-center justify-between rounded-xl px-2 py-2 text-left text-base font-black uppercase tracking-[0.16em] transition ${
+              hasGroupItems ? "hover:bg-slate-100" : "cursor-default"
+            } ${groupColorClass}`}
+            aria-expanded={isGroupOpen}
+          >
+            <span className="flex items-center gap-2 text-[17px] font-black leading-none">
+              <NavGroupIcon
+                aria-hidden="true"
+                className="h-5 w-5"
+                strokeWidth={2.5}
+              />
+              {group}
+            </span>
+            {hasGroupItems ? (
+              <span className="text-slate-400">
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`h-4 w-4 transition-transform ${
+                    isGroupOpen ? "rotate-180" : ""
+                  }`}
+                  strokeWidth={2.6}
+                />
+              </span>
+            ) : null}
+          </button>
 
-        <div className="space-y-2">
-          {navigationItems
-            .filter((item) => item.group === group)
-            .map((item) => {
+          {hasGroupItems && isGroupOpen ? (
+            <div className="space-y-2 pl-2">
+              {groupItems.map((item) => {
               const isActive = currentPage === item.id;
 
               return (
@@ -111,10 +202,12 @@ export default function AppHeader({ currentPage, onPageChange }) {
                   ) : null}
                 </button>
               );
-            })}
+              })}
+            </div>
+          ) : null}
         </div>
-      </div>
-    ));
+      );
+    });
   }
 
   return (

@@ -1,9 +1,282 @@
 import { useState } from "react";
+import { FileText } from "lucide-react";
+import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 import {
   formatFullDate,
   formatShortDate,
   formatTime,
 } from "../utils/dateHelpers";
+
+const capitalLumberInfo = {
+  name: "Capital Lumber Co, Inc",
+  addressLineOne: "3105 W. State St.",
+  addressLineTwo: "Boise, ID 83703",
+  phone: "208-343-5481",
+};
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatPickupItemsForPrint(items) {
+  if (items.length === 0) {
+    return `
+      <tr>
+        <td colspan="3" class="empty">No pickup items listed.</td>
+      </tr>
+    `;
+  }
+
+  return items
+    .map(
+      (item) => `
+        <tr>
+          <td class="qty">${escapeHtml(item.quantity || "-")}</td>
+          <td>
+            <strong>${escapeHtml(item.description)}</strong>
+            ${
+              item.internalReference
+                ? `<span>SKU / Item # / SO#: ${escapeHtml(
+                    item.internalReference,
+                  )}</span>`
+                : ""
+            }
+          </td>
+          <td>${item.pickedUp ? "Picked up" : "Pending"}</td>
+        </tr>
+      `,
+    )
+    .join("");
+}
+
+function createPickupSheetHtml(supplierRun, items) {
+  const logoUrl = new URL(
+    capitalLumberLogo,
+    window.location.origin,
+  ).href;
+  const createdDate = supplierRun.createdAt
+    ? `${formatFullDate(supplierRun.createdAt)} at ${formatTime(
+        supplierRun.createdAt,
+      )}`
+    : "Not recorded";
+
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Pickup PO ${escapeHtml(supplierRun.poNumber)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            background: #f8fafc;
+            color: #0f172a;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+          .sheet {
+            width: min(8.5in, calc(100vw - 32px));
+            min-height: 11in;
+            margin: 16px auto;
+            padding: 0.55in;
+            background: #fff;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+          }
+          .top {
+            display: flex;
+            justify-content: space-between;
+            gap: 24px;
+            border-bottom: 4px solid #fc2c38;
+            padding-bottom: 22px;
+          }
+          h1 {
+            margin: 0;
+            font-size: 30px;
+            letter-spacing: -0.03em;
+          }
+          .logo {
+            width: 230px;
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin-bottom: 12px;
+          }
+          .muted {
+            color: #64748b;
+            font-size: 13px;
+            font-weight: 700;
+            line-height: 1.5;
+          }
+          .po {
+            text-align: right;
+          }
+          .po strong {
+            display: block;
+            font-size: 28px;
+            letter-spacing: -0.03em;
+          }
+          .section {
+            margin-top: 26px;
+          }
+          .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+          }
+          .box {
+            border: 1px solid #dce4ef;
+            border-radius: 12px;
+            padding: 16px;
+          }
+          .label {
+            margin: 0 0 8px;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+          }
+          .value {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 800;
+            line-height: 1.45;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+          }
+          th {
+            padding: 10px;
+            background: #0f172a;
+            color: #fff;
+            font-size: 12px;
+            text-align: left;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+          }
+          td {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 12px 10px;
+            vertical-align: top;
+            font-size: 14px;
+            line-height: 1.4;
+          }
+          td span {
+            display: block;
+            margin-top: 4px;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 700;
+          }
+          .qty {
+            width: 86px;
+            font-weight: 900;
+          }
+          .empty {
+            color: #64748b;
+            font-weight: 700;
+            text-align: center;
+          }
+          .footer {
+            margin-top: 34px;
+            padding-top: 16px;
+            border-top: 1px solid #dce4ef;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 700;
+          }
+          @media print {
+            body { background: #fff; }
+            .sheet {
+              width: auto;
+              min-height: auto;
+              margin: 0;
+              box-shadow: none;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="sheet">
+          <section class="top">
+            <div>
+              <img
+                class="logo"
+                src="${escapeHtml(logoUrl)}"
+                alt="${escapeHtml(capitalLumberInfo.name)}"
+              />
+              <h1>${escapeHtml(capitalLumberInfo.name)}</h1>
+              <p class="muted">
+                ${escapeHtml(capitalLumberInfo.addressLineOne)}<br />
+                ${escapeHtml(capitalLumberInfo.addressLineTwo)}<br />
+                Phone: ${escapeHtml(capitalLumberInfo.phone)}
+              </p>
+            </div>
+            <div class="po">
+              <p class="label">Pickup PO</p>
+              <strong>${escapeHtml(supplierRun.poNumber)}</strong>
+              <p class="muted">Created ${escapeHtml(createdDate)}</p>
+            </div>
+          </section>
+
+          <section class="section grid">
+            <div class="box">
+              <p class="label">Supplier</p>
+              <p class="value">
+                ${escapeHtml(supplierRun.vendor || "Not listed")}
+              </p>
+              <p class="muted">
+                ${escapeHtml(
+                  supplierRun.supplierAddress || "No address listed",
+                )}
+              </p>
+            </div>
+            <div class="box">
+              <p class="label">Driver</p>
+              <p class="value">
+                ${escapeHtml(supplierRun.driver || "Unassigned")}
+              </p>
+              <p class="muted">For vendor pickup reference</p>
+            </div>
+          </section>
+
+          <section class="section">
+            <p class="label">Items To Pick Up</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Qty</th>
+                  <th>Item Description</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${formatPickupItemsForPrint(items)}
+              </tbody>
+            </table>
+          </section>
+
+          <p class="footer">
+            Generated from Capital Lumber Dispatch.
+          </p>
+        </main>
+        <script>
+          window.addEventListener("load", () => {
+            setTimeout(() => window.print(), 300);
+          });
+        </script>
+      </body>
+    </html>
+  `;
+}
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -152,6 +425,22 @@ export default function SupplierRunCard({
     }
   }
 
+  function openPickupSheet() {
+    const pickupSheetWindow = window.open("", "_blank");
+
+    if (!pickupSheetWindow) {
+      setPhotoError("Allow pop-ups to open the pickup PDF.");
+      return;
+    }
+
+    pickupSheetWindow.document.open();
+    pickupSheetWindow.document.write(
+      createPickupSheetHtml(supplierRun, items),
+    );
+    pickupSheetWindow.document.close();
+    pickupSheetWindow.focus();
+  }
+
   return (
     <article
       className={`rounded-xl border p-4 shadow-sm transition ${
@@ -188,16 +477,31 @@ export default function SupplierRunCard({
           </p>
         </div>
 
-        <div
-          className={`rounded-xl px-3 py-2 text-sm font-black ${
-            isComplete
-              ? "bg-emerald-100 text-emerald-800"
-              : "bg-blue-100 text-blue-800"
-          }`}
-        >
-          {isComplete
-            ? "All picked up"
-            : `${remainingCount} left`}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={openPickupSheet}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <FileText
+              aria-hidden="true"
+              className="h-4 w-4"
+              strokeWidth={2.4}
+            />
+            PDF
+          </button>
+
+          <div
+            className={`rounded-xl px-3 py-2 text-sm font-black ${
+              isComplete
+                ? "bg-emerald-100 text-emerald-800"
+                : "bg-blue-100 text-blue-800"
+            }`}
+          >
+            {isComplete
+              ? "All picked up"
+              : `${remainingCount} left`}
+          </div>
         </div>
       </div>
 
