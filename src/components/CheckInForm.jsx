@@ -89,14 +89,14 @@ async function createLocationPhoto(file) {
 export default function CheckInForm({ onSubmit }) {
   const [poNumber, setPoNumber] = useState("");
   const [vendor, setVendor] = useState("");
-  const [poLocation, setPoLocation] = useState("");
   const [checkedInBy, setCheckedInBy] = useState("");
   const [processingPhotoMaterialId, setProcessingPhotoMaterialId] =
     useState("");
 
-  const [materials, setMaterials] = useState([
+  const [materials, setMaterials] = useState(() => [
     createEmptyMaterial(),
   ]);
+  const [openMaterialId, setOpenMaterialId] = useState("");
 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,21 +107,6 @@ export default function CheckInForm({ onSubmit }) {
 
   function handlePoChange(event) {
     setPoNumber(formatPoNumber(event.target.value));
-    clearError();
-  }
-
-  function handlePoLocationChange(value) {
-    setPoLocation(value);
-    setMaterials((currentMaterials) =>
-      currentMaterials.map((material) =>
-        material.location
-          ? material
-          : {
-              ...material,
-              location: value,
-            },
-      ),
-    );
     clearError();
   }
 
@@ -226,6 +211,7 @@ export default function CheckInForm({ onSubmit }) {
       ),
     );
 
+    setOpenMaterialId("");
     clearError();
   }
 
@@ -241,18 +227,19 @@ export default function CheckInForm({ onSubmit }) {
       ),
     );
 
+    setOpenMaterialId(materialId);
     clearError();
   }
 
   function addMaterial() {
+    const newMaterial = createEmptyMaterial();
+
     setMaterials((currentMaterials) => [
       ...currentMaterials,
-      {
-        ...createEmptyMaterial(),
-        location: poLocation,
-      },
+      newMaterial,
     ]);
 
+    setOpenMaterialId(newMaterial.id);
     clearError();
   }
 
@@ -267,16 +254,21 @@ export default function CheckInForm({ onSubmit }) {
       );
     });
 
+    setOpenMaterialId((currentId) =>
+      currentId === materialId ? "" : currentId,
+    );
     clearError();
   }
 
   function resetForm() {
+    const newMaterial = createEmptyMaterial();
+
     setPoNumber("");
     setVendor("");
-    setPoLocation("");
     setCheckedInBy("");
     setProcessingPhotoMaterialId("");
-    setMaterials([createEmptyMaterial()]);
+    setMaterials([newMaterial]);
+    setOpenMaterialId("");
     setError("");
   }
 
@@ -362,16 +354,6 @@ export default function CheckInForm({ onSubmit }) {
       return;
     }
 
-    const matchedLocation = findMatchingOption(
-      poLocation,
-      locations,
-    );
-
-    if (!matchedLocation) {
-      setError("Select a location for the PO.");
-      return;
-    }
-
     if (!receivingTeamMembers.includes(checkedInBy)) {
       setError("Select who checked in this PO.");
       return;
@@ -402,20 +384,32 @@ export default function CheckInForm({ onSubmit }) {
     const cleanedMaterials = enteredMaterials.map((material) => ({
       id: material.id,
       description: material.description.trim(),
-      location:
-        findMatchingOption(material.location, locations) ||
-        matchedLocation,
+      location: findMatchingOption(material.location, locations),
       locationPhoto: material.locationPhoto,
       conditionGood: material.conditionGood !== false,
       damagePhoto: material.damagePhoto,
       notes: material.notes.trim(),
     }));
 
+    const materialLocations = [
+      ...new Set(
+        cleanedMaterials
+          .map((material) => material.location)
+          .filter(Boolean),
+      ),
+    ];
+    const poLocation =
+      materialLocations.length === 1
+        ? materialLocations[0]
+        : materialLocations.length > 1
+          ? "Multiple material locations"
+          : "";
+
     const newCheckIn = {
       id: createId(),
       poNumber,
       vendor: matchedVendor,
-      poLocation: matchedLocation,
+      poLocation,
       checkedInBy,
       notes: "",
 
@@ -542,60 +536,7 @@ export default function CheckInForm({ onSubmit }) {
           </div>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2">
-          <div>
-            <label
-              htmlFor="po-location-select"
-              className="mb-2 block text-sm font-bold text-slate-700"
-            >
-              PO Location
-            </label>
-
-            <select
-              id="po-location-select"
-              value={poLocation}
-              onChange={(event) =>
-                handlePoLocationChange(event.target.value)
-              }
-              disabled={isSubmitting}
-              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:hidden"
-            >
-              <option value="">Select a location...</option>
-
-              {locations.map((location) => (
-                <option key={location} value={location}>
-                  {location}
-                </option>
-              ))}
-            </select>
-
-            <input
-              id="po-location-search"
-              type="text"
-              list="location-options"
-              autoComplete="off"
-              value={poLocation}
-              onChange={(event) =>
-                handlePoLocationChange(event.target.value)
-              }
-              disabled={isSubmitting}
-              placeholder="Where was this PO placed?"
-              aria-label="PO Location"
-              className="hidden w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:block"
-            />
-
-            <datalist id="location-options">
-              {locations.map((location) => (
-                <option key={location} value={location} />
-              ))}
-            </datalist>
-
-            <p className="mt-2 text-sm text-slate-500">
-              Used as the default for each material. You can change
-              individual material locations below.
-            </p>
-          </div>
-
+        <div>
           <div>
             <label
               htmlFor="checked-in-by"
@@ -625,6 +566,12 @@ export default function CheckInForm({ onSubmit }) {
           </div>
         </div>
 
+        <datalist id="location-options">
+          {locations.map((location) => (
+            <option key={location} value={location} />
+          ))}
+        </datalist>
+
         <section>
           <div className="mb-4">
             <h3 className="text-sm font-bold text-slate-700">
@@ -638,7 +585,11 @@ export default function CheckInForm({ onSubmit }) {
           </div>
 
           <div className="space-y-3">
-            {materials.map((material, index) => (
+            {materials.map((material, index) => {
+              const isMaterialOpen =
+                openMaterialId === material.id;
+
+              return (
               <div
                 key={material.id}
                 className={`rounded-2xl border ${
@@ -692,28 +643,62 @@ export default function CheckInForm({ onSubmit }) {
                   </div>
                 ) : (
                   <>
-                    <div className="mb-4 flex items-center justify-between">
-                      <div>
-                        <h4 className="font-bold text-slate-900">
-                          Material {index + 1}
-                        </h4>
+                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-bold text-slate-900">
+                            {material.description.trim() ||
+                              `Material ${index + 1}`}
+                          </h4>
+
+                          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] text-amber-700">
+                            Open
+                          </span>
+                        </div>
 
                         <p className="mt-1 text-sm font-semibold text-slate-500">
-                          Enter material details, location, photos,
-                          and notes.
+                          {material.location ||
+                            "Choose a material location"}
+                          {material.locationPhoto
+                            ? " • Location photo"
+                            : ""}
+                          {material.damagePhoto
+                            ? " • Damage photo"
+                            : ""}
+                          {material.notes ? " • Note" : ""}
                         </p>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => removeMaterial(material.id)}
-                        className="text-sm font-semibold text-red-600 hover:text-red-800"
-                      >
-                        Remove
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenMaterialId((currentId) =>
+                              currentId === material.id
+                                ? ""
+                                : material.id,
+                            )
+                          }
+                          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+                        >
+                          {isMaterialOpen ? "Collapse" : "Open"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => removeMaterial(material.id)}
+                          className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="space-y-4">
+                    <div
+                      className={`space-y-4 ${
+                        isMaterialOpen ? "block" : "hidden"
+                      }`}
+                    >
                       <div>
                         <label
                           htmlFor={`material-${material.id}`}
@@ -1028,7 +1013,8 @@ export default function CheckInForm({ onSubmit }) {
                   </>
                 )}
               </div>
-            ))}
+              );
+            })}
 
             <button
               type="button"

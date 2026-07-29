@@ -173,6 +173,14 @@ export default function CheckInCard({
     materials.length - mobileVisibleMaterials.length,
     0,
   );
+  const hasMaterialDetails = materials.some(
+    (material) =>
+      material.location ||
+      material.notes ||
+      material.conditionGood === false ||
+      material.locationPhoto?.dataUrl ||
+      material.damagePhoto?.dataUrl,
+  );
 
   return (
     <article className="rounded-[22px] border border-[#DCE4EF] bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition hover:border-slate-300 sm:p-6 lg:rounded-[24px] lg:px-8 lg:py-7">
@@ -426,6 +434,22 @@ export default function CheckInCard({
                   </button>
                 ) : null}
 
+                {mobileHiddenMaterialCount === 0 &&
+                hasMaterialDetails ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsViewingMaterials(true)}
+                    className="flex w-full items-center pt-3 text-left text-base font-black text-[#1D64C8] transition hover:text-blue-800 lg:hidden"
+                  >
+                    View material details
+                    <ChevronRight
+                      aria-hidden="true"
+                      className="ml-auto h-6 w-6 text-[#64748B]"
+                      strokeWidth={2.5}
+                    />
+                  </button>
+                ) : null}
+
                 {hiddenMaterialCount > 0 ? (
                   <button
                     type="button"
@@ -436,6 +460,17 @@ export default function CheckInCard({
                     {hiddenMaterialCount === 1
                       ? "item"
                       : "items"}
+                  </button>
+                ) : null}
+
+                {hiddenMaterialCount === 0 &&
+                hasMaterialDetails ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsViewingMaterials(true)}
+                    className="hidden pt-1 text-left text-base font-black text-[#1D64C8] transition hover:text-blue-800 lg:block lg:text-[17px]"
+                  >
+                    View material details
                   </button>
                 ) : null}
               </div>
