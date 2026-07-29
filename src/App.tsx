@@ -20,6 +20,8 @@ import {
   updateSupplierRunItems,
 } from "./utils/supplierRunStorage";
 
+const DELETE_PO_CODE = "3105";
+
 type CheckIn = {
   id: string;
   [key: string]: unknown;
@@ -47,6 +49,23 @@ type SupplierRun = {
   status?: string;
   [key: string]: unknown;
 };
+
+function canDeletePo(label: string) {
+  const enteredCode = window.prompt(
+    `Enter delete code ${DELETE_PO_CODE} to delete ${label}.`,
+  );
+
+  if (enteredCode === null) {
+    return false;
+  }
+
+  if (enteredCode.trim() !== DELETE_PO_CODE) {
+    window.alert("Incorrect delete code. This PO was not deleted.");
+    return false;
+  }
+
+  return true;
+}
 
 export default function App() {
   const [currentPage, setCurrentPage] =
@@ -161,11 +180,15 @@ export default function App() {
   }
 
   async function handleDeleteCheckIn(checkInId: string) {
-    const shouldDelete = window.confirm(
-      "Are you sure you want to delete this check-in?",
+    const checkIn = checkIns.find(
+      (currentCheckIn) => currentCheckIn.id === checkInId,
     );
+    const poNumber =
+      typeof checkIn?.poNumber === "string"
+        ? `PO ${checkIn.poNumber}`
+        : "this check-in";
 
-    if (!shouldDelete) {
+    if (!canDeletePo(poNumber)) {
       return;
     }
 
@@ -255,11 +278,16 @@ export default function App() {
   }
 
   async function handleDeleteSupplierRun(supplierRunId: string) {
-    const shouldDelete = window.confirm(
-      "Are you sure you want to delete this supplier PO?",
+    const supplierRun = supplierRuns.find(
+      (currentSupplierRun) =>
+        currentSupplierRun.id === supplierRunId,
     );
+    const poNumber =
+      typeof supplierRun?.poNumber === "string"
+        ? `PO ${supplierRun.poNumber}`
+        : "this South PO";
 
-    if (!shouldDelete) {
+    if (!canDeletePo(poNumber)) {
       return;
     }
 
