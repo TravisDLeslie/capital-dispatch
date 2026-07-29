@@ -31,12 +31,65 @@ function findMatchingOption(value, options) {
   );
 }
 
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = dataUrl;
+  });
+}
+
+async function createLocationPhoto(file) {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(originalDataUrl);
+  const maxWidth = 1000;
+  const scale = Math.min(maxWidth / image.width, 1);
+  const width = Math.round(image.width * scale);
+  const height = Math.round(image.height * scale);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(image, 0, 0, width, height);
+
+  let quality = 0.72;
+  let dataUrl = canvas.toDataURL("image/jpeg", quality);
+
+  while (dataUrl.length > 700000 && quality > 0.38) {
+    quality -= 0.08;
+    dataUrl = canvas.toDataURL("image/jpeg", quality);
+  }
+
+  return {
+    dataUrl,
+    name: file.name,
+    type: "image/jpeg",
+    capturedAt: new Date().toISOString(),
+  };
+}
+
 export default function CheckInForm({ onSubmit }) {
   const [poNumber, setPoNumber] = useState("");
   const [vendor, setVendor] = useState("");
   const [poLocation, setPoLocation] = useState("");
   const [checkedInBy, setCheckedInBy] = useState("");
   const [notes, setNotes] = useState("");
+  const [locationPhoto, setLocationPhoto] = useState(null);
+  const [isProcessingPhoto, setIsProcessingPhoto] =
+    useState(false);
 
   const [materials, setMaterials] = useState([
     createEmptyMaterial(),
@@ -154,13 +207,48 @@ export default function CheckInForm({ onSubmit }) {
     setPoLocation("");
     setCheckedInBy("");
     setNotes("");
+    setLocationPhoto(null);
     setMaterials([createEmptyMaterial()]);
     setMaterialsSkipped(false);
     setError("");
   }
 
+  async function handleLocationPhotoChange(event) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setError("Choose an image file for the location photo.");
+      event.target.value = "";
+      return;
+    }
+
+    setIsProcessingPhoto(true);
+    clearError();
+
+    try {
+      const photo = await createLocationPhoto(file);
+      setLocationPhoto(photo);
+    } catch (photoError) {
+      console.error("Unable to prepare photo:", photoError);
+      setError("Unable to prepare that photo. Try taking it again.");
+      setLocationPhoto(null);
+    } finally {
+      setIsProcessingPhoto(false);
+      event.target.value = "";
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
+
+    if (isProcessingPhoto) {
+      setError("Wait for the location photo to finish preparing.");
+      return;
+    }
 
     if (!/^\d{3}-\d{3}$/.test(poNumber)) {
       setError("Enter a complete six-digit PO number.");
@@ -224,6 +312,7 @@ export default function CheckInForm({ onSubmit }) {
       poLocation: matchedLocation,
       checkedInBy,
       notes: cleanedNotes,
+      locationPhoto,
 
       orderAssignment: null,
       assignedAt: null,
@@ -454,6 +543,76 @@ export default function CheckInForm({ onSubmit }) {
           />
         </div>
 
+        <section className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-700">
+                Location Photo
+              </h3>
+
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                Please take a wide photo showing where the material
+                was placed.
+              </p>
+            </div>
+
+            {locationPhoto ? (
+              <button
+                type="button"
+                onClick={() => setLocationPhoto(null)}
+                disabled={isSubmitting || isProcessingPhoto}
+                className="rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-50"
+              >
+                Remove Photo
+              </button>
+            ) : null}
+          </div>
+
+          <div className="mt-4">
+            <label
+              htmlFor="location-photo"
+              className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white px-4 py-5 text-center transition hover:border-emerald-500 hover:bg-emerald-50"
+            >
+              <span className="text-base font-black text-slate-900">
+                {locationPhoto
+                  ? "Retake Location Photo"
+                  : "Snap Location Photo"}
+              </span>
+
+              <span className="mt-1 text-sm font-semibold text-slate-500">
+                Use a wide angle so the yard location is easy to
+                recognize.
+              </span>
+            </label>
+
+            <input
+              id="location-photo"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleLocationPhotoChange}
+              disabled={isSubmitting || isProcessingPhoto}
+              className="sr-only"
+            />
+          </div>
+
+          {isProcessingPhoto ? (
+            <p className="mt-3 text-sm font-semibold text-slate-500">
+              Preparing photo...
+            </p>
+          ) : null}
+
+          {locationPhoto ? (
+            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <img
+                src={locationPhoto.dataUrl}
+                alt="Material location preview"
+                className="h-48 w-full object-cover"
+              />
+            </div>
+          ) : null}
+        </section>
+
         <section>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -595,9 +754,10 @@ export default function CheckInForm({ onSubmit }) {
 
         <button
           type="submit"
-          className="w-full rounded-xl bg-emerald-700 px-6 py-4 text-lg font-black text-white shadow-md transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-300"
+          disabled={isSubmitting || isProcessingPhoto}
+          className="w-full rounded-xl bg-emerald-700 px-6 py-4 text-lg font-black text-white shadow-md transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-300 disabled:cursor-not-allowed disabled:bg-slate-400"
         >
-          Complete Check In
+          {isSubmitting ? "Saving..." : "Complete Check In"}
         </button>
       </div>
     </form>

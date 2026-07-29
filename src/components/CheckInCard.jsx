@@ -65,6 +65,7 @@ export default function CheckInCard({
   const [assignmentError, setAssignmentError] = useState("");
   const [isViewingMaterials, setIsViewingMaterials] =
     useState(false);
+  const [isViewingPhoto, setIsViewingPhoto] = useState(false);
 
   function openEditor() {
     const currentAssignment = getSavedAssignment(checkIn);
@@ -435,6 +436,42 @@ export default function CheckInCard({
             </div>
           ) : null}
 
+          {checkIn.locationPhoto?.dataUrl ? (
+            <div className="mt-5 rounded-2xl border border-[#DCE4EF] bg-slate-50 p-3">
+              <div className="mb-3 flex items-center justify-between gap-3 px-1">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#64748B]">
+                    Location Photo
+                  </p>
+
+                  <p className="mt-1 text-sm font-semibold text-[#64748B]">
+                    Wide photo of where the material was placed
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsViewingPhoto(true)}
+                  className="rounded-lg border border-[#DCE4EF] bg-white px-3 py-2 text-sm font-black text-[#0F172A] transition hover:border-[#1D64C8] hover:text-[#1D64C8]"
+                >
+                  View
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsViewingPhoto(true)}
+                className="block w-full overflow-hidden rounded-xl"
+              >
+                <img
+                  src={checkIn.locationPhoto.dataUrl}
+                  alt={`Material location for PO ${checkIn.poNumber}`}
+                  className="h-36 w-full object-cover sm:h-44"
+                />
+              </button>
+            </div>
+          ) : null}
+
           <div className="mt-4 flex gap-3 border-t border-[#DCE4EF] pt-4 sm:justify-end lg:mt-6 lg:border-t-0 lg:pt-0">
             <button
               type="button"
@@ -682,6 +719,53 @@ export default function CheckInCard({
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isViewingPhoto && checkIn.locationPhoto?.dataUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`photo-title-${checkIn.id}`}
+        >
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[22px] bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-[#DCE4EF] px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#64748B]">
+                  PO {checkIn.poNumber}
+                </p>
+
+                <h3
+                  id={`photo-title-${checkIn.id}`}
+                  className="mt-1 text-xl font-black text-[#0F172A]"
+                >
+                  Location Photo
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsViewingPhoto(false)}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#DCE4EF] text-[#64748B] transition hover:border-slate-400 hover:text-[#0F172A]"
+                aria-label="Close location photo"
+              >
+                <X
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                  strokeWidth={2.4}
+                />
+              </button>
+            </div>
+
+            <div className="max-h-[74vh] overflow-auto bg-slate-950">
+              <img
+                src={checkIn.locationPhoto.dataUrl}
+                alt={`Material location for PO ${checkIn.poNumber}`}
+                className="h-auto w-full"
+              />
             </div>
           </div>
         </div>
