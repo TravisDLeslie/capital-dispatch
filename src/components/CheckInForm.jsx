@@ -98,7 +98,6 @@ export default function CheckInForm({ onSubmit }) {
     createEmptyMaterial(),
   ]);
 
-  const [materialsSkipped, setMaterialsSkipped] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -139,7 +138,6 @@ export default function CheckInForm({ onSubmit }) {
       ),
     );
 
-    setMaterialsSkipped(false);
     clearError();
   }
 
@@ -156,7 +154,6 @@ export default function CheckInForm({ onSubmit }) {
       ),
     );
 
-    setMaterialsSkipped(false);
     clearError();
   }
 
@@ -173,7 +170,6 @@ export default function CheckInForm({ onSubmit }) {
       ),
     );
 
-    setMaterialsSkipped(false);
     clearError();
   }
 
@@ -193,7 +189,6 @@ export default function CheckInForm({ onSubmit }) {
       ),
     );
 
-    setMaterialsSkipped(false);
     clearError();
   }
 
@@ -258,7 +253,6 @@ export default function CheckInForm({ onSubmit }) {
       },
     ]);
 
-    setMaterialsSkipped(false);
     clearError();
   }
 
@@ -276,18 +270,6 @@ export default function CheckInForm({ onSubmit }) {
     clearError();
   }
 
-  function skipMaterials() {
-    setMaterialsSkipped(true);
-    setMaterials([createEmptyMaterial()]);
-    clearError();
-  }
-
-  function restoreMaterials() {
-    setMaterialsSkipped(false);
-    setMaterials([createEmptyMaterial()]);
-    clearError();
-  }
-
   function resetForm() {
     setPoNumber("");
     setVendor("");
@@ -295,7 +277,6 @@ export default function CheckInForm({ onSubmit }) {
     setCheckedInBy("");
     setProcessingPhotoMaterialId("");
     setMaterials([createEmptyMaterial()]);
-    setMaterialsSkipped(false);
     setError("");
   }
 
@@ -400,9 +381,9 @@ export default function CheckInForm({ onSubmit }) {
       material.description.trim(),
     );
 
-    if (!materialsSkipped && enteredMaterials.length === 0) {
+    if (enteredMaterials.length === 0) {
       setError(
-        "Add at least one material or choose Skip Materials.",
+        "Add at least one material before completing the PO check-in.",
       );
       return;
     }
@@ -411,7 +392,7 @@ export default function CheckInForm({ onSubmit }) {
       (material) => !material.saved,
     );
 
-    if (!materialsSkipped && unsavedMaterial) {
+    if (unsavedMaterial) {
       setError(
         "Save each material before completing the PO check-in.",
       );
@@ -441,8 +422,8 @@ export default function CheckInForm({ onSubmit }) {
       orderAssignment: null,
       assignedAt: null,
 
-      materials: materialsSkipped ? [] : cleanedMaterials,
-      materialsSkipped,
+      materials: cleanedMaterials,
+      materialsSkipped: false,
 
       checkedInAt: new Date().toISOString(),
     };
@@ -645,147 +626,93 @@ export default function CheckInForm({ onSubmit }) {
         </div>
 
         <section>
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-slate-700">
-                Materials
-              </h3>
+          <div className="mb-4">
+            <h3 className="text-sm font-bold text-slate-700">
+              Materials
+            </h3>
 
-              <p className="mt-1 text-sm text-slate-500">
-                Save each entered material, or skip this section.
-              </p>
-            </div>
-
-            {!materialsSkipped ? (
-              <button
-                type="button"
-                onClick={skipMaterials}
-                disabled={isSubmitting}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-100"
-              >
-                Skip Materials
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={restoreMaterials}
-                disabled={isSubmitting}
-                className="rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-900"
-              >
-                Add Materials
-              </button>
-            )}
+            <p className="mt-1 text-sm text-slate-500">
+              Add each material, then open a material only when you
+              need to edit its details.
+            </p>
           </div>
 
-          {materialsSkipped ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-800">
-              Materials will be skipped. The PO number, vendor, and
-              location will still be saved.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {materials.map((material, index) => (
-                <div
-                  key={material.id}
-                  className={`rounded-2xl border p-4 ${
-                    material.saved
-                      ? "border-emerald-300 bg-emerald-50"
-                      : "border-slate-200 bg-slate-50"
-                  }`}
-                >
-                  <div className="mb-4 flex items-center justify-between">
-                    <div>
-                      <h4 className="font-bold text-slate-900">
-                        Material {index + 1}
-                      </h4>
+          <div className="space-y-3">
+            {materials.map((material, index) => (
+              <div
+                key={material.id}
+                className={`rounded-2xl border ${
+                  material.saved
+                    ? "border-emerald-200 bg-white"
+                    : "border-slate-200 bg-slate-50 p-4"
+                }`}
+              >
+                {material.saved ? (
+                  <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="font-bold text-slate-900">
+                          Material {index + 1}
+                        </h4>
 
-                      {material.saved ? (
-                        <p className="mt-1 text-sm font-semibold text-emerald-700">
-                          ✓ Material saved
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        removeMaterial(material.id)
-                      }
-                      className="text-sm font-semibold text-red-600 hover:text-red-800"
-                    >
-                      Remove
-                    </button>
-                  </div>
-
-                  {material.saved ? (
-                    <div className="space-y-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="font-bold text-slate-900">
-                            {material.description}
-                          </p>
-
-                          <p className="mt-1 text-sm font-semibold text-slate-600">
-                            Location: {material.location}
-                          </p>
-
-                          {material.locationPhoto ? (
-                            <p className="mt-1 text-sm font-semibold text-emerald-700">
-                              Wide location photo attached
-                            </p>
-                          ) : null}
-
-                          {material.notes ? (
-                            <p className="mt-1 text-sm font-semibold text-slate-600">
-                              Note: {material.notes}
-                            </p>
-                          ) : null}
-
-                          <p
-                            className={`mt-1 text-sm font-semibold ${
-                              material.conditionGood === false
-                                ? "text-red-700"
-                                : "text-emerald-700"
-                            }`}
-                          >
-                            {material.conditionGood === false
-                              ? "Damage photo attached"
-                              : "Material marked in good condition"}
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            editMaterial(material.id)
-                          }
-                          className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
-                        >
-                          Edit
-                        </button>
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
+                          Saved
+                        </span>
                       </div>
 
-                      {material.locationPhoto ? (
-                        <div className="overflow-hidden rounded-xl border border-emerald-200 bg-white">
-                          <img
-                            src={material.locationPhoto.dataUrl}
-                            alt={`Location for material ${index + 1}`}
-                            className="h-36 w-full object-cover"
-                          />
-                        </div>
-                      ) : null}
+                      <p className="mt-2 truncate font-bold text-slate-900">
+                        {material.description}
+                      </p>
 
-                      {material.damagePhoto ? (
-                        <div className="overflow-hidden rounded-xl border border-red-200 bg-white">
-                          <img
-                            src={material.damagePhoto.dataUrl}
-                            alt={`Damage for material ${index + 1}`}
-                            className="h-36 w-full object-cover"
-                          />
-                        </div>
-                      ) : null}
+                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                        {material.location}
+                        {material.locationPhoto ? " • Location photo" : ""}
+                        {material.damagePhoto ? " • Damage photo" : ""}
+                        {material.notes ? " • Note" : ""}
+                      </p>
                     </div>
-                  ) : (
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => editMaterial(material.id)}
+                        className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+                      >
+                        Open
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => removeMaterial(material.id)}
+                        className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-4 flex items-center justify-between">
+                      <div>
+                        <h4 className="font-bold text-slate-900">
+                          Material {index + 1}
+                        </h4>
+
+                        <p className="mt-1 text-sm font-semibold text-slate-500">
+                          Enter material details, location, photos,
+                          and notes.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeMaterial(material.id)}
+                        className="text-sm font-semibold text-red-600 hover:text-red-800"
+                      >
+                        Remove
+                      </button>
+                    </div>
+
                     <div className="space-y-4">
                       <div>
                         <label
@@ -1098,19 +1025,19 @@ export default function CheckInForm({ onSubmit }) {
                         Save Material
                       </button>
                     </div>
-                  )}
-                </div>
-              ))}
+                  </>
+                )}
+              </div>
+            ))}
 
-              <button
-                type="button"
-                onClick={addMaterial}
-                className="w-full rounded-xl border-2 border-dashed border-slate-300 px-4 py-3.5 font-bold text-slate-600 transition hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-800"
-              >
-                + Add Another Material
-              </button>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={addMaterial}
+              className="w-full rounded-xl border-2 border-dashed border-slate-300 px-4 py-3.5 font-bold text-slate-600 transition hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-800"
+            >
+              + Add Another Material
+            </button>
+          </div>
         </section>
 
         {error ? (
