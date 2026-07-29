@@ -174,7 +174,7 @@ export default function CheckInCard({
     <article className="rounded-[22px] border border-[#DCE4EF] bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition hover:border-slate-300 sm:p-6 lg:rounded-[24px] lg:px-8 lg:py-7">
       <div className="lg:hidden">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-          <h2 className="min-w-0 text-[38px] font-black leading-none tracking-tight text-[#0F172A]">
+          <h2 className="min-w-0 text-4xl font-black leading-none tracking-tight text-[#0F172A]">
             {checkIn.poNumber}
           </h2>
 
@@ -220,7 +220,7 @@ export default function CheckInCard({
 
       <div className="hidden gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:gap-7 lg:gap-8">
-          <h2 className="text-3xl font-extrabold leading-none tracking-tight text-[#0F172A] sm:text-4xl lg:text-[46px] lg:font-black lg:leading-none">
+          <h2 className="text-2xl font-extrabold leading-none tracking-tight text-[#0F172A] sm:text-3xl lg:text-[40px] lg:font-black lg:leading-none">
             {checkIn.poNumber}
           </h2>
 
