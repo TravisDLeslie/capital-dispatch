@@ -76,25 +76,32 @@ export default function SupplierRunCard({
   const progressPercent =
     items.length > 0 ? (pickedUpCount / items.length) * 100 : 0;
   const [editingItemId, setEditingItemId] = useState("");
+  const [editingQuantity, setEditingQuantity] = useState("");
   const [editingDescription, setEditingDescription] =
+    useState("");
+  const [editingInternalReference, setEditingInternalReference] =
     useState("");
   const [editError, setEditError] = useState("");
   const [photoError, setPhotoError] = useState("");
   const [processingPhotoItemId, setProcessingPhotoItemId] =
     useState("");
   const [viewingPhoto, setViewingPhoto] = useState(null);
-  const [isItemsOpen, setIsItemsOpen] = useState(false);
+  const [isItemsOpen, setIsItemsOpen] = useState(true);
 
   function startEditingItem(item) {
     setEditingItemId(item.id);
+    setEditingQuantity(item.quantity || "");
     setEditingDescription(item.description || "");
+    setEditingInternalReference(item.internalReference || "");
     setEditError("");
     setIsItemsOpen(true);
   }
 
   function cancelEditingItem() {
     setEditingItemId("");
+    setEditingQuantity("");
     setEditingDescription("");
+    setEditingInternalReference("");
     setEditError("");
   }
 
@@ -110,6 +117,8 @@ export default function SupplierRunCard({
       supplierRun.id,
       itemId,
       cleanedDescription,
+      editingInternalReference.trim(),
+      editingQuantity.trim(),
     );
 
     cancelEditingItem();
@@ -275,6 +284,12 @@ export default function SupplierRunCard({
                     )}
 
                     <span className="min-w-0 flex-1">
+                      {item.quantity ? (
+                        <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+                          QTY: {item.quantity}
+                        </span>
+                      ) : null}
+
                       <span
                         className={`block text-base font-semibold ${
                           item.pickedUp
@@ -288,6 +303,13 @@ export default function SupplierRunCard({
                       {item.pickedUp && item.pickedUpAt ? (
                         <span className="mt-1 block text-xs font-bold text-emerald-700">
                           Picked up {formatTime(item.pickedUpAt)}
+                        </span>
+                      ) : null}
+
+                      {item.internalReference ? (
+                        <span className="mt-1 block text-xs font-bold text-slate-500">
+                          SKU / Item # / SO#:{" "}
+                          {item.internalReference}
                         </span>
                       ) : null}
 
@@ -354,6 +376,25 @@ export default function SupplierRunCard({
                 ) : (
                 <div>
                   <label
+                    htmlFor={`supplier-item-quantity-${supplierRun.id}-${item.id}`}
+                    className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
+                  >
+                    Quantity
+                  </label>
+
+                  <input
+                    id={`supplier-item-quantity-${supplierRun.id}-${item.id}`}
+                    type="text"
+                    value={editingQuantity}
+                    onChange={(event) => {
+                      setEditingQuantity(event.target.value);
+                      setEditError("");
+                    }}
+                    placeholder="Optional quantity"
+                    className="mb-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  />
+
+                  <label
                     htmlFor={`supplier-item-${supplierRun.id}-${item.id}`}
                     className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
                   >
@@ -369,6 +410,25 @@ export default function SupplierRunCard({
                     }}
                     rows={3}
                     className="w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  />
+
+                  <label
+                    htmlFor={`supplier-item-reference-${supplierRun.id}-${item.id}`}
+                    className="mb-2 mt-3 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
+                  >
+                    SKU / Item # / SO#
+                  </label>
+
+                  <input
+                    id={`supplier-item-reference-${supplierRun.id}-${item.id}`}
+                    type="text"
+                    value={editingInternalReference}
+                    onChange={(event) => {
+                      setEditingInternalReference(event.target.value);
+                      setEditError("");
+                    }}
+                    placeholder="Optional internal reference"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
                   />
 
                   {editError ? (

@@ -29,6 +29,7 @@ type CheckIn = {
 
 type OrderAssignment = {
   type: string;
+  internalReference?: string;
   businessName?: string;
   orderedBy?: string;
   jobName?: string;
@@ -36,7 +37,9 @@ type OrderAssignment = {
 
 type SupplierRunItem = {
   id: string;
+  quantity?: string;
   description: string;
+  internalReference?: string;
   pickedUp: boolean;
   pickedUpAt?: string | null;
   pickupPhoto?: unknown | null;
@@ -249,6 +252,8 @@ export default function App() {
     supplierRunId: string,
     itemId: string,
     description: string,
+    internalReference?: string,
+    quantity?: string,
   ) {
     const supplierRun = supplierRuns.find(
       (currentSupplierRun) =>
@@ -263,7 +268,13 @@ export default function App() {
       item.id === itemId
         ? {
             ...item,
+            quantity:
+              typeof quantity === "string" ? quantity : item.quantity,
             description,
+            internalReference:
+              typeof internalReference === "string"
+                ? internalReference
+                : item.internalReference,
           }
         : item,
     );

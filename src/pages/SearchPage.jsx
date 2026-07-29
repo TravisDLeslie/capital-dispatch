@@ -24,6 +24,7 @@ function getAssignment(checkIn) {
       businessName: checkIn.customer.businessName || "",
       orderedBy: checkIn.customer.orderedBy || "",
       jobName: checkIn.customer.jobName || "",
+      internalReference: checkIn.customer.internalReference || "",
     };
   }
 
@@ -80,6 +81,10 @@ export default function SearchPage({
           assignment?.jobName,
         ).includes(textSearch);
 
+        const assignmentReferenceMatches = normalizeText(
+          assignment?.internalReference,
+        ).includes(textSearch);
+
         const vendorMatches = normalizeText(
           checkIn.vendor,
         ).includes(textSearch);
@@ -106,6 +111,7 @@ export default function SearchPage({
           businessMatches ||
           orderedByMatches ||
           jobMatches ||
+          assignmentReferenceMatches ||
           vendorMatches ||
           locationMatches ||
           materialMatches

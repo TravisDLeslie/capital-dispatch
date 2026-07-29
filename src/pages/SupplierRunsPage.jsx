@@ -10,6 +10,31 @@ import {
 } from "../utils/dateHelpers";
 
 const UNASSIGNED_DRIVER = "Unassigned Driver";
+const driverAvatarColors = [
+  "bg-red-100 text-red-700",
+  "bg-blue-100 text-blue-700",
+  "bg-emerald-100 text-emerald-700",
+  "bg-amber-100 text-amber-700",
+  "bg-violet-100 text-violet-700",
+  "bg-cyan-100 text-cyan-700",
+  "bg-pink-100 text-pink-700",
+  "bg-lime-100 text-lime-700",
+  "bg-orange-100 text-orange-700",
+  "bg-slate-200 text-slate-700",
+];
+
+function getDriverAvatar(driver) {
+  const name = driver || UNASSIGNED_DRIVER;
+  const colorIndex = [...name].reduce(
+    (total, character) => total + character.charCodeAt(0),
+    0,
+  ) % driverAvatarColors.length;
+
+  return {
+    initial: name.trim().charAt(0).toUpperCase() || "?",
+    colorClass: driverAvatarColors[colorIndex],
+  };
+}
 
 function groupRunsByVendor(supplierRuns) {
   return supplierRuns.reduce((groups, supplierRun) => {
@@ -389,6 +414,9 @@ export default function SupplierRunsPage({
                     driverGroup.driver,
                     visibleRuns,
                   );
+                  const driverAvatar = getDriverAvatar(
+                    driverGroup.driver,
+                  );
 
                   return (
                     <div
@@ -397,15 +425,24 @@ export default function SupplierRunsPage({
                     >
                       <div className="mb-4 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-sm">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">
-                            Driver Route
-                          </p>
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div
+                              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-black ${driverAvatar.colorClass}`}
+                              aria-hidden="true"
+                            >
+                              {driverAvatar.initial}
+                            </div>
 
-                          <h4 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-                            {driverGroup.driver}
-                          </h4>
-                        </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">
+                                Driver Route
+                              </p>
+
+                              <h4 className="mt-1 truncate text-2xl font-black tracking-tight text-slate-900">
+                                {driverGroup.driver}
+                              </h4>
+                            </div>
+                          </div>
 
                         <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-blue-800 shadow-sm">
                           {driverGroup.vendorGroups.reduce(
@@ -579,15 +616,29 @@ export default function SupplierRunsPage({
               </div>
 
               <div className="space-y-5">
-                {completeRunGroups.map((driverGroup) => (
-                  <div
-                    key={driverGroup.driver}
-                    className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4"
-                  >
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <h4 className="text-lg font-black tracking-tight text-slate-800">
-                        {driverGroup.driver}
-                      </h4>
+                {completeRunGroups.map((driverGroup) => {
+                  const driverAvatar = getDriverAvatar(
+                    driverGroup.driver,
+                  );
+
+                  return (
+                    <div
+                      key={driverGroup.driver}
+                      className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4"
+                    >
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-black ${driverAvatar.colorClass}`}
+                            aria-hidden="true"
+                          >
+                            {driverAvatar.initial}
+                          </div>
+
+                          <h4 className="truncate text-lg font-black tracking-tight text-slate-800">
+                            {driverGroup.driver}
+                          </h4>
+                        </div>
 
                       <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-600 shadow-sm">
                         {driverGroup.vendorGroups.reduce(
@@ -700,7 +751,8 @@ export default function SupplierRunsPage({
                       })}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : null}

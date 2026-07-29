@@ -27,6 +27,7 @@ function getSavedAssignment(checkIn) {
       businessName: checkIn.customer.businessName || "",
       orderedBy: checkIn.customer.orderedBy || "",
       jobName: checkIn.customer.jobName || "",
+      internalReference: checkIn.customer.internalReference || "",
     };
   }
 
@@ -61,6 +62,9 @@ export default function CheckInCard({
   const [jobName, setJobName] = useState(
     savedAssignment?.jobName || "",
   );
+  const [internalReference, setInternalReference] = useState(
+    savedAssignment?.internalReference || "",
+  );
 
   const [assignmentError, setAssignmentError] = useState("");
   const [isViewingMaterials, setIsViewingMaterials] =
@@ -74,6 +78,7 @@ export default function CheckInCard({
     setBusinessName(currentAssignment?.businessName || "");
     setOrderedBy(currentAssignment?.orderedBy || "");
     setJobName(currentAssignment?.jobName || "");
+    setInternalReference(currentAssignment?.internalReference || "");
     setAssignmentError("");
     setIsEditing(true);
   }
@@ -116,12 +121,14 @@ export default function CheckInCard({
       assignmentType === "stock"
         ? {
             type: "stock",
+            internalReference: internalReference.trim(),
             businessName: "",
             orderedBy: "",
             jobName: "",
           }
         : {
             type: "customer",
+            internalReference: internalReference.trim(),
             businessName: businessName.trim(),
             orderedBy: orderedBy.trim(),
             jobName: jobName.trim(),
@@ -163,6 +170,12 @@ export default function CheckInCard({
     return "Link a customer or mark as stock";
   }
 
+  function getAssignmentReferenceText() {
+    return savedAssignment?.internalReference
+      ? `SKU / Item # / SO#: ${savedAssignment.internalReference}`
+      : "";
+  }
+
   const visibleMaterials = materials.slice(0, 3);
   const mobileVisibleMaterials = materials.slice(0, 2);
   const hiddenMaterialCount = Math.max(
@@ -173,6 +186,26 @@ export default function CheckInCard({
     materials.length - mobileVisibleMaterials.length,
     0,
   );
+  const firstLocationPhotoMaterial = materials.find(
+    (material) => material.locationPhoto?.dataUrl,
+  );
+  const locationPhoto = firstLocationPhotoMaterial?.locationPhoto
+    ?.dataUrl
+    ? {
+        dataUrl: firstLocationPhotoMaterial.locationPhoto.dataUrl,
+        title: "Location Photo",
+        subtitle:
+          firstLocationPhotoMaterial.description ||
+          "Material location",
+      }
+    : checkIn.locationPhoto?.dataUrl
+      ? {
+          dataUrl: checkIn.locationPhoto.dataUrl,
+          title: "Location Photo",
+          subtitle:
+            "Wide photo of where the material was placed",
+        }
+      : null;
   const hasMaterialDetails = materials.some(
     (material) =>
       material.location ||
@@ -280,11 +313,24 @@ export default function CheckInCard({
             <p className="mt-2 text-lg font-medium text-[#64748B] lg:text-[20px] lg:leading-tight">
               {getAssignmentSubheading()}
             </p>
+
+            {getAssignmentReferenceText() ? (
+              <p className="mt-2 text-sm font-black text-[#1D64C8] lg:text-base">
+                {getAssignmentReferenceText()}
+              </p>
+            ) : null}
           </div>
 
           <div className="mt-5 rounded-[18px] border border-[#DCE4EF] px-4 py-4 lg:mt-6 lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-0 lg:py-0 lg:pt-5">
             <div className="grid gap-4 md:grid-cols-2 lg:gap-6">
-              <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={() =>
+                  locationPhoto ? setViewingPhoto(locationPhoto) : null
+                }
+                disabled={!locationPhoto}
+                className="flex items-center gap-4 text-left disabled:cursor-default"
+              >
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#E98413]">
                   <MapPin
                     aria-hidden="true"
@@ -310,10 +356,14 @@ export default function CheckInCard({
 
                 <ChevronRight
                   aria-hidden="true"
-                  className="ml-auto h-6 w-6 text-[#64748B] lg:hidden"
+                  className={`ml-auto h-6 w-6 lg:hidden ${
+                    locationPhoto
+                      ? "text-[#64748B]"
+                      : "text-slate-300"
+                  }`}
                   strokeWidth={2.5}
                 />
-              </div>
+              </button>
 
               <div className="flex items-center gap-4 border-t border-[#DCE4EF] pt-4 md:border-l md:border-t-0 md:pl-7 md:pt-0">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-[#079455]">
@@ -639,7 +689,7 @@ export default function CheckInCard({
             </div>
 
             {assignmentType === "customer" ? (
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <label
                     htmlFor={`business-${checkIn.id}`}
@@ -703,6 +753,27 @@ export default function CheckInCard({
                     className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   />
                 </div>
+
+                <div>
+                  <label
+                    htmlFor={`assignment-reference-${checkIn.id}`}
+                    className="mb-1 block text-xs font-bold text-slate-600"
+                  >
+                    SKU / Item # / SO#
+                  </label>
+
+                  <input
+                    id={`assignment-reference-${checkIn.id}`}
+                    type="text"
+                    autoComplete="off"
+                    value={internalReference}
+                    onChange={(event) =>
+                      setInternalReference(event.target.value)
+                    }
+                    placeholder="Internal reference"
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
+                  />
+                </div>
               </div>
             ) : null}
 
@@ -716,6 +787,27 @@ export default function CheckInCard({
                   No customer, contact, or job information is
                   required.
                 </p>
+
+                <div className="mt-3">
+                  <label
+                    htmlFor={`stock-reference-${checkIn.id}`}
+                    className="mb-1 block text-xs font-bold text-blue-900"
+                  >
+                    SKU / Item # / SO#
+                  </label>
+
+                  <input
+                    id={`stock-reference-${checkIn.id}`}
+                    type="text"
+                    autoComplete="off"
+                    value={internalReference}
+                    onChange={(event) =>
+                      setInternalReference(event.target.value)
+                    }
+                    placeholder="Internal reference"
+                    className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
               </div>
             ) : null}
 

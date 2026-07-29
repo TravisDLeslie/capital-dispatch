@@ -11,7 +11,9 @@ import { createId } from "../utils/idHelpers";
 function createEmptyPickupItem() {
   return {
     id: createId(),
+    quantity: "",
     description: "",
+    internalReference: "",
     saved: false,
     pickedUp: false,
   };
@@ -80,6 +82,38 @@ export default function SupplierRunForm({ onSubmit }) {
     clearError();
   }
 
+  function updateItemQuantity(itemId, quantity) {
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              quantity,
+              saved: false,
+            }
+          : item,
+      ),
+    );
+
+    clearError();
+  }
+
+  function updateItemInternalReference(itemId, internalReference) {
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              internalReference,
+              saved: false,
+            }
+          : item,
+      ),
+    );
+
+    clearError();
+  }
+
   function addItem() {
     setItems((currentItems) => [
       ...currentItems,
@@ -116,7 +150,10 @@ export default function SupplierRunForm({ onSubmit }) {
         pickupItem.id === itemId
           ? {
               ...pickupItem,
+              quantity: pickupItem.quantity.trim(),
               description: pickupItem.description.trim(),
+              internalReference:
+                pickupItem.internalReference.trim(),
               saved: true,
             }
           : pickupItem,
@@ -174,7 +211,9 @@ export default function SupplierRunForm({ onSubmit }) {
       .filter((item) => item.description.trim())
       .map((item) => ({
         id: item.id,
+        quantity: item.quantity?.trim() || "",
         description: item.description.trim(),
+        internalReference: item.internalReference?.trim() || "",
         pickedUp: false,
       }));
 
@@ -429,9 +468,24 @@ export default function SupplierRunForm({ onSubmit }) {
 
                 {item.saved ? (
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="font-bold text-slate-900">
-                      {item.description}
-                    </p>
+                    <div>
+                      {item.quantity ? (
+                        <p className="mb-1 text-sm font-black text-blue-700">
+                          QTY: {item.quantity}
+                        </p>
+                      ) : null}
+
+                      <p className="font-bold text-slate-900">
+                        {item.description}
+                      </p>
+
+                      {item.internalReference ? (
+                        <p className="mt-1 text-sm font-semibold text-slate-500">
+                          SKU / Item # / SO#:{" "}
+                          {item.internalReference}
+                        </p>
+                      ) : null}
+                    </div>
 
                     <button
                       type="button"
@@ -443,17 +497,75 @@ export default function SupplierRunForm({ onSubmit }) {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <input
-                      type="text"
-                      value={item.description}
-                      onChange={(event) =>
-                        updateItem(item.id, event.target.value)
-                      }
-                      disabled={isSubmitting}
-                      placeholder="Example: 2 units LVL, hangers, trim pack"
-                      className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-                    />
+                  <div className="grid gap-3 lg:grid-cols-[minmax(100px,0.2fr)_minmax(0,1fr)_minmax(220px,0.45fr)_auto]">
+                    <div>
+                      <label
+                        htmlFor={`supplier-item-quantity-${item.id}`}
+                        className="sr-only"
+                      >
+                        Quantity
+                      </label>
+
+                      <input
+                        id={`supplier-item-quantity-${item.id}`}
+                        type="text"
+                        value={item.quantity}
+                        onChange={(event) =>
+                          updateItemQuantity(
+                            item.id,
+                            event.target.value,
+                          )
+                        }
+                        disabled={isSubmitting}
+                        placeholder="QTY"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor={`supplier-item-description-${item.id}`}
+                        className="sr-only"
+                      >
+                        Item Description
+                      </label>
+
+                      <input
+                        id={`supplier-item-description-${item.id}`}
+                        type="text"
+                        value={item.description}
+                        onChange={(event) =>
+                          updateItem(item.id, event.target.value)
+                        }
+                        disabled={isSubmitting}
+                        placeholder="Example: 2 units LVL, hangers, trim pack"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor={`supplier-item-reference-${item.id}`}
+                        className="sr-only"
+                      >
+                        SKU / Item # / SO#
+                      </label>
+
+                      <input
+                        id={`supplier-item-reference-${item.id}`}
+                        type="text"
+                        value={item.internalReference}
+                        onChange={(event) =>
+                          updateItemInternalReference(
+                            item.id,
+                            event.target.value,
+                          )
+                        }
+                        disabled={isSubmitting}
+                        placeholder="SKU / Item # / SO#"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </div>
 
                     <button
                       type="button"
