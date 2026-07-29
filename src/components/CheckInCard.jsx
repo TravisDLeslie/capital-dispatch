@@ -8,6 +8,7 @@ import {
   Package,
   Pencil,
   Trash2,
+  X,
 } from "lucide-react";
 import {
   formatFullDate,
@@ -62,6 +63,8 @@ export default function CheckInCard({
   );
 
   const [assignmentError, setAssignmentError] = useState("");
+  const [isViewingMaterials, setIsViewingMaterials] =
+    useState(false);
 
   function openEditor() {
     const currentAssignment = getSavedAssignment(checkIn);
@@ -383,7 +386,11 @@ export default function CheckInCard({
                 ))}
 
                 {mobileHiddenMaterialCount > 0 ? (
-                  <p className="flex items-center pt-3 text-base font-black text-[#1D64C8] lg:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsViewingMaterials(true)}
+                    className="flex w-full items-center pt-3 text-left text-base font-black text-[#1D64C8] transition hover:text-blue-800 lg:hidden"
+                  >
                     + {mobileHiddenMaterialCount} more{" "}
                     {mobileHiddenMaterialCount === 1
                       ? "item"
@@ -393,16 +400,20 @@ export default function CheckInCard({
                       className="ml-auto h-6 w-6 text-[#64748B]"
                       strokeWidth={2.5}
                     />
-                  </p>
+                  </button>
                 ) : null}
 
                 {hiddenMaterialCount > 0 ? (
-                  <p className="hidden pt-1 text-base font-black text-[#1D64C8] lg:block lg:text-[17px]">
+                  <button
+                    type="button"
+                    onClick={() => setIsViewingMaterials(true)}
+                    className="hidden pt-1 text-left text-base font-black text-[#1D64C8] transition hover:text-blue-800 lg:block lg:text-[17px]"
+                  >
                     + {hiddenMaterialCount} more{" "}
                     {hiddenMaterialCount === 1
                       ? "item"
                       : "items"}
-                  </p>
+                  </button>
                 ) : null}
               </div>
             ) : (
@@ -617,6 +628,64 @@ export default function CheckInCard({
           </form>
         </div>
       )}
+
+      {isViewingMaterials ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-slate-950/45 px-3 py-4 sm:items-center sm:justify-center sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`materials-title-${checkIn.id}`}
+        >
+          <div className="max-h-[86vh] w-full overflow-hidden rounded-[22px] bg-white shadow-2xl sm:max-w-xl">
+            <div className="flex items-start justify-between gap-4 border-b border-[#DCE4EF] px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#64748B]">
+                  PO {checkIn.poNumber}
+                </p>
+
+                <h3
+                  id={`materials-title-${checkIn.id}`}
+                  className="mt-1 text-xl font-black text-[#0F172A]"
+                >
+                  All Items
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsViewingMaterials(false)}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#DCE4EF] text-[#64748B] transition hover:border-slate-400 hover:text-[#0F172A]"
+                aria-label="Close items"
+              >
+                <X
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                  strokeWidth={2.4}
+                />
+              </button>
+            </div>
+
+            <div className="max-h-[64vh] overflow-y-auto px-5 py-4">
+              <div className="space-y-3">
+                {materials.map((material, index) => (
+                  <div
+                    key={material.id || `${checkIn.id}-${index}`}
+                    className="rounded-xl border border-[#DCE4EF] bg-slate-50 px-4 py-3"
+                  >
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#64748B]">
+                      Item {index + 1}
+                    </p>
+
+                    <p className="mt-1 text-base font-bold leading-snug text-[#0F172A]">
+                      {material.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }
