@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Camera,
+  ChevronDown,
   MapPin,
   Package,
   Phone,
@@ -72,6 +73,7 @@ function PhotoPreview({ photo, label, isHardware = false }) {
 
 export default function DeliveryHistoryPage({ deliveries }) {
   const [searchValue, setSearchValue] = useState("");
+  const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
 
   const completedDeliveries = useMemo(
     () =>
@@ -114,6 +116,13 @@ export default function DeliveryHistoryPage({ deliveries }) {
 
   const hasHistory = completedDeliveries.length > 0;
   const hasSearch = searchValue.trim().length > 0;
+
+  function toggleDelivery(deliveryId) {
+    setOpenDeliveryKeys((currentOpenDeliveryKeys) => ({
+      ...currentOpenDeliveryKeys,
+      [deliveryId]: !currentOpenDeliveryKeys[deliveryId],
+    }));
+  }
 
   return (
     <PageContainer>
@@ -185,19 +194,27 @@ export default function DeliveryHistoryPage({ deliveries }) {
               delivery.deliveryNotes ||
               "";
             const generalNotes = delivery.generalNotes || "";
+            const deliveryIsOpen = Boolean(
+              openDeliveryKeys[delivery.id],
+            );
 
             return (
               <article
                 key={delivery.id}
                 className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
+                <button
+                  type="button"
+                  onClick={() => toggleDelivery(delivery.id)}
+                  className="flex w-full flex-col gap-4 text-left transition hover:text-[#FC2C38] lg:flex-row lg:items-start lg:justify-between"
+                  aria-expanded={deliveryIsOpen}
+                >
+                  <div className="min-w-0">
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
                       Order {delivery.orderNumber}
                     </p>
 
-                    <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                    <h2 className="mt-2 truncate text-2xl font-black tracking-tight text-slate-900">
                       {delivery.customerName}
                     </h2>
 
@@ -206,7 +223,7 @@ export default function DeliveryHistoryPage({ deliveries }) {
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
                       <UserRound className="h-4 w-4" aria-hidden="true" />
                       {delivery.driver}
@@ -223,9 +240,21 @@ export default function DeliveryHistoryPage({ deliveries }) {
                         Hardware delivered
                       </span>
                     ) : null}
-                  </div>
-                </div>
 
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
+                      <ChevronDown
+                        aria-hidden="true"
+                        className={`h-5 w-5 transition-transform ${
+                          deliveryIsOpen ? "rotate-180" : ""
+                        }`}
+                        strokeWidth={2.6}
+                      />
+                    </span>
+                  </div>
+                </button>
+
+                {deliveryIsOpen ? (
+                <>
                 <div className="mt-5 grid gap-4 lg:grid-cols-3">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
@@ -331,6 +360,8 @@ export default function DeliveryHistoryPage({ deliveries }) {
                     isHardware
                   />
                 </div>
+                </>
+                ) : null}
               </article>
             );
           })}

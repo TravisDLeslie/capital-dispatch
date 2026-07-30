@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Camera,
   CheckCircle2,
+  ChevronDown,
   Edit3,
   ExternalLink,
   MapPin,
@@ -125,6 +126,7 @@ export default function DeliveryQueuePage({
   const [error, setError] = useState("");
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
   const [selectedDriver, setSelectedDriver] = useState("All");
+  const [openDriverKeys, setOpenDriverKeys] = useState({});
 
   const openDeliveries = deliveries.filter(
     (delivery) => delivery.status !== "complete",
@@ -146,6 +148,13 @@ export default function DeliveryQueuePage({
             (delivery.driver || "Unassigned Driver") === selectedDriver,
         );
   const driverGroups = groupDeliveriesByDriver(filteredDeliveries);
+
+  function toggleDriver(driver) {
+    setOpenDriverKeys((currentOpenDriverKeys) => ({
+      ...currentOpenDriverKeys,
+      [driver]: !currentOpenDriverKeys[driver],
+    }));
+  }
 
   async function handlePhotoChange(deliveryId, file, photoField) {
     if (!file) {
@@ -288,7 +297,14 @@ export default function DeliveryQueuePage({
               key={driverGroup.driver}
               className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
             >
-              <div className="mb-5 flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
+              <button
+                type="button"
+                onClick={() => toggleDriver(driverGroup.driver)}
+                className="flex w-full items-center justify-between gap-4 border-b border-slate-200 pb-4 text-left transition hover:text-[#FC2C38]"
+                aria-expanded={Boolean(
+                  openDriverKeys[driverGroup.driver],
+                )}
+              >
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
                     <Truck className="h-6 w-6" aria-hidden="true" />
@@ -307,9 +323,22 @@ export default function DeliveryQueuePage({
                     </p>
                   </div>
                 </div>
-              </div>
 
-              <div className="space-y-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
+                  <ChevronDown
+                    className={`h-5 w-5 transition-transform ${
+                      openDriverKeys[driverGroup.driver]
+                        ? "rotate-180"
+                        : ""
+                    }`}
+                    aria-hidden="true"
+                    strokeWidth={2.6}
+                  />
+                </span>
+              </button>
+
+              {openDriverKeys[driverGroup.driver] ? (
+              <div className="mt-5 space-y-4">
                 {driverGroup.deliveries.map((delivery) => {
                   const items = Array.isArray(delivery.items)
                     ? delivery.items
@@ -631,6 +660,7 @@ export default function DeliveryQueuePage({
                   );
                 })}
               </div>
+              ) : null}
             </section>
           ))}
         </div>

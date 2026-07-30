@@ -21,32 +21,32 @@ const navigationItems = [
   {
     group: "South",
     id: "supplier-runs-add",
-    label: "Add POs",
+    label: "Add POs for South",
   },
   {
     group: "South",
     id: "supplier-runs-check",
-    label: "Check POs",
+    label: "View POs To Pick Up",
   },
   {
     group: "South",
     id: "supplier-runs-history",
-    label: "History",
+    label: "South PO History",
   },
   {
     group: "Deliveries",
     id: "deliveries-add",
-    label: "Add Orders",
+    label: "Add Deliveries",
   },
   {
     group: "Deliveries",
     id: "deliveries-queue",
-    label: "To Be Delivered",
+    label: "Deliveries",
   },
   {
     group: "Deliveries",
     id: "deliveries-history",
-    label: "History",
+    label: "Delivery History",
   },
 ];
 

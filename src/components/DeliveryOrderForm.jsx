@@ -321,11 +321,11 @@ export default function DeliveryOrderForm({
     >
       <div className="mb-7">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
-          Driver Delivery
+          Delivery's for Drivers
         </p>
 
         <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
-          {isEditing ? "Edit Delivery Order" : "Add Delivery Order"}
+          {isEditing ? "Edit Delivery Order" : "Add Delivery"}
         </h2>
 
         <p className="mt-2 text-slate-500">
