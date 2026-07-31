@@ -7,6 +7,7 @@ import {
   query,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -52,16 +53,25 @@ function sortDeliveries(deliveries) {
   );
 }
 
-export function subscribeToDeliveries(onDeliveries, onError) {
+export function subscribeToDeliveries(
+  onDeliveries,
+  onError,
+  driverName = "",
+) {
   if (!db) {
     onDeliveries(getLocalDeliveries());
     return () => {};
   }
 
-  const deliveriesQuery = query(
-    collection(db, DELIVERIES_COLLECTION),
-    orderBy("createdAt", "desc"),
-  );
+  const deliveriesQuery = driverName
+    ? query(
+        collection(db, DELIVERIES_COLLECTION),
+        where("driver", "==", driverName),
+      )
+    : query(
+        collection(db, DELIVERIES_COLLECTION),
+        orderBy("createdAt", "desc"),
+      );
 
   return onSnapshot(
     deliveriesQuery,
@@ -73,8 +83,10 @@ export function subscribeToDeliveries(onDeliveries, onError) {
         }),
       );
 
-      saveLocalDeliveries(deliveries);
-      onDeliveries(deliveries);
+      const sortedDeliveries = sortDeliveries(deliveries);
+
+      saveLocalDeliveries(sortedDeliveries);
+      onDeliveries(sortedDeliveries);
     },
     onError,
   );

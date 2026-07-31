@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, Package, PackageCheck, Truck } from "lucide-react";
+import {
+  ChevronDown,
+  Package,
+  PackageCheck,
+  ShieldCheck,
+  Truck,
+} from "lucide-react";
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 
 const navigationItems = [
@@ -48,6 +54,11 @@ const navigationItems = [
     id: "deliveries-history",
     label: "Delivery History",
   },
+  {
+    group: "Admin",
+    id: "user-admin",
+    label: "User Access",
+  },
 ];
 
 function getNavButtonClass(item, isActive, isMobile = false) {
@@ -87,15 +98,28 @@ function getNavGroupIcon(group) {
     return PackageCheck;
   }
 
+  if (group === "Admin") {
+    return ShieldCheck;
+  }
+
   return Package;
 }
 
-export default function AppHeader({ currentPage, onPageChange }) {
+export default function AppHeader({
+  currentPage,
+  onPageChange,
+  currentUser,
+  currentUserProfile,
+  allowedPageIds,
+  isSuperAdmin = false,
+  onSignOut,
+}) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openNavGroups, setOpenNavGroups] = useState({
     Receiving: true,
     South: true,
     Deliveries: true,
+    Admin: true,
   });
 
   useEffect(() => {
@@ -126,10 +150,13 @@ export default function AppHeader({ currentPage, onPageChange }) {
   }
 
   function renderNavigation() {
-    return ["Receiving", "South", "Deliveries"].map((group) => {
-      const groupItems = navigationItems.filter(
-        (item) => item.group === group,
-      );
+    return ["Receiving", "South", "Deliveries", "Admin"].map((group) => {
+      const groupItems = navigationItems.filter((item) => {
+        const pageIsAllowed =
+          !allowedPageIds || allowedPageIds.includes(item.id);
+
+        return item.group === group && pageIsAllowed;
+      });
       const isGroupOpen = openNavGroups[group];
       const NavGroupIcon = getNavGroupIcon(group);
       const hasGroupItems = groupItems.length > 0;
@@ -140,7 +167,7 @@ export default function AppHeader({ currentPage, onPageChange }) {
             ? "text-[#FC2C38]"
             : "text-emerald-800";
 
-      return (
+      return hasGroupItems ? (
         <div
           key={group}
           className="mb-5 border-b border-slate-200 pb-4 last:mb-0 last:border-b-0 last:pb-0"
@@ -206,7 +233,7 @@ export default function AppHeader({ currentPage, onPageChange }) {
             </div>
           ) : null}
         </div>
-      );
+      ) : null;
     });
   }
 
@@ -230,6 +257,30 @@ export default function AppHeader({ currentPage, onPageChange }) {
         </button>
 
         <nav>{renderNavigation()}</nav>
+
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="truncate text-sm font-black text-slate-900">
+            {currentUser?.email || "Signed in"}
+          </p>
+
+          {isSuperAdmin ? (
+            <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+              Super Admin
+            </p>
+          ) : currentUserProfile?.role ? (
+            <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+              {currentUserProfile.role}
+            </p>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+          >
+            Sign out
+          </button>
+        </div>
       </aside>
 
       <header className="border-b border-slate-200 bg-white md:hidden">
@@ -281,7 +332,13 @@ export default function AppHeader({ currentPage, onPageChange }) {
               />
             </button>
 
-            <span className="h-10 w-[46px] shrink-0" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="h-10 w-[62px] shrink-0 rounded-xl text-sm font-black text-slate-700 transition hover:bg-slate-100"
+            >
+              Sign out
+            </button>
           </div>
 
         {isMenuOpen ? (

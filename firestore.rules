@@ -2,12 +2,122 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isBootstrapSuperAdmin() {
+      return signedIn() && request.auth.token.email == "travis@capitallumber.co";
+    }
+
+    function userProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isApproved() {
+      return signedIn() && (
+        isBootstrapSuperAdmin() ||
+        userProfile().status == "approved"
+      );
+    }
+
+    function role() {
+      return isBootstrapSuperAdmin()
+        ? "superAdmin"
+        : userProfile().role;
+    }
+
+    function isAdmin() {
+      return isApproved() && (
+        role() == "superAdmin" ||
+        role() == "admin"
+      );
+    }
+
+    function isSuperAdmin() {
+      return isApproved() && role() == "superAdmin";
+    }
+
+    function isReceiving() {
+      return isApproved() && (
+        isAdmin() ||
+        role() == "receiving"
+      );
+    }
+
+    function isSouth() {
+      return isApproved() && (
+        isAdmin() ||
+        role() == "south"
+      );
+    }
+
+    function isDelivery() {
+      return isApproved() && (
+        isAdmin() ||
+        role() == "delivery"
+      );
+    }
+
+    function isDriverFor(driverName) {
+      return isApproved() &&
+        role() == "driver" &&
+        userProfile().driverName == driverName;
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn() &&
+        request.auth.uid == userId &&
+        request.resource.data.email == request.auth.token.email &&
+        (
+          (
+            request.resource.data.status == "pending" &&
+            request.resource.data.role == "pending"
+          ) ||
+          (
+            isBootstrapSuperAdmin() &&
+            request.resource.data.status == "approved" &&
+            request.resource.data.role == "superAdmin"
+          )
+        );
+
+      allow get: if signedIn() && (
+        request.auth.uid == userId ||
+        isSuperAdmin()
+      );
+
+      allow list: if isSuperAdmin();
+
+      allow update: if isSuperAdmin() ||
+        (
+          signedIn() &&
+          request.auth.uid == userId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "email",
+            "displayName",
+            "photoURL",
+            "lastLoginAt",
+            "updatedAt"
+          ])
+        );
+
+      allow delete: if isSuperAdmin();
+    }
+
     match /checkIns/{checkInId} {
-      allow read, create, update, delete: if true;
+      allow read, create, update, delete: if isReceiving();
     }
 
     match /supplierRuns/{supplierRunId} {
-      allow read, create, update, delete: if true;
+      allow read: if isSouth() || isDriverFor(resource.data.driver);
+      allow create, delete: if isSouth();
+      allow update: if isSouth() || isDriverFor(resource.data.driver);
+    }
+
+    match /deliveries/{deliveryId} {
+      allow read: if isDelivery() || isDriverFor(resource.data.driver);
+      allow create, delete: if isDelivery();
+      allow update: if isDelivery() || isDriverFor(resource.data.driver);
     }
   }
 }
