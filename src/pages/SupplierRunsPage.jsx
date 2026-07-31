@@ -756,6 +756,12 @@ export default function SupplierRunsPage({
                                       onUpdateSupplierRunItemDescription
                                     }
                                     onDelete={onDeleteSupplierRun}
+                                    defaultItemsOpen={
+                                      vendorGroup.runs.length === 1
+                                    }
+                                    compactWhenClosed={
+                                      vendorGroup.runs.length > 1
+                                    }
                                   />
                                 ))}
                               </div>

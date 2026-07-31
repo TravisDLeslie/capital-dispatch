@@ -334,6 +334,8 @@ export default function SupplierRunCard({
   onUpdateItemDescription,
   onDelete,
   isCompletedSection = false,
+  defaultItemsOpen = false,
+  compactWhenClosed = true,
 }) {
   const items = Array.isArray(supplierRun.items)
     ? supplierRun.items
@@ -359,7 +361,9 @@ export default function SupplierRunCard({
   const [processingPhotoItemId, setProcessingPhotoItemId] =
     useState("");
   const [viewingPhoto, setViewingPhoto] = useState(null);
-  const [isItemsOpen, setIsItemsOpen] = useState(true);
+  const [isItemsOpen, setIsItemsOpen] =
+    useState(defaultItemsOpen);
+  const isCompactClosed = compactWhenClosed && !isItemsOpen;
 
   function startEditingItem(item) {
     setEditingItemId(item.id);
@@ -443,13 +447,19 @@ export default function SupplierRunCard({
 
   return (
     <article
-      className={`rounded-xl border p-4 shadow-sm transition ${
+      className={`rounded-xl border ${
+        isCompactClosed ? "p-3" : "p-4"
+      } shadow-sm transition ${
         isComplete
           ? "border-emerald-200 bg-white"
           : "border-blue-200 bg-white hover:border-blue-300 hover:shadow-md"
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div
+        className={`flex justify-between gap-3 ${
+          isCompactClosed ? "items-center" : "items-start"
+        }`}
+      >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-black tracking-tight text-slate-900">
@@ -481,49 +491,69 @@ export default function SupplierRunCard({
           ) : null}
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
-          <button
-            type="button"
-            onClick={openPickupSheet}
-            aria-label={`Open pickup PDF for PO ${supplierRun.poNumber}`}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
-          >
-            <FileText
-              aria-hidden="true"
-              className="h-4 w-4"
-              strokeWidth={2.4}
-            />
-            <span className="hidden sm:inline">PDF</span>
-          </button>
-
+        <div
+          className={`flex shrink-0 ${
+            isItemsOpen
+              ? "flex-col items-end gap-2"
+              : "items-center gap-2"
+          }`}
+        >
           {isItemsOpen ? (
-            <div
-            className={`rounded-xl px-3 py-2 text-sm font-black ${
-              isComplete
-                ? "bg-emerald-100 text-emerald-800"
-                : "bg-blue-100 text-blue-800"
-            }`}
-          >
-            {isComplete
-              ? "All picked up"
-              : `${remainingCount} left`}
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsItemsOpen(false)}
+              className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-800 shadow-sm transition hover:bg-blue-100"
+              aria-expanded={isItemsOpen}
+            >
+              Close
+            </button>
           ) : null}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openPickupSheet}
+              aria-label={`Open pickup PDF for PO ${supplierRun.poNumber}`}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+            >
+              <FileText
+                aria-hidden="true"
+                className="h-4 w-4"
+                strokeWidth={2.4}
+              />
+              <span className="hidden sm:inline">PDF</span>
+            </button>
+
+            {!isItemsOpen ? (
+              <button
+                type="button"
+                onClick={() => setIsItemsOpen(true)}
+                className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-800 shadow-sm transition hover:bg-blue-100"
+                aria-expanded={isItemsOpen}
+              >
+                View
+              </button>
+            ) : null}
+
+            {isItemsOpen ? (
+              <div
+                className={`rounded-xl px-3 py-2 text-sm font-black ${
+                  isComplete
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-blue-100 text-blue-800"
+                }`}
+              >
+                {isComplete
+                  ? "All picked up"
+                  : `${remainingCount} left`}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
       {isItemsOpen ? (
       <div className="mt-4">
-        <div className="mb-1 flex items-center justify-between text-xs font-bold text-slate-500">
-          <span>
-            {pickedUpCount}/{items.length} picked up
-          </span>
-
-          {!isComplete ? (
-            <span>{remainingCount} remaining</span>
-          ) : null}
-        </div>
-
         <div className="h-2 overflow-hidden rounded-full bg-slate-100">
           <div
             className={`h-full rounded-full ${
@@ -534,27 +564,6 @@ export default function SupplierRunCard({
         </div>
       </div>
       ) : null}
-
-      <button
-        type="button"
-        onClick={() => setIsItemsOpen((current) => !current)}
-        className="mt-4 flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:bg-slate-100"
-        aria-expanded={isItemsOpen}
-      >
-        <span>
-          <span className="block text-sm font-black text-slate-900">
-            Pickup Items
-          </span>
-
-          <span className="mt-0.5 block text-xs font-bold text-slate-500">
-            {pickedUpCount}/{items.length} picked up
-          </span>
-        </span>
-
-        <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
-          {isItemsOpen ? "Close" : "View"}
-        </span>
-      </button>
 
       {isItemsOpen ? (
         <div className="mt-3 space-y-2">
@@ -775,7 +784,7 @@ export default function SupplierRunCard({
         </div>
       ) : null}
 
-      {supplierRun.completedAt ? (
+      {!isCompactClosed && supplierRun.completedAt ? (
         <p className="mt-3 text-xs font-bold text-emerald-700">
           {isCompletedSection ? "Finished" : "Completed"}{" "}
           {formatFullDate(supplierRun.completedAt)} at{" "}
@@ -783,22 +792,24 @@ export default function SupplierRunCard({
         </p>
       ) : null}
 
-      {supplierRun.updatedAt ? (
+      {!isCompactClosed && supplierRun.updatedAt ? (
         <p className="mt-3 text-xs font-semibold text-slate-400">
           Last updated {formatFullDate(supplierRun.updatedAt)} at{" "}
           {formatTime(supplierRun.updatedAt)}
         </p>
       ) : null}
 
-      <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">
-        <button
-          type="button"
-          onClick={() => onDelete(supplierRun.id)}
-          className="text-xs font-bold text-red-500 transition hover:text-red-700"
-        >
-          Delete PO
-        </button>
-      </div>
+      {!isCompactClosed ? (
+        <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">
+          <button
+            type="button"
+            onClick={() => onDelete(supplierRun.id)}
+            className="text-xs font-bold text-red-500 transition hover:text-red-700"
+          >
+            Delete PO
+          </button>
+        </div>
+      ) : null}
 
       {viewingPhoto ? (
         <div
