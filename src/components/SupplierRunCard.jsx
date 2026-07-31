@@ -348,6 +348,15 @@ export default function SupplierRunCard({
   const isComplete =
     items.length > 0 && pickedUpCount === items.length;
   const remainingCount = items.length - pickedUpCount;
+  const itemLabel = items.length === 1 ? "Item" : "Items";
+  const compactItemSummary =
+    items.length === 0
+      ? "No Items"
+      : pickedUpCount === 0
+        ? `${items.length} ${itemLabel}`
+        : isComplete
+          ? `All ${items.length} ${itemLabel} picked up`
+          : `${remainingCount}/${items.length} ${itemLabel} left`;
   const progressPercent =
     items.length > 0 ? (pickedUpCount / items.length) * 100 : 0;
   const [editingItemId, setEditingItemId] = useState("");
@@ -510,19 +519,27 @@ export default function SupplierRunCard({
           ) : null}
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={openPickupSheet}
-              aria-label={`Open pickup PDF for PO ${supplierRun.poNumber}`}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
-            >
-              <FileText
-                aria-hidden="true"
-                className="h-4 w-4"
-                strokeWidth={2.4}
-              />
-              <span className="hidden sm:inline">PDF</span>
-            </button>
+            {isItemsOpen ? (
+              <button
+                type="button"
+                onClick={openPickupSheet}
+                aria-label={`Open pickup PDF for PO ${supplierRun.poNumber}`}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+              >
+                <FileText
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  strokeWidth={2.4}
+                />
+                <span className="hidden sm:inline">PDF</span>
+              </button>
+            ) : null}
+
+            {!isItemsOpen ? (
+              <span className="whitespace-nowrap rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">
+                {compactItemSummary}
+              </span>
+            ) : null}
 
             {!isItemsOpen ? (
               <button
@@ -583,28 +600,23 @@ export default function SupplierRunCard({
             return (
               <div
                 key={item.id}
+                onClick={() => {
+                  if (
+                    !isEditing &&
+                    !item.pickedUp &&
+                    !processingPhotoItemId
+                  ) {
+                    document.getElementById(pickupPhotoInputId)?.click();
+                  }
+                }}
                 className={`rounded-xl border px-4 py-3 transition ${
                   item.pickedUp
                     ? "border-emerald-200 bg-emerald-50"
-                    : "border-blue-200 bg-blue-50/60"
+                    : "cursor-pointer border-blue-200 bg-blue-50/60 hover:border-blue-300 hover:bg-blue-50"
                 }`}
               >
                 {!isEditing ? (
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                    {item.pickedUp ? (
-                      <input
-                        type="checkbox"
-                        checked
-                        onChange={() =>
-                          onToggleItem(supplierRun.id, item.id)
-                        }
-                        className="mt-1 h-5 w-5 shrink-0 accent-blue-700"
-                        aria-label={`Mark ${item.description} not picked up`}
-                      />
-                    ) : (
-                      <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-blue-700 bg-white" />
-                    )}
-
                     <span className="min-w-0 flex-1">
                       {item.quantity ? (
                         <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-blue-700">
@@ -635,16 +647,46 @@ export default function SupplierRunCard({
                         </span>
                       ) : null}
 
+                      <span className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <span
+                          className={`text-xs font-black uppercase tracking-[0.08em] ${
+                            item.pickedUp
+                              ? "text-emerald-800"
+                              : "text-slate-600"
+                          }`}
+                        >
+                          {processingPhotoItemId === item.id
+                            ? "Saving photo..."
+                            : "Item has been picked up"}
+                        </span>
+
+                        <span
+                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${
+                            item.pickedUp
+                              ? "border-emerald-600 bg-emerald-600"
+                              : "border-slate-300 bg-white"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {item.pickedUp ? (
+                            <span className="text-sm font-black leading-none text-white">
+                              ✓
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+
                       {item.pickupPhoto?.dataUrl ? (
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={(event) => {
+                            event.stopPropagation();
                             setViewingPhoto({
                               dataUrl: item.pickupPhoto.dataUrl,
                               title: "Pickup Photo",
                               subtitle: item.description,
-                            })
-                          }
+                            });
+                          }}
                           className="mt-3 block overflow-hidden rounded-xl border border-emerald-200 bg-white text-left"
                         >
                           <img
@@ -662,33 +704,25 @@ export default function SupplierRunCard({
 
                     <div className="flex shrink-0 flex-wrap gap-2">
                       {!item.pickedUp ? (
-                        <>
-                          <label
-                            htmlFor={pickupPhotoInputId}
-                            className="cursor-pointer rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50"
-                          >
-                            {processingPhotoItemId === item.id
-                              ? "Saving Photo..."
-                              : "Snap Photo & Pick Up"}
-                          </label>
-
-                          <input
-                            id={pickupPhotoInputId}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={(event) =>
-                              handlePickupPhotoChange(item.id, event)
-                            }
-                            disabled={Boolean(processingPhotoItemId)}
-                            className="sr-only"
-                          />
-                        </>
+                        <input
+                          id={pickupPhotoInputId}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(event) =>
+                            handlePickupPhotoChange(item.id, event)
+                          }
+                          disabled={Boolean(processingPhotoItemId)}
+                          className="sr-only"
+                        />
                       ) : null}
 
                       <button
                         type="button"
-                        onClick={() => startEditingItem(item)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          startEditingItem(item);
+                        }}
                         className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                       >
                         Edit
