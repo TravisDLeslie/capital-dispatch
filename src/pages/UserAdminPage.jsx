@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import PageContainer from "../components/PageContainer";
 import { deliveryDrivers } from "../data/options";
 
@@ -12,6 +13,61 @@ const roles = [
   { value: "admin", label: "Admin" },
   { value: "superAdmin", label: "Super Admin" },
 ];
+
+const permissionGroups = [
+  {
+    title: "Receiving",
+    permissions: [
+      { id: "check-in", label: "Check In" },
+      { id: "today", label: "Today's Check-Ins" },
+      { id: "search", label: "Search PO" },
+    ],
+  },
+  {
+    title: "South",
+    permissions: [
+      { id: "supplier-runs-add", label: "Add POs" },
+      { id: "supplier-runs-check", label: "View POs to Pick Up" },
+      { id: "supplier-runs-history", label: "South History" },
+    ],
+  },
+  {
+    title: "Deliveries",
+    permissions: [
+      { id: "deliveries-add", label: "Add Deliveries" },
+      { id: "deliveries-queue", label: "To Be Delivered" },
+      { id: "deliveries-history", label: "Delivery History" },
+    ],
+  },
+  {
+    title: "Sales",
+    permissions: [
+      { id: "customers-add", label: "Add Customer" },
+      { id: "customers-view", label: "View Customers" },
+    ],
+  },
+  {
+    title: "Admin",
+    permissions: [{ id: "user-admin", label: "User Access" }],
+  },
+];
+
+const allPermissionIds = permissionGroups.flatMap((group) =>
+  group.permissions.map((permission) => permission.id),
+);
+
+const rolePermissionPresets = {
+  pending: [],
+  driver: ["supplier-runs-check", "deliveries-queue"],
+  receiving: ["check-in", "today", "search"],
+  south: ["supplier-runs-check", "supplier-runs-history"],
+  delivery: ["deliveries-queue", "deliveries-history"],
+  sales: ["customers-add", "customers-view"],
+  admin: allPermissionIds.filter(
+    (permissionId) => permissionId !== "user-admin",
+  ),
+  superAdmin: allPermissionIds,
+};
 
 const statuses = [
   { value: "pending", label: "Pending" },
@@ -31,6 +87,16 @@ function getStatusClass(status) {
   return "bg-amber-100 text-amber-700";
 }
 
+function getUserPermissions(user) {
+  if (Array.isArray(user.permissions)) {
+    return user.permissions.filter(
+      (permission) => typeof permission === "string",
+    );
+  }
+
+  return rolePermissionPresets[user.role] || [];
+}
+
 export default function UserAdminPage({
   users,
   currentUserProfile,
@@ -40,12 +106,15 @@ export default function UserAdminPage({
   const [savingUserId, setSavingUserId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [openAccessPanels, setOpenAccessPanels] = useState({});
+  const [openAccessGroups, setOpenAccessGroups] = useState({});
 
   function getDraft(user) {
     return {
       role: user.role || "pending",
       status: user.status || "pending",
       driverName: user.driverName || "",
+      permissions: getUserPermissions(user),
       ...(drafts[user.id] || {}),
     };
   }
@@ -82,6 +151,7 @@ export default function UserAdminPage({
         role: draft.role,
         status: draft.status,
         driverName: draft.driverName,
+        permissions: draft.permissions || [],
         approvedAt,
         approvedBy,
       });
@@ -98,6 +168,65 @@ export default function UserAdminPage({
     } finally {
       setSavingUserId("");
     }
+  }
+
+  function applyRolePreset(userId, role) {
+    setDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [userId]: {
+        ...(currentDrafts[userId] || {}),
+        role,
+        permissions: [...(rolePermissionPresets[role] || [])],
+      },
+    }));
+    setMessage("");
+    setError("");
+  }
+
+  function togglePermission(userId, permissionId) {
+    const user = users.find((savedUser) => savedUser.id === userId);
+    const currentDraft = user ? getDraft(user) : { permissions: [] };
+    const currentPermissions = currentDraft.permissions || [];
+    const nextPermissions = currentPermissions.includes(permissionId)
+      ? currentPermissions.filter(
+          (permission) => permission !== permissionId,
+        )
+      : [...currentPermissions, permissionId];
+
+    updateDraft(userId, "permissions", nextPermissions);
+  }
+
+  function getAccessGroupKey(userId, groupTitle) {
+    return `${userId}::${groupTitle}`;
+  }
+
+  function isAccessGroupOpen(userId, group, draft) {
+    const groupKey = getAccessGroupKey(userId, group.title);
+
+    if (groupKey in openAccessGroups) {
+      return openAccessGroups[groupKey];
+    }
+
+    return group.permissions.some((permission) =>
+      (draft.permissions || []).includes(permission.id),
+    );
+  }
+
+  function toggleAccessGroup(userId, group, draft) {
+    const groupKey = getAccessGroupKey(userId, group.title);
+    const groupIsOpen = isAccessGroupOpen(userId, group, draft);
+
+    setOpenAccessGroups((currentOpenAccessGroups) => ({
+      ...currentOpenAccessGroups,
+      [groupKey]: !groupIsOpen,
+    }));
+  }
+
+  function toggleAccessPanel(userId) {
+    setOpenAccessPanels((currentOpenAccessPanels) => ({
+      ...currentOpenAccessPanels,
+      [userId]: !currentOpenAccessPanels[userId],
+    }));
   }
 
   return (
@@ -134,7 +263,10 @@ export default function UserAdminPage({
           const hasChanges =
             draft.role !== (user.role || "pending") ||
             draft.status !== (user.status || "pending") ||
-            draft.driverName !== (user.driverName || "");
+            draft.driverName !== (user.driverName || "") ||
+            JSON.stringify([...(draft.permissions || [])].sort()) !==
+              JSON.stringify(getUserPermissions(user).sort());
+          const accessPanelIsOpen = Boolean(openAccessPanels[user.id]);
 
           return (
             <section
@@ -198,14 +330,13 @@ export default function UserAdminPage({
 
                   <label className="block">
                     <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-                      Role
+                      Preset
                     </span>
                     <select
                       value={draft.role}
                       onChange={(event) =>
-                        updateDraft(
+                        applyRolePreset(
                           user.id,
-                          "role",
                           event.target.value,
                         )
                       }
@@ -243,6 +374,124 @@ export default function UserAdminPage({
                     </select>
                   </label>
                 </div>
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+                <button
+                  type="button"
+                  onClick={() => toggleAccessPanel(user.id)}
+                  className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-4 text-left transition hover:bg-slate-100"
+                  aria-expanded={accessPanelIsOpen}
+                >
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                      Page Access
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      Pick exactly what this user can open.
+                    </p>
+                  </div>
+
+                  <span className="flex items-center gap-2">
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
+                      {(draft.permissions || []).length} selected
+                    </span>
+
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={`h-5 w-5 text-slate-400 transition-transform ${
+                        accessPanelIsOpen ? "rotate-180" : ""
+                      }`}
+                      strokeWidth={2.5}
+                    />
+                  </span>
+                </button>
+
+                {accessPanelIsOpen ? (
+                <div className="space-y-2 border-t border-slate-200 p-4">
+                  {permissionGroups.map((group) => {
+                    const selectedCount = group.permissions.filter(
+                      (permission) =>
+                        (draft.permissions || []).includes(
+                          permission.id,
+                        ),
+                    ).length;
+                    const groupIsOpen = isAccessGroupOpen(
+                      user.id,
+                      group,
+                      draft,
+                    );
+
+                    return (
+                      <div
+                        key={group.title}
+                        className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+                      >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleAccessGroup(user.id, group, draft)
+                          }
+                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+                          aria-expanded={groupIsOpen}
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-sm font-black text-slate-900">
+                              {group.title}
+                            </span>
+                            <span className="mt-0.5 block text-xs font-bold text-slate-500">
+                              {selectedCount} of{" "}
+                              {group.permissions.length} selected
+                            </span>
+                          </span>
+
+                          <span className="flex shrink-0 items-center gap-2">
+                            {selectedCount > 0 ? (
+                              <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-[#FC2C38]">
+                                {selectedCount}
+                              </span>
+                            ) : null}
+
+                            <ChevronDown
+                              aria-hidden="true"
+                              className={`h-5 w-5 text-slate-400 transition-transform ${
+                                groupIsOpen ? "rotate-180" : ""
+                              }`}
+                              strokeWidth={2.5}
+                            />
+                          </span>
+                        </button>
+
+                        {groupIsOpen ? (
+                          <div className="space-y-2 border-t border-slate-200 bg-slate-50 px-4 py-3">
+                            {group.permissions.map((permission) => (
+                              <label
+                                key={permission.id}
+                                className="flex items-center gap-2 text-sm font-bold text-slate-700"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={(
+                                    draft.permissions || []
+                                  ).includes(permission.id)}
+                                  onChange={() =>
+                                    togglePermission(
+                                      user.id,
+                                      permission.id,
+                                    )
+                                  }
+                                  className="h-4 w-4 rounded border-slate-300 text-[#FC2C38] focus:ring-red-200"
+                                />
+                                <span>{permission.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                ) : null}
               </div>
 
               <div className="mt-4 flex justify-end">

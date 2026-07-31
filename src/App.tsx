@@ -54,6 +54,7 @@ type UserProfile = {
   displayName?: string;
   photoURL?: string;
   role?: string;
+  permissions?: string[];
   status?: string;
   driverName?: string;
   approvedAt?: string | null;
@@ -206,7 +207,7 @@ function getUserRole(
   return userProfile.role || "pending";
 }
 
-function getAllowedPageIds(role: string) {
+function getAllowedPageIdsForRole(role: string) {
   if (role === "superAdmin") {
     return [
       "check-in",
@@ -261,6 +262,24 @@ function getAllowedPageIds(role: string) {
   }
 
   return [];
+}
+
+function getAllowedPageIds(
+  role: string,
+  permissions?: unknown,
+) {
+  if (role === "superAdmin") {
+    return getAllowedPageIdsForRole(role);
+  }
+
+  if (Array.isArray(permissions) && permissions.length > 0) {
+    return permissions.filter(
+      (permission): permission is string =>
+        typeof permission === "string",
+    );
+  }
+
+  return getAllowedPageIdsForRole(role);
 }
 
 function PendingApproval({
@@ -347,8 +366,8 @@ export default function App() {
   const isApproved =
     isSuperAdmin || userProfile?.status === "approved";
   const allowedPageIds = useMemo(
-    () => getAllowedPageIds(userRole),
-    [userRole],
+    () => getAllowedPageIds(userRole, userProfile?.permissions),
+    [userRole, userProfile?.permissions],
   );
   const driverName = userProfile?.driverName || "";
   const canReadReceiving = allowedPageIds.some((pageId) =>
