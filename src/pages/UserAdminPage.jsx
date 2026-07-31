@@ -44,6 +44,7 @@ const permissionGroups = [
     permissions: [
       { id: "customers-add", label: "Add Customer" },
       { id: "customers-view", label: "View Customers" },
+      { id: "sales-converter", label: "Converter" },
     ],
   },
   {
@@ -62,7 +63,7 @@ const rolePermissionPresets = {
   receiving: ["check-in", "today", "search"],
   south: ["supplier-runs-check", "supplier-runs-history"],
   delivery: ["deliveries-queue", "deliveries-history"],
-  sales: ["customers-add", "customers-view"],
+  sales: ["customers-add", "customers-view", "sales-converter"],
   admin: allPermissionIds.filter(
     (permissionId) => permissionId !== "user-admin",
   ),

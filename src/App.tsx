@@ -8,6 +8,7 @@ import DeliveryQueuePage from "./pages/DeliveryQueuePage";
 import DeliveriesPage from "./pages/DeliveriesPage";
 import LoginPage from "./components/LoginPage";
 import SearchPage from "./pages/SearchPage";
+import SalesConverterPage from "./pages/SalesConverterPage";
 import SupplierRunsPage from "./pages/SupplierRunsPage";
 import TodayPage from "./pages/TodayPage";
 import UserAdminPage from "./pages/UserAdminPage";
@@ -221,6 +222,7 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-history",
       "customers-add",
       "customers-view",
+      "sales-converter",
       "user-admin",
     ];
   }
@@ -238,6 +240,7 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-history",
       "customers-add",
       "customers-view",
+      "sales-converter",
     ];
   }
 
@@ -254,7 +257,7 @@ function getAllowedPageIdsForRole(role: string) {
   }
 
   if (role === "sales") {
-    return ["customers-add", "customers-view"];
+    return ["customers-add", "customers-view", "sales-converter"];
   }
 
   if (role === "driver") {
@@ -388,7 +391,7 @@ export default function App() {
     ].includes(pageId),
   );
   const canReadSales = allowedPageIds.some((pageId) =>
-    ["customers-add", "customers-view"].includes(pageId),
+    ["customers-add", "customers-view", "sales-converter"].includes(pageId),
   );
   const canReadCustomers = canReadSales || canReadReceiving;
   const visibleSupplierRuns =
@@ -1101,6 +1104,9 @@ export default function App() {
             onUpdateCustomer={handleUpdateCustomer}
           />
         );
+
+      case "sales-converter":
+        return <SalesConverterPage />;
 
       case "check-in":
       default:

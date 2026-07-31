@@ -67,6 +67,11 @@ const navigationItems = [
     label: "View Customers",
   },
   {
+    group: "Sales",
+    id: "sales-converter",
+    label: "Converter",
+  },
+  {
     group: "Admin",
     id: "user-admin",
     label: "User Access",
