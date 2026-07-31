@@ -237,22 +237,6 @@ export default function AppHeader({ currentPage, onPageChange }) {
           <div className="flex min-h-20 items-center justify-between gap-4 py-4">
             <button
               type="button"
-              onClick={() => handlePageChange("check-in")}
-              className="min-w-0 text-left"
-            >
-              <img
-                src={capitalLumberLogo}
-                alt="Capital Lumber Co."
-                className="h-auto w-36 max-w-[52vw]"
-              />
-
-              <p className="mt-1 text-sm font-black tracking-tight text-slate-900">
-                Dispatch CL
-              </p>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setIsMenuOpen((current) => !current)}
               className="flex shrink-0 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-700 shadow-sm transition hover:bg-slate-100"
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
@@ -284,6 +268,20 @@ export default function AppHeader({ currentPage, onPageChange }) {
                 {getCurrentPageLabel(currentPage)}
               </span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => handlePageChange("check-in")}
+              className="min-w-0 flex-1 text-center"
+            >
+              <img
+                src={capitalLumberLogo}
+                alt="Capital Lumber Co."
+                className="mx-auto h-auto w-36 max-w-[52vw]"
+              />
+            </button>
+
+            <span className="h-10 w-[46px] shrink-0" aria-hidden="true" />
           </div>
 
         {isMenuOpen ? (
