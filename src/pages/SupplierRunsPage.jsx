@@ -421,9 +421,34 @@ export default function SupplierRunsPage({
               : "Add South POs"}
         </h2>
 
-        <div className="mt-3 inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white">
-          {getTodayHeading()}
-        </div>
+        {mode === "check" ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white">
+              {formatDateInput(selectedScheduleDate)}
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setCheckViewMode((currentMode) =>
+                  currentMode === "calendar" ? "list" : "calendar",
+                )
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-[#dc1f2b]"
+            >
+              <CalendarDays
+                aria-hidden="true"
+                className="h-4 w-4"
+                strokeWidth={2.4}
+              />
+              {checkViewMode === "calendar" ? "View" : "Calendar"}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-3 inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white">
+            {getTodayHeading()}
+          </div>
+        )}
 
         <p className="mt-2 text-slate-500">
           {mode === "history"
@@ -614,37 +639,6 @@ export default function SupplierRunsPage({
         </section>
       ) : (
         <section>
-          <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                Viewing
-              </p>
-
-              <p className="mt-1 text-lg font-black text-slate-900">
-                {formatDateInput(selectedScheduleDate)}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                setCheckViewMode((currentMode) =>
-                  currentMode === "calendar" ? "list" : "calendar",
-                )
-              }
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#dc1f2b]"
-            >
-              <CalendarDays
-                aria-hidden="true"
-                className="h-4 w-4"
-                strokeWidth={2.4}
-              />
-              {checkViewMode === "calendar"
-                ? "Back to Pickups"
-                : "Calendar"}
-            </button>
-          </div>
-
           {checkViewMode === "calendar" ? (
             <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
