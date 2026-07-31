@@ -467,14 +467,18 @@ export default function SupplierRunCard({
             )}
           </div>
 
-          <p className="mt-1 text-sm font-semibold text-slate-500">
-            Added {formatShortDate(supplierRun.createdAt)} at{" "}
-            {formatTime(supplierRun.createdAt)}
-          </p>
+          {isItemsOpen ? (
+            <>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                Added {formatShortDate(supplierRun.createdAt)} at{" "}
+                {formatTime(supplierRun.createdAt)}
+              </p>
 
-          <p className="mt-1 text-sm font-black text-blue-700">
-            Driver: {supplierRun.driver || "Unassigned"}
-          </p>
+              <p className="mt-1 text-sm font-black text-blue-700">
+                Driver: {supplierRun.driver || "Unassigned"}
+              </p>
+            </>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
@@ -492,7 +496,8 @@ export default function SupplierRunCard({
             <span className="hidden sm:inline">PDF</span>
           </button>
 
-          <div
+          {isItemsOpen ? (
+            <div
             className={`rounded-xl px-3 py-2 text-sm font-black ${
               isComplete
                 ? "bg-emerald-100 text-emerald-800"
@@ -502,10 +507,12 @@ export default function SupplierRunCard({
             {isComplete
               ? "All picked up"
               : `${remainingCount} left`}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
+      {isItemsOpen ? (
       <div className="mt-4">
         <div className="mb-1 flex items-center justify-between text-xs font-bold text-slate-500">
           <span>
@@ -526,6 +533,7 @@ export default function SupplierRunCard({
           />
         </div>
       </div>
+      ) : null}
 
       <button
         type="button"
