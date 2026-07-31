@@ -91,6 +91,7 @@ function MarginTable({
   unitLabel,
   targetUnitCost,
   targetUnitLabel,
+  trimMargin,
 }) {
   const showTargetUnit = Boolean(targetUnitLabel);
   const tableGridClass = showTargetUnit
@@ -134,8 +135,13 @@ function MarginTable({
               key={margin}
               className={`grid gap-2 px-4 py-3 sm:items-center sm:gap-3 ${tableGridClass}`}
             >
-              <p className="text-sm font-black text-[#FC2C38]">
-                {margin}%
+              <p className="flex items-center gap-2 text-sm font-black text-[#FC2C38]">
+                <span>{margin}%</span>
+                {trimMargin === margin ? (
+                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+                    Trim
+                  </span>
+                ) : null}
               </p>
               <p className="flex items-center justify-between gap-3 text-sm font-black text-slate-900 sm:block">
                 <span className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500 sm:hidden">
@@ -326,7 +332,10 @@ export default function SalesConverterPage() {
         </p>
       </div>
 
-      <div className="mb-5 grid rounded-2xl border border-slate-200 bg-white p-1 shadow-sm sm:max-w-2xl sm:grid-cols-3">
+      <div className="mb-5 grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm sm:max-w-2xl">
+        <span className="px-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 sm:px-3 sm:text-xs">
+          Convert
+        </span>
         <button
           type="button"
           onClick={() => setConverterType("panel")}
@@ -337,7 +346,8 @@ export default function SalesConverterPage() {
           }`}
         >
           <Layers aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
-          Panel Goods
+          <span className="sm:hidden">Sheet</span>
+          <span className="hidden sm:inline">Panel Goods</span>
         </button>
         <button
           type="button"
@@ -349,7 +359,8 @@ export default function SalesConverterPage() {
           }`}
         >
           <Ruler aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
-          Boards
+          <span className="sm:hidden">Board</span>
+          <span className="hidden sm:inline">Boards</span>
         </button>
         <button
           type="button"
@@ -640,6 +651,7 @@ export default function SalesConverterPage() {
             costEach={itemTotals.costEachItem}
             totalCost={itemTotals.totalCost}
             unitLabel="item"
+            trimMargin={50}
           />
         </section>
         ) : null}
