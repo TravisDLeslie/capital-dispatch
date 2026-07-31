@@ -687,7 +687,7 @@ export default function SupplierRunsPage({
                                 </div>
                               </button>
 
-                              <div className="flex shrink-0 flex-col items-end justify-center gap-2 pr-2 sm:flex-row sm:items-center sm:gap-2 sm:pr-3">
+                              <div className="flex shrink-0 flex-col items-end justify-center gap-2.5 py-4 pr-4 sm:flex-row sm:items-center sm:gap-2 sm:py-0 sm:pr-5">
                                 {supplierAddress ? (
                                   <a
                                     href={getDirectionsUrl(
@@ -695,7 +695,7 @@ export default function SupplierRunsPage({
                                     )}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex h-8 items-center justify-center gap-1 rounded-full bg-[#FC2C38] px-2.5 text-[11px] font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:h-9 sm:px-3 sm:text-xs"
+                                    className="inline-flex h-9 items-center justify-center gap-1 rounded-full bg-[#FC2C38] px-3.5 text-[11px] font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:px-4 sm:text-xs"
                                     aria-label={`Directions to ${vendorGroup.vendor}`}
                                   >
                                     <ArrowUpRight
