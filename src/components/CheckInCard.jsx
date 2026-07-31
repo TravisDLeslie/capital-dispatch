@@ -24,6 +24,9 @@ function getSavedAssignment(checkIn) {
   if (checkIn.customer?.businessName) {
     return {
       type: "customer",
+      customerId: checkIn.customer.customerId || "",
+      customerAccountNumber:
+        checkIn.customer.customerAccountNumber || "",
       businessName: checkIn.customer.businessName || "",
       orderedBy: checkIn.customer.orderedBy || "",
       jobName: checkIn.customer.jobName || "",
@@ -36,6 +39,7 @@ function getSavedAssignment(checkIn) {
 
 export default function CheckInCard({
   checkIn,
+  customers = [],
   showFullDate = false,
   onDelete,
   onUpdateAssignment,
@@ -53,6 +57,9 @@ export default function CheckInCard({
 
   const [businessName, setBusinessName] = useState(
     savedAssignment?.businessName || "",
+  );
+  const [selectedCustomerId, setSelectedCustomerId] = useState(
+    savedAssignment?.customerId || "",
   );
 
   const [orderedBy, setOrderedBy] = useState(
@@ -76,6 +83,7 @@ export default function CheckInCard({
 
     setAssignmentType(currentAssignment?.type || "");
     setBusinessName(currentAssignment?.businessName || "");
+    setSelectedCustomerId(currentAssignment?.customerId || "");
     setOrderedBy(currentAssignment?.orderedBy || "");
     setJobName(currentAssignment?.jobName || "");
     setInternalReference(currentAssignment?.internalReference || "");
@@ -94,9 +102,42 @@ export default function CheckInCard({
 
     if (type === "stock") {
       setBusinessName("");
+      setSelectedCustomerId("");
       setOrderedBy("");
       setJobName("");
     }
+  }
+
+  function findMatchingCustomer(value) {
+    const normalizedValue = value.trim().toLowerCase();
+
+    if (!normalizedValue) {
+      return null;
+    }
+
+    return (
+      customers.find((customer) =>
+        [
+          customer.companyName,
+          customer.name,
+          customer.accountNumber,
+        ]
+          .filter(Boolean)
+          .some(
+            (customerValue) =>
+              String(customerValue).trim().toLowerCase() ===
+              normalizedValue,
+          ),
+      ) || null
+    );
+  }
+
+  function handleBusinessNameChange(value) {
+    const matchedCustomer = findMatchingCustomer(value);
+
+    setBusinessName(value);
+    setSelectedCustomerId(matchedCustomer?.id || "");
+    setAssignmentError("");
   }
 
   function handleAssignmentSave(event) {
@@ -130,6 +171,12 @@ export default function CheckInCard({
             type: "customer",
             internalReference: internalReference.trim(),
             businessName: businessName.trim(),
+            customerId:
+              selectedCustomerId ||
+              findMatchingCustomer(businessName)?.id ||
+              "",
+            customerAccountNumber:
+              findMatchingCustomer(businessName)?.accountNumber || "",
             orderedBy: orderedBy.trim(),
             jobName: jobName.trim(),
           };
@@ -701,15 +748,31 @@ export default function CheckInCard({
                   <input
                     id={`business-${checkIn.id}`}
                     type="text"
+                    list={`customers-${checkIn.id}`}
                     autoComplete="off"
                     value={businessName}
                     onChange={(event) => {
-                      setBusinessName(event.target.value);
-                      setAssignmentError("");
+                      handleBusinessNameChange(event.target.value);
                     }}
                     placeholder="ABC Construction"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   />
+                  <datalist id={`customers-${checkIn.id}`}>
+                    {customers.map((customer) => {
+                      const label =
+                        customer.companyName ||
+                        customer.name ||
+                        customer.accountNumber ||
+                        "";
+
+                      return label ? (
+                        <option
+                          key={customer.id}
+                          value={label}
+                        />
+                      ) : null;
+                    })}
+                  </datalist>
                 </div>
 
                 <div>

@@ -6,6 +6,7 @@ import {
   PackageCheck,
   ShieldCheck,
   Truck,
+  UsersRound,
 } from "lucide-react";
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 
@@ -56,6 +57,16 @@ const navigationItems = [
     label: "Delivery History",
   },
   {
+    group: "Sales",
+    id: "customers-add",
+    label: "Add Customer",
+  },
+  {
+    group: "Sales",
+    id: "customers-view",
+    label: "View Customers",
+  },
+  {
     group: "Admin",
     id: "user-admin",
     label: "User Access",
@@ -93,6 +104,10 @@ function getNavGroupIcon(group) {
     return PackageCheck;
   }
 
+  if (group === "Sales") {
+    return UsersRound;
+  }
+
   if (group === "Admin") {
     return ShieldCheck;
   }
@@ -114,6 +129,7 @@ export default function AppHeader({
     Receiving: true,
     South: false,
     Deliveries: false,
+    Sales: false,
     Admin: false,
   });
   const userInitial = (
@@ -138,6 +154,7 @@ export default function AppHeader({
       Receiving: false,
       South: false,
       Deliveries: false,
+      Sales: false,
       Admin: false,
       [currentItem.group]: true,
     });
@@ -156,6 +173,7 @@ export default function AppHeader({
         Receiving: false,
         South: false,
         Deliveries: false,
+        Sales: false,
         Admin: false,
         [group]: nextIsOpen,
       };
@@ -163,7 +181,7 @@ export default function AppHeader({
   }
 
   function renderNavigation(isMobile = false) {
-    return ["Receiving", "South", "Deliveries", "Admin"].map((group) => {
+    return ["Receiving", "South", "Deliveries", "Sales", "Admin"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds || allowedPageIds.includes(item.id);

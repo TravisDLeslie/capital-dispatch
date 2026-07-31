@@ -8,6 +8,7 @@ const roles = [
   { value: "receiving", label: "Receiving" },
   { value: "south", label: "South" },
   { value: "delivery", label: "Delivery" },
+  { value: "sales", label: "Sales" },
   { value: "admin", label: "Admin" },
   { value: "superAdmin", label: "Super Admin" },
 ];

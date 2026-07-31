@@ -8,6 +8,7 @@ import {
 
 export default function TodayPage({
   checkIns,
+  customers,
   onDeleteCheckIn,
   onUpdateAssignment,
 }) {
@@ -68,6 +69,7 @@ export default function TodayPage({
             <CheckInCard
               key={checkIn.id}
               checkIn={checkIn}
+              customers={customers}
               onDelete={onDeleteCheckIn}
               onUpdateAssignment={onUpdateAssignment}
             />

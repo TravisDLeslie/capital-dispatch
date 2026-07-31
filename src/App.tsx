@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import AppHeader from "./components/AppHeader";
 import CheckInPage from "./pages/CheckInPage";
+import CustomersPage from "./pages/CustomersPage";
 import DeliveryHistoryPage from "./pages/DeliveryHistoryPage";
 import DeliveryQueuePage from "./pages/DeliveryQueuePage";
 import DeliveriesPage from "./pages/DeliveriesPage";
@@ -31,6 +32,11 @@ import {
   subscribeToDeliveries,
   updateDelivery,
 } from "./utils/deliveryStorage";
+import {
+  addCustomer,
+  subscribeToCustomers,
+  updateCustomer,
+} from "./utils/customerStorage";
 import {
   ensureUserProfile,
   subscribeToUserProfile,
@@ -62,6 +68,8 @@ type CheckIn = {
 
 type OrderAssignment = {
   type: string;
+  customerId?: string;
+  customerAccountNumber?: string;
   internalReference?: string;
   businessName?: string;
   orderedBy?: string;
@@ -121,6 +129,31 @@ type Delivery = {
   status: string;
   createdAt: string;
   updatedAt: string;
+  [key: string]: unknown;
+};
+
+type CustomerContact = {
+  id: string;
+  label?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+};
+
+type Customer = {
+  id: string;
+  name?: string;
+  companyName?: string;
+  accountNumber?: string;
+  email?: string;
+  website?: string;
+  address?: string;
+  streetAddress?: string;
+  state?: string;
+  zip?: string;
+  contacts?: CustomerContact[];
+  createdAt?: string;
+  updatedAt?: string;
   [key: string]: unknown;
 };
 
@@ -185,6 +218,8 @@ function getAllowedPageIds(role: string) {
       "deliveries-add",
       "deliveries-queue",
       "deliveries-history",
+      "customers-add",
+      "customers-view",
       "user-admin",
     ];
   }
@@ -200,6 +235,8 @@ function getAllowedPageIds(role: string) {
       "deliveries-add",
       "deliveries-queue",
       "deliveries-history",
+      "customers-add",
+      "customers-view",
     ];
   }
 
@@ -213,6 +250,10 @@ function getAllowedPageIds(role: string) {
 
   if (role === "delivery") {
     return ["deliveries-queue", "deliveries-history"];
+  }
+
+  if (role === "sales") {
+    return ["customers-add", "customers-view"];
   }
 
   if (role === "driver") {
@@ -295,6 +336,7 @@ export default function App() {
   const [deliveries, setDeliveries] = useState<
     Delivery[]
   >([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [editingDeliveryId, setEditingDeliveryId] =
     useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -326,6 +368,10 @@ export default function App() {
       "deliveries-history",
     ].includes(pageId),
   );
+  const canReadSales = allowedPageIds.some((pageId) =>
+    ["customers-add", "customers-view"].includes(pageId),
+  );
+  const canReadCustomers = canReadSales || canReadReceiving;
   const visibleSupplierRuns =
     userRole === "driver"
       ? supplierRuns.filter(
@@ -453,6 +499,7 @@ export default function App() {
       setCheckIns([]);
       setSupplierRuns([]);
       setDeliveries([]);
+      setCustomers([]);
       setIsLoading(false);
       return;
     }
@@ -463,6 +510,7 @@ export default function App() {
     let unsubscribeFromCheckIns = () => {};
     let unsubscribeFromSupplierRuns = () => {};
     let unsubscribeFromDeliveries = () => {};
+    let unsubscribeFromCustomers = () => {};
 
     async function loadCheckIns() {
       try {
@@ -554,7 +602,34 @@ export default function App() {
         setDeliveries([]);
       }
 
-      if (!canReadReceiving && !canReadSouth && !canReadDeliveries) {
+      if (canReadCustomers) {
+        unsubscribeFromCustomers = subscribeToCustomers(
+          (savedCustomers: Customer[]) => {
+            if (isMounted) {
+              setCustomers(savedCustomers);
+              setSyncError("");
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to sync customers:", error);
+
+            if (isMounted) {
+              setSyncError(getFirebaseErrorMessage(error));
+              setIsLoading(false);
+            }
+          },
+        );
+      } else {
+        setCustomers([]);
+      }
+
+      if (
+        !canReadReceiving &&
+        !canReadSouth &&
+        !canReadDeliveries &&
+        !canReadCustomers
+      ) {
         setIsLoading(false);
       }
     } else {
@@ -595,6 +670,22 @@ export default function App() {
       } else {
         setDeliveries([]);
       }
+
+      if (canReadCustomers) {
+        subscribeToCustomers(
+          (savedCustomers: Customer[]) => {
+            if (isMounted) {
+              setCustomers(savedCustomers);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load customers:", error);
+          },
+        );
+      } else {
+        setCustomers([]);
+      }
     }
 
     return () => {
@@ -602,8 +693,10 @@ export default function App() {
       unsubscribeFromCheckIns();
       unsubscribeFromSupplierRuns();
       unsubscribeFromDeliveries();
+      unsubscribeFromCustomers();
     };
   }, [
+    canReadCustomers,
     currentUser,
     canReadDeliveries,
     canReadReceiving,
@@ -683,6 +776,26 @@ export default function App() {
     const updatedDeliveries = await addDelivery(delivery);
 
     setDeliveries(updatedDeliveries);
+    setSyncError("");
+  }
+
+  async function handleAddCustomer(customer: Customer) {
+    const updatedCustomers = await addCustomer(customer);
+
+    setCustomers(updatedCustomers);
+    setSyncError("");
+  }
+
+  async function handleUpdateCustomer(
+    customerId: string,
+    customerUpdates: Partial<Customer>,
+  ) {
+    const updatedCustomers = await updateCustomer(
+      customerId,
+      customerUpdates,
+    );
+
+    setCustomers(updatedCustomers);
     setSyncError("");
   }
 
@@ -856,6 +969,7 @@ export default function App() {
         return (
           <TodayPage
             checkIns={checkIns}
+            customers={customers}
             onDeleteCheckIn={handleDeleteCheckIn}
             onUpdateAssignment={
               handleUpdateAssignment
@@ -947,6 +1061,26 @@ export default function App() {
       case "deliveries-history":
         return (
           <DeliveryHistoryPage deliveries={visibleDeliveries} />
+        );
+
+      case "customers-add":
+        return (
+          <CustomersPage
+            mode="add"
+            customers={customers}
+            onAddCustomer={handleAddCustomer}
+            onUpdateCustomer={handleUpdateCustomer}
+          />
+        );
+
+      case "customers-view":
+        return (
+          <CustomersPage
+            mode="view"
+            customers={customers}
+            onAddCustomer={handleAddCustomer}
+            onUpdateCustomer={handleUpdateCustomer}
+          />
         );
 
       case "check-in":
