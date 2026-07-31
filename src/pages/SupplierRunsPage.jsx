@@ -4,6 +4,7 @@ import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
 import SupplierRunForm from "../components/SupplierRunForm";
+import { southVendorRouteOrder } from "../data/options";
 import {
   getTodayHeading,
   isToday,
@@ -23,6 +24,38 @@ const driverAvatarColors = [
   "bg-slate-200 text-slate-700",
 ];
 
+function normalizeVendorName(vendor) {
+  return String(vendor || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function getVendorRouteIndex(vendor) {
+  const normalizedVendor = normalizeVendorName(vendor);
+  const routeIndex = southVendorRouteOrder.findIndex(
+    (routeVendor) =>
+      normalizeVendorName(routeVendor) === normalizedVendor,
+  );
+
+  return routeIndex === -1
+    ? Number.MAX_SAFE_INTEGER
+    : routeIndex;
+}
+
+function sortVendorGroups(vendorGroups) {
+  return [...vendorGroups].sort((firstGroup, secondGroup) => {
+    const firstIndex = getVendorRouteIndex(firstGroup.vendor);
+    const secondIndex = getVendorRouteIndex(secondGroup.vendor);
+
+    if (firstIndex !== secondIndex) {
+      return firstIndex - secondIndex;
+    }
+
+    return firstGroup.vendor.localeCompare(secondGroup.vendor);
+  });
+}
+
 function getDriverAvatar(driver) {
   const name = driver || UNASSIGNED_DRIVER;
   const colorIndex = [...name].reduce(
@@ -37,7 +70,7 @@ function getDriverAvatar(driver) {
 }
 
 function groupRunsByVendor(supplierRuns) {
-  return supplierRuns.reduce((groups, supplierRun) => {
+  const vendorGroups = supplierRuns.reduce((groups, supplierRun) => {
     const vendor = supplierRun.vendor || "Unknown Supplier";
     const existingGroup = groups.find(
       (group) => group.vendor === vendor,
@@ -56,6 +89,8 @@ function groupRunsByVendor(supplierRuns) {
       },
     ];
   }, []);
+
+  return sortVendorGroups(vendorGroups);
 }
 
 function groupRunsByDriverAndVendor(supplierRuns) {
@@ -459,33 +494,33 @@ export default function SupplierRunsPage({
         </section>
       ) : (
         <section>
-          <div className="mb-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">
+          <div className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-2 py-3 text-center sm:px-4 sm:text-left">
+              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-blue-700 sm:text-xs sm:tracking-[0.18em]">
                 Open Stops
               </p>
 
-              <p className="mt-1 text-3xl font-black text-slate-900">
+              <p className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
                 {openStopsCount}
               </p>
             </div>
 
-            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-2 py-3 text-center sm:px-4 sm:text-left">
+              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-amber-700 sm:text-xs sm:tracking-[0.18em]">
                 Items Left
               </p>
 
-              <p className="mt-1 text-3xl font-black text-slate-900">
+              <p className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
                 {openItemsCount}
               </p>
             </div>
 
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-2 py-3 text-center sm:px-4 sm:text-left">
+              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-emerald-700 sm:text-xs sm:tracking-[0.18em]">
                 Completed POs
               </p>
 
-              <p className="mt-1 text-3xl font-black text-slate-900">
+              <p className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
                 {completeRuns.length}
               </p>
             </div>
@@ -624,7 +659,7 @@ export default function SupplierRunsPage({
                             key={vendorGroup.vendor}
                             className="overflow-hidden rounded-xl border border-slate-200 bg-white"
                           >
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                            <div className="flex items-stretch gap-2">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -650,42 +685,60 @@ export default function SupplierRunsPage({
                                     {stats.itemCount} items
                                   </p>
                                 </div>
-
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-black text-blue-800 shadow-sm">
-                                    {stats.poCount}{" "}
-                                    {stats.poCount === 1
-                                      ? "PO"
-                                      : "POs"}
-                                  </span>
-
-                                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm">
-                                    <ChevronDown
-                                      aria-hidden="true"
-                                      className={`h-5 w-5 transition-transform ${
-                                        stopIsOpen ? "rotate-180" : ""
-                                      }`}
-                                      strokeWidth={2.6}
-                                    />
-                                  </span>
-                                </div>
                               </button>
 
-                              {supplierAddress ? (
-                                <a
-                                  href={getDirectionsUrl(supplierAddress)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:mx-0 sm:my-6 sm:mr-6"
+                              <div className="flex shrink-0 items-center gap-1.5 pr-2 sm:gap-2 sm:pr-3">
+                                {supplierAddress ? (
+                                  <a
+                                    href={getDirectionsUrl(
+                                      supplierAddress,
+                                    )}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex h-9 items-center justify-center gap-1 rounded-full bg-[#FC2C38] px-2.5 text-[11px] font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:px-3 sm:text-xs"
+                                    aria-label={`Directions to ${vendorGroup.vendor}`}
+                                  >
+                                    <ArrowUpRight
+                                      aria-hidden="true"
+                                      className="h-3.5 w-3.5"
+                                      strokeWidth={2.6}
+                                    />
+                                    <span>Directions</span>
+                                  </a>
+                                ) : null}
+
+                                <span className="rounded-lg bg-white px-2 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:px-3">
+                                  {stats.poCount}{" "}
+                                  {stats.poCount === 1
+                                    ? "PO"
+                                    : "POs"}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleStop(
+                                      driverGroup.driver,
+                                      vendorGroup.vendor,
+                                    )
+                                  }
+                                  className="flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+                                  aria-label={
+                                    stopIsOpen
+                                      ? `Close ${vendorGroup.vendor}`
+                                      : `Open ${vendorGroup.vendor}`
+                                  }
+                                  aria-expanded={stopIsOpen}
                                 >
-                                  Directions
-                                  <ArrowUpRight
+                                  <ChevronDown
                                     aria-hidden="true"
-                                    className="h-4 w-4"
+                                    className={`h-5 w-5 transition-transform ${
+                                      stopIsOpen ? "rotate-180" : ""
+                                    }`}
                                     strokeWidth={2.6}
                                   />
-                                </a>
-                              ) : null}
+                                </button>
+                              </div>
                             </div>
 
                             {stopIsOpen ? (

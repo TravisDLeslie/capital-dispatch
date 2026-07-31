@@ -1,4 +1,5 @@
 export const vendors = [
+  "Tacoma",
   "Orepac",
   "Boise",
   "Weyerhaeuser",
@@ -11,6 +12,19 @@ export const vendors = [
   "JM Thomas",
   "Basalite",
   "Idaho Fence",
+];
+
+export const southVendorRouteOrder = [
+  "Tacoma",
+  "Boise",
+  "Woodgrain",
+  "JM Thomas",
+  "Orepac",
+  "Weyerhaeuser",
+  "Handy",
+  "Basalite",
+  "Idaho Fence",
+  "Rugby",
 ];
 
 export const supplierAddresses = {

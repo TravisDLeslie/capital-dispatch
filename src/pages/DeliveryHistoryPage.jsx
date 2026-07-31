@@ -128,11 +128,11 @@ export default function DeliveryHistoryPage({ deliveries }) {
     <PageContainer>
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
-          Deliveries
+          Delivery History
         </p>
 
         <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
-          History
+          Past Deliveries
         </h1>
 
         <p className="mt-2 text-lg text-slate-500">
