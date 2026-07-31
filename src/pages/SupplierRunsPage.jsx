@@ -687,7 +687,7 @@ export default function SupplierRunsPage({
                                 </div>
                               </button>
 
-                              <div className="flex shrink-0 items-center gap-1.5 pr-2 sm:gap-2 sm:pr-3">
+                              <div className="flex shrink-0 flex-col items-end justify-center gap-2 pr-2 sm:flex-row sm:items-center sm:gap-2 sm:pr-3">
                                 {supplierAddress ? (
                                   <a
                                     href={getDirectionsUrl(
@@ -695,7 +695,7 @@ export default function SupplierRunsPage({
                                     )}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex h-9 items-center justify-center gap-1 rounded-full bg-[#FC2C38] px-2.5 text-[11px] font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:px-3 sm:text-xs"
+                                    className="inline-flex h-8 items-center justify-center gap-1 rounded-full bg-[#FC2C38] px-2.5 text-[11px] font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:h-9 sm:px-3 sm:text-xs"
                                     aria-label={`Directions to ${vendorGroup.vendor}`}
                                   >
                                     <ArrowUpRight
@@ -707,37 +707,39 @@ export default function SupplierRunsPage({
                                   </a>
                                 ) : null}
 
-                                <span className="rounded-lg bg-white px-2 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:px-3">
-                                  {stats.poCount}{" "}
-                                  {stats.poCount === 1
-                                    ? "PO"
-                                    : "POs"}
-                                </span>
+                                <div className="flex items-center gap-1.5 sm:gap-2">
+                                  <span className="rounded-lg bg-white px-2 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:px-3">
+                                    {stats.poCount}{" "}
+                                    {stats.poCount === 1
+                                      ? "PO"
+                                      : "POs"}
+                                  </span>
 
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    toggleStop(
-                                      driverGroup.driver,
-                                      vendorGroup.vendor,
-                                    )
-                                  }
-                                  className="flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
-                                  aria-label={
-                                    stopIsOpen
-                                      ? `Close ${vendorGroup.vendor}`
-                                      : `Open ${vendorGroup.vendor}`
-                                  }
-                                  aria-expanded={stopIsOpen}
-                                >
-                                  <ChevronDown
-                                    aria-hidden="true"
-                                    className={`h-5 w-5 transition-transform ${
-                                      stopIsOpen ? "rotate-180" : ""
-                                    }`}
-                                    strokeWidth={2.6}
-                                  />
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      toggleStop(
+                                        driverGroup.driver,
+                                        vendorGroup.vendor,
+                                      )
+                                    }
+                                    className="flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+                                    aria-label={
+                                      stopIsOpen
+                                        ? `Close ${vendorGroup.vendor}`
+                                        : `Open ${vendorGroup.vendor}`
+                                    }
+                                    aria-expanded={stopIsOpen}
+                                  >
+                                    <ChevronDown
+                                      aria-hidden="true"
+                                      className={`h-5 w-5 transition-transform ${
+                                        stopIsOpen ? "rotate-180" : ""
+                                      }`}
+                                      strokeWidth={2.6}
+                                    />
+                                  </button>
+                                </div>
                               </div>
                             </div>
 

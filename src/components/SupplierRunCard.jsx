@@ -449,7 +449,7 @@ export default function SupplierRunCard({
           : "border-blue-200 bg-white hover:border-blue-300 hover:shadow-md"
       }`}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-black tracking-tight text-slate-900">
@@ -477,18 +477,19 @@ export default function SupplierRunCard({
           </p>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-col items-end gap-2 sm:flex-row sm:items-center">
           <button
             type="button"
             onClick={openPickupSheet}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+            aria-label={`Open pickup PDF for PO ${supplierRun.poNumber}`}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
           >
             <FileText
               aria-hidden="true"
               className="h-4 w-4"
               strokeWidth={2.4}
             />
-            PDF
+            <span className="hidden sm:inline">PDF</span>
           </button>
 
           <div
@@ -543,7 +544,7 @@ export default function SupplierRunCard({
         </span>
 
         <span className="rounded-lg bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
-          {isItemsOpen ? "Hide" : "Show"}
+          {isItemsOpen ? "Close" : "View"}
         </span>
       </button>
 
