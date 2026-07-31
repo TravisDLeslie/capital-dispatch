@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, ChevronDown } from "lucide-react";
+import {
+  ArrowUpRight,
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  X,
+} from "lucide-react";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
@@ -7,8 +14,8 @@ import SupplierRunForm from "../components/SupplierRunForm";
 import { southVendorRouteOrder } from "../data/options";
 import {
   formatDateInput,
+  getDateInputValue,
   getTodayHeading,
-  isDateInputTodayOrEarlier,
   isToday,
 } from "../utils/dateHelpers";
 
@@ -128,6 +135,54 @@ function getDirectionsUrl(address) {
   )}`;
 }
 
+function getDateKeyFromDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getSupplierRunDateKey(supplierRun) {
+  if (supplierRun.scheduledDate) {
+    return supplierRun.scheduledDate;
+  }
+
+  if (supplierRun.createdAt) {
+    return getDateKeyFromDate(new Date(supplierRun.createdAt));
+  }
+
+  return "";
+}
+
+function getCalendarDays(monthDate) {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const startDate = new Date(firstDay);
+
+  startDate.setDate(firstDay.getDate() - firstDay.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(startDate);
+    date.setDate(startDate.getDate() + index);
+
+    return {
+      key: getDateKeyFromDate(date),
+      day: date.getDate(),
+      inCurrentMonth: date.getMonth() === month,
+      isToday: getDateKeyFromDate(date) === getDateInputValue(),
+    };
+  });
+}
+
+function getMonthLabel(monthDate) {
+  return monthDate.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export default function SupplierRunsPage({
   mode = "add",
   supplierRuns,
@@ -136,9 +191,19 @@ export default function SupplierRunsPage({
   onUpdateSupplierRunItemDescription,
   onDeleteSupplierRun,
 }) {
+  const todayKey = getDateInputValue();
   const [successMessage, setSuccessMessage] = useState("");
   const [openStopKeys, setOpenStopKeys] = useState({});
   const [openDriverKeys, setOpenDriverKeys] = useState({});
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+  const [selectedScheduleDate, setSelectedScheduleDate] =
+    useState(todayKey);
+  const [checkViewMode, setCheckViewMode] = useState("list");
+  const [viewingSupplierRun, setViewingSupplierRun] =
+    useState(null);
 
   useEffect(() => {
     if (!successMessage) {
@@ -248,13 +313,60 @@ export default function SupplierRunsPage({
     });
   }
 
+  function changeCalendarMonth(offset) {
+    setCalendarMonth(
+      (currentMonth) =>
+        new Date(
+          currentMonth.getFullYear(),
+          currentMonth.getMonth() + offset,
+          1,
+        ),
+    );
+  }
+
+  const runsByDate = supplierRuns.reduce((groups, supplierRun) => {
+    const dateKey = getSupplierRunDateKey(supplierRun);
+
+    if (!dateKey) {
+      return groups;
+    }
+
+    return {
+      ...groups,
+      [dateKey]: [...(groups[dateKey] || []), supplierRun],
+    };
+  }, {});
+  const calendarDays = getCalendarDays(calendarMonth);
+  const selectedScheduleRuns = [
+    ...(runsByDate[selectedScheduleDate] || []),
+  ].sort((firstRun, secondRun) => {
+    const firstIndex = getVendorRouteIndex(firstRun.vendor);
+    const secondIndex = getVendorRouteIndex(secondRun.vendor);
+
+    if (firstIndex !== secondIndex) {
+      return firstIndex - secondIndex;
+    }
+
+    return String(firstRun.poNumber || "").localeCompare(
+      String(secondRun.poNumber || ""),
+    );
+  });
+  const selectedSupplierRunDetails = viewingSupplierRun
+    ? supplierRuns.find(
+        (supplierRun) => supplierRun.id === viewingSupplierRun.id,
+      ) || viewingSupplierRun
+    : null;
+
   const dailyRuns = supplierRuns.filter(
     (supplierRun) => {
       if (supplierRun.status === "complete") {
-        return isToday(supplierRun.completedAt || supplierRun.updatedAt);
+        return (
+          getSupplierRunDateKey(supplierRun) === selectedScheduleDate &&
+          isToday(supplierRun.completedAt || supplierRun.updatedAt)
+        );
       }
 
-      return isDateInputTodayOrEarlier(supplierRun.scheduledDate);
+      return getSupplierRunDateKey(supplierRun) === selectedScheduleDate;
     },
   );
 
@@ -502,6 +614,227 @@ export default function SupplierRunsPage({
         </section>
       ) : (
         <section>
+          <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                Viewing
+              </p>
+
+              <p className="mt-1 text-lg font-black text-slate-900">
+                {formatDateInput(selectedScheduleDate)}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setCheckViewMode((currentMode) =>
+                  currentMode === "calendar" ? "list" : "calendar",
+                )
+              }
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#dc1f2b]"
+            >
+              <CalendarDays
+                aria-hidden="true"
+                className="h-4 w-4"
+                strokeWidth={2.4}
+              />
+              {checkViewMode === "calendar"
+                ? "Back to Pickups"
+                : "Calendar"}
+            </button>
+          </div>
+
+          {checkViewMode === "calendar" ? (
+            <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                    <CalendarDays
+                      aria-hidden="true"
+                      className="h-4 w-4"
+                      strokeWidth={2.4}
+                    />
+                    South Schedule
+                  </p>
+
+                  <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                    Scheduled South POs
+                  </h3>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => changeCalendarMonth(-1)}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+                    aria-label="Previous month"
+                  >
+                    <ChevronLeft
+                      aria-hidden="true"
+                      className="h-5 w-5"
+                      strokeWidth={2.5}
+                    />
+                  </button>
+
+                  <div className="min-w-36 rounded-xl bg-slate-100 px-4 py-2 text-center text-sm font-black text-slate-900">
+                    {getMonthLabel(calendarMonth)}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => changeCalendarMonth(1)}
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+                    aria-label="Next month"
+                  >
+                    <ChevronRight
+                      aria-hidden="true"
+                      className="h-5 w-5"
+                      strokeWidth={2.5}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+                <div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
+                    {[
+                      "Sun",
+                      "Mon",
+                      "Tue",
+                      "Wed",
+                      "Thu",
+                      "Fri",
+                      "Sat",
+                    ].map((dayLabel) => (
+                      <div key={dayLabel} className="py-2">
+                        {dayLabel}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1">
+                    {calendarDays.map((day) => {
+                      const dayRuns = runsByDate[day.key] || [];
+                      const isSelected =
+                        selectedScheduleDate === day.key;
+
+                      return (
+                        <button
+                          key={day.key}
+                          type="button"
+                          onClick={() =>
+                            setSelectedScheduleDate(day.key)
+                          }
+                          className={`relative flex min-h-14 flex-col items-center justify-center rounded-xl border text-sm font-black transition sm:min-h-16 ${
+                            isSelected
+                              ? "border-[#FC2C38] bg-red-50 text-[#FC2C38]"
+                              : day.inCurrentMonth
+                                ? "border-slate-200 bg-white text-slate-800 hover:border-red-200 hover:bg-red-50"
+                                : "border-slate-100 bg-slate-50 text-slate-300"
+                          }`}
+                        >
+                          <span
+                            className={
+                              day.isToday
+                                ? "flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-white"
+                                : ""
+                            }
+                          >
+                            {day.day}
+                          </span>
+
+                          {dayRuns.length > 0 ? (
+                            <span
+                              className="mt-1 h-1.5 w-1.5 rounded-full bg-[#FC2C38]"
+                              aria-label={`${dayRuns.length} South POs`}
+                            />
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <aside className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                    {formatDateInput(selectedScheduleDate)}
+                  </p>
+
+                  <h3 className="mt-1 text-2xl font-black text-slate-900">
+                    {selectedScheduleRuns.length}{" "}
+                    {selectedScheduleRuns.length === 1
+                      ? "South PO"
+                      : "South POs"}
+                  </h3>
+
+                  <div className="mt-4 space-y-3">
+                    {selectedScheduleRuns.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-5 text-sm font-semibold text-slate-500">
+                        No South POs scheduled for this date.
+                      </p>
+                    ) : (
+                      selectedScheduleRuns.map((supplierRun) => {
+                        const itemCount = Array.isArray(
+                          supplierRun.items,
+                        )
+                          ? supplierRun.items.length
+                          : 0;
+
+                        return (
+                          <button
+                            key={supplierRun.id}
+                            type="button"
+                            onClick={() =>
+                              setViewingSupplierRun(supplierRun)
+                            }
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-red-200 hover:bg-red-50"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-lg font-black text-slate-900">
+                                  {supplierRun.poNumber || "No PO #"}
+                                </p>
+
+                                <p className="mt-1 truncate text-sm font-bold text-slate-600">
+                                  {supplierRun.vendor ||
+                                    "Unknown Supplier"}
+                                </p>
+                              </div>
+
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${
+                                  supplierRun.status === "complete"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-amber-100 text-amber-700"
+                                }`}
+                              >
+                                {supplierRun.status === "complete"
+                                  ? "Complete"
+                                  : "Open"}
+                              </span>
+                            </div>
+
+                            <p className="mt-2 text-xs font-bold text-slate-500">
+                              Driver:{" "}
+                              {supplierRun.driver || "Unassigned"} •{" "}
+                              {itemCount}{" "}
+                              {itemCount === 1 ? "item" : "items"}
+                            </p>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </aside>
+              </div>
+            </div>
+          ) : null}
+
+          {checkViewMode === "list" ? (
+          <>
+
           <div className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-2 py-3 text-center sm:px-4 sm:text-left">
               <p className="text-[10px] font-black uppercase tracking-[0.08em] text-blue-700 sm:text-xs sm:tracking-[0.18em]">
@@ -536,8 +869,8 @@ export default function SupplierRunsPage({
 
           {visibleRuns.length === 0 ? (
             <EmptyState
-              title="No South POs scheduled for today"
-              description="Open South POs scheduled for today or earlier will appear here."
+              title="No South POs scheduled for this date"
+              description="Choose another date on the calendar to view scheduled South pickups."
             />
           ) : null}
 
@@ -976,8 +1309,218 @@ export default function SupplierRunsPage({
               </div>
             </div>
           ) : null}
+          </>
+          ) : null}
         </section>
       )}
+
+      {selectedSupplierRunDetails ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-6">
+          <button
+            type="button"
+            className="absolute inset-0"
+            aria-label="Close PO details"
+            onClick={() => setViewingSupplierRun(null)}
+          />
+
+          <section
+            className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:max-w-3xl sm:rounded-3xl"
+            aria-modal="true"
+            role="dialog"
+            aria-labelledby="south-po-detail-title"
+          >
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                  South PO Details
+                </p>
+
+                <h3
+                  id="south-po-detail-title"
+                  className="mt-1 truncate text-3xl font-black tracking-tight text-slate-900"
+                >
+                  {selectedSupplierRunDetails.poNumber || "No PO #"}
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setViewingSupplierRun(null)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+                aria-label="Close PO details"
+              >
+                <X
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                  strokeWidth={2.5}
+                />
+              </button>
+            </div>
+
+            <div className="space-y-5 px-5 py-5 sm:px-6">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Supplier
+                  </p>
+                  <p className="mt-1 text-lg font-black text-slate-900">
+                    {selectedSupplierRunDetails.vendor ||
+                      "Unknown Supplier"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Driver
+                  </p>
+                  <p className="mt-1 text-lg font-black text-slate-900">
+                    {selectedSupplierRunDetails.driver || "Unassigned"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Pickup Date
+                  </p>
+                  <p className="mt-1 text-lg font-black text-slate-900">
+                    {formatDateInput(
+                      getSupplierRunDateKey(
+                        selectedSupplierRunDetails,
+                      ),
+                    )}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Status
+                  </p>
+                  <p
+                    className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${
+                      selectedSupplierRunDetails.status === "complete"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {selectedSupplierRunDetails.status === "complete"
+                      ? "Complete"
+                      : "Open"}
+                  </p>
+                </div>
+              </div>
+
+              {selectedSupplierRunDetails.supplierAddress ? (
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Address
+                  </p>
+
+                  <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="font-bold text-slate-800">
+                      {selectedSupplierRunDetails.supplierAddress}
+                    </p>
+
+                    <a
+                      href={getDirectionsUrl(
+                        selectedSupplierRunDetails.supplierAddress,
+                      )}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-2 text-sm font-black text-white transition hover:bg-[#dc1f2b]"
+                    >
+                      Directions
+                      <ArrowUpRight
+                        aria-hidden="true"
+                        className="h-4 w-4"
+                        strokeWidth={2.6}
+                      />
+                    </a>
+                  </div>
+                </div>
+              ) : null}
+
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                      Pickup Items
+                    </p>
+
+                    <h4 className="mt-1 text-xl font-black text-slate-900">
+                      {Array.isArray(selectedSupplierRunDetails.items)
+                        ? selectedSupplierRunDetails.items.length
+                        : 0}{" "}
+                      items
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {Array.isArray(selectedSupplierRunDetails.items) &&
+                  selectedSupplierRunDetails.items.length > 0 ? (
+                    selectedSupplierRunDetails.items.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`rounded-2xl border px-4 py-3 ${
+                          item.pickedUp
+                            ? "border-emerald-200 bg-emerald-50"
+                            : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            {item.quantity ? (
+                              <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                                QTY: {item.quantity}
+                              </p>
+                            ) : null}
+
+                            <p className="mt-1 text-base font-black text-slate-900">
+                              {item.description || "No description"}
+                            </p>
+
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+                              {item.internalReference ? (
+                                <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                                  SKU / SO: {item.internalReference}
+                                </span>
+                              ) : null}
+
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                                {item.materialUse === "stock"
+                                  ? "Stock"
+                                  : `Order${
+                                      item.orderNumber
+                                        ? ` ${item.orderNumber}`
+                                        : ""
+                                    }`}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${
+                              item.pickedUp
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {item.pickedUp ? "Picked Up" : "Needs Pickup"}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="rounded-2xl border border-dashed border-slate-300 px-4 py-5 text-sm font-semibold text-slate-500">
+                      No items listed on this PO.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }

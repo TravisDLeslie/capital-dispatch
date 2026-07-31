@@ -24,6 +24,16 @@ function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
+function formatOrderNumber(value) {
+  const numbersOnly = value.replace(/\D/g, "").slice(0, 6);
+
+  if (numbersOnly.length > 3) {
+    return `${numbersOnly.slice(0, 3)}-${numbersOnly.slice(3)}`;
+  }
+
+  return numbersOnly;
+}
+
 function formatPickupItemsForPrint(items) {
   if (items.length === 0) {
     return `
@@ -372,6 +382,9 @@ export default function SupplierRunCard({
     useState("");
   const [editingInternalReference, setEditingInternalReference] =
     useState("");
+  const [editingMaterialUse, setEditingMaterialUse] =
+    useState("order");
+  const [editingOrderNumber, setEditingOrderNumber] = useState("");
   const [editError, setEditError] = useState("");
   const [photoError, setPhotoError] = useState("");
   const [processingPhotoItemId, setProcessingPhotoItemId] =
@@ -386,6 +399,8 @@ export default function SupplierRunCard({
     setEditingQuantity(item.quantity || "");
     setEditingDescription(item.description || "");
     setEditingInternalReference(item.internalReference || "");
+    setEditingMaterialUse(item.materialUse || "order");
+    setEditingOrderNumber(item.orderNumber || "");
     setEditError("");
     setIsItemsOpen(true);
   }
@@ -395,6 +410,8 @@ export default function SupplierRunCard({
     setEditingQuantity("");
     setEditingDescription("");
     setEditingInternalReference("");
+    setEditingMaterialUse("order");
+    setEditingOrderNumber("");
     setEditError("");
   }
 
@@ -412,6 +429,8 @@ export default function SupplierRunCard({
       cleanedDescription,
       editingInternalReference.trim(),
       editingQuantity.trim(),
+      editingMaterialUse,
+      editingMaterialUse === "stock" ? "" : editingOrderNumber.trim(),
     );
 
     cancelEditingItem();
@@ -799,6 +818,60 @@ export default function SupplierRunCard({
                     placeholder="Optional internal reference"
                     className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
                   />
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+                    <div>
+                      <label
+                        htmlFor={`supplier-item-use-${supplierRun.id}-${item.id}`}
+                        className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
+                      >
+                        Order or Stock
+                      </label>
+
+                      <select
+                        id={`supplier-item-use-${supplierRun.id}-${item.id}`}
+                        value={editingMaterialUse}
+                        onChange={(event) => {
+                          const nextMaterialUse = event.target.value;
+                          setEditingMaterialUse(nextMaterialUse);
+                          if (nextMaterialUse === "stock") {
+                            setEditingOrderNumber("");
+                          }
+                          setEditError("");
+                        }}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                      >
+                        <option value="order">Order</option>
+                        <option value="stock">Stock</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor={`supplier-item-order-${supplierRun.id}-${item.id}`}
+                        className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
+                      >
+                        Order #
+                      </label>
+
+                      <input
+                        id={`supplier-item-order-${supplierRun.id}-${item.id}`}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={7}
+                        value={editingOrderNumber}
+                        onChange={(event) => {
+                          setEditingOrderNumber(
+                            formatOrderNumber(event.target.value),
+                          );
+                          setEditError("");
+                        }}
+                        disabled={editingMaterialUse === "stock"}
+                        placeholder="Optional order number"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+                      />
+                    </div>
+                  </div>
 
                   {editError ? (
                     <p className="mt-2 text-sm font-semibold text-red-600">

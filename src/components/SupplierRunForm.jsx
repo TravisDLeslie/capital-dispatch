@@ -15,6 +15,8 @@ function createEmptyPickupItem() {
     quantity: "",
     description: "",
     internalReference: "",
+    materialUse: "order",
+    orderNumber: "",
     saved: false,
     pickedUp: false,
   };
@@ -28,6 +30,10 @@ function formatPoNumber(value) {
   }
 
   return numbersOnly;
+}
+
+function formatOrderNumber(value) {
+  return formatPoNumber(value);
 }
 
 function findMatchingVendor(value) {
@@ -118,6 +124,40 @@ export default function SupplierRunForm({ onSubmit }) {
     clearError();
   }
 
+  function updateItemMaterialUse(itemId, materialUse) {
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              materialUse,
+              orderNumber:
+                materialUse === "stock" ? "" : item.orderNumber,
+              saved: false,
+            }
+          : item,
+      ),
+    );
+
+    clearError();
+  }
+
+  function updateItemOrderNumber(itemId, orderNumber) {
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              orderNumber,
+              saved: false,
+            }
+          : item,
+      ),
+    );
+
+    clearError();
+  }
+
   function addItem() {
     setItems((currentItems) => [
       ...currentItems,
@@ -158,6 +198,11 @@ export default function SupplierRunForm({ onSubmit }) {
               description: pickupItem.description.trim(),
               internalReference:
                 pickupItem.internalReference.trim(),
+              materialUse: pickupItem.materialUse || "order",
+              orderNumber:
+                pickupItem.materialUse === "stock"
+                  ? ""
+                  : formatOrderNumber(pickupItem.orderNumber || ""),
               saved: true,
             }
           : pickupItem,
@@ -224,6 +269,11 @@ export default function SupplierRunForm({ onSubmit }) {
         quantity: item.quantity?.trim() || "",
         description: item.description.trim(),
         internalReference: item.internalReference?.trim() || "",
+        materialUse: item.materialUse || "order",
+        orderNumber:
+          item.materialUse === "stock"
+            ? ""
+            : formatOrderNumber(item.orderNumber || ""),
         pickedUp: false,
       }));
 
@@ -517,6 +567,16 @@ export default function SupplierRunForm({ onSubmit }) {
                           {item.internalReference}
                         </p>
                       ) : null}
+
+                      <p className="mt-2 text-sm font-black text-slate-600">
+                        {item.materialUse === "stock"
+                          ? "Stock"
+                          : `Order${
+                              item.orderNumber
+                                ? ` ${item.orderNumber}`
+                                : ""
+                            }`}
+                      </p>
                     </div>
 
                     <button
@@ -529,84 +589,142 @@ export default function SupplierRunForm({ onSubmit }) {
                     </button>
                   </div>
                 ) : (
-                  <div className="grid gap-3 lg:grid-cols-[minmax(100px,0.2fr)_minmax(0,1fr)_minmax(220px,0.45fr)_auto]">
-                    <div>
-                      <label
-                        htmlFor={`supplier-item-quantity-${item.id}`}
-                        className="sr-only"
-                      >
-                        Quantity
-                      </label>
+                  <div className="space-y-3">
+                    <div className="grid gap-3 lg:grid-cols-[minmax(100px,0.2fr)_minmax(0,1fr)_minmax(220px,0.45fr)]">
+                      <div>
+                        <label
+                          htmlFor={`supplier-item-quantity-${item.id}`}
+                          className="sr-only"
+                        >
+                          Quantity
+                        </label>
 
-                      <input
-                        id={`supplier-item-quantity-${item.id}`}
-                        type="text"
-                        value={item.quantity}
-                        onChange={(event) =>
-                          updateItemQuantity(
-                            item.id,
-                            event.target.value,
-                          )
-                        }
-                        disabled={isSubmitting}
-                        placeholder="QTY"
-                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-                      />
+                        <input
+                          id={`supplier-item-quantity-${item.id}`}
+                          type="text"
+                          value={item.quantity}
+                          onChange={(event) =>
+                            updateItemQuantity(
+                              item.id,
+                              event.target.value,
+                            )
+                          }
+                          disabled={isSubmitting}
+                          placeholder="QTY"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`supplier-item-description-${item.id}`}
+                          className="sr-only"
+                        >
+                          Item Description
+                        </label>
+
+                        <input
+                          id={`supplier-item-description-${item.id}`}
+                          type="text"
+                          value={item.description}
+                          onChange={(event) =>
+                            updateItem(item.id, event.target.value)
+                          }
+                          disabled={isSubmitting}
+                          placeholder="Example: 2 units LVL, hangers, trim pack"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`supplier-item-reference-${item.id}`}
+                          className="sr-only"
+                        >
+                          SKU / Item # / SO#
+                        </label>
+
+                        <input
+                          id={`supplier-item-reference-${item.id}`}
+                          type="text"
+                          value={item.internalReference}
+                          onChange={(event) =>
+                            updateItemInternalReference(
+                              item.id,
+                              event.target.value,
+                            )
+                          }
+                          disabled={isSubmitting}
+                          placeholder="SKU / Item # / SO#"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label
-                        htmlFor={`supplier-item-description-${item.id}`}
-                        className="sr-only"
-                      >
-                        Item Description
-                      </label>
+                    <div className="grid gap-3 lg:grid-cols-[220px_minmax(180px,0.45fr)_auto]">
+                      <div>
+                        <label
+                          htmlFor={`supplier-item-use-${item.id}`}
+                          className="sr-only"
+                        >
+                          Order or Stock
+                        </label>
 
-                      <input
-                        id={`supplier-item-description-${item.id}`}
-                        type="text"
-                        value={item.description}
-                        onChange={(event) =>
-                          updateItem(item.id, event.target.value)
-                        }
+                        <select
+                          id={`supplier-item-use-${item.id}`}
+                          value={item.materialUse}
+                          onChange={(event) =>
+                            updateItemMaterialUse(
+                              item.id,
+                              event.target.value,
+                            )
+                          }
+                          disabled={isSubmitting}
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                        >
+                          <option value="order">Order</option>
+                          <option value="stock">Stock</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor={`supplier-item-order-${item.id}`}
+                          className="sr-only"
+                        >
+                          Order Number
+                        </label>
+
+                        <input
+                          id={`supplier-item-order-${item.id}`}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={7}
+                          value={item.orderNumber}
+                          onChange={(event) =>
+                            updateItemOrderNumber(
+                              item.id,
+                              formatOrderNumber(event.target.value),
+                            )
+                          }
+                          disabled={
+                            isSubmitting ||
+                            item.materialUse === "stock"
+                          }
+                          placeholder="Order #"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => saveItem(item.id)}
                         disabled={isSubmitting}
-                        placeholder="Example: 2 units LVL, hangers, trim pack"
-                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor={`supplier-item-reference-${item.id}`}
-                        className="sr-only"
+                        className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                       >
-                        SKU / Item # / SO#
-                      </label>
-
-                      <input
-                        id={`supplier-item-reference-${item.id}`}
-                        type="text"
-                        value={item.internalReference}
-                        onChange={(event) =>
-                          updateItemInternalReference(
-                            item.id,
-                            event.target.value,
-                          )
-                        }
-                        disabled={isSubmitting}
-                        placeholder="SKU / Item # / SO#"
-                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-                      />
+                        Save Item
+                      </button>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => saveItem(item.id)}
-                      disabled={isSubmitting}
-                      className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                    >
-                      Save Item
-                    </button>
                   </div>
                 )}
               </div>
