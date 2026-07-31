@@ -220,10 +220,12 @@ function getAllowedPageIds(role: string) {
 function PendingApproval({
   currentUser,
   userProfile,
+  syncError,
   onSignOut,
 }: {
   currentUser: User;
   userProfile: UserProfile | null;
+  syncError?: string;
   onSignOut: () => void;
 }) {
   const isDisabled = userProfile?.status === "disabled";
@@ -253,6 +255,12 @@ function PendingApproval({
             {currentUser.email || "Unknown email"}
           </p>
         </div>
+
+        {syncError ? (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-left text-sm font-semibold text-red-700">
+            User profile was not saved: {syncError}
+          </div>
+        ) : null}
 
         <button
           type="button"
@@ -953,6 +961,7 @@ export default function App() {
         <PendingApproval
           currentUser={currentUser}
           userProfile={userProfile}
+          syncError={syncError}
           onSignOut={handleSignOut}
         />
       ) : (

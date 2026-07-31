@@ -1,0 +1,25 @@
+{
+  "name": "Capital Lumber Dispatch",
+  "short_name": "Dispatch CL",
+  "description": "Capital Lumber receiving, South runs, and delivery dispatch.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#FC2C38",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/pwa/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
