@@ -6,7 +6,9 @@ import SupplierRunCard from "../components/SupplierRunCard";
 import SupplierRunForm from "../components/SupplierRunForm";
 import { southVendorRouteOrder } from "../data/options";
 import {
+  formatDateInput,
   getTodayHeading,
+  isDateInputTodayOrEarlier,
   isToday,
 } from "../utils/dateHelpers";
 
@@ -156,7 +158,9 @@ export default function SupplierRunsPage({
     await onAddSupplierRun(supplierRun);
 
     setSuccessMessage(
-      `PO ${supplierRun.poNumber} was sent to ${supplierRun.driver}'s South list.`,
+      `PO ${supplierRun.poNumber} was scheduled for ${formatDateInput(
+        supplierRun.scheduledDate,
+      )} and sent to ${supplierRun.driver}'s South list.`,
     );
   }
 
@@ -245,9 +249,13 @@ export default function SupplierRunsPage({
   }
 
   const dailyRuns = supplierRuns.filter(
-    (supplierRun) =>
-      supplierRun.status !== "complete" ||
-      isToday(supplierRun.completedAt || supplierRun.updatedAt),
+    (supplierRun) => {
+      if (supplierRun.status === "complete") {
+        return isToday(supplierRun.completedAt || supplierRun.updatedAt);
+      }
+
+      return isDateInputTodayOrEarlier(supplierRun.scheduledDate);
+    },
   );
 
   const historyRuns = supplierRuns.filter(
@@ -309,8 +317,8 @@ export default function SupplierRunsPage({
           {mode === "history"
             ? "Older completed South pickups stay here so the daily driver board stays focused."
             : mode === "check"
-              ? "Drivers can check off today's South pickup items as they load them from each supplier."
-              : "Dispatch can add South POs before the driver leaves or while they are already on the road."}
+              ? "Drivers can check off scheduled South pickup items as they load them from each supplier."
+              : "Dispatch can add South POs before the driver leaves, while they are on the road, or schedule them ahead."}
         </p>
       </div>
 
@@ -528,8 +536,8 @@ export default function SupplierRunsPage({
 
           {visibleRuns.length === 0 ? (
             <EmptyState
-              title="No South POs for today"
-              description="New South pickups and today's completed POs will appear here."
+              title="No South POs scheduled for today"
+              description="Open South POs scheduled for today or earlier will appear here."
             />
           ) : null}
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ChevronDown,
+  LogOut,
   Package,
   PackageCheck,
   ShieldCheck,
@@ -12,17 +13,17 @@ const navigationItems = [
   {
     group: "Receiving",
     id: "check-in",
-    label: "Check In",
+    label: "Check In Items",
   },
   {
     group: "Receiving",
     id: "today",
-    label: "Today's Check-Ins",
+    label: "Today's Checked In Items",
   },
   {
     group: "Receiving",
     id: "search",
-    label: "Search PO",
+    label: "Search POs",
   },
   {
     group: "South",
@@ -61,26 +62,12 @@ const navigationItems = [
   },
 ];
 
-function getNavButtonClass(item, isActive, isMobile = false) {
-  const activeClass =
-    item.group === "South"
-      ? isMobile
-        ? "bg-blue-700 text-white shadow-sm"
-        : "bg-blue-50 text-blue-800 ring-1 ring-blue-100"
-      : item.group === "Deliveries"
-        ? isMobile
-          ? "bg-[#FC2C38] text-white shadow-sm"
-          : "bg-red-50 text-[#FC2C38] ring-1 ring-red-100"
-      : isMobile
-        ? "bg-emerald-700 text-white shadow-sm"
-        : "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100";
-
+function getNavButtonClass(isActive, isMobile = false) {
+  const activeClass = "text-[#FC2C38]";
   const inactiveClass =
-    isMobile
-      ? "bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
-      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900";
+    "text-slate-900 hover:bg-slate-50 hover:text-[#FC2C38]";
 
-  return `${isMobile ? "w-full justify-between px-4 py-2.5" : "w-full justify-between px-3 py-2"} flex items-center rounded-xl text-left text-sm font-bold transition ${
+  return `${isMobile ? "px-4 py-2.5" : "px-7 py-2.5"} flex w-full items-center gap-4 rounded-xl text-left text-sm font-semibold transition ${
     isActive ? activeClass : inactiveClass
   }`;
 }
@@ -125,9 +112,9 @@ export default function AppHeader({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openNavGroups, setOpenNavGroups] = useState({
     Receiving: true,
-    South: true,
-    Deliveries: true,
-    Admin: true,
+    South: false,
+    Deliveries: false,
+    Admin: false,
   });
   const userInitial = (
     currentUser?.displayName ||
@@ -147,10 +134,13 @@ export default function AppHeader({
       return;
     }
 
-    setOpenNavGroups((currentOpenNavGroups) => ({
-      ...currentOpenNavGroups,
+    setOpenNavGroups({
+      Receiving: false,
+      South: false,
+      Deliveries: false,
+      Admin: false,
       [currentItem.group]: true,
-    }));
+    });
   }, [currentPage]);
 
   function handlePageChange(pageId) {
@@ -159,13 +149,20 @@ export default function AppHeader({
   }
 
   function toggleNavGroup(group) {
-    setOpenNavGroups((currentOpenNavGroups) => ({
-      ...currentOpenNavGroups,
-      [group]: !currentOpenNavGroups[group],
-    }));
+    setOpenNavGroups((currentOpenNavGroups) => {
+      const nextIsOpen = !currentOpenNavGroups[group];
+
+      return {
+        Receiving: false,
+        South: false,
+        Deliveries: false,
+        Admin: false,
+        [group]: nextIsOpen,
+      };
+    });
   }
 
-  function renderNavigation() {
+  function renderNavigation(isMobile = false) {
     return ["Receiving", "South", "Deliveries", "Admin"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
@@ -176,19 +173,14 @@ export default function AppHeader({
       const isGroupOpen = openNavGroups[group];
       const NavGroupIcon = getNavGroupIcon(group);
       const hasGroupItems = groupItems.length > 0;
-      const groupColorClass =
-        group === "South"
-          ? "text-blue-700"
-          : group === "Deliveries"
-            ? "text-[#FC2C38]"
-            : group === "Admin"
-              ? "text-slate-700"
-              : "text-emerald-700";
+      const groupIsActive = groupItems.some(
+        (item) => item.id === currentPage,
+      );
 
       return hasGroupItems ? (
         <div
           key={group}
-          className="mb-4 border-b border-slate-200 pb-3 last:mb-0 last:border-b-0 last:pb-0"
+          className="border-b border-slate-200 py-4 first:pt-0 last:border-b-0"
         >
           <button
             type="button"
@@ -197,15 +189,17 @@ export default function AppHeader({
                 toggleNavGroup(group);
               }
             }}
-            className={`mb-2 flex w-full items-center justify-between rounded-xl px-2 py-2 text-left text-xs font-black uppercase tracking-[0.18em] transition ${
-              hasGroupItems ? "hover:bg-slate-100" : "cursor-default"
-            } ${groupColorClass}`}
+            className={`flex w-full items-center justify-between rounded-xl px-4 py-4 text-left text-lg font-black transition ${
+              groupIsActive
+                ? "bg-red-50 text-[#FC2C38]"
+                : "text-slate-900 hover:bg-slate-50"
+            }`}
             aria-expanded={isGroupOpen}
           >
-            <span className="flex items-center gap-2 leading-none">
+            <span className="flex items-center gap-4 leading-none">
               <NavGroupIcon
                 aria-hidden="true"
-                className="h-4 w-4"
+                className="h-6 w-6"
                 strokeWidth={2.5}
               />
               {group}
@@ -214,7 +208,7 @@ export default function AppHeader({
               <span className="text-slate-400">
                 <ChevronDown
                   aria-hidden="true"
-                  className={`h-4 w-4 transition-transform ${
+                  className={`h-5 w-5 transition-transform ${
                     isGroupOpen ? "rotate-180" : ""
                   }`}
                   strokeWidth={2.6}
@@ -224,7 +218,7 @@ export default function AppHeader({
           </button>
 
           {hasGroupItems && isGroupOpen ? (
-            <div className="space-y-1">
+            <div className="mt-3 space-y-2">
               {groupItems.map((item) => {
                 const isActive = currentPage === item.id;
 
@@ -233,18 +227,17 @@ export default function AppHeader({
                     key={item.id}
                     type="button"
                     onClick={() => handlePageChange(item.id)}
-                    className={getNavButtonClass(
-                      item,
-                      isActive,
-                      isMenuOpen,
-                    )}
+                    className={getNavButtonClass(isActive, isMobile)}
                   >
-                    <span>{item.label}</span>
-                    {isActive ? (
-                      <span className="text-[10px] uppercase tracking-wide opacity-75">
-                        Open
-                      </span>
-                    ) : null}
+                    <span
+                      className={`h-2 w-2 shrink-0 rounded-full ${
+                        isActive ? "bg-[#FC2C38]" : "bg-slate-400"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      {item.label}
+                    </span>
                   </button>
                 );
               })}
@@ -257,49 +250,66 @@ export default function AppHeader({
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-slate-200 bg-white px-5 py-5 md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-slate-200 bg-white md:flex">
         <button
           type="button"
           onClick={() => handlePageChange("check-in")}
-          className="mb-5 block text-left"
+          className="block px-8 pb-8 pt-8 text-left"
         >
           <img
             src={capitalLumberLogo}
             alt="Capital Lumber Co."
-            className="h-auto w-40"
+            className="h-auto w-48"
           />
         </button>
 
-        <nav className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <nav className="min-h-0 flex-1 overflow-y-auto px-5">
           {renderNavigation()}
         </nav>
 
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          <p className="truncate text-xs font-black text-slate-900">
-            {currentUser?.email || "Signed in"}
-          </p>
+        <div className="border-t border-slate-200 p-5">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FC2C38] text-sm font-black text-white">
+                {userInitial}
+              </span>
 
-          {isSuperAdmin ? (
-            <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38]">
-              Super Admin
-            </p>
-          ) : currentUserProfile?.role ? (
-            <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-              {currentUserProfile.role}
-            </p>
-          ) : null}
+              <span className="min-w-0">
+                <span className="block truncate text-xs font-black text-slate-900">
+                  {currentUser?.displayName ||
+                    currentUser?.email ||
+                    "Signed in"}
+                </span>
 
-          <button
-            type="button"
-            onClick={onSignOut}
-            className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-100"
-          >
-            Sign out
-          </button>
+                {isSuperAdmin ? (
+                  <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                    Super Admin
+                  </span>
+                ) : currentUserProfile?.role ? (
+                  <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                    {currentUserProfile.role}
+                  </span>
+                ) : null}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="flex w-full items-center gap-3 border-t border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+            >
+              <LogOut
+                aria-hidden="true"
+                className="h-4 w-4"
+                strokeWidth={2.3}
+              />
+              Sign out
+            </button>
+          </div>
         </div>
       </aside>
 
-      <header className="border-b border-slate-200 bg-white md:hidden">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white md:hidden">
         <div className="mx-auto max-w-5xl px-4 sm:px-6">
           <div className="flex min-h-20 items-center justify-between gap-4 py-4">
             <button
@@ -357,40 +367,89 @@ export default function AppHeader({
               {userInitial}
             </button>
           </div>
+        </div>
+      </header>
 
-        {isMenuOpen ? (
-          <nav className="pb-4">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
-              {renderNavigation()}
+      {isMenuOpen ? (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-950/30"
+            aria-label="Close menu"
+            onClick={() => setIsMenuOpen(false)}
+          />
 
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
-                <p className="truncate text-xs font-black text-slate-900">
-                  {currentUser?.email || "Signed in"}
-                </p>
+          <aside className="relative flex h-full w-[86vw] max-w-[340px] flex-col border-r border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between px-6 pb-5 pt-6">
+              <button
+                type="button"
+                onClick={() => handlePageChange("check-in")}
+                className="min-w-0 text-left"
+              >
+                <img
+                  src={capitalLumberLogo}
+                  alt="Capital Lumber Co."
+                  className="h-auto w-44 max-w-full"
+                />
+              </button>
 
-                {isSuperAdmin ? (
-                  <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38]">
-                    Super Admin
-                  </p>
-                ) : currentUserProfile?.role ? (
-                  <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                    {currentUserProfile.role}
-                  </p>
-                ) : null}
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen(false)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl font-semibold leading-none text-slate-600 shadow-sm"
+                aria-label="Close menu"
+              >
+                ×
+              </button>
+            </div>
+
+            <nav className="min-h-0 flex-1 overflow-y-auto px-5">
+              {renderNavigation(true)}
+            </nav>
+
+            <div className="border-t border-slate-200 p-5">
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FC2C38] text-sm font-black text-white">
+                    {userInitial}
+                  </span>
+
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-black text-slate-900">
+                      {currentUser?.displayName ||
+                        currentUser?.email ||
+                        "Signed in"}
+                    </span>
+
+                    {isSuperAdmin ? (
+                      <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                        Super Admin
+                      </span>
+                    ) : currentUserProfile?.role ? (
+                      <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                        {currentUserProfile.role}
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
 
                 <button
                   type="button"
                   onClick={onSignOut}
-                  className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+                  className="flex w-full items-center gap-3 border-t border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                 >
+                  <LogOut
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                    strokeWidth={2.3}
+                  />
                   Sign out
                 </button>
               </div>
             </div>
-          </nav>
-        ) : null}
+          </aside>
         </div>
-      </header>
+      ) : null}
     </>
   );
 }

@@ -80,6 +80,9 @@ type SupplierRunItem = {
 
 type SupplierRun = {
   id: string;
+  poNumber?: string;
+  vendor?: string;
+  scheduledDate?: string;
   driver?: string;
   supplierAddress?: string;
   items?: SupplierRunItem[];
@@ -231,7 +234,7 @@ function PendingApproval({
   const isDisabled = userProfile?.status === "disabled";
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-8">
+    <main className="flex min-h-screen items-center justify-center bg-[#F8F7F5] px-4 py-8">
       <section className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-xl sm:p-8">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
           Capital Dispatch
@@ -948,7 +951,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-[#F8F7F5]">
       {isAuthLoading || isProfileLoading ? (
         <div className="flex min-h-screen items-center justify-center px-4">
           <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold text-slate-600 shadow-sm">

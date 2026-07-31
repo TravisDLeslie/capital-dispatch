@@ -6,6 +6,7 @@ import {
   vendors,
 } from "../data/options";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
+import { getDateInputValue } from "../utils/dateHelpers";
 import { createId } from "../utils/idHelpers";
 
 function createEmptyPickupItem() {
@@ -43,6 +44,9 @@ function findSupplierAddress(value) {
 
 export default function SupplierRunForm({ onSubmit }) {
   const [poNumber, setPoNumber] = useState("");
+  const [scheduledDate, setScheduledDate] = useState(
+    getDateInputValue(),
+  );
   const [vendor, setVendor] = useState("");
   const [supplierAddress, setSupplierAddress] = useState("");
   const [driver, setDriver] = useState("");
@@ -180,6 +184,7 @@ export default function SupplierRunForm({ onSubmit }) {
 
   function resetForm() {
     setPoNumber("");
+    setScheduledDate(getDateInputValue());
     setVendor("");
     setSupplierAddress("");
     setDriver("");
@@ -192,6 +197,11 @@ export default function SupplierRunForm({ onSubmit }) {
 
     if (!/^\d{3}-\d{3}$/.test(poNumber)) {
       setError("Enter a complete six-digit PO number.");
+      return;
+    }
+
+    if (!scheduledDate) {
+      setError("Choose the scheduled pickup date.");
       return;
     }
 
@@ -235,6 +245,7 @@ export default function SupplierRunForm({ onSubmit }) {
     const supplierRun = {
       id: createId(),
       poNumber,
+      scheduledDate,
       vendor: matchedVendor,
       supplierAddress: supplierAddress.trim(),
       driver,
@@ -278,7 +289,7 @@ export default function SupplierRunForm({ onSubmit }) {
       </div>
 
       <div className="space-y-7">
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-5 lg:grid-cols-4">
           <div>
             <label
               htmlFor="supplier-run-po"
@@ -301,6 +312,27 @@ export default function SupplierRunForm({ onSubmit }) {
               disabled={isSubmitting}
               placeholder="123-456"
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-2xl font-black tracking-[0.15em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="supplier-run-date"
+              className="mb-2 block text-sm font-bold text-slate-700"
+            >
+              Pickup Date
+            </label>
+
+            <input
+              id="supplier-run-date"
+              type="date"
+              value={scheduledDate}
+              onChange={(event) => {
+                setScheduledDate(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-black text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
             />
           </div>
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FileText } from "lucide-react";
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 import {
+  formatDateInput,
   formatFullDate,
   formatShortDate,
   formatTime,
@@ -63,6 +64,9 @@ function createPickupSheetHtml(supplierRun, items) {
     ? `${formatFullDate(supplierRun.createdAt)} at ${formatTime(
         supplierRun.createdAt,
       )}`
+    : "Not recorded";
+  const scheduledDate = supplierRun.scheduledDate
+    ? formatDateInput(supplierRun.scheduledDate)
     : "Not recorded";
 
   return `
@@ -223,6 +227,7 @@ function createPickupSheetHtml(supplierRun, items) {
             <div class="po">
               <p class="label">Pickup PO</p>
               <strong>${escapeHtml(supplierRun.poNumber)}</strong>
+              <p class="muted">Pickup ${escapeHtml(scheduledDate)}</p>
               <p class="muted">Created ${escapeHtml(createdDate)}</p>
             </div>
           </section>
@@ -244,6 +249,8 @@ function createPickupSheetHtml(supplierRun, items) {
               <p class="value">
                 ${escapeHtml(supplierRun.driver || "Unassigned")}
               </p>
+              <p class="label">Scheduled Pickup</p>
+              <p>${escapeHtml(scheduledDate)}</p>
               <p class="muted">For vendor pickup reference</p>
             </div>
           </section>
@@ -492,6 +499,12 @@ export default function SupplierRunCard({
                 Added {formatShortDate(supplierRun.createdAt)} at{" "}
                 {formatTime(supplierRun.createdAt)}
               </p>
+
+              {supplierRun.scheduledDate ? (
+                <p className="mt-1 text-sm font-black text-slate-700">
+                  Pickup: {formatDateInput(supplierRun.scheduledDate)}
+                </p>
+              ) : null}
 
               <p className="mt-1 text-sm font-black text-blue-700">
                 Driver: {supplierRun.driver || "Unassigned"}

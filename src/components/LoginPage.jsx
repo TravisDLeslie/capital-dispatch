@@ -55,9 +55,6 @@ export default function LoginPage() {
 
     try {
       const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({
-        hd: "capitallumber.co",
-      });
 
       await signInWithPopup(auth, provider);
     } catch (loginError) {
