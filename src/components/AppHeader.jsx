@@ -425,36 +425,30 @@ export default function AppHeader({
               {renderNavigation(true)}
             </nav>
 
-            <div className="border-t border-slate-200 p-5">
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#FC2C38] text-sm font-black text-white">
-                    {userInitial}
+            <div className="border-t border-slate-200 px-5 py-3">
+              <div className="flex items-center gap-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-bold text-slate-600">
+                    {currentUser?.displayName ||
+                      currentUser?.email ||
+                      "Signed in"}
                   </span>
 
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-black text-slate-900">
-                      {currentUser?.displayName ||
-                        currentUser?.email ||
-                        "Signed in"}
+                  {isSuperAdmin ? (
+                    <span className="mt-0.5 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                      Super Admin
                     </span>
-
-                    {isSuperAdmin ? (
-                      <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                        Super Admin
-                      </span>
-                    ) : currentUserProfile?.role ? (
-                      <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                        {currentUserProfile.role}
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
+                  ) : currentUserProfile?.role ? (
+                    <span className="mt-0.5 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                      {currentUserProfile.role}
+                    </span>
+                  ) : null}
+                </span>
 
                 <button
                   type="button"
                   onClick={onSignOut}
-                  className="flex w-full items-center gap-3 border-t border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+                  className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
                 >
                   <LogOut
                     aria-hidden="true"
