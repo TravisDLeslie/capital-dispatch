@@ -34,6 +34,64 @@ function formatOrderNumber(value) {
   return numbersOnly;
 }
 
+function usesOrderNumber(materialUse) {
+  return ["order", "return", "swap"].includes(materialUse);
+}
+
+function getMaterialUseLabel(materialUse) {
+  const labels = {
+    order: "Order",
+    stock: "Stock",
+    return: "Return",
+    swap: "Swap",
+  };
+
+  return labels[materialUse] || "Order";
+}
+
+function getMaterialUseClasses(materialUse, isPickedUp = false) {
+  if (isPickedUp) {
+    return {
+      card: "border-emerald-200 bg-emerald-50",
+      badge: "border-emerald-200 bg-white text-emerald-700",
+    };
+  }
+
+  if (materialUse === "return") {
+    return {
+      card:
+        "cursor-pointer border-amber-200 bg-amber-50/70 hover:border-amber-300 hover:bg-amber-50",
+      badge: "border-amber-200 bg-amber-100 text-amber-800",
+    };
+  }
+
+  if (materialUse === "swap") {
+    return {
+      card:
+        "cursor-pointer border-violet-200 bg-violet-50/70 hover:border-violet-300 hover:bg-violet-50",
+      badge: "border-violet-200 bg-violet-100 text-violet-800",
+    };
+  }
+
+  return {
+    card:
+      "cursor-pointer border-blue-200 bg-blue-50/60 hover:border-blue-300 hover:bg-blue-50",
+    badge: "border-blue-100 bg-white text-slate-600",
+  };
+}
+
+function getMaterialActionLabel(materialUse) {
+  if (materialUse === "return") {
+    return "Item has been returned";
+  }
+
+  if (materialUse === "swap") {
+    return "Item has been swapped";
+  }
+
+  return "Item has been picked up";
+}
+
 function formatPickupItemsForPrint(items) {
   if (items.length === 0) {
     return `
@@ -70,6 +128,13 @@ function createPickupSheetHtml(supplierRun, items) {
     capitalLumberLogo,
     window.location.origin,
   ).href;
+  const safePoNumber = escapeHtml(supplierRun.poNumber || "pickup");
+  const shareSubject = encodeURIComponent(
+    `Capital Lumber Pickup PO ${supplierRun.poNumber || ""}`.trim(),
+  );
+  const shareBody = encodeURIComponent(
+    `Capital Lumber pickup sheet for PO ${supplierRun.poNumber || ""}. Open the attached/saved PDF for supplier reference.`.trim(),
+  );
   const createdDate = supplierRun.createdAt
     ? `${formatFullDate(supplierRun.createdAt)} at ${formatTime(
         supplierRun.createdAt,
@@ -93,6 +158,58 @@ function createPickupSheetHtml(supplierRun, items) {
             background: #f8fafc;
             color: #0f172a;
             font-family: Arial, Helvetica, sans-serif;
+          }
+          .toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 18px;
+            background: rgba(248, 250, 252, 0.96);
+            border-bottom: 1px solid #dce4ef;
+            backdrop-filter: blur(12px);
+          }
+          .toolbar-title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 900;
+          }
+          .toolbar-note {
+            margin: 2px 0 0;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 700;
+          }
+          .toolbar-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 8px;
+          }
+          .toolbar button,
+          .toolbar a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40px;
+            border-radius: 10px;
+            padding: 0 14px;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            color: #0f172a;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 900;
+            text-decoration: none;
+            cursor: pointer;
+          }
+          .toolbar .primary {
+            border-color: #fc2c38;
+            background: #fc2c38;
+            color: #fff;
           }
           .sheet {
             width: min(8.5in, calc(100vw - 32px));
@@ -209,6 +326,7 @@ function createPickupSheetHtml(supplierRun, items) {
           }
           @media print {
             body { background: #fff; }
+            .toolbar { display: none; }
             .sheet {
               width: auto;
               min-height: auto;
@@ -216,9 +334,42 @@ function createPickupSheetHtml(supplierRun, items) {
               box-shadow: none;
             }
           }
+          @media (max-width: 680px) {
+            .toolbar {
+              align-items: stretch;
+              flex-direction: column;
+            }
+            .toolbar-actions {
+              justify-content: stretch;
+            }
+            .toolbar button,
+            .toolbar a {
+              flex: 1;
+            }
+            .top,
+            .grid {
+              grid-template-columns: 1fr;
+              display: grid;
+            }
+            .po {
+              text-align: left;
+            }
+          }
         </style>
       </head>
       <body>
+        <section class="toolbar">
+          <div>
+            <p class="toolbar-title">Pickup Sheet ${safePoNumber}</p>
+            <p class="toolbar-note">Use Download PDF, then save or share from your device.</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="primary" type="button" onclick="window.print()">Download PDF</button>
+            <a href="mailto:?subject=${shareSubject}&body=${shareBody}">Email</a>
+            <a href="sms:?&body=${shareBody}">Text</a>
+            <button type="button" onclick="window.close()">Close</button>
+          </div>
+        </section>
         <main class="sheet">
           <section class="top">
             <div>
@@ -285,11 +436,6 @@ function createPickupSheetHtml(supplierRun, items) {
             Generated from Capital Lumber Dispatch.
           </p>
         </main>
-        <script>
-          window.addEventListener("load", () => {
-            setTimeout(() => window.print(), 300);
-          });
-        </script>
       </body>
     </html>
   `;
@@ -430,7 +576,7 @@ export default function SupplierRunCard({
       editingInternalReference.trim(),
       editingQuantity.trim(),
       editingMaterialUse,
-      editingMaterialUse === "stock" ? "" : editingOrderNumber.trim(),
+      usesOrderNumber(editingMaterialUse) ? editingOrderNumber.trim() : "",
     );
 
     cancelEditingItem();
@@ -468,7 +614,7 @@ export default function SupplierRunCard({
     const pickupSheetWindow = window.open("", "_blank");
 
     if (!pickupSheetWindow) {
-      setPhotoError("Allow pop-ups to open the pickup PDF.");
+      setPhotoError("Allow pop-ups to open the pickup sheet.");
       return;
     }
 
@@ -642,6 +788,10 @@ export default function SupplierRunCard({
           {items.map((item) => {
             const isEditing = editingItemId === item.id;
             const pickupPhotoInputId = `pickup-photo-${supplierRun.id}-${item.id}`;
+            const materialUseClasses = getMaterialUseClasses(
+              item.materialUse,
+              item.pickedUp,
+            );
 
             return (
               <div
@@ -655,15 +805,17 @@ export default function SupplierRunCard({
                     document.getElementById(pickupPhotoInputId)?.click();
                   }
                 }}
-                className={`rounded-xl border px-4 py-3 transition ${
-                  item.pickedUp
-                    ? "border-emerald-200 bg-emerald-50"
-                    : "cursor-pointer border-blue-200 bg-blue-50/60 hover:border-blue-300 hover:bg-blue-50"
-                }`}
+                className={`rounded-xl border px-4 py-3 transition ${materialUseClasses.card}`}
               >
                 {!isEditing ? (
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                     <span className="min-w-0 flex-1">
+                      <span
+                        className={`mb-2 inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${materialUseClasses.badge}`}
+                      >
+                        {getMaterialUseLabel(item.materialUse)}
+                      </span>
+
                       {item.quantity ? (
                         <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-blue-700">
                           QTY: {item.quantity}
@@ -693,6 +845,12 @@ export default function SupplierRunCard({
                         </span>
                       ) : null}
 
+                      {item.orderNumber ? (
+                        <span className="mt-1 block text-xs font-bold text-slate-500">
+                          Order #: {item.orderNumber}
+                        </span>
+                      ) : null}
+
                       <span className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
                         <span
                           className={`text-xs font-black uppercase tracking-[0.08em] ${
@@ -703,7 +861,7 @@ export default function SupplierRunCard({
                         >
                           {processingPhotoItemId === item.id
                             ? "Saving photo..."
-                            : "Item has been picked up"}
+                            : getMaterialActionLabel(item.materialUse)}
                         </span>
 
                         <span
@@ -839,7 +997,7 @@ export default function SupplierRunCard({
                         htmlFor={`supplier-item-use-${supplierRun.id}-${item.id}`}
                         className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
                       >
-                        Order or Stock
+                        Item Type
                       </label>
 
                       <select
@@ -848,7 +1006,7 @@ export default function SupplierRunCard({
                         onChange={(event) => {
                           const nextMaterialUse = event.target.value;
                           setEditingMaterialUse(nextMaterialUse);
-                          if (nextMaterialUse === "stock") {
+                          if (!usesOrderNumber(nextMaterialUse)) {
                             setEditingOrderNumber("");
                           }
                           setEditError("");
@@ -857,6 +1015,8 @@ export default function SupplierRunCard({
                       >
                         <option value="order">Order</option>
                         <option value="stock">Stock</option>
+                        <option value="return">Return</option>
+                        <option value="swap">Swap</option>
                       </select>
                     </div>
 
@@ -880,8 +1040,12 @@ export default function SupplierRunCard({
                           );
                           setEditError("");
                         }}
-                        disabled={editingMaterialUse === "stock"}
-                        placeholder="Optional order number"
+                        disabled={!usesOrderNumber(editingMaterialUse)}
+                        placeholder={
+                          usesOrderNumber(editingMaterialUse)
+                            ? "Optional order number"
+                            : `${getMaterialUseLabel(editingMaterialUse)} item`
+                        }
                         className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
                       />
                     </div>

@@ -114,6 +114,13 @@ service cloud.firestore {
       allow update: if isSouth() || isDriverFor(resource.data.driver);
     }
 
+    match /southRouteOrders/{routeOrderId} {
+      allow read: if isSouth() || isDriverFor(resource.data.driver);
+      allow create: if isSouth() || isDriverFor(request.resource.data.driver);
+      allow update: if isSouth() || isDriverFor(resource.data.driver);
+      allow delete: if isSouth();
+    }
+
     match /deliveries/{deliveryId} {
       allow read: if isDelivery() || isDriverFor(resource.data.driver);
       allow create, delete: if isDelivery();

@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  GripVertical,
   X,
 } from "lucide-react";
 import EmptyState from "../components/EmptyState";
@@ -18,6 +19,11 @@ import {
   getTodayHeading,
   isToday,
 } from "../utils/dateHelpers";
+import {
+  getSouthRouteOrderId,
+  saveSouthRouteOrder,
+  subscribeToSouthRouteOrders,
+} from "../utils/southRouteOrderStorage";
 
 const UNASSIGNED_DRIVER = "Unassigned Driver";
 const driverAvatarColors = [
@@ -52,8 +58,29 @@ function getVendorRouteIndex(vendor) {
     : routeIndex;
 }
 
-function sortVendorGroups(vendorGroups) {
+function sortVendorGroups(vendorGroups, manualVendorOrder = []) {
+  const normalizedManualOrder = manualVendorOrder.map(normalizeVendorName);
+
   return [...vendorGroups].sort((firstGroup, secondGroup) => {
+    const firstManualIndex = normalizedManualOrder.indexOf(
+      normalizeVendorName(firstGroup.vendor),
+    );
+    const secondManualIndex = normalizedManualOrder.indexOf(
+      normalizeVendorName(secondGroup.vendor),
+    );
+
+    if (firstManualIndex !== -1 || secondManualIndex !== -1) {
+      if (firstManualIndex === -1) {
+        return 1;
+      }
+
+      if (secondManualIndex === -1) {
+        return -1;
+      }
+
+      return firstManualIndex - secondManualIndex;
+    }
+
     const firstIndex = getVendorRouteIndex(firstGroup.vendor);
     const secondIndex = getVendorRouteIndex(secondGroup.vendor);
 
@@ -78,7 +105,7 @@ function getDriverAvatar(driver) {
   };
 }
 
-function groupRunsByVendor(supplierRuns) {
+function groupRunsByVendor(supplierRuns, manualVendorOrder = []) {
   const vendorGroups = supplierRuns.reduce((groups, supplierRun) => {
     const vendor = supplierRun.vendor || "Unknown Supplier";
     const existingGroup = groups.find(
@@ -99,40 +126,58 @@ function groupRunsByVendor(supplierRuns) {
     ];
   }, []);
 
-  return sortVendorGroups(vendorGroups);
+  return sortVendorGroups(vendorGroups, manualVendorOrder);
 }
 
-function groupRunsByDriverAndVendor(supplierRuns) {
-  return supplierRuns.reduce((driverGroups, supplierRun) => {
+function groupRunsByDriverAndVendor(
+  supplierRuns,
+  routeOrdersByDriver = {},
+) {
+  const runsByDriver = supplierRuns.reduce((groups, supplierRun) => {
     const driver = supplierRun.driver || UNASSIGNED_DRIVER;
-    const existingDriverGroup = driverGroups.find(
-      (group) => group.driver === driver,
-    );
 
-    if (existingDriverGroup) {
-      existingDriverGroup.vendorGroups = groupRunsByVendor([
-        ...existingDriverGroup.vendorGroups.flatMap(
-          (group) => group.runs,
-        ),
-        supplierRun,
-      ]);
-      return driverGroups;
-    }
+    return {
+      ...groups,
+      [driver]: [...(groups[driver] || []), supplierRun],
+    };
+  }, {});
 
-    return [
-      ...driverGroups,
-      {
-        driver,
-        vendorGroups: groupRunsByVendor([supplierRun]),
-      },
-    ];
-  }, []);
+  return Object.entries(runsByDriver).map(([driver, runs]) => ({
+    driver,
+    vendorGroups: groupRunsByVendor(
+      runs,
+      routeOrdersByDriver[driver]?.vendorOrder || [],
+    ),
+  }));
 }
 
 function getDirectionsUrl(address) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
     address,
   )}`;
+}
+
+function getMaterialUseLabel(materialUse) {
+  const labels = {
+    order: "Order",
+    stock: "Stock",
+    return: "Return",
+    swap: "Swap",
+  };
+
+  return labels[materialUse] || "Order";
+}
+
+function getMaterialUseBadgeClass(materialUse) {
+  if (materialUse === "return") {
+    return "bg-amber-100 text-amber-800";
+  }
+
+  if (materialUse === "swap") {
+    return "bg-violet-100 text-violet-800";
+  }
+
+  return "bg-slate-100 text-slate-600";
 }
 
 function getDateKeyFromDate(date) {
@@ -205,6 +250,9 @@ export default function SupplierRunsPage({
   const [checkViewMode, setCheckViewMode] = useState("list");
   const [viewingSupplierRun, setViewingSupplierRun] =
     useState(null);
+  const [southRouteOrders, setSouthRouteOrders] = useState([]);
+  const [draggingStop, setDraggingStop] = useState(null);
+  const [routeOrderError, setRouteOrderError] = useState("");
 
   useEffect(() => {
     if (!successMessage) {
@@ -219,6 +267,23 @@ export default function SupplierRunsPage({
       window.clearTimeout(timer);
     };
   }, [successMessage]);
+
+  useEffect(
+    () =>
+      subscribeToSouthRouteOrders(
+        setSouthRouteOrders,
+        (routeOrderSyncError) => {
+          console.error(
+            "Unable to sync South route orders:",
+            routeOrderSyncError,
+          );
+          setRouteOrderError(
+            "Unable to sync route order. Publish Firestore rules for South route orders.",
+          );
+        },
+      ),
+    [],
+  );
 
   async function handleSubmit(supplierRun) {
     await onAddSupplierRun(supplierRun);
@@ -254,6 +319,70 @@ export default function SupplierRunsPage({
 
   function isStopOpen(driver, vendor, scope = "open") {
     return Boolean(openStopKeys[`${scope}::${driver}::${vendor}`]);
+  }
+
+  async function saveRouteOrder(driver, vendorOrder) {
+    const routeOrderId = getSouthRouteOrderId(
+      driver,
+      selectedScheduleDate,
+    );
+
+    setRouteOrderError("");
+
+    try {
+      const updatedRouteOrders = await saveSouthRouteOrder({
+        id: routeOrderId,
+        driver,
+        dateKey: selectedScheduleDate,
+        vendorOrder,
+      });
+
+      setSouthRouteOrders(updatedRouteOrders);
+    } catch (routeOrderSaveError) {
+      console.error("Unable to save South route order:", routeOrderSaveError);
+      setRouteOrderError(
+        "Unable to save route order. Publish Firestore rules for South route orders.",
+      );
+    }
+  }
+
+  function moveVendor(vendors, fromVendor, toVendor) {
+    const fromIndex = vendors.indexOf(fromVendor);
+    const toIndex = vendors.indexOf(toVendor);
+
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+      return vendors;
+    }
+
+    const nextVendors = [...vendors];
+    const [movedVendor] = nextVendors.splice(fromIndex, 1);
+    nextVendors.splice(toIndex, 0, movedVendor);
+
+    return nextVendors;
+  }
+
+  async function handleStopDrop(driver, targetVendor, vendorGroups) {
+    if (!draggingStop || draggingStop.driver !== driver) {
+      setDraggingStop(null);
+      return;
+    }
+
+    const currentVendorOrder = vendorGroups.map(
+      (vendorGroup) => vendorGroup.vendor,
+    );
+    const nextVendorOrder = moveVendor(
+      currentVendorOrder,
+      draggingStop.vendor,
+      targetVendor,
+    );
+
+    setDraggingStop(null);
+
+    if (nextVendorOrder.join("::") === currentVendorOrder.join("::")) {
+      return;
+    }
+
+    await saveRouteOrder(driver, nextVendorOrder);
   }
 
   function getVendorGroupStats(vendorGroup) {
@@ -388,9 +517,27 @@ export default function SupplierRunsPage({
     (supplierRun) => supplierRun.status === "complete",
   );
 
-  const openRunGroups = groupRunsByDriverAndVendor(openRuns);
+  const routeOrdersByDriver = southRouteOrders
+    .filter(
+      (routeOrder) => routeOrder.dateKey === selectedScheduleDate,
+    )
+    .reduce(
+      (ordersByDriver, routeOrder) => ({
+        ...ordersByDriver,
+        [routeOrder.driver || UNASSIGNED_DRIVER]: routeOrder,
+      }),
+      {},
+    );
+
+  const openRunGroups = groupRunsByDriverAndVendor(
+    openRuns,
+    mode === "check" ? routeOrdersByDriver : {},
+  );
   const completeRunGroups =
-    groupRunsByDriverAndVendor(completeRuns);
+    groupRunsByDriverAndVendor(
+      completeRuns,
+      mode === "check" ? routeOrdersByDriver : {},
+    );
   const openStopsCount = openRunGroups.reduce(
     (count, driverGroup) =>
       count + driverGroup.vendorGroups.length,
@@ -979,6 +1126,12 @@ export default function SupplierRunsPage({
                         </div>
                       </button>
 
+                      {routeOrderError ? (
+                        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                          {routeOrderError}
+                        </div>
+                      ) : null}
+
                     {driverIsOpen ? (
                     <div className="space-y-3 border-l-4 border-blue-200 pl-3">
                       {driverGroup.vendorGroups.map((vendorGroup) => {
@@ -993,9 +1146,49 @@ export default function SupplierRunsPage({
                         return (
                           <div
                             key={vendorGroup.vendor}
-                            className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+                            draggable={driverGroup.vendorGroups.length > 1}
+                            onDragStart={() =>
+                              setDraggingStop({
+                                driver: driverGroup.driver,
+                                vendor: vendorGroup.vendor,
+                              })
+                            }
+                            onDragOver={(event) => {
+                              if (
+                                draggingStop?.driver === driverGroup.driver
+                              ) {
+                                event.preventDefault();
+                              }
+                            }}
+                            onDrop={() =>
+                              handleStopDrop(
+                                driverGroup.driver,
+                                vendorGroup.vendor,
+                                driverGroup.vendorGroups,
+                              )
+                            }
+                            onDragEnd={() => setDraggingStop(null)}
+                            className={`overflow-hidden rounded-xl border bg-white transition ${
+                              draggingStop?.driver === driverGroup.driver &&
+                              draggingStop?.vendor === vendorGroup.vendor
+                                ? "border-blue-300 opacity-60"
+                                : "border-slate-200"
+                            }`}
                           >
                             <div className="flex items-stretch gap-2">
+                              {driverGroup.vendorGroups.length > 1 ? (
+                                <div
+                                  className="flex w-10 shrink-0 cursor-grab items-center justify-center border-r border-slate-100 bg-slate-50 text-slate-400 active:cursor-grabbing"
+                                  title="Drag to reorder this stop"
+                                  aria-hidden="true"
+                                >
+                                  <GripVertical
+                                    className="h-5 w-5"
+                                    strokeWidth={2.4}
+                                  />
+                                </div>
+                              ) : null}
+
                               <button
                                 type="button"
                                 onClick={() =>
@@ -1481,14 +1674,15 @@ export default function SupplierRunsPage({
                                 </span>
                               ) : null}
 
-                              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-                                {item.materialUse === "stock"
-                                  ? "Stock"
-                                  : `Order${
-                                      item.orderNumber
-                                        ? ` ${item.orderNumber}`
-                                        : ""
-                                    }`}
+                              <span
+                                className={`rounded-full px-3 py-1 ${getMaterialUseBadgeClass(
+                                  item.materialUse,
+                                )}`}
+                              >
+                                {getMaterialUseLabel(item.materialUse)}
+                                {item.orderNumber
+                                  ? ` ${item.orderNumber}`
+                                  : ""}
                               </span>
                             </div>
                           </div>

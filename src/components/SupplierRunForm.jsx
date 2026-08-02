@@ -22,6 +22,21 @@ function createEmptyPickupItem() {
   };
 }
 
+function usesOrderNumber(materialUse) {
+  return ["order", "return", "swap"].includes(materialUse);
+}
+
+function getMaterialUseLabel(materialUse) {
+  const labels = {
+    order: "Order",
+    stock: "Stock",
+    return: "Return",
+    swap: "Swap",
+  };
+
+  return labels[materialUse] || "Order";
+}
+
 function formatPoNumber(value) {
   const numbersOnly = value.replace(/\D/g, "").slice(0, 6);
 
@@ -145,7 +160,7 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
               ...item,
               materialUse,
               orderNumber:
-                materialUse === "stock" ? "" : item.orderNumber,
+                usesOrderNumber(materialUse) ? item.orderNumber : "",
               saved: false,
             }
           : item,
@@ -213,9 +228,9 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
                 pickupItem.internalReference.trim(),
               materialUse: pickupItem.materialUse || "order",
               orderNumber:
-                pickupItem.materialUse === "stock"
-                  ? ""
-                  : formatOrderNumber(pickupItem.orderNumber || ""),
+                usesOrderNumber(pickupItem.materialUse)
+                  ? formatOrderNumber(pickupItem.orderNumber || "")
+                  : "",
               saved: true,
             }
           : pickupItem,
@@ -290,9 +305,9 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
         internalReference: item.internalReference?.trim() || "",
         materialUse: item.materialUse || "order",
         orderNumber:
-          item.materialUse === "stock"
-            ? ""
-            : formatOrderNumber(item.orderNumber || ""),
+          usesOrderNumber(item.materialUse)
+            ? formatOrderNumber(item.orderNumber || "")
+            : "",
         pickedUp: false,
       }));
 
@@ -361,226 +376,267 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
         </p>
       </div>
 
-      <div className="space-y-7">
-        <div className="grid gap-5 lg:grid-cols-4">
-          <div>
-            <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                Created By
-              </p>
-              <p className="mt-0.5 truncate text-sm font-black text-slate-800">
-                {createdBy?.name || createdBy?.email || "Signed in user"}
-              </p>
+      <div className="space-y-6">
+        <div className="grid gap-5 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]">
+          <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+            <div className="mb-5 flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                  PO Details
+                </p>
+                <h3 className="mt-1 text-xl font-black text-slate-900">
+                  Pickup Reference
+                </h3>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 sm:min-w-48">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                  Created By
+                </p>
+                <p className="mt-0.5 truncate text-sm font-black text-slate-800">
+                  {createdBy?.name || createdBy?.email || "Signed in user"}
+                </p>
+              </div>
             </div>
 
-            <label
-              htmlFor="supplier-run-ordered-by"
-              className="mb-2 block text-sm font-bold text-slate-700"
-            >
-              Ordered By
-            </label>
-
-            <select
-              id="supplier-run-ordered-by"
-              value={orderedBy}
-              onChange={(event) => {
-                setOrderedBy(event.target.value);
-                clearError();
-              }}
-              disabled={isSubmitting}
-              className="mb-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-            >
-              <option value="">Select...</option>
-              {orderedByOptions.map((orderedByOption) => (
-                <option key={orderedByOption} value={orderedByOption}>
-                  {orderedByOption}
-                </option>
-              ))}
-            </select>
-
-            <label
-              htmlFor="supplier-run-po"
-              className="mb-2 block text-sm font-bold text-slate-700"
-            >
-              PO Number
-            </label>
-
-            <input
-              id="supplier-run-po"
-              type="text"
-              inputMode="numeric"
-              autoComplete="off"
-              maxLength={7}
-              value={poNumber}
-              onChange={(event) => {
-                setPoNumber(formatPoNumber(event.target.value));
-                clearError();
-              }}
-              disabled={isSubmitting}
-              placeholder="123-456"
-              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-2xl font-black tracking-[0.15em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="supplier-run-date"
-              className="mb-2 block text-sm font-bold text-slate-700"
-            >
-              Pickup Date
-            </label>
-
-            <input
-              id="supplier-run-date"
-              type="date"
-              value={scheduledDate}
-              onChange={(event) => {
-                setScheduledDate(event.target.value);
-                clearError();
-              }}
-              disabled={isSubmitting}
-              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-black text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="supplier-run-vendor-select"
-              className="mb-2 block text-sm font-bold text-slate-700"
-            >
-              Vendor
-            </label>
-
-            <select
-              id="supplier-run-vendor-select"
-              value={vendor}
-              onChange={(event) => updateVendor(event.target.value)}
-              disabled={isSubmitting}
-              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 md:hidden"
-            >
-              <option value="">Select a vendor...</option>
-
-              {vendors.map((vendorOption) => (
-                <option
-                  key={vendorOption}
-                  value={vendorOption}
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="supplier-run-ordered-by"
+                  className="mb-2 block text-sm font-bold text-slate-700"
                 >
-                  {vendorOption}
-                </option>
-              ))}
-            </select>
+                  Ordered By
+                </label>
 
-            <input
-              id="supplier-run-vendor-search"
-              type="text"
-              list="supplier-run-vendor-options"
-              autoComplete="off"
-              value={vendor}
-              onChange={(event) => updateVendor(event.target.value)}
-              disabled={isSubmitting}
-              placeholder="Start typing a vendor..."
-              aria-label="Vendor"
-              className="hidden w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 md:block"
-            />
-
-            <datalist id="supplier-run-vendor-options">
-              {vendors.map((vendorOption) => (
-                <option
-                  key={vendorOption}
-                  value={vendorOption}
-                />
-              ))}
-            </datalist>
-          </div>
-
-          <div>
-            <label
-              htmlFor="supplier-run-driver"
-              className="mb-2 block text-sm font-bold text-slate-700"
-            >
-              Driver
-            </label>
-
-            <select
-              id="supplier-run-driver"
-              value={driver}
-              onChange={(event) => {
-                setDriver(event.target.value);
-                clearError();
-              }}
-              disabled={isSubmitting}
-              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-            >
-              <option value="">Select a driver...</option>
-
-              <optgroup label="Favorites">
-                {favoriteSouthDrivers.map((driverOption) => (
-                  <option key={driverOption} value={driverOption}>
-                    {driverOption}
-                  </option>
-                ))}
-              </optgroup>
-
-              <optgroup label="All Drivers">
-                {southDrivers
-                  .filter(
-                    (driverOption) =>
-                      !favoriteSouthDrivers.includes(driverOption),
-                  )
-                  .map((driverOption) => (
-                    <option key={driverOption} value={driverOption}>
-                      {driverOption}
+                <select
+                  id="supplier-run-ordered-by"
+                  value={orderedBy}
+                  onChange={(event) => {
+                    setOrderedBy(event.target.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                >
+                  <option value="">Select...</option>
+                  {orderedByOptions.map((orderedByOption) => (
+                    <option key={orderedByOption} value={orderedByOption}>
+                      {orderedByOption}
                     </option>
                   ))}
-              </optgroup>
-            </select>
-          </div>
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="supplier-run-date"
+                  className="mb-2 block text-sm font-bold text-slate-700"
+                >
+                  Pickup Date
+                </label>
+
+                <input
+                  id="supplier-run-date"
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(event) => {
+                    setScheduledDate(event.target.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+
+              <div className="lg:col-span-2 xl:col-span-1 2xl:col-span-2">
+                <label
+                  htmlFor="supplier-run-po"
+                  className="mb-2 block text-sm font-bold text-slate-700"
+                >
+                  PO Number
+                </label>
+
+                <input
+                  id="supplier-run-po"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={7}
+                  value={poNumber}
+                  onChange={(event) => {
+                    setPoNumber(formatPoNumber(event.target.value));
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  placeholder="123-456"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-3xl font-black tracking-[0.12em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="mb-5 border-b border-slate-200 pb-4">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                Route Assignment
+              </p>
+              <h3 className="mt-1 text-xl font-black text-slate-900">
+                Supplier & Driver
+              </h3>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="supplier-run-vendor-select"
+                  className="mb-2 block text-sm font-bold text-slate-700"
+                >
+                  Vendor
+                </label>
+
+                <select
+                  id="supplier-run-vendor-select"
+                  value={vendor}
+                  onChange={(event) => updateVendor(event.target.value)}
+                  disabled={isSubmitting}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 md:hidden"
+                >
+                  <option value="">Select a vendor...</option>
+
+                  {vendors.map((vendorOption) => (
+                    <option
+                      key={vendorOption}
+                      value={vendorOption}
+                    >
+                      {vendorOption}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  id="supplier-run-vendor-search"
+                  type="text"
+                  list="supplier-run-vendor-options"
+                  autoComplete="off"
+                  value={vendor}
+                  onChange={(event) => updateVendor(event.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="Start typing a vendor..."
+                  aria-label="Vendor"
+                  className="hidden w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 md:block"
+                />
+
+                <datalist id="supplier-run-vendor-options">
+                  {vendors.map((vendorOption) => (
+                    <option
+                      key={vendorOption}
+                      value={vendorOption}
+                    />
+                  ))}
+                </datalist>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="supplier-run-driver"
+                  className="mb-2 block text-sm font-bold text-slate-700"
+                >
+                  Driver
+                </label>
+
+                <select
+                  id="supplier-run-driver"
+                  value={driver}
+                  onChange={(event) => {
+                    setDriver(event.target.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                >
+                  <option value="">Select a driver...</option>
+
+                  <optgroup label="Favorites">
+                    {favoriteSouthDrivers.map((driverOption) => (
+                      <option key={driverOption} value={driverOption}>
+                        {driverOption}
+                      </option>
+                    ))}
+                  </optgroup>
+
+                  <optgroup label="All Drivers">
+                    {southDrivers
+                      .filter(
+                        (driverOption) =>
+                          !favoriteSouthDrivers.includes(driverOption),
+                      )
+                      .map((driverOption) => (
+                        <option key={driverOption} value={driverOption}>
+                          {driverOption}
+                        </option>
+                      ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              <div className="lg:col-span-2">
+                <label
+                  htmlFor="supplier-run-address"
+                  className="mb-2 block text-sm font-bold text-slate-700"
+                >
+                  Supplier Address
+                </label>
+
+                <input
+                  id="supplier-run-address"
+                  type="text"
+                  autoComplete="street-address"
+                  value={supplierAddress}
+                  onChange={(event) => {
+                    setSupplierAddress(event.target.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  placeholder="Optional: address for driver directions"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                />
+
+                <p className="mt-2 text-sm font-semibold text-slate-500">
+                  Known supplier addresses fill automatically and can be
+                  edited.
+                </p>
+              </div>
+            </div>
+          </section>
         </div>
 
-        <div>
-          <label
-            htmlFor="supplier-run-address"
-            className="mb-2 block text-sm font-bold text-slate-700"
-          >
-            Supplier Address
-          </label>
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-5 flex flex-col gap-1 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                Checklist
+              </p>
+              <h3 className="mt-1 text-xl font-black text-slate-900">
+                Pickup Items
+              </h3>
+            </div>
 
-          <input
-            id="supplier-run-address"
-            type="text"
-            autoComplete="street-address"
-            value={supplierAddress}
-            onChange={(event) => {
-              setSupplierAddress(event.target.value);
-              clearError();
-            }}
-            disabled={isSubmitting}
-            placeholder="Optional: address for driver directions"
-            className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-          />
-
-          <p className="mt-2 text-sm font-semibold text-slate-500">
-            Known supplier addresses fill automatically and can be
-            edited.
-          </p>
-        </div>
-
-        <section>
-          <div className="mb-4">
-            <h3 className="text-sm font-bold text-slate-700">
-              Pickup Items
-            </h3>
-
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="text-sm font-semibold text-slate-500">
               These become the driver checklist.
             </p>
+          </div>
+
+          <div>
+            <h3 className="sr-only">
+              Pickup Items
+            </h3>
           </div>
 
           <div className="space-y-4">
             {items.map((item, index) => (
               <div
                 key={item.id}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4"
               >
                 <div className="mb-3 flex items-center justify-between">
                   <div>
@@ -607,7 +663,7 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
 
                 {item.saved ? (
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       {item.quantity ? (
                         <p className="mb-1 text-sm font-black text-blue-700">
                           QTY: {item.quantity}
@@ -626,13 +682,8 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
                       ) : null}
 
                       <p className="mt-2 text-sm font-black text-slate-600">
-                        {item.materialUse === "stock"
-                          ? "Stock"
-                          : `Order${
-                              item.orderNumber
-                                ? ` ${item.orderNumber}`
-                                : ""
-                            }`}
+                        {getMaterialUseLabel(item.materialUse)}
+                        {item.orderNumber ? ` ${item.orderNumber}` : ""}
                       </p>
                     </div>
 
@@ -647,7 +698,7 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="grid gap-3 lg:grid-cols-[minmax(100px,0.2fr)_minmax(0,1fr)_minmax(220px,0.45fr)]">
+                    <div className="grid gap-3 lg:grid-cols-[110px_minmax(280px,1fr)_minmax(220px,0.5fr)]">
                       <div>
                         <label
                           htmlFor={`supplier-item-quantity-${item.id}`}
@@ -718,13 +769,13 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 lg:grid-cols-[220px_minmax(180px,0.45fr)_auto]">
+                    <div className="grid gap-3 lg:grid-cols-[180px_minmax(180px,0.45fr)_160px]">
                       <div>
                         <label
                           htmlFor={`supplier-item-use-${item.id}`}
                           className="sr-only"
                         >
-                          Order or Stock
+                          Item Type
                         </label>
 
                         <select
@@ -741,6 +792,8 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
                         >
                           <option value="order">Order</option>
                           <option value="stock">Stock</option>
+                          <option value="return">Return</option>
+                          <option value="swap">Swap</option>
                         </select>
                       </div>
 
@@ -766,7 +819,7 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
                           }
                           disabled={
                             isSubmitting ||
-                            item.materialUse === "stock"
+                            !usesOrderNumber(item.materialUse)
                           }
                           placeholder="Order #"
                           className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
