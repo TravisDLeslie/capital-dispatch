@@ -49,7 +49,11 @@ const permissionGroups = [
   },
   {
     title: "Admin",
-    permissions: [{ id: "user-admin", label: "User Access" }],
+    permissions: [
+      { id: "user-admin", label: "User Access" },
+      { id: "email-list", label: "Email List" },
+      { id: "bouncie", label: "Vehicles" },
+    ],
   },
 ];
 

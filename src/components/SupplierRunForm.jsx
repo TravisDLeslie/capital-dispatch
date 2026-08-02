@@ -48,11 +48,24 @@ function findSupplierAddress(value) {
   return matchedVendor ? supplierAddresses[matchedVendor] || "" : "";
 }
 
-export default function SupplierRunForm({ onSubmit }) {
+const orderedByOptions = [
+  "Dane",
+  "Joe",
+  "Travis",
+  "Todd",
+  "Shane",
+  "McKenzie",
+  "Tim",
+  "Justin",
+  "Pete",
+];
+
+export default function SupplierRunForm({ onSubmit, createdBy }) {
   const [poNumber, setPoNumber] = useState("");
   const [scheduledDate, setScheduledDate] = useState(
     getDateInputValue(),
   );
+  const [orderedBy, setOrderedBy] = useState("");
   const [vendor, setVendor] = useState("");
   const [supplierAddress, setSupplierAddress] = useState("");
   const [driver, setDriver] = useState("");
@@ -230,6 +243,7 @@ export default function SupplierRunForm({ onSubmit }) {
   function resetForm() {
     setPoNumber("");
     setScheduledDate(getDateInputValue());
+    setOrderedBy("");
     setVendor("");
     setSupplierAddress("");
     setDriver("");
@@ -247,6 +261,11 @@ export default function SupplierRunForm({ onSubmit }) {
 
     if (!scheduledDate) {
       setError("Choose the scheduled pickup date.");
+      return;
+    }
+
+    if (!orderedBy) {
+      setError("Select who ordered this South PO.");
       return;
     }
 
@@ -296,11 +315,15 @@ export default function SupplierRunForm({ onSubmit }) {
       id: createId(),
       poNumber,
       scheduledDate,
+      orderedBy,
       vendor: matchedVendor,
       supplierAddress: supplierAddress.trim(),
       driver,
       items: pickupItems,
       status: "open",
+      createdByName: createdBy?.name || "",
+      createdByEmail: createdBy?.email || "",
+      createdById: createdBy?.id || "",
       createdAt: now,
       updatedAt: now,
     };
@@ -341,6 +364,40 @@ export default function SupplierRunForm({ onSubmit }) {
       <div className="space-y-7">
         <div className="grid gap-5 lg:grid-cols-4">
           <div>
+            <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                Created By
+              </p>
+              <p className="mt-0.5 truncate text-sm font-black text-slate-800">
+                {createdBy?.name || createdBy?.email || "Signed in user"}
+              </p>
+            </div>
+
+            <label
+              htmlFor="supplier-run-ordered-by"
+              className="mb-2 block text-sm font-bold text-slate-700"
+            >
+              Ordered By
+            </label>
+
+            <select
+              id="supplier-run-ordered-by"
+              value={orderedBy}
+              onChange={(event) => {
+                setOrderedBy(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              className="mb-3 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+            >
+              <option value="">Select...</option>
+              {orderedByOptions.map((orderedByOption) => (
+                <option key={orderedByOption} value={orderedByOption}>
+                  {orderedByOption}
+                </option>
+              ))}
+            </select>
+
             <label
               htmlFor="supplier-run-po"
               className="mb-2 block text-sm font-bold text-slate-700"

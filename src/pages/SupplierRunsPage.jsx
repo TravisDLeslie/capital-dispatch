@@ -190,6 +190,7 @@ export default function SupplierRunsPage({
   onToggleSupplierRunItem,
   onUpdateSupplierRunItemDescription,
   onDeleteSupplierRun,
+  createdBy = {},
 }) {
   const todayKey = getDateInputValue();
   const [successMessage, setSuccessMessage] = useState("");
@@ -468,7 +469,7 @@ export default function SupplierRunsPage({
       ) : null}
 
       {mode === "add" ? (
-        <SupplierRunForm onSubmit={handleSubmit} />
+        <SupplierRunForm onSubmit={handleSubmit} createdBy={createdBy} />
       ) : mode === "history" ? (
         <section>
           <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">

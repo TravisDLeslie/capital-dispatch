@@ -4,6 +4,7 @@ import {
   LogOut,
   Package,
   PackageCheck,
+  Plus,
   ShieldCheck,
   Truck,
   UsersRound,
@@ -76,6 +77,16 @@ const navigationItems = [
     id: "user-admin",
     label: "User Access",
   },
+  {
+    group: "Admin",
+    id: "email-list",
+    label: "Email List",
+  },
+  {
+    group: "Admin",
+    id: "bouncie",
+    label: "Vehicles",
+  },
 ];
 
 function getNavButtonClass(isActive, isMobile = false) {
@@ -86,6 +97,16 @@ function getNavButtonClass(isActive, isMobile = false) {
   return `${isMobile ? "px-4 py-2.5" : "px-7 py-2.5"} flex w-full items-center gap-4 rounded-xl text-left text-sm font-semibold transition ${
     isActive ? activeClass : inactiveClass
   }`;
+}
+
+function getActionNavButtonClass(isActive, isMobile = false) {
+  const stateClass = isActive
+    ? "bg-[#FC2C38] text-white shadow-sm"
+    : "bg-red-50 text-[#FC2C38] hover:bg-[#FC2C38] hover:text-white hover:shadow-sm";
+
+  return `${
+    isMobile ? "px-4 py-3" : "px-5 py-3"
+  } group flex w-full items-center gap-3 rounded-xl text-left text-sm font-black transition ${stateClass}`;
 }
 
 function getCurrentPageLabel(currentPage) {
@@ -244,20 +265,38 @@ export default function AppHeader({
             <div className="mt-3 space-y-2">
               {groupItems.map((item) => {
                 const isActive = currentPage === item.id;
+                const isPrimaryAction = item.id === "supplier-runs-add";
 
                 return (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => handlePageChange(item.id)}
-                    className={getNavButtonClass(isActive, isMobile)}
+                    className={
+                      isPrimaryAction
+                        ? getActionNavButtonClass(isActive, isMobile)
+                        : getNavButtonClass(isActive, isMobile)
+                    }
                   >
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${
-                        isActive ? "bg-[#FC2C38]" : "bg-slate-400"
-                      }`}
-                      aria-hidden="true"
-                    />
+                    {isPrimaryAction ? (
+                      <span
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition ${
+                          isActive
+                            ? "bg-white/20"
+                            : "bg-[#FC2C38] text-white group-hover:bg-white/20"
+                        }`}
+                        aria-hidden="true"
+                      >
+                        <Plus className="h-4 w-4" strokeWidth={3} />
+                      </span>
+                    ) : (
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${
+                          isActive ? "bg-[#FC2C38]" : "bg-slate-400"
+                        }`}
+                        aria-hidden="true"
+                      />
+                    )}
                     <span className="min-w-0 flex-1 truncate">
                       {item.label}
                     </span>

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import AppHeader from "./components/AppHeader";
+import BounciePage from "./pages/BounciePage";
 import CheckInPage from "./pages/CheckInPage";
 import CustomersPage from "./pages/CustomersPage";
 import DeliveryHistoryPage from "./pages/DeliveryHistoryPage";
 import DeliveryQueuePage from "./pages/DeliveryQueuePage";
 import DeliveriesPage from "./pages/DeliveriesPage";
+import EmailListPage from "./pages/EmailListPage";
 import LoginPage from "./components/LoginPage";
 import SearchPage from "./pages/SearchPage";
 import SalesConverterPage from "./pages/SalesConverterPage";
@@ -44,6 +46,11 @@ import {
   subscribeToUsers,
   updateUserProfile,
 } from "./utils/userStorage";
+import {
+  addEmailListEntry,
+  deleteEmailListEntry,
+  subscribeToEmailList,
+} from "./utils/emailListStorage";
 
 const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
@@ -95,8 +102,12 @@ type SupplierRun = {
   poNumber?: string;
   vendor?: string;
   scheduledDate?: string;
+  orderedBy?: string;
   driver?: string;
   supplierAddress?: string;
+  createdByName?: string;
+  createdByEmail?: string;
+  createdById?: string;
   items?: SupplierRunItem[];
   status?: string;
   [key: string]: unknown;
@@ -154,6 +165,19 @@ type Customer = {
   state?: string;
   zip?: string;
   contacts?: CustomerContact[];
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
+type EmailListEntry = {
+  id: string;
+  email: string;
+  name?: string;
+  companyName?: string;
+  source?: string;
+  customerId?: string;
+  contactId?: string;
   createdAt?: string;
   updatedAt?: string;
   [key: string]: unknown;
@@ -224,6 +248,8 @@ function getAllowedPageIdsForRole(role: string) {
       "customers-view",
       "sales-converter",
       "user-admin",
+      "email-list",
+      "bouncie",
     ];
   }
 
@@ -241,6 +267,8 @@ function getAllowedPageIdsForRole(role: string) {
       "customers-add",
       "customers-view",
       "sales-converter",
+      "email-list",
+      "bouncie",
     ];
   }
 
@@ -359,6 +387,7 @@ export default function App() {
     Delivery[]
   >([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [emailList, setEmailList] = useState<EmailListEntry[]>([]);
   const [editingDeliveryId, setEditingDeliveryId] =
     useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -393,7 +422,8 @@ export default function App() {
   const canReadSales = allowedPageIds.some((pageId) =>
     ["customers-add", "customers-view", "sales-converter"].includes(pageId),
   );
-  const canReadCustomers = canReadSales || canReadReceiving;
+  const canReadEmailList = allowedPageIds.includes("email-list");
+  const canReadCustomers = canReadSales || canReadReceiving || canReadEmailList;
   const visibleSupplierRuns =
     userRole === "driver"
       ? supplierRuns.filter(
@@ -404,6 +434,17 @@ export default function App() {
     userRole === "driver"
       ? deliveries.filter((delivery) => delivery.driver === driverName)
       : deliveries;
+  const currentUserDisplayName =
+    currentUser?.displayName ||
+    userProfile?.displayName ||
+    currentUser?.email ||
+    userProfile?.email ||
+    "";
+  const currentUserCreator = {
+    id: currentUser?.uid || userProfile?.uid || userProfile?.id || "",
+    name: currentUserDisplayName,
+    email: currentUser?.email || userProfile?.email || "",
+  };
 
   useEffect(() => {
     if (!auth) {
@@ -522,6 +563,7 @@ export default function App() {
       setSupplierRuns([]);
       setDeliveries([]);
       setCustomers([]);
+      setEmailList([]);
       setIsLoading(false);
       return;
     }
@@ -533,6 +575,7 @@ export default function App() {
     let unsubscribeFromSupplierRuns = () => {};
     let unsubscribeFromDeliveries = () => {};
     let unsubscribeFromCustomers = () => {};
+    let unsubscribeFromEmailList = () => {};
 
     async function loadCheckIns() {
       try {
@@ -646,11 +689,34 @@ export default function App() {
         setCustomers([]);
       }
 
+      if (canReadEmailList) {
+        unsubscribeFromEmailList = subscribeToEmailList(
+          (savedEmailList: EmailListEntry[]) => {
+            if (isMounted) {
+              setEmailList(savedEmailList);
+              setSyncError("");
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to sync email list:", error);
+
+            if (isMounted) {
+              setSyncError(getFirebaseErrorMessage(error));
+              setIsLoading(false);
+            }
+          },
+        );
+      } else {
+        setEmailList([]);
+      }
+
       if (
         !canReadReceiving &&
         !canReadSouth &&
         !canReadDeliveries &&
-        !canReadCustomers
+        !canReadCustomers &&
+        !canReadEmailList
       ) {
         setIsLoading(false);
       }
@@ -708,6 +774,22 @@ export default function App() {
       } else {
         setCustomers([]);
       }
+
+      if (canReadEmailList) {
+        subscribeToEmailList(
+          (savedEmailList: EmailListEntry[]) => {
+            if (isMounted) {
+              setEmailList(savedEmailList);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load email list:", error);
+          },
+        );
+      } else {
+        setEmailList([]);
+      }
     }
 
     return () => {
@@ -716,8 +798,10 @@ export default function App() {
       unsubscribeFromSupplierRuns();
       unsubscribeFromDeliveries();
       unsubscribeFromCustomers();
+      unsubscribeFromEmailList();
     };
   }, [
+    canReadEmailList,
     canReadCustomers,
     currentUser,
     canReadDeliveries,
@@ -745,6 +829,21 @@ export default function App() {
     updates: Partial<UserProfile>,
   ) {
     await updateUserProfile(userId, updates);
+  }
+
+  async function handleAddEmailListEntry(
+    emailListEntry: EmailListEntry,
+  ) {
+    const updatedEmailList = await addEmailListEntry(emailListEntry);
+    setEmailList(updatedEmailList);
+    setSyncError("");
+  }
+
+  async function handleDeleteEmailListEntry(emailListEntryId: string) {
+    const updatedEmailList =
+      await deleteEmailListEntry(emailListEntryId);
+    setEmailList(updatedEmailList);
+    setSyncError("");
   }
 
   async function handleAddCheckIn(checkIn: CheckIn) {
@@ -987,6 +1086,19 @@ export default function App() {
           />
         );
 
+      case "email-list":
+        return (
+          <EmailListPage
+            customers={customers}
+            emailList={emailList}
+            onAddEmailListEntry={handleAddEmailListEntry}
+            onDeleteEmailListEntry={handleDeleteEmailListEntry}
+          />
+        );
+
+      case "bouncie":
+        return <BounciePage />;
+
       case "today":
         return (
           <TodayPage
@@ -1015,6 +1127,7 @@ export default function App() {
           <SupplierRunsPage
             mode="add"
             supplierRuns={supplierRuns}
+            createdBy={currentUserCreator}
             onAddSupplierRun={handleAddSupplierRun}
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem

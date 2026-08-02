@@ -519,6 +519,20 @@ export default function SupplierRunCard({
                 {formatTime(supplierRun.createdAt)}
               </p>
 
+              {supplierRun.createdByName || supplierRun.createdByEmail ? (
+                <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
+                  Created by{" "}
+                  {supplierRun.createdByName ||
+                    supplierRun.createdByEmail}
+                </p>
+              ) : null}
+
+              {supplierRun.orderedBy ? (
+                <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
+                  Ordered by {supplierRun.orderedBy}
+                </p>
+              ) : null}
+
               {supplierRun.scheduledDate ? (
                 <p className="mt-1 text-sm font-black text-slate-700">
                   Pickup: {formatDateInput(supplierRun.scheduledDate)}
