@@ -9,6 +9,40 @@ import {
 import { useEffect, useState } from "react";
 import PageContainer from "../components/PageContainer";
 
+function formatVehicleValue(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+
+  if (["string", "number", "boolean"].includes(typeof value)) {
+    return String(value).trim();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(formatVehicleValue).filter(Boolean).join(", ");
+  }
+
+  if (typeof value === "object") {
+    for (const key of [
+      "name",
+      "displayName",
+      "label",
+      "value",
+      "text",
+      "description",
+      "number",
+    ]) {
+      const formattedValue = formatVehicleValue(value[key]);
+
+      if (formattedValue) {
+        return formattedValue;
+      }
+    }
+  }
+
+  return "";
+}
+
 function getFirstValue(vehicle, paths) {
   for (const path of paths) {
     const value = path
@@ -20,9 +54,10 @@ function getFirstValue(vehicle, paths) {
             : undefined,
         vehicle,
       );
+    const formattedValue = formatVehicleValue(value);
 
-    if (value !== undefined && value !== null && String(value).trim()) {
-      return String(value).trim();
+    if (formattedValue) {
+      return formattedValue;
     }
   }
 
@@ -67,35 +102,27 @@ function getVehicleYearMakeModel(vehicle) {
 
 function getVehicleName(vehicle) {
   return (
-    vehicle?.nickname ||
-    vehicle?.name ||
+    getFirstValue(vehicle, ["nickname", "name", "displayName", "label"]) ||
     getVehicleYearMakeModel(vehicle) ||
-    vehicle?.vin ||
+    getFirstValue(vehicle, ["vin", "vehicle.vin"]) ||
     "Bouncie Vehicle"
   );
 }
 
 function getVehicleDetail(vehicle) {
+  const vin = getFirstValue(vehicle, ["vin", "vehicle.vin"]);
+  const imei = getFirstValue(vehicle, ["imei", "device.imei"]);
+  const plate = getFirstValue(vehicle, [
+    "licensePlate",
+    "plate",
+    "vehicle.licensePlate",
+    "vehicle.plate",
+  ]);
+
   return [
-    getFirstValue(vehicle, ["vin", "vehicle.vin"])
-      ? `VIN ${getFirstValue(vehicle, ["vin", "vehicle.vin"])}`
-      : "",
-    getFirstValue(vehicle, ["imei", "device.imei"])
-      ? `IMEI ${getFirstValue(vehicle, ["imei", "device.imei"])}`
-      : "",
-    getFirstValue(vehicle, [
-      "licensePlate",
-      "plate",
-      "vehicle.licensePlate",
-      "vehicle.plate",
-    ])
-      ? `Plate ${getFirstValue(vehicle, [
-          "licensePlate",
-          "plate",
-          "vehicle.licensePlate",
-          "vehicle.plate",
-        ])}`
-      : "",
+    vin ? `VIN ${vin}` : "",
+    imei ? `IMEI ${imei}` : "",
+    plate ? `Plate ${plate}` : "",
   ]
     .filter(Boolean)
     .join(" • ");
