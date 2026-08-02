@@ -9,13 +9,13 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import PageContainer from "../components/PageContainer";
 import {
-  getVehicleBadgeText,
   getVehicleCoordinates,
   getVehicleKey,
   getVehicleLastUpdated,
   getVehicleLocationLabel,
   getVehicleName,
   getVehicleYearMakeModel,
+  getUniqueVehicleBadgeTexts,
 } from "../utils/bouncieVehicleFormatters";
 import { subscribeToBouncieVehicleSettings } from "../utils/bouncieVehicleStorage";
 
@@ -76,11 +76,19 @@ export default function DashboardPage() {
     [vehicleSettings],
   );
 
-  const dashboardVehicles = vehicles.map((vehicle, index) => {
+  const dashboardVehicleTitles = vehicles.map((vehicle, index) => {
     const vehicleId = getVehicleKey(vehicle, index);
     const savedSetting = vehicleSettingsById[vehicleId];
     const bouncieName = getVehicleName(vehicle);
-    const title = savedSetting?.title || bouncieName;
+    return savedSetting?.title || bouncieName;
+  });
+  const dashboardVehicleBadges = getUniqueVehicleBadgeTexts(
+    dashboardVehicleTitles,
+  );
+  const dashboardVehicles = vehicles.map((vehicle, index) => {
+    const vehicleId = getVehicleKey(vehicle, index);
+    const bouncieName = getVehicleName(vehicle);
+    const title = dashboardVehicleTitles[index];
     const locationLabel = getVehicleLocationLabel(vehicle);
 
     return {
@@ -89,7 +97,7 @@ export default function DashboardPage() {
       title,
       bouncieName,
       yearMakeModel: getVehicleYearMakeModel(vehicle),
-      badge: getVehicleBadgeText(title),
+      badge: dashboardVehicleBadges[index],
       locationLabel,
       lastUpdated: getVehicleLastUpdated(vehicle),
       mapUrl: getVehicleMapUrl(vehicle),

@@ -17,11 +17,11 @@ import {
 } from "../utils/bouncieVehicleStorage";
 import {
   getFirstVehicleValue,
-  getVehicleBadgeText,
   getVehicleDetail,
   getVehicleKey,
   getVehicleName,
   getVehicleYearMakeModel,
+  getUniqueVehicleBadgeTexts,
 } from "../utils/bouncieVehicleFormatters";
 
 async function readApiJson(response, routeName) {
@@ -57,6 +57,14 @@ export default function BounciePage() {
     }),
     {},
   );
+  const vehicleTitles = vehicles.map((vehicle, index) => {
+    const vehicleId = getVehicleKey(vehicle, index);
+    const savedSetting = vehicleSettingsById[vehicleId];
+    const bouncieVehicleName = getVehicleName(vehicle);
+
+    return savedSetting?.title || bouncieVehicleName;
+  });
+  const vehicleBadges = getUniqueVehicleBadgeTexts(vehicleTitles);
 
   async function loadBouncie() {
     setIsLoading(true);
@@ -277,7 +285,7 @@ export default function BounciePage() {
               const vehicleId = getVehicleKey(vehicle, index);
               const savedSetting = vehicleSettingsById[vehicleId];
               const bouncieVehicleName = getVehicleName(vehicle);
-              const vehicleName = savedSetting?.title || bouncieVehicleName;
+              const vehicleName = vehicleTitles[index];
               const yearMakeModel = getVehicleYearMakeModel(vehicle);
               const vehicleDetail = getVehicleDetail(vehicle);
               const isEditingVehicle = editingVehicleId === vehicleId;
@@ -290,7 +298,7 @@ export default function BounciePage() {
                 >
                   <div className="flex items-start gap-4">
                     <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFF0F2] text-lg font-black text-[#FC2C38]">
-                      {getVehicleBadgeText(vehicleName)}
+                      {vehicleBadges[index]}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

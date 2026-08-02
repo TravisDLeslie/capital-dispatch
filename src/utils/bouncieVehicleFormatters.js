@@ -159,6 +159,22 @@ export function getVehicleBadgeText(title) {
     .toUpperCase();
 }
 
+export function getUniqueVehicleBadgeTexts(vehicleTitles) {
+  const badgeCounts = {};
+
+  return vehicleTitles.map((title) => {
+    const baseBadge = getVehicleBadgeText(title);
+    const count = (badgeCounts[baseBadge] || 0) + 1;
+    badgeCounts[baseBadge] = count;
+
+    if (count === 1) {
+      return baseBadge;
+    }
+
+    return `${baseBadge}${count}`;
+  });
+}
+
 export function getVehicleCoordinates(vehicle) {
   const latitude = getFirstVehicleValue(vehicle, [
     "latitude",
