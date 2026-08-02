@@ -665,20 +665,6 @@ export default function SupplierRunCard({
                 {formatTime(supplierRun.createdAt)}
               </p>
 
-              {supplierRun.createdByName || supplierRun.createdByEmail ? (
-                <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
-                  Created by{" "}
-                  {supplierRun.createdByName ||
-                    supplierRun.createdByEmail}
-                </p>
-              ) : null}
-
-              {supplierRun.orderedBy ? (
-                <p className="mt-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
-                  Ordered by {supplierRun.orderedBy}
-                </p>
-              ) : null}
-
               {supplierRun.scheduledDate ? (
                 <p className="mt-1 text-sm font-black text-slate-700">
                   Pickup: {formatDateInput(supplierRun.scheduledDate)}
@@ -1095,6 +1081,24 @@ export default function SupplierRunCard({
           Last updated {formatFullDate(supplierRun.updatedAt)} at{" "}
           {formatTime(supplierRun.updatedAt)}
         </p>
+      ) : null}
+
+      {!isCompactClosed &&
+      (supplierRun.createdByName ||
+        supplierRun.createdByEmail ||
+        supplierRun.orderedBy) ? (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-400">
+          {supplierRun.createdByName || supplierRun.createdByEmail ? (
+            <span>
+              Created by{" "}
+              {supplierRun.createdByName || supplierRun.createdByEmail}
+            </span>
+          ) : null}
+
+          {supplierRun.orderedBy ? (
+            <span>Ordered by {supplierRun.orderedBy}</span>
+          ) : null}
+        </div>
       ) : null}
 
       {!isCompactClosed ? (

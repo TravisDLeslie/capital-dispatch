@@ -54,6 +54,7 @@ function customerMatchesSearch(customer, searchTerm) {
     customer.website,
     customer.address,
     customer.streetAddress,
+    customer.city,
     customer.state,
     customer.zip,
     ...(Array.isArray(customer.contacts)
@@ -85,6 +86,7 @@ export default function CustomersPage({
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
   const [streetAddress, setStreetAddress] = useState("");
+  const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
   const [contacts, setContacts] = useState(createDefaultContacts);
@@ -144,6 +146,7 @@ export default function CustomersPage({
     setEmail("");
     setWebsite("");
     setStreetAddress("");
+    setCity("");
     setState("");
     setZip("");
     setContacts(createDefaultContacts());
@@ -160,6 +163,7 @@ export default function CustomersPage({
     setStreetAddress(
       customer.streetAddress || customer.address || "",
     );
+    setCity(customer.city || "");
     setState(customer.state || "");
     setZip(customer.zip || "");
     setContacts(
@@ -213,10 +217,12 @@ export default function CustomersPage({
       email: email.trim(),
       website: website.trim(),
       streetAddress: streetAddress.trim(),
+      city: city.trim(),
       state: state.trim(),
       zip: zip.trim(),
       address: [
         streetAddress.trim(),
+        city.trim(),
         state.trim(),
         zip.trim(),
       ]
@@ -408,7 +414,7 @@ export default function CustomersPage({
             </label>
           </div>
 
-          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_140px_140px]">
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px_140px_140px]">
             <label className="block">
               <span className="mb-2 block text-sm font-bold text-slate-700">
                 Street Address
@@ -422,6 +428,23 @@ export default function CustomersPage({
                 }}
                 disabled={isSubmitting}
                 placeholder="Street address"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-red-500 focus:ring-4 focus:ring-red-100"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-2 block text-sm font-bold text-slate-700">
+                City
+              </span>
+              <input
+                type="text"
+                value={city}
+                onChange={(event) => {
+                  setCity(event.target.value);
+                  clearFeedback();
+                }}
+                disabled={isSubmitting}
+                placeholder="Boise"
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-red-500 focus:ring-4 focus:ring-red-100"
               />
             </label>
@@ -717,12 +740,14 @@ export default function CustomersPage({
                       ) : null}
 
                       {customer.streetAddress ||
+                      customer.city ||
                       customer.state ||
                       customer.zip ||
                       customer.address ? (
                         <p className="mt-1 text-sm font-semibold text-slate-500">
                           {[
                             customer.streetAddress || customer.address,
+                            customer.city,
                             customer.state,
                             customer.zip,
                           ]
