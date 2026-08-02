@@ -18,6 +18,7 @@ const permissionGroups = [
   {
     title: "Dashboard",
     permissions: [
+      { id: "driver-dashboard", label: "Driver Dashboard" },
       { id: "dashboard", label: "Fleet Dashboard" },
     ],
   },
@@ -69,7 +70,7 @@ const allPermissionIds = permissionGroups.flatMap((group) =>
 
 const rolePermissionPresets = {
   pending: [],
-  driver: ["supplier-runs-check", "deliveries-queue"],
+  driver: ["driver-dashboard", "supplier-runs-check", "deliveries-queue"],
   receiving: ["check-in", "today", "search"],
   south: ["supplier-runs-check", "supplier-runs-history"],
   delivery: ["deliveries-queue", "deliveries-history"],

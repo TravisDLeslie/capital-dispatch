@@ -5,6 +5,7 @@ import BounciePage from "./pages/BounciePage";
 import CheckInPage from "./pages/CheckInPage";
 import CustomersPage from "./pages/CustomersPage";
 import DashboardPage from "./pages/DashboardPage";
+import DriverDashboardPage from "./pages/DriverDashboardPage";
 import DeliveryHistoryPage from "./pages/DeliveryHistoryPage";
 import DeliveryQueuePage from "./pages/DeliveryQueuePage";
 import DeliveriesPage from "./pages/DeliveriesPage";
@@ -237,6 +238,7 @@ function getAllowedPageIdsForRole(role: string) {
   if (role === "superAdmin") {
     return [
       "dashboard",
+      "driver-dashboard",
       "check-in",
       "today",
       "search",
@@ -258,6 +260,7 @@ function getAllowedPageIdsForRole(role: string) {
   if (role === "admin") {
     return [
       "dashboard",
+      "driver-dashboard",
       "check-in",
       "today",
       "search",
@@ -292,7 +295,7 @@ function getAllowedPageIdsForRole(role: string) {
   }
 
   if (role === "driver") {
-    return ["supplier-runs-check", "deliveries-queue"];
+    return ["driver-dashboard", "supplier-runs-check", "deliveries-queue"];
   }
 
   return [];
@@ -1098,6 +1101,18 @@ export default function App() {
     switch (currentPage) {
       case "dashboard":
         return <DashboardPage />;
+
+      case "driver-dashboard":
+        return (
+          <DriverDashboardPage
+            supplierRuns={supplierRuns}
+            deliveries={deliveries}
+            users={users}
+            driverName={driverName}
+            isSuperAdmin={isSuperAdmin}
+            onPageChange={setCurrentPage}
+          />
+        );
 
       case "user-admin":
         return (

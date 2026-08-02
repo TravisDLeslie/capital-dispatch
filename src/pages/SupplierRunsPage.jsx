@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   ArrowUpRight,
   CalendarDays,
   ChevronDown,
@@ -381,6 +383,28 @@ export default function SupplierRunsPage({
     if (nextVendorOrder.join("::") === currentVendorOrder.join("::")) {
       return;
     }
+
+    await saveRouteOrder(driver, nextVendorOrder);
+  }
+
+  async function handleMoveStop(driver, vendorGroups, vendor, offset) {
+    const currentVendorOrder = vendorGroups.map(
+      (vendorGroup) => vendorGroup.vendor,
+    );
+    const currentIndex = currentVendorOrder.indexOf(vendor);
+    const nextIndex = currentIndex + offset;
+
+    if (
+      currentIndex === -1 ||
+      nextIndex < 0 ||
+      nextIndex >= currentVendorOrder.length
+    ) {
+      return;
+    }
+
+    const nextVendorOrder = [...currentVendorOrder];
+    const [movedVendor] = nextVendorOrder.splice(currentIndex, 1);
+    nextVendorOrder.splice(nextIndex, 0, movedVendor);
 
     await saveRouteOrder(driver, nextVendorOrder);
   }
@@ -1134,7 +1158,7 @@ export default function SupplierRunsPage({
 
                     {driverIsOpen ? (
                     <div className="space-y-3 border-l-4 border-blue-200 pl-3">
-                      {driverGroup.vendorGroups.map((vendorGroup) => {
+                      {driverGroup.vendorGroups.map((vendorGroup, vendorIndex) => {
                         const stats = getVendorGroupStats(vendorGroup);
                         const supplierAddress =
                           getVendorGroupAddress(vendorGroup);
@@ -1178,14 +1202,59 @@ export default function SupplierRunsPage({
                             <div className="flex items-stretch gap-2">
                               {driverGroup.vendorGroups.length > 1 ? (
                                 <div
-                                  className="flex w-10 shrink-0 cursor-grab items-center justify-center border-r border-slate-100 bg-slate-50 text-slate-400 active:cursor-grabbing"
+                                  className="flex w-11 shrink-0 flex-col items-center justify-center gap-1 border-r border-slate-100 bg-slate-50 px-1 sm:w-10 sm:cursor-grab sm:px-0 sm:active:cursor-grabbing"
                                   title="Drag to reorder this stop"
-                                  aria-hidden="true"
                                 >
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleMoveStop(
+                                        driverGroup.driver,
+                                        driverGroup.vendorGroups,
+                                        vendorGroup.vendor,
+                                        -1,
+                                      )
+                                    }
+                                    disabled={vendorIndex === 0}
+                                    className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 sm:hidden"
+                                    aria-label={`Move ${vendorGroup.vendor} earlier in route`}
+                                  >
+                                    <ArrowUp
+                                      aria-hidden="true"
+                                      className="h-4 w-4"
+                                      strokeWidth={2.6}
+                                    />
+                                  </button>
+
                                   <GripVertical
-                                    className="h-5 w-5"
+                                    aria-hidden="true"
+                                    className="hidden h-5 w-5 text-slate-400 sm:block"
                                     strokeWidth={2.4}
                                   />
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleMoveStop(
+                                        driverGroup.driver,
+                                        driverGroup.vendorGroups,
+                                        vendorGroup.vendor,
+                                        1,
+                                      )
+                                    }
+                                    disabled={
+                                      vendorIndex ===
+                                      driverGroup.vendorGroups.length - 1
+                                    }
+                                    className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-100 disabled:text-slate-300 sm:hidden"
+                                    aria-label={`Move ${vendorGroup.vendor} later in route`}
+                                  >
+                                    <ArrowDown
+                                      aria-hidden="true"
+                                      className="h-4 w-4"
+                                      strokeWidth={2.6}
+                                    />
+                                  </button>
                                 </div>
                               ) : null}
 

@@ -15,6 +15,11 @@ import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 const navigationItems = [
   {
     group: "Dashboard",
+    id: "driver-dashboard",
+    label: "Driver Dashboard",
+  },
+  {
+    group: "Dashboard",
     id: "dashboard",
     label: "Fleet Dashboard",
   },
