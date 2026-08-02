@@ -79,6 +79,7 @@ export default function SupplierRunForm({
   onSubmit,
   createdBy,
   vehicleOptions,
+  canAssignRoute = false,
 }) {
   const safeVehicleOptions = Array.isArray(vehicleOptions)
     ? vehicleOptions
@@ -303,12 +304,16 @@ export default function SupplierRunForm({
       return;
     }
 
-    if (!southDrivers.includes(driver)) {
+    if (canAssignRoute && !southDrivers.includes(driver)) {
       setError("Select the driver for this South PO.");
       return;
     }
 
-    if (safeVehicleOptions.length > 0 && !selectedVehicle) {
+    if (
+      canAssignRoute &&
+      safeVehicleOptions.length > 0 &&
+      !selectedVehicle
+    ) {
       setError("Select what truck is going South.");
       return;
     }
@@ -350,10 +355,12 @@ export default function SupplierRunForm({
       orderedBy,
       vendor: matchedVendor,
       supplierAddress: supplierAddress.trim(),
-      driver,
-      vehicleId: selectedVehicle?.id || "",
-      vehicleTitle: selectedVehicle?.title || "",
-      vehicleBadge: selectedVehicle?.badge || "",
+      driver: canAssignRoute ? driver : "",
+      vehicleId: canAssignRoute ? selectedVehicle?.id || "" : "",
+      vehicleTitle: canAssignRoute ? selectedVehicle?.title || "" : "",
+      vehicleBadge: canAssignRoute ? selectedVehicle?.badge || "" : "",
+      dispatchStatus:
+        canAssignRoute && driver ? "assigned" : "needsDispatch",
       items: pickupItems,
       status: "open",
       createdByName: createdBy?.name || "",
@@ -391,8 +398,8 @@ export default function SupplierRunForm({
         </h2>
 
         <p className="mt-2 text-slate-500">
-          Add the PO, supplier, driver, and items before the
-          driver leaves or while they are already on the road.
+          Add the PO, supplier, and items. Dispatch will assign the driver
+          and truck from Needs Dispatch.
         </p>
       </div>
 
@@ -556,91 +563,107 @@ export default function SupplierRunForm({
                 </datalist>
               </div>
 
-              <div>
-                <label
-                  htmlFor="supplier-run-driver"
-                  className="mb-2 block text-sm font-bold text-slate-700"
-                >
-                  Driver
-                </label>
+              {canAssignRoute ? (
+                <>
+                  <div>
+                    <label
+                      htmlFor="supplier-run-driver"
+                      className="mb-2 block text-sm font-bold text-slate-700"
+                    >
+                      Driver
+                    </label>
 
-                <select
-                  id="supplier-run-driver"
-                  value={driver}
-                  onChange={(event) => {
-                    setDriver(event.target.value);
-                    clearError();
-                  }}
-                  disabled={isSubmitting}
-                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-                >
-                  <option value="">Select a driver...</option>
+                    <select
+                      id="supplier-run-driver"
+                      value={driver}
+                      onChange={(event) => {
+                        setDriver(event.target.value);
+                        clearError();
+                      }}
+                      disabled={isSubmitting}
+                      className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                    >
+                      <option value="">Select a driver...</option>
 
-                  <optgroup label="Favorites">
-                    {favoriteSouthDrivers.map((driverOption) => (
-                      <option key={driverOption} value={driverOption}>
-                        {driverOption}
+                      <optgroup label="Favorites">
+                        {favoriteSouthDrivers.map((driverOption) => (
+                          <option key={driverOption} value={driverOption}>
+                            {driverOption}
+                          </option>
+                        ))}
+                      </optgroup>
+
+                      <optgroup label="All Drivers">
+                        {southDrivers
+                          .filter(
+                            (driverOption) =>
+                              !favoriteSouthDrivers.includes(driverOption),
+                          )
+                          .map((driverOption) => (
+                            <option key={driverOption} value={driverOption}>
+                              {driverOption}
+                            </option>
+                          ))}
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  <div className="lg:col-span-2">
+                    <label
+                      htmlFor="supplier-run-vehicle"
+                      className="mb-2 block text-sm font-bold text-slate-700"
+                    >
+                      What Truck is going South?
+                    </label>
+
+                    <select
+                      id="supplier-run-vehicle"
+                      value={vehicleId}
+                      onChange={(event) => {
+                        setVehicleId(event.target.value);
+                        clearError();
+                      }}
+                      disabled={
+                        isSubmitting || safeVehicleOptions.length === 0
+                      }
+                      className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+                    >
+                      <option value="">
+                        {safeVehicleOptions.length > 0
+                          ? "Select a truck..."
+                          : "No vehicles saved yet"}
                       </option>
-                    ))}
-                  </optgroup>
 
-                  <optgroup label="All Drivers">
-                    {southDrivers
-                      .filter(
-                        (driverOption) =>
-                          !favoriteSouthDrivers.includes(driverOption),
-                      )
-                      .map((driverOption) => (
-                        <option key={driverOption} value={driverOption}>
-                          {driverOption}
+                      {safeVehicleOptions.map((vehicleOption) => (
+                        <option
+                          key={vehicleOption.id}
+                          value={vehicleOption.id}
+                        >
+                          {vehicleOption.title}
+                          {vehicleOption.badge
+                            ? ` (${vehicleOption.badge})`
+                            : ""}
                         </option>
                       ))}
-                  </optgroup>
-                </select>
-              </div>
+                    </select>
 
-              <div className="lg:col-span-2">
-                <label
-                  htmlFor="supplier-run-vehicle"
-                  className="mb-2 block text-sm font-bold text-slate-700"
-                >
-                  What Truck is going South?
-                </label>
-
-                <select
-                  id="supplier-run-vehicle"
-                  value={vehicleId}
-                  onChange={(event) => {
-                    setVehicleId(event.target.value);
-                    clearError();
-                  }}
-                  disabled={isSubmitting || safeVehicleOptions.length === 0}
-                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
-                >
-                  <option value="">
-                    {safeVehicleOptions.length > 0
-                      ? "Select a truck..."
-                      : "No vehicles saved yet"}
-                  </option>
-
-                  {safeVehicleOptions.map((vehicleOption) => (
-                    <option
-                      key={vehicleOption.id}
-                      value={vehicleOption.id}
-                    >
-                      {vehicleOption.title}
-                      {vehicleOption.badge
-                        ? ` (${vehicleOption.badge})`
-                        : ""}
-                    </option>
-                  ))}
-                </select>
-
-                <p className="mt-2 text-sm font-semibold text-slate-500">
-                  This ties the South PO to the truck for location and ETA
-                  later.
-                </p>
-              </div>
+                    <p className="mt-2 text-sm font-semibold text-slate-500">
+                      This ties the South PO to the truck for location and ETA
+                      later.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <div className="lg:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-sm font-black text-amber-900">
+                    Dispatch will assign the driver and truck.
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-amber-800">
+                    Submit the PO request now, and it will land in Needs
+                    Dispatch.
+                  </p>
+                </div>
+              )}
 
               <div className="lg:col-span-2">
                 <label

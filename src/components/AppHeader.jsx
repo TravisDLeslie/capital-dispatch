@@ -45,6 +45,11 @@ const navigationItems = [
   },
   {
     group: "South",
+    id: "supplier-runs-dispatch",
+    label: "Needs Dispatch",
+  },
+  {
+    group: "South",
     id: "supplier-runs-check",
     label: "View POs To Pick Up",
   },

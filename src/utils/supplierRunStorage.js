@@ -162,6 +162,37 @@ export async function updateSupplierRunItems(
   return updatedSupplierRuns;
 }
 
+export async function updateSupplierRun(
+  supplierRunId,
+  supplierRunUpdates,
+) {
+  const currentSupplierRuns = getLocalSupplierRuns();
+  const updatedAt = new Date().toISOString();
+  const updates = {
+    ...supplierRunUpdates,
+    updatedAt,
+  };
+  const updatedSupplierRuns = currentSupplierRuns.map((supplierRun) =>
+    supplierRun.id === supplierRunId
+      ? {
+          ...supplierRun,
+          ...updates,
+        }
+      : supplierRun,
+  );
+
+  if (db) {
+    await updateDoc(
+      doc(db, SUPPLIER_RUNS_COLLECTION, supplierRunId),
+      updates,
+    );
+  }
+
+  saveLocalSupplierRuns(updatedSupplierRuns);
+
+  return updatedSupplierRuns;
+}
+
 export async function deleteSupplierRun(supplierRunId) {
   const currentSupplierRuns = getLocalSupplierRuns();
 

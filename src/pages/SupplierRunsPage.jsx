@@ -14,7 +14,11 @@ import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
 import SupplierRunForm from "../components/SupplierRunForm";
-import { southVendorRouteOrder } from "../data/options";
+import {
+  favoriteSouthDrivers,
+  southDrivers,
+  southVendorRouteOrder,
+} from "../data/options";
 import {
   formatDateInput,
   getDateInputValue,
@@ -236,9 +240,11 @@ export default function SupplierRunsPage({
   onAddSupplierRun,
   onToggleSupplierRunItem,
   onUpdateSupplierRunItemDescription,
+  onUpdateSupplierRun,
   onDeleteSupplierRun,
   createdBy = {},
   vehicleOptions,
+  canAssignRoute = false,
 }) {
   const safeVehicleOptions = Array.isArray(vehicleOptions)
     ? vehicleOptions
@@ -259,6 +265,8 @@ export default function SupplierRunsPage({
   const [southRouteOrders, setSouthRouteOrders] = useState([]);
   const [draggingStop, setDraggingStop] = useState(null);
   const [routeOrderError, setRouteOrderError] = useState("");
+  const [dispatchDrafts, setDispatchDrafts] = useState({});
+  const [savingDispatchRunId, setSavingDispatchRunId] = useState("");
 
   useEffect(() => {
     if (!successMessage) {
@@ -295,9 +303,13 @@ export default function SupplierRunsPage({
     await onAddSupplierRun(supplierRun);
 
     setSuccessMessage(
-      `PO ${supplierRun.poNumber} was scheduled for ${formatDateInput(
-        supplierRun.scheduledDate,
-      )} and sent to ${supplierRun.driver}'s South list.`,
+      supplierRun.dispatchStatus === "needsDispatch"
+        ? `PO ${supplierRun.poNumber} was scheduled for ${formatDateInput(
+            supplierRun.scheduledDate,
+          )} and sent to Needs Dispatch.`
+        : `PO ${supplierRun.poNumber} was scheduled for ${formatDateInput(
+            supplierRun.scheduledDate,
+          )} and sent to ${supplierRun.driver}'s South list.`,
     );
   }
 
@@ -497,6 +509,75 @@ export default function SupplierRunsPage({
     });
   }
 
+  function getDispatchDraft(supplierRun) {
+    return {
+      driver: supplierRun.driver || "",
+      vehicleId: supplierRun.vehicleId || "",
+      ...(dispatchDrafts[supplierRun.id] || {}),
+    };
+  }
+
+  function updateDispatchDraft(supplierRunId, field, value) {
+    setDispatchDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [supplierRunId]: {
+        ...(currentDrafts[supplierRunId] || {}),
+        [field]: value,
+      },
+    }));
+    setRouteOrderError("");
+  }
+
+  async function assignSupplierRun(supplierRun) {
+    const draft = getDispatchDraft(supplierRun);
+    const selectedVehicle = safeVehicleOptions.find(
+      (vehicleOption) => vehicleOption.id === draft.vehicleId,
+    );
+
+    if (!southDrivers.includes(draft.driver)) {
+      setRouteOrderError(`Select a driver for PO ${supplierRun.poNumber}.`);
+      return;
+    }
+
+    if (safeVehicleOptions.length > 0 && !selectedVehicle) {
+      setRouteOrderError(`Select a truck for PO ${supplierRun.poNumber}.`);
+      return;
+    }
+
+    setSavingDispatchRunId(supplierRun.id);
+    setRouteOrderError("");
+
+    try {
+      const updatedSupplierRuns = await onUpdateSupplierRun(
+        supplierRun.id,
+        {
+          driver: draft.driver,
+          vehicleId: selectedVehicle?.id || "",
+          vehicleTitle: selectedVehicle?.title || "",
+          vehicleBadge: selectedVehicle?.badge || "",
+          dispatchStatus: "assigned",
+        },
+      );
+
+      setDispatchDrafts((currentDrafts) => {
+        const nextDrafts = { ...currentDrafts };
+        delete nextDrafts[supplierRun.id];
+        return nextDrafts;
+      });
+
+      if (Array.isArray(updatedSupplierRuns)) {
+        setSuccessMessage(
+          `PO ${supplierRun.poNumber} was assigned to ${draft.driver}.`,
+        );
+      }
+    } catch (assignError) {
+      console.error("Unable to assign South PO:", assignError);
+      setRouteOrderError("Unable to assign that PO. Check Firebase rules.");
+    } finally {
+      setSavingDispatchRunId("");
+    }
+  }
+
   function changeCalendarMonth(offset) {
     setCalendarMonth(
       (currentMonth) =>
@@ -607,6 +688,12 @@ export default function SupplierRunsPage({
   );
   const historyRunGroups =
     groupRunsByDriverAndVendor(historyRuns);
+  const dispatchRuns = supplierRuns.filter(
+    (supplierRun) =>
+      supplierRun.status !== "complete" &&
+      (supplierRun.dispatchStatus === "needsDispatch" ||
+        !supplierRun.driver),
+  );
 
   return (
     <PageContainer>
@@ -618,6 +705,8 @@ export default function SupplierRunsPage({
         <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
           {mode === "history"
             ? "History"
+            : mode === "dispatch"
+              ? "Needs Dispatch"
             : mode === "check"
               ? "Check South POs"
               : "Add South POs"}
@@ -655,9 +744,11 @@ export default function SupplierRunsPage({
         <p className="mt-2 text-slate-500">
           {mode === "history"
             ? "Older completed South pickups stay here so the daily driver board stays focused."
+            : mode === "dispatch"
+              ? "Assign the driver and truck before the PO reaches the driver pickup board."
             : mode === "check"
               ? "Drivers can check off scheduled South pickup items as they load them from each supplier."
-              : "Dispatch can add South POs before the driver leaves, while they are on the road, or schedule them ahead."}
+              : "Add South PO requests before the driver leaves, while they are on the road, or schedule them ahead. Dispatch assigns driver and truck next."}
         </p>
       </div>
 
@@ -674,7 +765,176 @@ export default function SupplierRunsPage({
           onSubmit={handleSubmit}
           createdBy={createdBy}
           vehicleOptions={safeVehicleOptions}
+          canAssignRoute={canAssignRoute}
         />
+      ) : mode === "dispatch" ? (
+        <section>
+          <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+              Waiting For Assignment
+            </p>
+            <p className="mt-1 text-3xl font-black text-slate-900">
+              {dispatchRuns.length}
+            </p>
+          </div>
+
+          {routeOrderError ? (
+            <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+              {routeOrderError}
+            </div>
+          ) : null}
+
+          {dispatchRuns.length === 0 ? (
+            <EmptyState
+              title="No South POs need dispatch"
+              description="Sales-created PO requests will appear here until dispatch assigns a driver and truck."
+            />
+          ) : (
+            <div className="space-y-4">
+              {dispatchRuns.map((supplierRun) => {
+                const draft = getDispatchDraft(supplierRun);
+                const itemCount = Array.isArray(supplierRun.items)
+                  ? supplierRun.items.length
+                  : 0;
+
+                return (
+                  <article
+                    key={supplierRun.id}
+                    className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                          South Request
+                        </p>
+                        <h3 className="mt-1 text-2xl font-black text-slate-950">
+                          PO {supplierRun.poNumber}
+                        </h3>
+                        <p className="mt-1 text-sm font-bold text-slate-500">
+                          {supplierRun.vendor || "Unknown Supplier"} •{" "}
+                          {formatDateInput(
+                            getSupplierRunDateKey(supplierRun),
+                          )}{" "}
+                          • {itemCount} {itemCount === 1 ? "item" : "items"}
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.12em]">
+                          {supplierRun.orderedBy ? (
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                              Ordered by {supplierRun.orderedBy}
+                            </span>
+                          ) : null}
+                          {supplierRun.createdByName ||
+                          supplierRun.createdByEmail ? (
+                            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                              Created by{" "}
+                              {supplierRun.createdByName ||
+                                supplierRun.createdByEmail}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-[180px_180px_auto] lg:min-w-[520px]">
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                            Driver
+                          </span>
+                          <select
+                            value={draft.driver}
+                            onChange={(event) =>
+                              updateDispatchDraft(
+                                supplierRun.id,
+                                "driver",
+                                event.target.value,
+                              )
+                            }
+                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                          >
+                            <option value="">Select...</option>
+                            <optgroup label="Favorites">
+                              {favoriteSouthDrivers.map((driverOption) => (
+                                <option
+                                  key={driverOption}
+                                  value={driverOption}
+                                >
+                                  {driverOption}
+                                </option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="All Drivers">
+                              {southDrivers
+                                .filter(
+                                  (driverOption) =>
+                                    !favoriteSouthDrivers.includes(
+                                      driverOption,
+                                    ),
+                                )
+                                .map((driverOption) => (
+                                  <option
+                                    key={driverOption}
+                                    value={driverOption}
+                                  >
+                                    {driverOption}
+                                  </option>
+                                ))}
+                            </optgroup>
+                          </select>
+                        </label>
+
+                        <label className="block">
+                          <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                            Truck
+                          </span>
+                          <select
+                            value={draft.vehicleId}
+                            onChange={(event) =>
+                              updateDispatchDraft(
+                                supplierRun.id,
+                                "vehicleId",
+                                event.target.value,
+                              )
+                            }
+                            disabled={safeVehicleOptions.length === 0}
+                            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+                          >
+                            <option value="">
+                              {safeVehicleOptions.length > 0
+                                ? "Select..."
+                                : "No vehicles"}
+                            </option>
+                            {safeVehicleOptions.map((vehicleOption) => (
+                              <option
+                                key={vehicleOption.id}
+                                value={vehicleOption.id}
+                              >
+                                {vehicleOption.title}
+                                {vehicleOption.badge
+                                  ? ` (${vehicleOption.badge})`
+                                  : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => assignSupplierRun(supplierRun)}
+                          disabled={savingDispatchRunId === supplierRun.id}
+                          className="self-end rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        >
+                          {savingDispatchRunId === supplierRun.id
+                            ? "Assigning..."
+                            : "Assign"}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
       ) : mode === "history" ? (
         <section>
           <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">

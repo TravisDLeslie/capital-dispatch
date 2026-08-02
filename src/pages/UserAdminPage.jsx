@@ -7,7 +7,7 @@ const roles = [
   { value: "pending", label: "Pending" },
   { value: "driver", label: "Driver" },
   { value: "receiving", label: "Receiving" },
-  { value: "south", label: "South" },
+  { value: "south", label: "Dispatch" },
   { value: "delivery", label: "Delivery" },
   { value: "sales", label: "Sales" },
   { value: "admin", label: "Admin" },
@@ -34,6 +34,7 @@ const permissionGroups = [
     title: "South",
     permissions: [
       { id: "supplier-runs-add", label: "Add POs" },
+      { id: "supplier-runs-dispatch", label: "Needs Dispatch" },
       { id: "supplier-runs-check", label: "View POs to Pick Up" },
       { id: "supplier-runs-history", label: "South History" },
     ],
@@ -72,9 +73,19 @@ const rolePermissionPresets = {
   pending: [],
   driver: ["driver-dashboard", "supplier-runs-check", "deliveries-queue"],
   receiving: ["check-in", "today", "search"],
-  south: ["supplier-runs-check", "supplier-runs-history"],
+  south: [
+    "supplier-runs-add",
+    "supplier-runs-dispatch",
+    "supplier-runs-check",
+    "supplier-runs-history",
+  ],
   delivery: ["deliveries-queue", "deliveries-history"],
-  sales: ["customers-add", "customers-view", "sales-converter"],
+  sales: [
+    "supplier-runs-add",
+    "customers-add",
+    "customers-view",
+    "sales-converter",
+  ],
   admin: allPermissionIds.filter(
     (permissionId) => permissionId !== "user-admin",
   ),

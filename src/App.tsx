@@ -29,6 +29,7 @@ import {
   addSupplierRun,
   deleteSupplierRun,
   subscribeToSupplierRuns,
+  updateSupplierRun,
   updateSupplierRunItems,
 } from "./utils/supplierRunStorage";
 import {
@@ -114,6 +115,7 @@ type SupplierRun = {
   vehicleId?: string;
   vehicleTitle?: string;
   vehicleBadge?: string;
+  dispatchStatus?: string;
   items?: SupplierRunItem[];
   status?: string;
   [key: string]: unknown;
@@ -256,6 +258,7 @@ function getAllowedPageIdsForRole(role: string) {
       "today",
       "search",
       "supplier-runs-add",
+      "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-history",
       "deliveries-add",
@@ -278,6 +281,7 @@ function getAllowedPageIdsForRole(role: string) {
       "today",
       "search",
       "supplier-runs-add",
+      "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-history",
       "deliveries-add",
@@ -296,7 +300,12 @@ function getAllowedPageIdsForRole(role: string) {
   }
 
   if (role === "south") {
-    return ["supplier-runs-check", "supplier-runs-history"];
+    return [
+      "supplier-runs-add",
+      "supplier-runs-dispatch",
+      "supplier-runs-check",
+      "supplier-runs-history",
+    ];
   }
 
   if (role === "delivery") {
@@ -304,7 +313,12 @@ function getAllowedPageIdsForRole(role: string) {
   }
 
   if (role === "sales") {
-    return ["customers-add", "customers-view", "sales-converter"];
+    return [
+      "supplier-runs-add",
+      "customers-add",
+      "customers-view",
+      "sales-converter",
+    ];
   }
 
   if (role === "driver") {
@@ -428,9 +442,13 @@ export default function App() {
   const canReadSouth = allowedPageIds.some((pageId) =>
     [
       "supplier-runs-add",
+      "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-history",
     ].includes(pageId),
+  );
+  const canAssignSouthRoutes = allowedPageIds.includes(
+    "supplier-runs-dispatch",
   );
   const canReadDeliveries = allowedPageIds.some((pageId) =>
     [
@@ -450,6 +468,11 @@ export default function App() {
           (supplierRun) => supplierRun.driver === driverName,
         )
       : supplierRuns;
+  const assignedVisibleSupplierRuns = visibleSupplierRuns.filter(
+    (supplierRun) =>
+      supplierRun.dispatchStatus !== "needsDispatch" &&
+      Boolean(supplierRun.driver),
+  );
   const visibleDeliveries =
     userRole === "driver"
       ? deliveries.filter((delivery) => delivery.driver === driverName)
@@ -589,7 +612,7 @@ export default function App() {
   }, [isSuperAdmin]);
 
   useEffect(() => {
-    if (!isApproved || !canReadSouth) {
+    if (!isApproved || !canAssignSouthRoutes) {
       setVehicleSettings([]);
       return;
     }
@@ -604,7 +627,7 @@ export default function App() {
         setSyncError(getFirebaseErrorMessage(error));
       },
     );
-  }, [canReadSouth, isApproved]);
+  }, [canAssignSouthRoutes, isApproved]);
 
   useEffect(() => {
     if (
@@ -958,6 +981,21 @@ export default function App() {
     setSyncError("");
   }
 
+  async function handleUpdateSupplierRun(
+    supplierRunId: string,
+    supplierRunUpdates: Partial<SupplierRun>,
+  ) {
+    const updatedSupplierRuns = await updateSupplierRun(
+      supplierRunId,
+      supplierRunUpdates,
+    );
+
+    setSupplierRuns(updatedSupplierRuns);
+    setSyncError("");
+
+    return updatedSupplierRuns;
+  }
+
   async function handleAddDelivery(delivery: Delivery) {
     const updatedDeliveries = await addDelivery(delivery);
 
@@ -1209,7 +1247,28 @@ export default function App() {
             supplierRuns={supplierRuns}
             createdBy={currentUserCreator}
             vehicleOptions={southVehicleOptions}
+            canAssignRoute={false}
             onAddSupplierRun={handleAddSupplierRun}
+            onUpdateSupplierRun={handleUpdateSupplierRun}
+            onToggleSupplierRunItem={
+              handleToggleSupplierRunItem
+            }
+            onUpdateSupplierRunItemDescription={
+              handleUpdateSupplierRunItemDescription
+            }
+            onDeleteSupplierRun={handleDeleteSupplierRun}
+          />
+        );
+
+      case "supplier-runs-dispatch":
+        return (
+          <SupplierRunsPage
+            mode="dispatch"
+            supplierRuns={supplierRuns}
+            vehicleOptions={southVehicleOptions}
+            canAssignRoute
+            onAddSupplierRun={handleAddSupplierRun}
+            onUpdateSupplierRun={handleUpdateSupplierRun}
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
@@ -1224,9 +1283,10 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="check"
-            supplierRuns={visibleSupplierRuns}
+            supplierRuns={assignedVisibleSupplierRuns}
             vehicleOptions={southVehicleOptions}
             onAddSupplierRun={handleAddSupplierRun}
+            onUpdateSupplierRun={handleUpdateSupplierRun}
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
@@ -1241,9 +1301,10 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="history"
-            supplierRuns={visibleSupplierRuns}
+            supplierRuns={assignedVisibleSupplierRuns}
             vehicleOptions={southVehicleOptions}
             onAddSupplierRun={handleAddSupplierRun}
+            onUpdateSupplierRun={handleUpdateSupplierRun}
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
