@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   ChevronDown,
   LogOut,
+  LayoutDashboard,
   Package,
   PackageCheck,
   Plus,
@@ -12,6 +13,11 @@ import {
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 
 const navigationItems = [
+  {
+    group: "Dashboard",
+    id: "dashboard",
+    label: "Fleet Dashboard",
+  },
   {
     group: "Receiving",
     id: "check-in",
@@ -126,6 +132,10 @@ function getNavGroupIcon(group) {
     return Truck;
   }
 
+  if (group === "Dashboard") {
+    return LayoutDashboard;
+  }
+
   if (group === "Deliveries") {
     return PackageCheck;
   }
@@ -152,6 +162,7 @@ export default function AppHeader({
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openNavGroups, setOpenNavGroups] = useState({
+    Dashboard: true,
     Receiving: true,
     South: false,
     Deliveries: false,
@@ -177,6 +188,7 @@ export default function AppHeader({
     }
 
     setOpenNavGroups({
+      Dashboard: false,
       Receiving: false,
       South: false,
       Deliveries: false,
@@ -196,6 +208,7 @@ export default function AppHeader({
       const nextIsOpen = !currentOpenNavGroups[group];
 
       return {
+        Dashboard: false,
         Receiving: false,
         South: false,
         Deliveries: false,
@@ -207,7 +220,7 @@ export default function AppHeader({
   }
 
   function renderNavigation(isMobile = false) {
-    return ["Receiving", "South", "Deliveries", "Sales", "Admin"].map((group) => {
+    return ["Dashboard", "Receiving", "South", "Deliveries", "Sales", "Admin"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds || allowedPageIds.includes(item.id);

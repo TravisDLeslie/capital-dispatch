@@ -16,6 +16,12 @@ const roles = [
 
 const permissionGroups = [
   {
+    title: "Dashboard",
+    permissions: [
+      { id: "dashboard", label: "Fleet Dashboard" },
+    ],
+  },
+  {
     title: "Receiving",
     permissions: [
       { id: "check-in", label: "Check In" },

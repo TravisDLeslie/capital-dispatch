@@ -4,6 +4,7 @@ import AppHeader from "./components/AppHeader";
 import BounciePage from "./pages/BounciePage";
 import CheckInPage from "./pages/CheckInPage";
 import CustomersPage from "./pages/CustomersPage";
+import DashboardPage from "./pages/DashboardPage";
 import DeliveryHistoryPage from "./pages/DeliveryHistoryPage";
 import DeliveryQueuePage from "./pages/DeliveryQueuePage";
 import DeliveriesPage from "./pages/DeliveriesPage";
@@ -235,6 +236,7 @@ function getUserRole(
 function getAllowedPageIdsForRole(role: string) {
   if (role === "superAdmin") {
     return [
+      "dashboard",
       "check-in",
       "today",
       "search",
@@ -255,6 +257,7 @@ function getAllowedPageIdsForRole(role: string) {
 
   if (role === "admin") {
     return [
+      "dashboard",
       "check-in",
       "today",
       "search",
@@ -1093,6 +1096,9 @@ export default function App() {
     }
 
     switch (currentPage) {
+      case "dashboard":
+        return <DashboardPage />;
+
       case "user-admin":
         return (
           <UserAdminPage

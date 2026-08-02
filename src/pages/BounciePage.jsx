@@ -15,162 +15,14 @@ import {
   saveBouncieVehicleSetting,
   subscribeToBouncieVehicleSettings,
 } from "../utils/bouncieVehicleStorage";
-
-function formatVehicleValue(value) {
-  if (value === undefined || value === null) {
-    return "";
-  }
-
-  if (["string", "number", "boolean"].includes(typeof value)) {
-    return String(value).trim();
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(formatVehicleValue).filter(Boolean).join(", ");
-  }
-
-  if (typeof value === "object") {
-    for (const key of [
-      "name",
-      "displayName",
-      "label",
-      "value",
-      "text",
-      "description",
-      "number",
-    ]) {
-      const formattedValue = formatVehicleValue(value[key]);
-
-      if (formattedValue) {
-        return formattedValue;
-      }
-    }
-  }
-
-  return "";
-}
-
-function getFirstValue(vehicle, paths) {
-  for (const path of paths) {
-    const value = path
-      .split(".")
-      .reduce(
-        (currentValue, key) =>
-          currentValue && currentValue[key] !== undefined
-            ? currentValue[key]
-            : undefined,
-        vehicle,
-      );
-    const formattedValue = formatVehicleValue(value);
-
-    if (formattedValue) {
-      return formattedValue;
-    }
-  }
-
-  return "";
-}
-
-function getVehicleYearMakeModel(vehicle) {
-  return [
-    getFirstValue(vehicle, [
-      "year",
-      "modelYear",
-      "vehicleYear",
-      "standardYear",
-      "vehicle.year",
-      "vehicle.modelYear",
-      "details.year",
-      "specs.year",
-      "info.year",
-    ]),
-    getFirstValue(vehicle, [
-      "make",
-      "vehicleMake",
-      "standardMake",
-      "vehicle.make",
-      "details.make",
-      "specs.make",
-      "info.make",
-    ]),
-    getFirstValue(vehicle, [
-      "model",
-      "vehicleModel",
-      "standardModel",
-      "vehicle.model",
-      "details.model",
-      "specs.model",
-      "info.model",
-    ]),
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function getVehicleName(vehicle) {
-  return (
-    getFirstValue(vehicle, ["nickname", "name", "displayName", "label"]) ||
-    getVehicleYearMakeModel(vehicle) ||
-    getFirstValue(vehicle, ["vin", "vehicle.vin"]) ||
-    "Bouncie Vehicle"
-  );
-}
-
-function getVehicleDetail(vehicle) {
-  const vin = getFirstValue(vehicle, ["vin", "vehicle.vin"]);
-  const imei = getFirstValue(vehicle, ["imei", "device.imei"]);
-  const plate = getFirstValue(vehicle, [
-    "licensePlate",
-    "plate",
-    "vehicle.licensePlate",
-    "vehicle.plate",
-  ]);
-
-  return [
-    vin ? `VIN ${vin}` : "",
-    imei ? `IMEI ${imei}` : "",
-    plate ? `Plate ${plate}` : "",
-  ]
-    .filter(Boolean)
-    .join(" • ");
-}
-
-function getVehicleKey(vehicle, index) {
-  const rawKey =
-    getFirstValue(vehicle, [
-      "id",
-      "vehicleId",
-      "vin",
-      "imei",
-      "device.imei",
-      "vehicle.vin",
-    ]) || `vehicle-${index}`;
-
-  return String(rawKey).replace(/[^a-zA-Z0-9_-]/g, "-");
-}
-
-function getVehicleBadgeText(title) {
-  const cleanTitle = String(title || "").trim();
-
-  if (!cleanTitle) {
-    return "V";
-  }
-
-  const words = cleanTitle
-    .split(/\s+/)
-    .map((word) => word.replace(/[^a-zA-Z0-9]/g, ""))
-    .filter(Boolean);
-
-  if (words.length === 1) {
-    return words[0].slice(0, 2).toUpperCase();
-  }
-
-  return words
-    .slice(0, 2)
-    .map((word) => word.slice(0, 1))
-    .join("")
-    .toUpperCase();
-}
+import {
+  getFirstVehicleValue,
+  getVehicleBadgeText,
+  getVehicleDetail,
+  getVehicleKey,
+  getVehicleName,
+  getVehicleYearMakeModel,
+} from "../utils/bouncieVehicleFormatters";
 
 export default function BounciePage() {
   const [status, setStatus] = useState(null);
@@ -266,8 +118,8 @@ export default function BounciePage() {
         title,
         bouncieName: getVehicleName(vehicle),
         yearMakeModel: getVehicleYearMakeModel(vehicle),
-        vin: getFirstValue(vehicle, ["vin", "vehicle.vin"]),
-        imei: getFirstValue(vehicle, ["imei", "device.imei"]),
+        vin: getFirstVehicleValue(vehicle, ["vin", "vehicle.vin"]),
+        imei: getFirstVehicleValue(vehicle, ["imei", "device.imei"]),
       });
 
       setVehicleSettings(updatedSettings);
