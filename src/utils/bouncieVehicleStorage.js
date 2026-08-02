@@ -82,6 +82,7 @@ export async function saveBouncieVehicleSetting(vehicleSetting) {
   const setting = {
     ...vehicleSetting,
     title: String(vehicleSetting.title || "").trim(),
+    badge: String(vehicleSetting.badge || "").trim(),
     updatedAt,
   };
   const updatedSettings = sortVehicleSettings([

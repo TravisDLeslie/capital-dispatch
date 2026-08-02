@@ -103,6 +103,31 @@ export function getVehicleName(vehicle) {
   );
 }
 
+export function getVehicleDefaultAppTitle(vehicle) {
+  const vin = getFirstVehicleValue(vehicle, ["vin", "vehicle.vin"]);
+  const vinLastSix = vin.slice(-6);
+
+  if (vinLastSix === "203496") {
+    return "19Int";
+  }
+
+  if (vinLastSix === "141266") {
+    return "16Int";
+  }
+
+  const yearMakeModel = getVehicleYearMakeModel(vehicle).toLowerCase();
+  const bouncieName = getVehicleName(vehicle).toLowerCase();
+
+  if (
+    yearMakeModel.includes("ram") ||
+    bouncieName.includes("ram")
+  ) {
+    return "R45";
+  }
+
+  return "";
+}
+
 export function getVehicleDetail(vehicle) {
   const vin = getFirstVehicleValue(vehicle, ["vin", "vehicle.vin"]);
   const imei = getFirstVehicleValue(vehicle, ["imei", "device.imei"]);
@@ -147,6 +172,10 @@ export function getVehicleBadgeText(title) {
     .split(/\s+/)
     .map((word) => word.replace(/[^a-zA-Z0-9]/g, ""))
     .filter(Boolean);
+
+  if (words.length === 1 && /\d/.test(words[0]) && words[0].length <= 5) {
+    return words[0].toUpperCase();
+  }
 
   if (words.length === 1) {
     return words[0].slice(0, 2).toUpperCase();

@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import PageContainer from "../components/PageContainer";
 import {
   getVehicleCoordinates,
+  getVehicleDefaultAppTitle,
   getVehicleKey,
   getVehicleLastUpdated,
   getVehicleLocationLabel,
@@ -80,10 +81,19 @@ export default function DashboardPage() {
     const vehicleId = getVehicleKey(vehicle, index);
     const savedSetting = vehicleSettingsById[vehicleId];
     const bouncieName = getVehicleName(vehicle);
-    return savedSetting?.title || bouncieName;
+    return (
+      savedSetting?.title ||
+      getVehicleDefaultAppTitle(vehicle) ||
+      bouncieName
+    );
   });
   const dashboardVehicleBadges = getUniqueVehicleBadgeTexts(
-    dashboardVehicleTitles,
+    vehicles.map((vehicle, index) => {
+      const vehicleId = getVehicleKey(vehicle, index);
+      const savedSetting = vehicleSettingsById[vehicleId];
+
+      return savedSetting?.badge || dashboardVehicleTitles[index];
+    }),
   );
   const dashboardVehicles = vehicles.map((vehicle, index) => {
     const vehicleId = getVehicleKey(vehicle, index);

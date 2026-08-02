@@ -17,6 +17,7 @@ import {
 } from "../utils/bouncieVehicleStorage";
 import {
   getFirstVehicleValue,
+  getVehicleDefaultAppTitle,
   getVehicleDetail,
   getVehicleKey,
   getVehicleName,
@@ -46,6 +47,7 @@ export default function BounciePage() {
   const [vehicleSettings, setVehicleSettings] = useState([]);
   const [editingVehicleId, setEditingVehicleId] = useState("");
   const [editingTitle, setEditingTitle] = useState("");
+  const [editingBadge, setEditingBadge] = useState("");
   const [savingVehicleId, setSavingVehicleId] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -62,9 +64,19 @@ export default function BounciePage() {
     const savedSetting = vehicleSettingsById[vehicleId];
     const bouncieVehicleName = getVehicleName(vehicle);
 
-    return savedSetting?.title || bouncieVehicleName;
+    return (
+      savedSetting?.title ||
+      getVehicleDefaultAppTitle(vehicle) ||
+      bouncieVehicleName
+    );
   });
-  const vehicleBadges = getUniqueVehicleBadgeTexts(vehicleTitles);
+  const vehicleBadgeSources = vehicles.map((vehicle, index) => {
+    const vehicleId = getVehicleKey(vehicle, index);
+    const savedSetting = vehicleSettingsById[vehicleId];
+
+    return savedSetting?.badge || vehicleTitles[index];
+  });
+  const vehicleBadges = getUniqueVehicleBadgeTexts(vehicleBadgeSources);
 
   async function loadBouncie() {
     setIsLoading(true);
@@ -127,13 +139,17 @@ export default function BounciePage() {
   );
 
   function startEditingVehicle(vehicle, vehicleId, currentTitle) {
+    const savedSetting = vehicleSettingsById[vehicleId];
+
     setEditingVehicleId(vehicleId);
     setEditingTitle(currentTitle || getVehicleName(vehicle));
+    setEditingBadge(savedSetting?.badge || "");
   }
 
   function cancelEditingVehicle() {
     setEditingVehicleId("");
     setEditingTitle("");
+    setEditingBadge("");
   }
 
   async function handleSaveVehicleTitle(vehicle, vehicleId) {
@@ -149,6 +165,7 @@ export default function BounciePage() {
       const updatedSettings = await saveBouncieVehicleSetting({
         id: vehicleId,
         title,
+        badge: editingBadge.trim(),
         bouncieName: getVehicleName(vehicle),
         yearMakeModel: getVehicleYearMakeModel(vehicle),
         vin: getFirstVehicleValue(vehicle, ["vin", "vehicle.vin"]),
@@ -304,16 +321,38 @@ export default function BounciePage() {
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           {isEditingVehicle ? (
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                              <input
-                                type="text"
-                                value={editingTitle}
-                                onChange={(event) =>
-                                  setEditingTitle(event.target.value)
-                                }
-                                className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                                placeholder="Truck 12"
-                              />
+                            <div className="flex flex-col gap-2">
+                              <div className="grid gap-2 sm:grid-cols-[1fr_120px]">
+                                <label className="block">
+                                  <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                                    Vehicle Name
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={editingTitle}
+                                    onChange={(event) =>
+                                      setEditingTitle(event.target.value)
+                                    }
+                                    className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                                    placeholder="Truck 12"
+                                  />
+                                </label>
+                                <label className="block">
+                                  <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                                    Map Badge
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={editingBadge}
+                                    onChange={(event) =>
+                                      setEditingBadge(event.target.value)
+                                    }
+                                    className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                                    maxLength={5}
+                                    placeholder="R45"
+                                  />
+                                </label>
+                              </div>
                               <div className="flex gap-2">
                                 <button
                                   type="button"
