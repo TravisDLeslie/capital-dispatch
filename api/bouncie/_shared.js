@@ -7,9 +7,7 @@ export function getBouncieConfig() {
     clientId: process.env.BOUNCIE_CLIENT_ID || "",
     clientSecret: process.env.BOUNCIE_CLIENT_SECRET || "",
     redirectUri: process.env.BOUNCIE_REDIRECT_URI || "",
-    authorizationCode: process.env.BOUNCIE_AUTHORIZATION_CODE || "",
     accessToken: process.env.BOUNCIE_ACCESS_TOKEN || "",
-    refreshToken: process.env.BOUNCIE_REFRESH_TOKEN || "",
     webhookKey: process.env.BOUNCIE_WEBHOOK_KEY || "",
   };
 }
@@ -72,48 +70,11 @@ export async function getBouncieAccessToken() {
     return { accessToken: config.accessToken };
   }
 
-  try {
-    if (config.authorizationCode) {
-      const tokenData = await exchangeBouncieToken({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        grant_type: "authorization_code",
-        code: config.authorizationCode,
-        redirect_uri: config.redirectUri,
-      });
-
-      return {
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token,
-      };
-    }
-
-    if (config.refreshToken) {
-      const tokenData = await exchangeBouncieToken({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        grant_type: "refresh_token",
-        refresh_token: config.refreshToken,
-      });
-
-      return {
-        accessToken: tokenData.access_token,
-        refreshToken: tokenData.refresh_token,
-        rotatedRefreshToken: true,
-      };
-    }
-
-    return {
-      error:
-        "Bouncie is not connected yet. Connect once and add BOUNCIE_AUTHORIZATION_CODE in Vercel.",
-      status: 409,
-    };
-  } catch (error) {
-    return {
-      error: error.message || "Unable to get Bouncie access token.",
-      status: 502,
-    };
-  }
+  return {
+    error:
+      "Bouncie is not connected yet. Connect once and add BOUNCIE_ACCESS_TOKEN in Vercel.",
+    status: 409,
+  };
 }
 
 export async function callBouncieApi(path) {

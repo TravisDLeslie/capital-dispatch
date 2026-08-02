@@ -9,9 +9,8 @@ export default async function handler(_request, response) {
       config.clientId && config.clientSecret && config.redirectUri,
     ),
     connected: Boolean(tokenResult.accessToken),
-    needsAuthorizationCode: !config.authorizationCode && !config.accessToken,
+    needsAccessToken: !config.accessToken,
     hasWebhookKey: Boolean(config.webhookKey),
     error: tokenResult.error || "",
-    rotatedRefreshToken: Boolean(tokenResult.rotatedRefreshToken),
   });
 }

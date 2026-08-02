@@ -92,16 +92,23 @@ export default async function handler(request, response) {
                 )}</p>`
               : `<p>Bouncie returned an authorization code and the token exchange worked.</p>`
           }
-          <p>Add this value in Vercel as <strong>BOUNCIE_AUTHORIZATION_CODE</strong>, then redeploy:</p>
+          <p>Bouncie returned this authorization code:</p>
           <pre>${escapeHtml(code)}</pre>
           ${
+            tokenData?.access_token
+              ? `<p>Add this value in Vercel as <strong>BOUNCIE_ACCESS_TOKEN</strong>, then redeploy:</p><pre>${escapeHtml(
+                  tokenData.access_token,
+                )}</pre>`
+              : ""
+          }
+          ${
             tokenData?.refresh_token
-              ? `<p>Optional one-time refresh token returned by Bouncie. Only use this if you later add token storage:</p><pre>${escapeHtml(
+              ? `<p>Save this refresh token somewhere private for later. Do not add it to the app yet:</p><pre>${escapeHtml(
                   tokenData.refresh_token,
                 )}</pre>`
               : ""
           }
-          <p>You can close this page after saving the authorization code in Vercel.</p>
+          <p>You can close this page after saving the access token in Vercel.</p>
         </main>
       </body>
     </html>`);

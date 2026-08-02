@@ -93,7 +93,7 @@ export default function BounciePage() {
             <p className="mt-1 text-sm font-semibold text-slate-500">
               {status?.connected
                 ? "Vehicle data can be loaded from Bouncie."
-                : "Authorize Bouncie, then save the returned authorization code in Vercel."}
+                : "Authorize Bouncie, then save the returned access token in Vercel."}
             </p>
           </div>
 
@@ -131,11 +131,11 @@ export default function BounciePage() {
           </div>
         ) : null}
 
-        {status?.needsAuthorizationCode ? (
+        {status?.needsAccessToken ? (
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-            After Bouncie redirects back, add the shown code to Vercel as{" "}
+            After Bouncie redirects back, add the shown access token to Vercel as{" "}
             <span className="font-black text-slate-900">
-              BOUNCIE_AUTHORIZATION_CODE
+              BOUNCIE_ACCESS_TOKEN
             </span>
             , then redeploy.
           </div>
