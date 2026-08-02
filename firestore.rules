@@ -119,5 +119,9 @@ service cloud.firestore {
       allow create, delete: if isDelivery();
       allow update: if isDelivery() || isDriverFor(resource.data.driver);
     }
+
+    match /bouncieVehicleSettings/{vehicleSettingId} {
+      allow read, create, update, delete: if isAdmin();
+    }
   }
 }

@@ -3,11 +3,18 @@ import {
   CheckCircle2,
   ExternalLink,
   Hash,
+  Pencil,
   RefreshCw,
+  Save,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import PageContainer from "../components/PageContainer";
+import {
+  saveBouncieVehicleSetting,
+  subscribeToBouncieVehicleSettings,
+} from "../utils/bouncieVehicleStorage";
 
 function formatVehicleValue(value) {
   if (value === undefined || value === null) {
@@ -128,15 +135,60 @@ function getVehicleDetail(vehicle) {
     .join(" • ");
 }
 
-function getVehicleInitial(vehicle) {
-  return getVehicleName(vehicle).slice(0, 1).toUpperCase();
+function getVehicleKey(vehicle, index) {
+  const rawKey =
+    getFirstValue(vehicle, [
+      "id",
+      "vehicleId",
+      "vin",
+      "imei",
+      "device.imei",
+      "vehicle.vin",
+    ]) || `vehicle-${index}`;
+
+  return String(rawKey).replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
+function getVehicleBadgeText(title) {
+  const cleanTitle = String(title || "").trim();
+
+  if (!cleanTitle) {
+    return "V";
+  }
+
+  const words = cleanTitle
+    .split(/\s+/)
+    .map((word) => word.replace(/[^a-zA-Z0-9]/g, ""))
+    .filter(Boolean);
+
+  if (words.length === 1) {
+    return words[0].slice(0, 2).toUpperCase();
+  }
+
+  return words
+    .slice(0, 2)
+    .map((word) => word.slice(0, 1))
+    .join("")
+    .toUpperCase();
 }
 
 export default function BounciePage() {
   const [status, setStatus] = useState(null);
   const [vehicles, setVehicles] = useState([]);
+  const [vehicleSettings, setVehicleSettings] = useState([]);
+  const [editingVehicleId, setEditingVehicleId] = useState("");
+  const [editingTitle, setEditingTitle] = useState("");
+  const [savingVehicleId, setSavingVehicleId] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  const vehicleSettingsById = vehicleSettings.reduce(
+    (settingsById, setting) => ({
+      ...settingsById,
+      [setting.id]: setting,
+    }),
+    {},
+  );
 
   async function loadBouncie() {
     setIsLoading(true);
@@ -174,6 +226,61 @@ export default function BounciePage() {
   useEffect(() => {
     loadBouncie();
   }, []);
+
+  useEffect(
+    () =>
+      subscribeToBouncieVehicleSettings(
+        setVehicleSettings,
+        (settingsError) => {
+          console.error("Unable to sync Bouncie vehicle settings:", settingsError);
+          setError(
+            "Unable to sync vehicle titles. Publish Firestore rules for Bouncie vehicle settings.",
+          );
+        },
+      ),
+    [],
+  );
+
+  function startEditingVehicle(vehicle, vehicleId, currentTitle) {
+    setEditingVehicleId(vehicleId);
+    setEditingTitle(currentTitle || getVehicleName(vehicle));
+  }
+
+  function cancelEditingVehicle() {
+    setEditingVehicleId("");
+    setEditingTitle("");
+  }
+
+  async function handleSaveVehicleTitle(vehicle, vehicleId) {
+    const title = editingTitle.trim();
+
+    if (!title) {
+      return;
+    }
+
+    setSavingVehicleId(vehicleId);
+
+    try {
+      const updatedSettings = await saveBouncieVehicleSetting({
+        id: vehicleId,
+        title,
+        bouncieName: getVehicleName(vehicle),
+        yearMakeModel: getVehicleYearMakeModel(vehicle),
+        vin: getFirstValue(vehicle, ["vin", "vehicle.vin"]),
+        imei: getFirstValue(vehicle, ["imei", "device.imei"]),
+      });
+
+      setVehicleSettings(updatedSettings);
+      cancelEditingVehicle();
+    } catch (saveError) {
+      console.error("Unable to save vehicle title:", saveError);
+      setError(
+        "Unable to save vehicle title. Publish Firestore rules for Bouncie vehicle settings.",
+      );
+    } finally {
+      setSavingVehicleId("");
+    }
+  }
 
   return (
     <PageContainer>
@@ -279,25 +386,100 @@ export default function BounciePage() {
         <div className="grid gap-4 xl:grid-cols-2">
           {vehicles.length > 0 ? (
             vehicles.map((vehicle, index) => {
-              const vehicleName = getVehicleName(vehicle);
+              const vehicleId = getVehicleKey(vehicle, index);
+              const savedSetting = vehicleSettingsById[vehicleId];
+              const bouncieVehicleName = getVehicleName(vehicle);
+              const vehicleName = savedSetting?.title || bouncieVehicleName;
               const yearMakeModel = getVehicleYearMakeModel(vehicle);
               const vehicleDetail = getVehicleDetail(vehicle);
+              const isEditingVehicle = editingVehicleId === vehicleId;
+              const isSavingVehicle = savingVehicleId === vehicleId;
 
               return (
                 <div
-                  key={vehicle?.id || vehicle?.vin || vehicle?.imei || index}
+                  key={vehicleId}
                   className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-start gap-4">
                     <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFF0F2] text-lg font-black text-[#FC2C38]">
-                      {getVehicleInitial(vehicle)}
+                      {getVehicleBadgeText(vehicleName)}
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
-                          <p className="truncate text-xl font-black text-slate-950">
-                            {vehicleName}
-                          </p>
+                          {isEditingVehicle ? (
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <input
+                                type="text"
+                                value={editingTitle}
+                                onChange={(event) =>
+                                  setEditingTitle(event.target.value)
+                                }
+                                className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                                placeholder="Truck 12"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleSaveVehicleTitle(vehicle, vehicleId)
+                                  }
+                                  disabled={isSavingVehicle || !editingTitle.trim()}
+                                  className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 text-sm font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                >
+                                  <Save
+                                    aria-hidden="true"
+                                    className="h-4 w-4"
+                                    strokeWidth={2.5}
+                                  />
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelEditingVehicle}
+                                  className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+                                  aria-label="Cancel title edit"
+                                >
+                                  <X
+                                    aria-hidden="true"
+                                    className="h-4 w-4"
+                                    strokeWidth={2.5}
+                                  />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex min-w-0 items-start gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-xl font-black text-slate-950">
+                                  {vehicleName}
+                                </p>
+                                {savedSetting?.title ? (
+                                  <p className="mt-0.5 truncate text-xs font-bold uppercase tracking-[0.12em] text-slate-400">
+                                    Bouncie: {bouncieVehicleName}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  startEditingVehicle(
+                                    vehicle,
+                                    vehicleId,
+                                    savedSetting?.title,
+                                  )
+                                }
+                                className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-[#FC2C38] hover:text-[#FC2C38]"
+                                aria-label={`Edit ${vehicleName} title`}
+                              >
+                                <Pencil
+                                  aria-hidden="true"
+                                  className="h-4 w-4"
+                                  strokeWidth={2.4}
+                                />
+                              </button>
+                            </div>
+                          )}
                           <p className="mt-1 text-base font-extrabold text-slate-700">
                             {yearMakeModel || "Year make model unavailable"}
                           </p>
