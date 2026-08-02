@@ -75,7 +75,14 @@ const orderedByOptions = [
   "Pete",
 ];
 
-export default function SupplierRunForm({ onSubmit, createdBy }) {
+export default function SupplierRunForm({
+  onSubmit,
+  createdBy,
+  vehicleOptions,
+}) {
+  const safeVehicleOptions = Array.isArray(vehicleOptions)
+    ? vehicleOptions
+    : [];
   const [poNumber, setPoNumber] = useState("");
   const [scheduledDate, setScheduledDate] = useState(
     getDateInputValue(),
@@ -84,9 +91,13 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
   const [vendor, setVendor] = useState("");
   const [supplierAddress, setSupplierAddress] = useState("");
   const [driver, setDriver] = useState("");
+  const [vehicleId, setVehicleId] = useState("");
   const [items, setItems] = useState([createEmptyPickupItem()]);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const selectedVehicle = safeVehicleOptions.find(
+    (vehicleOption) => vehicleOption.id === vehicleId,
+  );
 
   function clearError() {
     setError("");
@@ -262,6 +273,7 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
     setVendor("");
     setSupplierAddress("");
     setDriver("");
+    setVehicleId("");
     setItems([createEmptyPickupItem()]);
     setError("");
   }
@@ -293,6 +305,11 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
 
     if (!southDrivers.includes(driver)) {
       setError("Select the driver for this South PO.");
+      return;
+    }
+
+    if (safeVehicleOptions.length > 0 && !selectedVehicle) {
+      setError("Select what truck is going South.");
       return;
     }
 
@@ -334,6 +351,9 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
       vendor: matchedVendor,
       supplierAddress: supplierAddress.trim(),
       driver,
+      vehicleId: selectedVehicle?.id || "",
+      vehicleTitle: selectedVehicle?.title || "",
+      vehicleBadge: selectedVehicle?.badge || "",
       items: pickupItems,
       status: "open",
       createdByName: createdBy?.name || "",
@@ -577,6 +597,49 @@ export default function SupplierRunForm({ onSubmit, createdBy }) {
                       ))}
                   </optgroup>
                 </select>
+              </div>
+
+              <div className="lg:col-span-2">
+                <label
+                  htmlFor="supplier-run-vehicle"
+                  className="mb-2 block text-sm font-bold text-slate-700"
+                >
+                  What Truck is going South?
+                </label>
+
+                <select
+                  id="supplier-run-vehicle"
+                  value={vehicleId}
+                  onChange={(event) => {
+                    setVehicleId(event.target.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting || safeVehicleOptions.length === 0}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  <option value="">
+                    {safeVehicleOptions.length > 0
+                      ? "Select a truck..."
+                      : "No vehicles saved yet"}
+                  </option>
+
+                  {safeVehicleOptions.map((vehicleOption) => (
+                    <option
+                      key={vehicleOption.id}
+                      value={vehicleOption.id}
+                    >
+                      {vehicleOption.title}
+                      {vehicleOption.badge
+                        ? ` (${vehicleOption.badge})`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+
+                <p className="mt-2 text-sm font-semibold text-slate-500">
+                  This ties the South PO to the truck for location and ETA
+                  later.
+                </p>
               </div>
 
               <div className="lg:col-span-2">

@@ -238,7 +238,11 @@ export default function SupplierRunsPage({
   onUpdateSupplierRunItemDescription,
   onDeleteSupplierRun,
   createdBy = {},
+  vehicleOptions,
 }) {
+  const safeVehicleOptions = Array.isArray(vehicleOptions)
+    ? vehicleOptions
+    : [];
   const todayKey = getDateInputValue();
   const [successMessage, setSuccessMessage] = useState("");
   const [openStopKeys, setOpenStopKeys] = useState({});
@@ -455,6 +459,32 @@ export default function SupplierRunsPage({
     };
   }
 
+  function getDriverGroupVehicleLabel(driverGroup) {
+    const vehicleLabels = [
+      ...new Set(
+        driverGroup.vendorGroups
+          .flatMap((vendorGroup) => vendorGroup.runs)
+          .map(
+            (supplierRun) =>
+              supplierRun.vehicleBadge ||
+              supplierRun.vehicleTitle ||
+              "",
+          )
+          .filter(Boolean),
+      ),
+    ];
+
+    if (vehicleLabels.length === 0) {
+      return "";
+    }
+
+    if (vehicleLabels.length === 1) {
+      return vehicleLabels[0];
+    }
+
+    return `${vehicleLabels[0]} +${vehicleLabels.length - 1}`;
+  }
+
   function getDriverStatsForRuns(driver, runs) {
     return getDriverGroupStats({
       driver,
@@ -640,7 +670,11 @@ export default function SupplierRunsPage({
       ) : null}
 
       {mode === "add" ? (
-        <SupplierRunForm onSubmit={handleSubmit} createdBy={createdBy} />
+        <SupplierRunForm
+          onSubmit={handleSubmit}
+          createdBy={createdBy}
+          vehicleOptions={safeVehicleOptions}
+        />
       ) : mode === "history" ? (
         <section>
           <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
@@ -1066,6 +1100,8 @@ export default function SupplierRunsPage({
                   const driverIsOpen = isDriverOpen(
                     driverGroup.driver,
                   );
+                  const vehicleLabel =
+                    getDriverGroupVehicleLabel(driverGroup);
 
                   return (
                     <div
@@ -1095,6 +1131,12 @@ export default function SupplierRunsPage({
                               <h4 className="mt-1 truncate text-2xl font-black tracking-tight text-slate-900">
                                 {driverGroup.driver}
                               </h4>
+
+                              {vehicleLabel ? (
+                                <p className="mt-1 text-sm font-black text-slate-500">
+                                  Truck {vehicleLabel}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
 

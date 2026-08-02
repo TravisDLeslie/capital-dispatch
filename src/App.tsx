@@ -53,6 +53,7 @@ import {
   deleteEmailListEntry,
   subscribeToEmailList,
 } from "./utils/emailListStorage";
+import { subscribeToBouncieVehicleSettings } from "./utils/bouncieVehicleStorage";
 
 const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
@@ -110,6 +111,9 @@ type SupplierRun = {
   createdByName?: string;
   createdByEmail?: string;
   createdById?: string;
+  vehicleId?: string;
+  vehicleTitle?: string;
+  vehicleBadge?: string;
   items?: SupplierRunItem[];
   status?: string;
   [key: string]: unknown;
@@ -182,6 +186,15 @@ type EmailListEntry = {
   contactId?: string;
   createdAt?: string;
   updatedAt?: string;
+  [key: string]: unknown;
+};
+
+type VehicleSetting = {
+  id: string;
+  title?: string;
+  badge?: string;
+  bouncieName?: string;
+  yearMakeModel?: string;
   [key: string]: unknown;
 };
 
@@ -394,6 +407,7 @@ export default function App() {
   >([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [emailList, setEmailList] = useState<EmailListEntry[]>([]);
+  const [vehicleSettings, setVehicleSettings] = useState<VehicleSetting[]>([]);
   const [editingDeliveryId, setEditingDeliveryId] =
     useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -451,6 +465,17 @@ export default function App() {
     name: currentUserDisplayName,
     email: currentUser?.email || userProfile?.email || "",
   };
+  const southVehicleOptions = vehicleSettings
+    .map((vehicleSetting) => ({
+      id: vehicleSetting.id,
+      title:
+        vehicleSetting.title ||
+        vehicleSetting.bouncieName ||
+        vehicleSetting.yearMakeModel ||
+        "Vehicle",
+      badge: vehicleSetting.badge || "",
+    }))
+    .filter((vehicleOption) => vehicleOption.id && vehicleOption.title);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -562,6 +587,24 @@ export default function App() {
       },
     );
   }, [isSuperAdmin]);
+
+  useEffect(() => {
+    if (!isApproved || !canReadSouth) {
+      setVehicleSettings([]);
+      return;
+    }
+
+    return subscribeToBouncieVehicleSettings(
+      (savedVehicleSettings: VehicleSetting[]) => {
+        setVehicleSettings(savedVehicleSettings);
+        setSyncError("");
+      },
+      (error: Error) => {
+        console.error("Unable to sync vehicle settings:", error);
+        setSyncError(getFirebaseErrorMessage(error));
+      },
+    );
+  }, [canReadSouth, isApproved]);
 
   useEffect(() => {
     if (
@@ -1165,6 +1208,7 @@ export default function App() {
             mode="add"
             supplierRuns={supplierRuns}
             createdBy={currentUserCreator}
+            vehicleOptions={southVehicleOptions}
             onAddSupplierRun={handleAddSupplierRun}
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
@@ -1181,6 +1225,7 @@ export default function App() {
           <SupplierRunsPage
             mode="check"
             supplierRuns={visibleSupplierRuns}
+            vehicleOptions={southVehicleOptions}
             onAddSupplierRun={handleAddSupplierRun}
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
@@ -1197,6 +1242,7 @@ export default function App() {
           <SupplierRunsPage
             mode="history"
             supplierRuns={visibleSupplierRuns}
+            vehicleOptions={southVehicleOptions}
             onAddSupplierRun={handleAddSupplierRun}
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
