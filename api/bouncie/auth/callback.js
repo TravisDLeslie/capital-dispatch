@@ -96,19 +96,19 @@ export default async function handler(request, response) {
           <pre>${escapeHtml(code)}</pre>
           ${
             tokenData?.access_token
-              ? `<p>Add this value in Vercel as <strong>BOUNCIE_ACCESS_TOKEN</strong>, then redeploy:</p><pre>${escapeHtml(
+              ? `<p>Add this value in Vercel as <strong>BOUNCIE_ACCESS_TOKEN</strong>:</p><pre>${escapeHtml(
                   tokenData.access_token,
                 )}</pre>`
               : ""
           }
           ${
             tokenData?.refresh_token
-              ? `<p>Save this refresh token somewhere private for later. Do not add it to the app yet:</p><pre>${escapeHtml(
+              ? `<p>Add this value in Vercel as <strong>BOUNCIE_REFRESH_TOKEN</strong>:</p><pre>${escapeHtml(
                   tokenData.refresh_token,
                 )}</pre>`
               : ""
           }
-          <p>You can close this page after saving the access token in Vercel.</p>
+          <p>After saving both values in Vercel, redeploy the app. If Bouncie expires the access token again later, reconnect and replace both values together.</p>
         </main>
       </body>
     </html>`);

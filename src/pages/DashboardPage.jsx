@@ -30,6 +30,22 @@ const markerPositions = [
   { left: "45%", top: "52%" },
 ];
 
+async function readApiJson(response, routeName) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const responseText = await response.text();
+
+  throw new Error(
+    `${routeName} returned ${response.status} instead of JSON. ${
+      responseText ? responseText.slice(0, 120) : ""
+    }`,
+  );
+}
+
 function getVehicleMapUrl(vehicle) {
   const coordinates = getVehicleCoordinates(vehicle);
 
@@ -91,7 +107,10 @@ export default function DashboardPage() {
 
     try {
       const vehiclesResponse = await fetch("/api/bouncie/vehicles");
-      const vehiclesData = await vehiclesResponse.json();
+      const vehiclesData = await readApiJson(
+        vehiclesResponse,
+        "Bouncie vehicles route",
+      );
 
       if (!vehiclesResponse.ok) {
         setError(vehiclesData.error || "Unable to load vehicle locations.");
@@ -104,7 +123,10 @@ export default function DashboardPage() {
       );
     } catch (loadError) {
       console.error("Unable to load dashboard vehicles:", loadError);
-      setError("Unable to reach the Bouncie vehicle route.");
+      setError(
+        loadError.message ||
+          "Unable to reach the Bouncie vehicle route.",
+      );
     } finally {
       setIsLoading(false);
     }

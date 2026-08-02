@@ -10,6 +10,7 @@ export default async function handler(_request, response) {
     ),
     connected: Boolean(tokenResult.accessToken),
     needsAccessToken: !config.accessToken,
+    hasRefreshToken: Boolean(config.refreshToken),
     hasWebhookKey: Boolean(config.webhookKey),
     error: tokenResult.error || "",
   });

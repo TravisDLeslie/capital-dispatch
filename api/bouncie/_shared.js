@@ -15,6 +15,7 @@ export function getBouncieConfig() {
     clientSecret: process.env.BOUNCIE_CLIENT_SECRET || "",
     redirectUri: process.env.BOUNCIE_REDIRECT_URI || "",
     accessToken: cleanToken(process.env.BOUNCIE_ACCESS_TOKEN),
+    refreshToken: cleanToken(process.env.BOUNCIE_REFRESH_TOKEN),
     webhookKey: process.env.BOUNCIE_WEBHOOK_KEY || "",
   };
 }
@@ -62,6 +63,40 @@ export async function exchangeBouncieToken(body) {
   return tokenData;
 }
 
+export async function refreshBouncieToken(config) {
+  if (!config.refreshToken) {
+    return {
+      error:
+        "Bouncie access token expired and no BOUNCIE_REFRESH_TOKEN is configured. Reconnect Bouncie, then add both BOUNCIE_ACCESS_TOKEN and BOUNCIE_REFRESH_TOKEN in Vercel.",
+      status: 401,
+    };
+  }
+
+  try {
+    const tokenData = await exchangeBouncieToken({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: config.refreshToken,
+    });
+
+    return {
+      accessToken: cleanToken(tokenData.access_token),
+      refreshToken: cleanToken(tokenData.refresh_token),
+      expiresIn: tokenData.expires_in || null,
+    };
+  } catch (error) {
+    return {
+      error:
+        "Bouncie access token expired and the refresh token could not be used. Reconnect Bouncie from Admin > Vehicles > Connect Bouncie, then update both Bouncie token values in Vercel.",
+      status: 401,
+      data: {
+        message: error.message || "Unable to refresh Bouncie token.",
+      },
+    };
+  }
+}
+
 export async function getBouncieAccessToken() {
   const config = getBouncieConfig();
   const missingConfig = getMissingConfig(config);
@@ -74,7 +109,11 @@ export async function getBouncieAccessToken() {
   }
 
   if (config.accessToken) {
-    return { accessToken: config.accessToken };
+    return {
+      accessToken: config.accessToken,
+      refreshToken: config.refreshToken,
+      config,
+    };
   }
 
   return {
@@ -106,7 +145,7 @@ export async function callBouncieApi(path) {
       `Bouncie API request failed with status ${apiResponse.status}.`;
     const tokenHelp =
       apiResponse.status === 401
-        ? " Bouncie rejected the access token. Create a fresh token from Admin > Vehicles > Connect Bouncie, paste only the access token value into BOUNCIE_ACCESS_TOKEN without the word Bearer, then redeploy Vercel."
+        ? " Bouncie rejected the access token. Reconnect Bouncie from Admin > Vehicles > Connect Bouncie, paste the new access token into BOUNCIE_ACCESS_TOKEN and the new refresh token into BOUNCIE_REFRESH_TOKEN, then redeploy Vercel."
         : "";
 
     return {

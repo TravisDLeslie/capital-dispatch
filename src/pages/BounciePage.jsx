@@ -24,6 +24,22 @@ import {
   getVehicleYearMakeModel,
 } from "../utils/bouncieVehicleFormatters";
 
+async function readApiJson(response, routeName) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  const responseText = await response.text();
+
+  throw new Error(
+    `${routeName} returned ${response.status} instead of JSON. ${
+      responseText ? responseText.slice(0, 120) : ""
+    }`,
+  );
+}
+
 export default function BounciePage() {
   const [status, setStatus] = useState(null);
   const [vehicles, setVehicles] = useState([]);
@@ -48,7 +64,10 @@ export default function BounciePage() {
 
     try {
       const statusResponse = await fetch("/api/bouncie/status");
-      const statusData = await statusResponse.json();
+      const statusData = await readApiJson(
+        statusResponse,
+        "Bouncie status route",
+      );
       setStatus(statusData);
 
       if (!statusResponse.ok || !statusData.connected) {
@@ -58,7 +77,10 @@ export default function BounciePage() {
       }
 
       const vehiclesResponse = await fetch("/api/bouncie/vehicles");
-      const vehiclesData = await vehiclesResponse.json();
+      const vehiclesData = await readApiJson(
+        vehiclesResponse,
+        "Bouncie vehicles route",
+      );
 
       if (!vehiclesResponse.ok) {
         setError(vehiclesData.error || "Unable to load Bouncie vehicles.");
@@ -69,7 +91,10 @@ export default function BounciePage() {
       setVehicles(Array.isArray(vehiclesData.vehicles) ? vehiclesData.vehicles : []);
     } catch (loadError) {
       console.error("Unable to load Bouncie:", loadError);
-      setError("Unable to reach the Bouncie API route.");
+      setError(
+        loadError.message ||
+          "Unable to reach the Bouncie API route.",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -173,8 +198,10 @@ export default function BounciePage() {
             </div>
             <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-500">
               {status?.connected
-                ? "Fleet data is loading from Bouncie."
-                : "Authorize Bouncie, then save the returned access token in Vercel."}
+                ? status?.hasRefreshToken
+                  ? "Fleet data is loading from Bouncie. Refresh token is saved for reconnection."
+                  : "Fleet data is loading from Bouncie, but this access token may expire. Reconnect and save both token values."
+                : "Authorize Bouncie, then save the returned access and refresh tokens in Vercel."}
             </p>
           </div>
 
@@ -214,11 +241,20 @@ export default function BounciePage() {
 
         {status?.needsAccessToken ? (
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-            After Bouncie redirects back, add the shown access token to Vercel as{" "}
+            After Bouncie redirects back, add the shown access token as{" "}
             <span className="font-black text-slate-900">
               BOUNCIE_ACCESS_TOKEN
             </span>
+            {" "}and the refresh token as{" "}
+            <span className="font-black text-slate-900">
+              BOUNCIE_REFRESH_TOKEN
+            </span>
             , then redeploy.
+          </div>
+        ) : status?.connected && !status?.hasRefreshToken ? (
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+            BOUNCIE_REFRESH_TOKEN is missing. Reconnect Bouncie and save both
+            returned token values in Vercel so the next token refresh is easier.
           </div>
         ) : null}
       </section>
