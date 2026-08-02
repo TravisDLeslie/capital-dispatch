@@ -2,12 +2,19 @@ const BOUNCIE_AUTH_URL = "https://auth.bouncie.com/dialog/authorize";
 const BOUNCIE_TOKEN_URL = "https://auth.bouncie.com/oauth/token";
 const BOUNCIE_API_BASE_URL = "https://api.bouncie.dev/v1";
 
+function cleanToken(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+}
+
 export function getBouncieConfig() {
   return {
     clientId: process.env.BOUNCIE_CLIENT_ID || "",
     clientSecret: process.env.BOUNCIE_CLIENT_SECRET || "",
     redirectUri: process.env.BOUNCIE_REDIRECT_URI || "",
-    accessToken: process.env.BOUNCIE_ACCESS_TOKEN || "",
+    accessToken: cleanToken(process.env.BOUNCIE_ACCESS_TOKEN),
     webhookKey: process.env.BOUNCIE_WEBHOOK_KEY || "",
   };
 }
@@ -93,11 +100,17 @@ export async function callBouncieApi(path) {
   const data = await apiResponse.json().catch(() => ({}));
 
   if (!apiResponse.ok) {
+    const baseError =
+      data?.errors ||
+      data?.error ||
+      `Bouncie API request failed with status ${apiResponse.status}.`;
+    const tokenHelp =
+      apiResponse.status === 401
+        ? " Bouncie rejected the access token. Create a fresh token from Admin > Vehicles > Connect Bouncie, paste only the access token value into BOUNCIE_ACCESS_TOKEN without the word Bearer, then redeploy Vercel."
+        : "";
+
     return {
-      error:
-        data?.errors ||
-        data?.error ||
-        `Bouncie API request failed with status ${apiResponse.status}.`,
+      error: `${baseError}${tokenHelp}`,
       status: apiResponse.status,
       data,
     };

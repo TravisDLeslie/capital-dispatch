@@ -447,6 +447,22 @@ export default function App() {
   };
 
   useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const bouncieCode = searchParams.get("code");
+
+    if (!bouncieCode) {
+      return;
+    }
+
+    const callbackUrl = new URL(
+      "/api/bouncie/auth/callback",
+      window.location.origin,
+    );
+    callbackUrl.search = window.location.search;
+    window.location.replace(callbackUrl.toString());
+  }, []);
+
+  useEffect(() => {
     if (!auth) {
       setIsAuthLoading(false);
       return;
