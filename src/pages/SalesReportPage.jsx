@@ -62,12 +62,12 @@ function SalesMetric({ icon: Icon, label, value, note, tone = "default" }) {
   };
 
   return (
-    <article className={`rounded-2xl border p-4 shadow-sm ${toneClasses[tone]}`}>
+    <article className={`min-w-0 rounded-2xl border p-4 shadow-sm ${toneClasses[tone]}`}>
       <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
         <Icon aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
         {label}
       </p>
-      <p className="mt-3 text-2xl font-black sm:text-3xl">
+      <p className="mt-3 break-words text-[clamp(1.75rem,3vw,2.35rem)] font-black leading-none tracking-normal">
         {value}
       </p>
       <p className="mt-1 text-sm font-bold text-slate-500">
@@ -95,7 +95,7 @@ function ReportSummary({ report }) {
           </h2>
         </div>
         <span className="rounded-2xl bg-rose-50 px-4 py-2 text-right">
-          <span className="block text-xl font-black text-rose-900">
+          <span className="block text-[clamp(1.25rem,3vw,1.75rem)] font-black leading-none text-rose-900">
             {formatCurrency(getReportTotal(report))}
           </span>
           <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
@@ -104,7 +104,7 @@ function ReportSummary({ report }) {
         </span>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
         <SalesMetric
           icon={CreditCard}
           label="Cash/Card"
@@ -301,7 +301,19 @@ export default function SalesReportPage({
         </div>
       </div>
 
-      <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+      <section className="space-y-5">
+        <ReportSummary
+          report={
+            selectedReport || {
+              month: selectedMonth,
+              cashCardSales: 0,
+              chargeSales: 0,
+              topSpenders: [],
+            }
+          }
+        />
+
+        <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-5">
           {isSuperAdmin ? (
             <form
@@ -440,17 +452,6 @@ export default function SalesReportPage({
         </div>
 
         <div className="space-y-5">
-          <ReportSummary
-            report={
-              selectedReport || {
-                month: selectedMonth,
-                cashCardSales: 0,
-                chargeSales: 0,
-                topSpenders: [],
-              }
-            }
-          />
-
           <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
               History
@@ -498,6 +499,7 @@ export default function SalesReportPage({
               </div>
             )}
           </section>
+        </div>
         </div>
       </section>
     </PageContainer>
