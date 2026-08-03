@@ -231,10 +231,10 @@ export default function BounciePage({ onPageChange }) {
             </div>
             <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-500">
               {status?.connected
-                ? status?.tokenSource === "firestore"
-                  ? "Fleet data is loading from Bouncie. Tokens are saved in Firestore so deploys will not reset the connection."
-                  : "Fleet data is loading from Bouncie using Vercel environment tokens. Reconnect after Firestore token storage is configured."
-                : "Authorize Bouncie once. The app will save the access and refresh tokens securely in Firestore."}
+                ? status?.tokenSource === "redis"
+                  ? "Fleet data is loading from Bouncie. Tokens are saved in Redis so deploys will not reset the connection."
+                  : "Fleet data is loading from Bouncie using Vercel environment tokens. Reconnect after Redis token storage is configured."
+                : "Authorize Bouncie once. The app will save the access and refresh tokens securely in Redis."}
             </p>
           </div>
 
@@ -274,13 +274,13 @@ export default function BounciePage({ onPageChange }) {
 
         {!status?.canPersistTokens ? (
           <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
-            Add <span className="font-black">FIREBASE_SERVICE_ACCOUNT_KEY</span>{" "}
-            in Vercel so Bouncie tokens can be saved to Firestore.
+            Connect Redis to this Vercel project so Bouncie tokens can be saved
+            across deploys.
           </div>
         ) : status?.needsAccessToken ? (
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
             Click Connect Bouncie. After the redirect, tokens will be saved to
-            Firestore automatically.
+            Redis automatically.
           </div>
         ) : status?.connected && !status?.hasRefreshToken ? (
           <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">

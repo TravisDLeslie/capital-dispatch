@@ -72,7 +72,7 @@ export async function refreshBouncieToken(config) {
   if (!config.refreshToken) {
     return {
       error:
-        "Bouncie access token expired and no BOUNCIE_REFRESH_TOKEN is configured. Reconnect Bouncie, then add both BOUNCIE_ACCESS_TOKEN and BOUNCIE_REFRESH_TOKEN in Vercel.",
+        "Bouncie access token expired and no refresh token is saved. Reconnect Bouncie from Admin > Vehicles.",
       status: 401,
     };
   }
@@ -128,7 +128,7 @@ export async function getBouncieAccessToken() {
       accessToken: storedConfig.accessToken,
       refreshToken: storedConfig.refreshToken,
       config: storedConfig,
-      source: "firestore",
+      source: "redis",
     };
   }
 
@@ -230,7 +230,7 @@ export async function callBouncieApiWithoutRefresh(path) {
       `Bouncie API request failed with status ${apiResponse.status}.`;
     const tokenHelp =
       apiResponse.status === 401
-        ? " Bouncie rejected the access token. Reconnect Bouncie from Admin > Vehicles > Connect Bouncie, paste the new access token into BOUNCIE_ACCESS_TOKEN and the new refresh token into BOUNCIE_REFRESH_TOKEN, then redeploy Vercel."
+        ? " Bouncie rejected the access token. Reconnect Bouncie from Admin > Vehicles > Connect Bouncie."
         : "";
 
     return {

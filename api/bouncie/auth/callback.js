@@ -104,15 +104,15 @@ export default async function handler(request, response) {
                   tokenError,
                 )}</p>`
               : tokensWereSaved
-                ? `<p>Bouncie is connected. Tokens were saved securely to Firestore, so future deploys can keep using the current connection.</p>`
-                : `<p class="error">Bouncie returned tokens, but they were not saved to Firestore. Add FIREBASE_SERVICE_ACCOUNT_KEY in Vercel, redeploy, then reconnect Bouncie.</p>`
+                ? `<p>Bouncie is connected. Tokens were saved securely to Redis, so future deploys can keep using the current connection.</p>`
+                : `<p class="error">Bouncie returned tokens, but they were not saved to Redis. Connect Redis to this Vercel project, redeploy, then reconnect Bouncie.</p>`
           }
           <p>Bouncie returned this authorization code:</p>
           <pre>${escapeHtml(code)}</pre>
           ${
             canPersistBouncieTokens()
               ? `<p>You can close this page and return to Capital Dispatch.</p>`
-              : `<p>Missing <strong>FIREBASE_SERVICE_ACCOUNT_KEY</strong>. The app cannot persist Bouncie tokens until that Vercel environment value is added.</p>`
+              : `<p>Missing Redis REST environment values. The app cannot persist Bouncie tokens until Redis is connected to this Vercel project.</p>`
           }
         </main>
       </body>

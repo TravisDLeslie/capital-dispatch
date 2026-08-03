@@ -1,6 +1,7 @@
 import { getBouncieAccessToken, getBouncieConfig } from "./_shared.js";
 import {
   canPersistBouncieTokens,
+  getBouncieTokenStoreName,
   getStoredBouncieTokens,
 } from "./_tokenStore.js";
 
@@ -15,6 +16,7 @@ export default async function handler(_request, response) {
     ),
     connected: Boolean(tokenResult.accessToken),
     tokenSource: tokenResult.source || "",
+    tokenStore: getBouncieTokenStoreName(),
     canPersistTokens: canPersistBouncieTokens(),
     needsAccessToken: !config.accessToken && !storedTokens?.accessToken,
     hasRefreshToken: Boolean(config.refreshToken || storedTokens?.refreshToken),

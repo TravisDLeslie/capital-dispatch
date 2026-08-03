@@ -1,82 +1,120 @@
-import { cert, getApps, initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+const TOKEN_KEY = "bouncie:tokens";
 
-const TOKEN_DOC_PATH = "integrations/bouncie";
+function getRedisConfig() {
+  return {
+    url:
+      process.env.KV_REST_API_URL ||
+      process.env.REDIS_REST_API_URL ||
+      process.env.UPSTASH_REDIS_REST_URL ||
+      "",
+    token:
+      process.env.KV_REST_API_TOKEN ||
+      process.env.REDIS_REST_API_TOKEN ||
+      process.env.UPSTASH_REDIS_REST_TOKEN ||
+      "",
+    redisUrl: process.env.REDIS_URL || "",
+  };
+}
 
-function parseServiceAccount() {
-  const rawValue =
-    process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
-    process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
-    "";
+async function redisUrlCommand(command) {
+  const config = getRedisConfig();
 
-  if (!rawValue) {
-    return null;
+  if (!config.redisUrl) {
+    return {
+      error:
+        "Redis token storage is not configured. Connect Redis to this Vercel project so Bouncie tokens can persist across deploys.",
+    };
   }
 
-  try {
-    const normalizedValue = rawValue.trim().startsWith("{")
-      ? rawValue
-      : Buffer.from(rawValue, "base64").toString("utf8");
-    const serviceAccount = JSON.parse(normalizedValue);
+  let redisClient = null;
 
-    return {
-      ...serviceAccount,
-      private_key: String(serviceAccount.private_key || "").replace(
-        /\\n/g,
-        "\n",
-      ),
-    };
+  try {
+    const { createClient } = await import("redis");
+    redisClient = createClient({
+      url: config.redisUrl,
+    });
+
+    redisClient.on("error", (error) => {
+      console.error("Redis client error:", error);
+    });
+
+    await redisClient.connect();
+
+    if (command[0] === "GET") {
+      const value = await redisClient.get(command[1]);
+
+      return { data: { result: value } };
+    }
+
+    if (command[0] === "SET") {
+      await redisClient.set(command[1], command[2]);
+
+      return { data: { result: "OK" } };
+    }
+
+    return { error: `Unsupported Redis command: ${command[0]}` };
   } catch (error) {
-    console.error("Unable to parse Firebase service account:", error);
-    return null;
+    return {
+      error: error.message || "Unable to reach Redis token storage.",
+    };
+  } finally {
+    if (redisClient) {
+      await redisClient.quit().catch(() => {});
+    }
   }
 }
 
-function getAdminDb() {
-  const serviceAccount = parseServiceAccount();
+async function redisCommand(command) {
+  const config = getRedisConfig();
 
-  if (!serviceAccount) {
-    return null;
+  if (!config.url || !config.token) {
+    return redisUrlCommand(command);
   }
 
-  if (getApps().length === 0) {
-    initializeApp({
-      credential: cert(serviceAccount),
-      projectId:
-        process.env.FIREBASE_PROJECT_ID ||
-        process.env.VITE_FIREBASE_PROJECT_ID ||
-        serviceAccount.project_id,
+  try {
+    const redisResponse = await fetch(config.url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(command),
     });
-  }
+    const redisData = await redisResponse.json().catch(() => ({}));
 
-  return getFirestore();
+    if (!redisResponse.ok || redisData?.error) {
+      return {
+        error:
+          redisData?.error ||
+          `Redis request failed with status ${redisResponse.status}.`,
+      };
+    }
+
+    return { data: redisData };
+  } catch (error) {
+    return {
+      error: error.message || "Unable to reach Redis token storage.",
+    };
+  }
 }
 
 export async function getStoredBouncieTokens() {
-  const db = getAdminDb();
+  const result = await redisCommand(["GET", TOKEN_KEY]);
 
-  if (!db) {
+  if (result.error || !result.data?.result) {
     return null;
   }
 
   try {
-    const tokenSnapshot = await db.doc(TOKEN_DOC_PATH).get();
-
-    if (!tokenSnapshot.exists) {
-      return null;
-    }
-
-    return tokenSnapshot.data() || null;
+    return JSON.parse(result.data.result);
   } catch (error) {
-    console.error("Unable to read Bouncie tokens from Firestore:", error);
+    console.error("Unable to parse Bouncie tokens from Redis:", error);
     return null;
   }
 }
 
 export async function saveBouncieTokens(tokenData, source = "api") {
-  const db = getAdminDb();
-
-  if (!db || !tokenData?.accessToken) {
+  if (!tokenData?.accessToken) {
     return false;
   }
 
@@ -86,27 +124,34 @@ export async function saveBouncieTokens(tokenData, source = "api") {
     expiresInSeconds > 0
       ? new Date(now.getTime() + expiresInSeconds * 1000).toISOString()
       : "";
+  const tokenPayload = {
+    accessToken: tokenData.accessToken,
+    refreshToken: tokenData.refreshToken || "",
+    expiresIn: expiresInSeconds || null,
+    expiresAt,
+    source,
+    updatedAt: now.toISOString(),
+  };
+  const result = await redisCommand([
+    "SET",
+    TOKEN_KEY,
+    JSON.stringify(tokenPayload),
+  ]);
 
-  try {
-    await db.doc(TOKEN_DOC_PATH).set(
-      {
-        accessToken: tokenData.accessToken,
-        refreshToken: tokenData.refreshToken || "",
-        expiresIn: expiresInSeconds || null,
-        expiresAt,
-        source,
-        updatedAt: now.toISOString(),
-      },
-      { merge: true },
-    );
-
-    return true;
-  } catch (error) {
-    console.error("Unable to save Bouncie tokens to Firestore:", error);
+  if (result.error) {
+    console.error("Unable to save Bouncie tokens to Redis:", result.error);
     return false;
   }
+
+  return true;
 }
 
 export function canPersistBouncieTokens() {
-  return Boolean(parseServiceAccount());
+  const config = getRedisConfig();
+
+  return Boolean((config.url && config.token) || config.redisUrl);
+}
+
+export function getBouncieTokenStoreName() {
+  return "redis";
 }
