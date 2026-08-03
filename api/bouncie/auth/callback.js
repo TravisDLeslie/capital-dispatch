@@ -3,6 +3,10 @@ import {
   getBouncieConfig,
   getMissingConfig,
 } from "../_shared.js";
+import {
+  canPersistBouncieTokens,
+  saveBouncieTokens,
+} from "../_tokenStore.js";
 
 function escapeHtml(value) {
   return String(value || "")
@@ -32,6 +36,7 @@ export default async function handler(request, response) {
 
   let tokenData = null;
   let tokenError = "";
+  let tokensWereSaved = false;
 
   try {
     tokenData = await exchangeBouncieToken({
@@ -41,6 +46,14 @@ export default async function handler(request, response) {
       code,
       redirect_uri: config.redirectUri,
     });
+    tokensWereSaved = await saveBouncieTokens(
+      {
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token,
+        expiresIn: tokenData.expires_in,
+      },
+      "connect",
+    );
   } catch (error) {
     tokenError = error.message || "Token exchange failed.";
   }
@@ -90,25 +103,17 @@ export default async function handler(request, response) {
               ? `<p class="error">The code was received, but token exchange failed: ${escapeHtml(
                   tokenError,
                 )}</p>`
-              : `<p>Bouncie returned an authorization code and the token exchange worked.</p>`
+              : tokensWereSaved
+                ? `<p>Bouncie is connected. Tokens were saved securely to Firestore, so future deploys can keep using the current connection.</p>`
+                : `<p class="error">Bouncie returned tokens, but they were not saved to Firestore. Add FIREBASE_SERVICE_ACCOUNT_KEY in Vercel, redeploy, then reconnect Bouncie.</p>`
           }
           <p>Bouncie returned this authorization code:</p>
           <pre>${escapeHtml(code)}</pre>
           ${
-            tokenData?.access_token
-              ? `<p>Add this value in Vercel as <strong>BOUNCIE_ACCESS_TOKEN</strong>:</p><pre>${escapeHtml(
-                  tokenData.access_token,
-                )}</pre>`
-              : ""
+            canPersistBouncieTokens()
+              ? `<p>You can close this page and return to Capital Dispatch.</p>`
+              : `<p>Missing <strong>FIREBASE_SERVICE_ACCOUNT_KEY</strong>. The app cannot persist Bouncie tokens until that Vercel environment value is added.</p>`
           }
-          ${
-            tokenData?.refresh_token
-              ? `<p>Add this value in Vercel as <strong>BOUNCIE_REFRESH_TOKEN</strong>:</p><pre>${escapeHtml(
-                  tokenData.refresh_token,
-                )}</pre>`
-              : ""
-          }
-          <p>After saving both values in Vercel, redeploy the app. If Bouncie expires the access token again later, reconnect and replace both values together.</p>
         </main>
       </body>
     </html>`);

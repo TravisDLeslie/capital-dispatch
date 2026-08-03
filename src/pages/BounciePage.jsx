@@ -231,10 +231,10 @@ export default function BounciePage({ onPageChange }) {
             </div>
             <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-500">
               {status?.connected
-                ? status?.hasRefreshToken
-                  ? "Fleet data is loading from Bouncie. Refresh token is saved for reconnection."
-                  : "Fleet data is loading from Bouncie, but this access token may expire. Reconnect and save both token values."
-                : "Authorize Bouncie, then save the returned access and refresh tokens in Vercel."}
+                ? status?.tokenSource === "firestore"
+                  ? "Fleet data is loading from Bouncie. Tokens are saved in Firestore so deploys will not reset the connection."
+                  : "Fleet data is loading from Bouncie using Vercel environment tokens. Reconnect after Firestore token storage is configured."
+                : "Authorize Bouncie once. The app will save the access and refresh tokens securely in Firestore."}
             </p>
           </div>
 
@@ -272,22 +272,20 @@ export default function BounciePage({ onPageChange }) {
           </div>
         ) : null}
 
-        {status?.needsAccessToken ? (
+        {!status?.canPersistTokens ? (
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+            Add <span className="font-black">FIREBASE_SERVICE_ACCOUNT_KEY</span>{" "}
+            in Vercel so Bouncie tokens can be saved to Firestore.
+          </div>
+        ) : status?.needsAccessToken ? (
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
-            After Bouncie redirects back, add the shown access token as{" "}
-            <span className="font-black text-slate-900">
-              BOUNCIE_ACCESS_TOKEN
-            </span>
-            {" "}and the refresh token as{" "}
-            <span className="font-black text-slate-900">
-              BOUNCIE_REFRESH_TOKEN
-            </span>
-            , then redeploy.
+            Click Connect Bouncie. After the redirect, tokens will be saved to
+            Firestore automatically.
           </div>
         ) : status?.connected && !status?.hasRefreshToken ? (
           <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
-            BOUNCIE_REFRESH_TOKEN is missing. Reconnect Bouncie and save both
-            returned token values in Vercel so the next token refresh is easier.
+            Refresh token is missing. Reconnect Bouncie so the app can save a
+            fresh access and refresh token pair.
           </div>
         ) : null}
       </section>

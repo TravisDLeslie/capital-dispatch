@@ -1,3 +1,8 @@
+import {
+  getStoredBouncieTokens,
+  saveBouncieTokens,
+} from "./_tokenStore.js";
+
 const BOUNCIE_AUTH_URL = "https://auth.bouncie.com/dialog/authorize";
 const BOUNCIE_TOKEN_URL = "https://auth.bouncie.com/oauth/token";
 const BOUNCIE_API_BASE_URL = "https://api.bouncie.dev/v1";
@@ -108,17 +113,37 @@ export async function getBouncieAccessToken() {
     };
   }
 
+  const storedTokens = await getStoredBouncieTokens();
+  const storedAccessToken = cleanToken(storedTokens?.accessToken);
+  const storedRefreshToken = cleanToken(storedTokens?.refreshToken);
+
+  if (storedAccessToken) {
+    const storedConfig = {
+      ...config,
+      accessToken: storedAccessToken,
+      refreshToken: storedRefreshToken || config.refreshToken,
+    };
+
+    return {
+      accessToken: storedConfig.accessToken,
+      refreshToken: storedConfig.refreshToken,
+      config: storedConfig,
+      source: "firestore",
+    };
+  }
+
   if (config.accessToken) {
     return {
       accessToken: config.accessToken,
       refreshToken: config.refreshToken,
       config,
+      source: "environment",
     };
   }
 
   return {
     error:
-      "Bouncie is not connected yet. Connect once and add BOUNCIE_ACCESS_TOKEN in Vercel.",
+      "Bouncie is not connected yet. Connect Bouncie from Admin > Vehicles.",
     status: 409,
   };
 }
@@ -150,6 +175,7 @@ export async function callBouncieApi(path) {
     }
 
     refreshedToken = refreshedTokenResult;
+    await saveBouncieTokens(refreshedToken, "refresh");
     apiResponse = await requestBouncieApi(refreshedToken.accessToken);
     data = await apiResponse.json().catch(() => ({}));
   }
@@ -161,7 +187,7 @@ export async function callBouncieApi(path) {
       `Bouncie API request failed with status ${apiResponse.status}.`;
     const tokenHelp =
       apiResponse.status === 401
-        ? " Bouncie rejected the access token and the refresh retry did not work. Reconnect Bouncie from Admin > Vehicles > Connect Bouncie, paste the new access token into BOUNCIE_ACCESS_TOKEN and the new refresh token into BOUNCIE_REFRESH_TOKEN, then redeploy Vercel."
+        ? " Bouncie rejected the access token and the refresh retry did not work. Reconnect Bouncie from Admin > Vehicles > Connect Bouncie."
         : "";
 
     return {
