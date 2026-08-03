@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import {
   Calculator,
   ClipboardCheck,
+  DollarSign,
   History,
   Mail,
   Package,
@@ -27,6 +28,7 @@ import EmailListPage from "./pages/EmailListPage";
 import LoginPage from "./components/LoginPage";
 import SearchPage from "./pages/SearchPage";
 import SalesConverterPage from "./pages/SalesConverterPage";
+import SalesReportPage from "./pages/SalesReportPage";
 import SouthHubPage from "./pages/SouthHubPage";
 import SupplierRunsPage from "./pages/SupplierRunsPage";
 import TodayPage from "./pages/TodayPage";
@@ -69,6 +71,10 @@ import {
   deleteEmailListEntry,
   subscribeToEmailList,
 } from "./utils/emailListStorage";
+import {
+  saveSalesReport,
+  subscribeToSalesReports,
+} from "./utils/salesReportStorage";
 import { subscribeToBouncieVehicleSettings } from "./utils/bouncieVehicleStorage";
 
 const DELETE_PO_CODE = "3105";
@@ -165,6 +171,19 @@ type Delivery = {
   status: string;
   createdAt: string;
   updatedAt: string;
+  [key: string]: unknown;
+};
+
+type SalesReport = {
+  id?: string;
+  month: string;
+  cashCardSales?: number;
+  chargeSales?: number;
+  topSpenders?: Array<{
+    id?: string;
+    name?: string;
+    amount?: number;
+  }>;
   [key: string]: unknown;
 };
 
@@ -286,6 +305,7 @@ function getAllowedPageIdsForRole(role: string) {
       "customers-add",
       "customers-view",
       "sales-converter",
+      "sales-report",
       "admin",
       "user-admin",
       "email-list",
@@ -314,6 +334,7 @@ function getAllowedPageIdsForRole(role: string) {
       "customers-add",
       "customers-view",
       "sales-converter",
+      "sales-report",
       "admin",
       "email-list",
       "bouncie",
@@ -467,6 +488,7 @@ export default function App() {
   >([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [emailList, setEmailList] = useState<EmailListEntry[]>([]);
+  const [salesReports, setSalesReports] = useState<SalesReport[]>([]);
   const [vehicleSettings, setVehicleSettings] = useState<VehicleSetting[]>([]);
   const [editingDeliveryId, setEditingDeliveryId] =
     useState("");
@@ -562,12 +584,21 @@ export default function App() {
     ].includes(pageId),
   );
   const canReadSales = effectiveAllowedPageIds.some((pageId) =>
-    ["sales", "customers-add", "customers-view", "sales-converter"].includes(pageId),
+    [
+      "sales",
+      "customers-add",
+      "customers-view",
+      "sales-converter",
+      "sales-report",
+    ].includes(pageId),
   );
   const canReadAdmin = effectiveAllowedPageIds.some((pageId) =>
     ["admin", "user-admin", "email-list", "bouncie"].includes(pageId),
   );
   const canReadEmailList = effectiveAllowedPageIds.includes("email-list");
+  const canReadSalesReport =
+    effectiveAllowedPageIds.includes("sales-report") &&
+    ["superAdmin", "admin"].includes(effectiveUserRole);
   const canReadCustomers = canReadSales || canReadReceiving || canReadEmailList;
   const visibleSupplierRuns =
     effectiveUserRole === "driver"
@@ -595,6 +626,13 @@ export default function App() {
     name: currentUserDisplayName,
     email: currentUser?.email || userProfile?.email || "",
   };
+  const currentSalesMonth = new Date().toISOString().slice(0, 7);
+  const currentSalesReport = salesReports.find(
+    (salesReport) => salesReport.month === currentSalesMonth,
+  );
+  const currentSalesTotal =
+    (Number(currentSalesReport?.cashCardSales) || 0) +
+    (Number(currentSalesReport?.chargeSales) || 0);
   const adminDashboardOperations = {
     receivingToday: checkIns.filter((checkIn) => {
       const checkedAt =
@@ -624,7 +662,7 @@ export default function App() {
         !delivery.hardwareChecked,
     ).length,
     customerCount: customers.length,
-    emailCount: emailList.length,
+    salesMonthTotal: currentSalesTotal,
   };
   const southVehicleOptions = vehicleSettings
     .map((vehicleSetting) => ({
@@ -637,7 +675,6 @@ export default function App() {
       badge: vehicleSetting.badge || "",
     }))
     .filter((vehicleOption) => vehicleOption.id && vehicleOption.title);
-
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const bouncieCode = searchParams.get("code");
@@ -790,6 +827,7 @@ export default function App() {
       setDeliveries([]);
       setCustomers([]);
       setEmailList([]);
+      setSalesReports([]);
       setIsLoading(false);
       return;
     }
@@ -802,6 +840,7 @@ export default function App() {
     let unsubscribeFromDeliveries = () => {};
     let unsubscribeFromCustomers = () => {};
     let unsubscribeFromEmailList = () => {};
+    let unsubscribeFromSalesReports = () => {};
 
     async function loadCheckIns() {
       try {
@@ -937,12 +976,35 @@ export default function App() {
         setEmailList([]);
       }
 
+      if (canReadSalesReport) {
+        unsubscribeFromSalesReports = subscribeToSalesReports(
+          (savedSalesReports: SalesReport[]) => {
+            if (isMounted) {
+              setSalesReports(savedSalesReports);
+              setSyncError("");
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to sync sales reports:", error);
+
+            if (isMounted) {
+              setSyncError(getFirebaseErrorMessage(error));
+              setIsLoading(false);
+            }
+          },
+        );
+      } else {
+        setSalesReports([]);
+      }
+
       if (
         !canReadReceiving &&
         !canReadSouth &&
         !canReadDeliveries &&
         !canReadCustomers &&
-        !canReadEmailList
+        !canReadEmailList &&
+        !canReadSalesReport
       ) {
         setIsLoading(false);
       }
@@ -1016,6 +1078,22 @@ export default function App() {
       } else {
         setEmailList([]);
       }
+
+      if (canReadSalesReport) {
+        subscribeToSalesReports(
+          (savedSalesReports: SalesReport[]) => {
+            if (isMounted) {
+              setSalesReports(savedSalesReports);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load sales reports:", error);
+          },
+        );
+      } else {
+        setSalesReports([]);
+      }
     }
 
     return () => {
@@ -1025,10 +1103,12 @@ export default function App() {
       unsubscribeFromDeliveries();
       unsubscribeFromCustomers();
       unsubscribeFromEmailList();
+      unsubscribeFromSalesReports();
     };
   }, [
     canReadEmailList,
     canReadCustomers,
+    canReadSalesReport,
     currentUser,
     canReadDeliveries,
     canReadReceiving,
@@ -1069,6 +1149,12 @@ export default function App() {
     const updatedEmailList =
       await deleteEmailListEntry(emailListEntryId);
     setEmailList(updatedEmailList);
+    setSyncError("");
+  }
+
+  async function handleSaveSalesReport(salesReport: SalesReport) {
+    const updatedSalesReports = await saveSalesReport(salesReport);
+    setSalesReports(updatedSalesReports);
     setSyncError("");
   }
 
@@ -1607,12 +1693,6 @@ export default function App() {
               value: dashboardAllowedPageIds.includes("sales-converter") ? 1 : 0,
               note: "Pricing converter",
             },
-            {
-              icon: Mail,
-              label: "Emails",
-              value: emailList.length,
-              note: "List entries",
-            },
           ]}
           actions={[
             dashboardAllowedPageIds.includes("customers-view")
@@ -1843,12 +1923,19 @@ export default function App() {
               value: effectiveAllowedPageIds.includes("sales-converter") ? 1 : 0,
               note: "Pricing converter",
             },
-            {
-              icon: Mail,
-              label: "Emails",
-              value: emailList.length,
-              note: "List entries",
-            },
+            ...(canReadSalesReport
+              ? [
+                  {
+                    icon: DollarSign,
+                    label: "Sales Month",
+                    value:
+                      currentSalesTotal > 0
+                        ? `$${Math.round(currentSalesTotal).toLocaleString()}`
+                        : "$0",
+                    note: "Current month",
+                  },
+                ]
+              : []),
           ]}
           actions={[
             effectiveAllowedPageIds.includes("customers-view")
@@ -1871,6 +1958,21 @@ export default function App() {
                   metric: "$",
                   metricLabel: "Margin",
                   onClick: () => setCurrentPage("sales-converter"),
+                }
+              : null,
+            canReadSalesReport
+              ? {
+                  icon: DollarSign,
+                  label: "Admin Pulse",
+                  title: "Sales Pulse",
+                  description: "Monthly cash/card sales, charge sales, and top spenders.",
+                  metric:
+                    currentSalesTotal > 0
+                      ? `$${Math.round(currentSalesTotal).toLocaleString()}`
+                      : "$0",
+                  metricLabel: "Month",
+                  tone: "marketing",
+                  onClick: () => setCurrentPage("sales-report"),
                 }
               : null,
           ].filter(Boolean)}
@@ -2152,6 +2254,16 @@ export default function App() {
 
       case "sales-converter":
         return <SalesConverterPage onPageChange={setCurrentPage} />;
+
+      case "sales-report":
+        return canReadSalesReport ? (
+          <SalesReportPage
+            reports={salesReports}
+            isSuperAdmin={isSuperAdmin}
+            onSaveReport={handleSaveSalesReport}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
 
       case "check-in":
       default:

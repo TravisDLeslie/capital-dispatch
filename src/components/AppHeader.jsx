@@ -81,7 +81,8 @@ function getCurrentPageLabel(currentPage) {
 
   if (
     String(currentPage || "").startsWith("customers-") ||
-    currentPage === "sales-converter"
+    currentPage === "sales-converter" ||
+    currentPage === "sales-report"
   ) {
     return "Sales";
   }
@@ -120,7 +121,8 @@ function getCurrentPageGroup(currentPage) {
   if (
     currentPage === "sales" ||
     String(currentPage || "").startsWith("customers-") ||
-    currentPage === "sales-converter"
+    currentPage === "sales-converter" ||
+    currentPage === "sales-report"
   ) {
     return "Sales";
   }
@@ -264,7 +266,8 @@ export default function AppHeader({
             allowedPageIds.some(
               (pageId) =>
                 String(pageId).startsWith("customers-") ||
-                pageId === "sales-converter",
+                pageId === "sales-converter" ||
+                pageId === "sales-report",
             )) ||
           (item.id === "admin" &&
             allowedPageIds.some((pageId) =>

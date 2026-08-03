@@ -59,6 +59,10 @@ service cloud.firestore {
       );
     }
 
+    function isSalesReportViewer() {
+      return isAdmin();
+    }
+
     function isDriverFor(driverName) {
       return isApproved() &&
         role() == "driver" &&
@@ -129,6 +133,11 @@ service cloud.firestore {
 
     match /bouncieVehicleSettings/{vehicleSettingId} {
       allow read, create, update, delete: if isAdmin();
+    }
+
+    match /salesMonthlyReports/{salesReportId} {
+      allow read: if isSalesReportViewer();
+      allow create, update, delete: if isSuperAdmin();
     }
   }
 }

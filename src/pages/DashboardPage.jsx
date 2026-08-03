@@ -63,6 +63,14 @@ function getVehicleMapUrl(vehicle) {
   )}`;
 }
 
+function formatDashboardCurrency(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(Number(value) || 0);
+}
+
 /**
  * @param {{
  *   title: string;
@@ -214,7 +222,7 @@ function MiniMetricCard({ icon: Icon, label, value, note, tone = "default" }) {
  *     deliveryOpen?: number;
  *     hardwareOpen?: number;
  *     customerCount?: number;
- *     emailCount?: number;
+ *     salesMonthTotal?: number;
  *   };
  * }} props
  */
@@ -405,9 +413,9 @@ export default function DashboardPage({
         <HeartbeatCard
           icon={UsersRound}
           title="Sales"
-          description="Customer records and email list growth."
+          description="Current month sales pulse and customer records."
           value={operations.customerCount || 0}
-          note={`${operations.emailCount || 0} emails`}
+          note={`${formatDashboardCurrency(operations.salesMonthTotal)} this month`}
           tone="marketing"
           onClick={() => onPageChange?.("sales")}
         />

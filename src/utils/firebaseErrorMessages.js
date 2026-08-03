@@ -3,7 +3,7 @@ export function getFirebaseErrorMessage(error) {
   const errorMessage = error?.message || "";
 
   if (errorCode === "permission-denied") {
-    return "Firebase denied access. Publish Firestore rules that allow this app to read and write check-ins, supplier runs, South route orders, deliveries, customers, and email list entries.";
+    return "Firebase denied access. Publish Firestore rules that allow this app to access check-ins, supplier runs, South route orders, deliveries, customers, email list entries, and sales reports.";
   }
 
   if (errorCode === "failed-precondition") {
