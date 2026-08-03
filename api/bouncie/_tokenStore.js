@@ -13,13 +13,17 @@ function getRedisConfig() {
       process.env.UPSTASH_REDIS_REST_TOKEN ||
       "",
     redisUrl: process.env.REDIS_URL || "",
+    prefixedRedisUrl:
+      process.env.BOUNCIE_REDIS_URL || process.env.bouncie_REDIS_URL || "",
   };
 }
 
 async function redisUrlCommand(command) {
   const config = getRedisConfig();
 
-  if (!config.redisUrl) {
+  const redisUrl = config.redisUrl || config.prefixedRedisUrl;
+
+  if (!redisUrl) {
     return {
       error:
         "Redis token storage is not configured. Connect Redis to this Vercel project so Bouncie tokens can persist across deploys.",
@@ -31,7 +35,7 @@ async function redisUrlCommand(command) {
   try {
     const { createClient } = await import("redis");
     redisClient = createClient({
-      url: config.redisUrl,
+      url: redisUrl,
     });
 
     redisClient.on("error", (error) => {
@@ -149,7 +153,9 @@ export async function saveBouncieTokens(tokenData, source = "api") {
 export function canPersistBouncieTokens() {
   const config = getRedisConfig();
 
-  return Boolean((config.url && config.token) || config.redisUrl);
+  return Boolean(
+    (config.url && config.token) || config.redisUrl || config.prefixedRedisUrl,
+  );
 }
 
 export function getBouncieTokenStoreName() {
