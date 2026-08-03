@@ -60,7 +60,11 @@ service cloud.firestore {
     }
 
     function isSalesReportViewer() {
-      return isAdmin();
+      return isAdmin() || (
+        isApproved() &&
+        userProfile().permissions is list &&
+        userProfile().permissions.hasAny(["sales-report"])
+      );
     }
 
     function isDriverFor(driverName) {

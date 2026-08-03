@@ -146,6 +146,7 @@ function ActionRow({
  *   }>;
  *   actions: Array<Record<string, unknown> | null>;
  *   headerAccessory?: import("react").ReactNode;
+ *   children?: import("react").ReactNode;
  * }} props
  */
 export default function SectionHubPage({
@@ -157,6 +158,7 @@ export default function SectionHubPage({
   stats,
   actions,
   headerAccessory = null,
+  children = null,
 }) {
   const PrimaryActionIcon = primaryAction?.icon;
 
@@ -210,6 +212,8 @@ export default function SectionHubPage({
           ))}
         </section>
       ) : null}
+
+      {children}
 
       <section className="grid gap-3">
         {actions.filter(Boolean).map((action) => (

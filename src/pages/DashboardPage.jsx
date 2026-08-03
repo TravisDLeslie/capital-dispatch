@@ -223,6 +223,8 @@ function MiniMetricCard({ icon: Icon, label, value, note, tone = "default" }) {
  *     hardwareOpen?: number;
  *     customerCount?: number;
  *     salesMonthTotal?: number;
+ *     cashCardSales?: number;
+ *     chargeSales?: number;
  *   };
  * }} props
  */
@@ -413,9 +415,11 @@ export default function DashboardPage({
         <HeartbeatCard
           icon={UsersRound}
           title="Sales"
-          description="Current month sales pulse and customer records."
-          value={operations.customerCount || 0}
-          note={`${formatDashboardCurrency(operations.salesMonthTotal)} this month`}
+          description="Current month cash/card and charge sales."
+          value={formatDashboardCurrency(operations.salesMonthTotal)}
+          note={`Cash/Card ${formatDashboardCurrency(
+            operations.cashCardSales,
+          )} · Charge ${formatDashboardCurrency(operations.chargeSales)}`}
           tone="marketing"
           onClick={() => onPageChange?.("sales")}
         />

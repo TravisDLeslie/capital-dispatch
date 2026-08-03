@@ -596,9 +596,7 @@ export default function App() {
     ["admin", "user-admin", "email-list", "bouncie"].includes(pageId),
   );
   const canReadEmailList = effectiveAllowedPageIds.includes("email-list");
-  const canReadSalesReport =
-    effectiveAllowedPageIds.includes("sales-report") &&
-    ["superAdmin", "admin"].includes(effectiveUserRole);
+  const canReadSalesReport = effectiveAllowedPageIds.includes("sales-report");
   const canReadCustomers = canReadSales || canReadReceiving || canReadEmailList;
   const visibleSupplierRuns =
     effectiveUserRole === "driver"
@@ -663,6 +661,8 @@ export default function App() {
     ).length,
     customerCount: customers.length,
     salesMonthTotal: currentSalesTotal,
+    cashCardSales: Number(currentSalesReport?.cashCardSales) || 0,
+    chargeSales: Number(currentSalesReport?.chargeSales) || 0,
   };
   const southVehicleOptions = vehicleSettings
     .map((vehicleSetting) => ({
@@ -1932,7 +1932,11 @@ export default function App() {
                       currentSalesTotal > 0
                         ? `$${Math.round(currentSalesTotal).toLocaleString()}`
                         : "$0",
-                    note: "Current month",
+                    note: `Cash/Card $${Math.round(
+                      Number(currentSalesReport?.cashCardSales) || 0,
+                    ).toLocaleString()} · Charge $${Math.round(
+                      Number(currentSalesReport?.chargeSales) || 0,
+                    ).toLocaleString()}`,
                   },
                 ]
               : []),
