@@ -70,7 +70,7 @@ function getVehicleMapUrl(vehicle) {
  *   icon: import("lucide-react").LucideIcon;
  *   value: string | number;
  *   note: string;
- *   tone?: "default" | "warning" | "success";
+ *   tone?: "default" | "warning" | "success" | "dispatch" | "marketing" | "fleet";
  *   onClick?: () => void;
  * }} props
  */
@@ -84,21 +84,49 @@ function HeartbeatCard({
   onClick,
 }) {
   const toneClasses = {
-    default: "bg-slate-50 text-slate-700 border-slate-200",
-    warning: "bg-amber-50 text-amber-700 border-amber-200",
-    success: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    default: {
+      card: "border-slate-200 bg-white hover:border-red-200 hover:bg-red-50/30",
+      icon: "bg-slate-50 text-slate-700 border-slate-200",
+      value: "text-slate-950",
+    },
+    warning: {
+      card: "border-amber-200 bg-white hover:border-amber-300 hover:bg-amber-50/40",
+      icon: "bg-amber-50 text-amber-700 border-amber-200",
+      value: "text-amber-900",
+    },
+    success: {
+      card: "border-emerald-200 bg-emerald-50/40 hover:border-emerald-300 hover:bg-emerald-50",
+      icon: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      value: "text-emerald-800",
+    },
+    dispatch: {
+      card: "border-blue-200 bg-blue-50/40 hover:border-blue-300 hover:bg-blue-50",
+      icon: "bg-white text-blue-700 border-blue-200",
+      value: "text-blue-900",
+    },
+    marketing: {
+      card: "border-rose-200 bg-rose-50/40 hover:border-rose-300 hover:bg-rose-50",
+      icon: "bg-white text-rose-700 border-rose-200",
+      value: "text-rose-900",
+    },
+    fleet: {
+      card: "border-cyan-200 bg-cyan-50/40 hover:border-cyan-300 hover:bg-cyan-50",
+      icon: "bg-white text-cyan-700 border-cyan-200",
+      value: "text-cyan-900",
+    },
   };
+  const selectedTone = toneClasses[tone] || toneClasses.default;
   const content = (
     <>
       <div className="flex items-start justify-between gap-4">
         <span
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${toneClasses[tone]}`}
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${selectedTone.icon}`}
         >
           <Icon aria-hidden="true" className="h-6 w-6" strokeWidth={2.4} />
         </span>
 
         <span className="text-right">
-          <span className="block text-3xl font-black text-slate-950">
+          <span className={`block text-3xl font-black ${selectedTone.value}`}>
             {value}
           </span>
           <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
@@ -121,7 +149,7 @@ function HeartbeatCard({
       <button
         type="button"
         onClick={onClick}
-        className="rounded-[22px] border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-red-200 hover:bg-red-50/30"
+        className={`rounded-[22px] border p-5 text-left shadow-sm transition ${selectedTone.card}`}
       >
         {content}
       </button>
@@ -129,9 +157,49 @@ function HeartbeatCard({
   }
 
   return (
-    <article className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
+    <article className={`rounded-[22px] border p-5 shadow-sm ${selectedTone.card}`}>
       {content}
     </article>
+  );
+}
+
+function MiniMetricCard({ icon: Icon, label, value, note, tone = "default" }) {
+  const toneClasses = {
+    default: {
+      card: "border-slate-200 bg-white",
+      icon: "text-slate-400",
+      value: "text-slate-950",
+    },
+    success: {
+      card: "border-emerald-200 bg-emerald-50/40",
+      icon: "text-emerald-700",
+      value: "text-emerald-800",
+    },
+    fleet: {
+      card: "border-cyan-200 bg-cyan-50/40",
+      icon: "text-cyan-700",
+      value: "text-cyan-900",
+    },
+  };
+  const selectedTone = toneClasses[tone] || toneClasses.default;
+
+  return (
+    <div className={`rounded-[22px] border p-5 shadow-sm ${selectedTone.card}`}>
+      <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+        <Icon
+          aria-hidden="true"
+          className={`h-4 w-4 ${selectedTone.icon}`}
+          strokeWidth={2.5}
+        />
+        {label}
+      </p>
+      <p className={`mt-3 text-4xl font-black ${selectedTone.value}`}>
+        {value}
+      </p>
+      <p className="mt-1 text-sm font-bold text-slate-500">
+        {note}
+      </p>
+    </div>
   );
 }
 
@@ -310,6 +378,7 @@ export default function DashboardPage({
           description="POs checked in today."
           value={operations.receivingToday || 0}
           note="Today"
+          tone="success"
           onClick={() => onPageChange?.("today")}
         />
 
@@ -319,7 +388,7 @@ export default function DashboardPage({
           description="PO requests waiting for driver and truck assignment."
           value={operations.southNeedsDispatch || 0}
           note="Waiting"
-          tone={operations.southNeedsDispatch > 0 ? "warning" : "success"}
+          tone={operations.southNeedsDispatch > 0 ? "warning" : "dispatch"}
           onClick={() => onPageChange?.("supplier-runs-dispatch")}
         />
 
@@ -329,7 +398,7 @@ export default function DashboardPage({
           description="Open deliveries with hardware reminders called out."
           value={operations.deliveryOpen || 0}
           note={`${operations.hardwareOpen || 0} hardware`}
-          tone={operations.hardwareOpen > 0 ? "warning" : "default"}
+          tone={operations.hardwareOpen > 0 ? "warning" : "success"}
           onClick={() => onPageChange?.("deliveries-queue")}
         />
 
@@ -339,53 +408,35 @@ export default function DashboardPage({
           description="Customer records and email list growth."
           value={operations.customerCount || 0}
           note={`${operations.emailCount || 0} emails`}
+          tone="marketing"
           onClick={() => onPageChange?.("sales")}
         />
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-            <Car aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
-            Vehicles
-          </p>
-          <p className="mt-3 text-4xl font-black text-slate-950">
-            {dashboardVehicles.length}
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-500">
-            Connected through Bouncie
-          </p>
-        </div>
+        <MiniMetricCard
+          icon={Car}
+          label="Vehicles"
+          value={dashboardVehicles.length}
+          note="Connected through Bouncie"
+          tone="fleet"
+        />
 
-        <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-            <Satellite
-              aria-hidden="true"
-              className="h-4 w-4"
-              strokeWidth={2.5}
-            />
-            Located
-          </p>
-          <p className="mt-3 text-4xl font-black text-slate-950">
-            {locatedVehicles.length}
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-500">
-            Showing last known position
-          </p>
-        </div>
+        <MiniMetricCard
+          icon={Satellite}
+          label="Located"
+          value={locatedVehicles.length}
+          note="Showing last known position"
+          tone="fleet"
+        />
 
-        <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-            <PackageCheck aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
-            South Pickups
-          </p>
-          <p className="mt-3 text-4xl font-black text-[#FC2C38]">
-            {operations.southOpen || 0}
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-500">
-            Open POs assigned to drivers
-          </p>
-        </div>
+        <MiniMetricCard
+          icon={PackageCheck}
+          label="South Pickups"
+          value={operations.southOpen || 0}
+          note="Open POs assigned to drivers"
+          tone="success"
+        />
       </section>
 
       <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
