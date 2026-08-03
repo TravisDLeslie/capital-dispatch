@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import Breadcrumbs from "../components/Breadcrumbs";
 import CheckInCard from "../components/CheckInCard";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
@@ -35,6 +36,7 @@ export default function SearchPage({
   checkIns,
   onDeleteCheckIn,
   onUpdateAssignment,
+  onPageChange,
 }) {
   const [searchValue, setSearchValue] = useState("");
 
@@ -128,6 +130,13 @@ export default function SearchPage({
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "Receiving", onClick: () => onPageChange?.("receiving") },
+          { label: "Search PO" },
+        ]}
+      />
+
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">
           PO Lookup

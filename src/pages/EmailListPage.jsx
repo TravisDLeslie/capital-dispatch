@@ -8,6 +8,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { createId } from "../utils/idHelpers";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
@@ -87,6 +88,7 @@ export default function EmailListPage({
   emailList,
   onAddEmailListEntry,
   onDeleteEmailListEntry,
+  onPageChange,
 }) {
   const savedEmailList = Array.isArray(emailList) ? emailList : [];
   const [manualEmail, setManualEmail] = useState("");
@@ -345,6 +347,13 @@ export default function EmailListPage({
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "Admin", onClick: () => onPageChange?.("admin") },
+          { label: "Email List" },
+        ]}
+      />
+
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
           Admin

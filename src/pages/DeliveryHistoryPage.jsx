@@ -10,6 +10,7 @@ import {
   Truck,
   UserRound,
 } from "lucide-react";
+import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 
@@ -71,7 +72,7 @@ function PhotoPreview({ photo, label, isHardware = false }) {
   );
 }
 
-export default function DeliveryHistoryPage({ deliveries }) {
+export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
   const [searchValue, setSearchValue] = useState("");
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
 
@@ -126,6 +127,13 @@ export default function DeliveryHistoryPage({ deliveries }) {
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "Deliveries", onClick: () => onPageChange?.("deliveries") },
+          { label: "Delivery History" },
+        ]}
+      />
+
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
           Delivery History

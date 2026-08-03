@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import Breadcrumbs from "../components/Breadcrumbs";
 import CheckInForm from "../components/CheckInForm";
 import PageContainer from "../components/PageContainer";
 
 export default function CheckInPage({
   onAddCheckIn,
   onViewToday,
+  onPageChange,
 }) {
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -32,6 +34,13 @@ export default function CheckInPage({
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "Receiving", onClick: () => onPageChange?.("receiving") },
+          { label: "Check In" },
+        ]}
+      />
+
       {successMessage ? (
         <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-bold text-emerald-800">

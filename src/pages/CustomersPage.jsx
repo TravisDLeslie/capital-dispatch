@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { HelpCircle, Plus, Search, UsersRound } from "lucide-react";
+import {
+  ChevronDown,
+  HelpCircle,
+  Plus,
+  Search,
+  UsersRound,
+} from "lucide-react";
+import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
@@ -78,6 +85,7 @@ export default function CustomersPage({
   customers,
   onAddCustomer,
   onUpdateCustomer,
+  onPageChange,
 }) {
   const savedCustomers = Array.isArray(customers) ? customers : [];
   const [name, setName] = useState("");
@@ -95,6 +103,7 @@ export default function CustomersPage({
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState("");
+  const [openContactCustomerIds, setOpenContactCustomerIds] = useState({});
   const filteredCustomers = savedCustomers.filter((customer) =>
     customerMatchesSearch(customer, searchTerm),
   );
@@ -187,6 +196,13 @@ export default function CustomersPage({
     setError("");
   }
 
+  function toggleCustomerContacts(customerId) {
+    setOpenContactCustomerIds((currentOpenContactCustomerIds) => ({
+      ...currentOpenContactCustomerIds,
+      [customerId]: !currentOpenContactCustomerIds[customerId],
+    }));
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -268,6 +284,19 @@ export default function CustomersPage({
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "Sales", onClick: () => onPageChange?.("sales") },
+          {
+            label: editingCustomerId
+              ? "Edit Customer"
+              : mode === "add"
+                ? "Add Customer"
+                : "View Customers",
+          },
+        ]}
+      />
+
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
           Sales
@@ -681,11 +710,18 @@ export default function CustomersPage({
             </div>
           ) : (
             <div className="grid gap-4 xl:grid-cols-2">
-              {filteredCustomers.map((customer) => (
-                <article
-                  key={customer.id}
-                  className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-                >
+              {filteredCustomers.map((customer) => {
+                const hasContacts =
+                  Array.isArray(customer.contacts) &&
+                  customer.contacts.length > 0;
+                const contactsAreOpen =
+                  Boolean(openContactCustomerIds[customer.id]);
+
+                return (
+                  <article
+                    key={customer.id}
+                    className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                  >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
@@ -766,43 +802,75 @@ export default function CustomersPage({
                     </button>
                   </div>
 
-                  <div className="mt-4 space-y-2">
-                    {Array.isArray(customer.contacts) &&
-                    customer.contacts.length > 0 ? (
-                      customer.contacts.map((contact) => (
-                        <div
-                          key={contact.id}
-                          className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
-                        >
-                          {contact.label ? (
-                            <p className="mb-1 text-xs font-black uppercase tracking-[0.14em] text-[#FC2C38]">
-                              {contact.label}
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        onClick={() => toggleCustomerContacts(customer.id)}
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:bg-slate-100"
+                        aria-expanded={contactsAreOpen}
+                      >
+                        <span>
+                          <span className="block text-sm font-black text-slate-900">
+                            Contacts
+                          </span>
+                          <span className="mt-0.5 block text-xs font-bold text-slate-500">
+                            {hasContacts
+                              ? `${customer.contacts.length} saved contact${
+                                  customer.contacts.length === 1 ? "" : "s"
+                                }`
+                              : "No contacts saved"}
+                          </span>
+                        </span>
+
+                        <ChevronDown
+                          aria-hidden="true"
+                          className={`h-5 w-5 text-slate-500 transition-transform ${
+                            contactsAreOpen ? "rotate-180" : ""
+                          }`}
+                          strokeWidth={2.6}
+                        />
+                      </button>
+
+                      {contactsAreOpen ? (
+                        <div className="mt-2 space-y-2">
+                          {hasContacts ? (
+                            customer.contacts.map((contact) => (
+                              <div
+                                key={contact.id}
+                                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                              >
+                                {contact.label ? (
+                                  <p className="mb-1 text-xs font-black uppercase tracking-[0.14em] text-[#FC2C38]">
+                                    {contact.label}
+                                  </p>
+                                ) : null}
+
+                                <p className="font-black text-slate-900">
+                                  {contact.name || "No contact name"}
+                                </p>
+
+                                <p className="mt-1 text-sm font-bold text-slate-500">
+                                  {contact.phone || "No phone listed"}
+                                </p>
+
+                                {contact.email ? (
+                                  <p className="mt-1 text-sm font-bold text-slate-500">
+                                    {contact.email}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ))
+                          ) : (
+                            <p className="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm font-semibold text-slate-500">
+                              No contacts saved.
                             </p>
-                          ) : null}
-
-                          <p className="font-black text-slate-900">
-                            {contact.name || "No contact name"}
-                          </p>
-
-                          <p className="mt-1 text-sm font-bold text-slate-500">
-                            {contact.phone || "No phone listed"}
-                          </p>
-
-                          {contact.email ? (
-                            <p className="mt-1 text-sm font-bold text-slate-500">
-                              {contact.email}
-                            </p>
-                          ) : null}
+                          )}
                         </div>
-                      ))
-                    ) : (
-                      <p className="rounded-2xl border border-dashed border-slate-300 px-4 py-4 text-sm font-semibold text-slate-500">
-                        No contacts saved.
-                      </p>
-                    )}
-                  </div>
-                </article>
-              ))}
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>

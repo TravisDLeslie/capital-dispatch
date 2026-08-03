@@ -1,5 +1,6 @@
 import { Calculator, Layers, Package, Ruler } from "lucide-react";
 import { useMemo, useState } from "react";
+import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -220,7 +221,7 @@ function SellPriceCheck({
   );
 }
 
-export default function SalesConverterPage() {
+export default function SalesConverterPage({ onPageChange }) {
   const [converterType, setConverterType] = useState("panel");
   const [panelQuantity, setPanelQuantity] = useState("1");
   const [panelWidthFeet, setPanelWidthFeet] = useState("4");
@@ -317,6 +318,13 @@ export default function SalesConverterPage() {
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "Sales", onClick: () => onPageChange?.("sales") },
+          { label: "Converter" },
+        ]}
+      />
+
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
           Sales
@@ -332,46 +340,46 @@ export default function SalesConverterPage() {
         </p>
       </div>
 
-      <div className="mb-5 grid grid-cols-[auto_1fr_1fr_1fr] items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm sm:max-w-2xl">
-        <span className="px-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 sm:px-3 sm:text-xs">
+      <div className="mb-5 grid grid-cols-3 items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm sm:max-w-2xl sm:grid-cols-[auto_1fr_1fr_1fr]">
+        <span className="hidden px-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 sm:block sm:px-3 sm:text-xs">
           Convert
         </span>
         <button
           type="button"
           onClick={() => setConverterType("panel")}
-          className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
+          className={`flex min-w-0 items-center justify-center gap-1 rounded-xl px-2 py-3 text-xs font-black transition sm:gap-2 sm:px-4 sm:text-sm ${
             converterType === "panel"
               ? "bg-[#FC2C38] text-white shadow-sm"
               : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           }`}
         >
-          <Layers aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
+          <Layers aria-hidden="true" className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.5} />
           <span className="sm:hidden">Sheet</span>
           <span className="hidden sm:inline">Panel Goods</span>
         </button>
         <button
           type="button"
           onClick={() => setConverterType("boards")}
-          className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
+          className={`flex min-w-0 items-center justify-center gap-1 rounded-xl px-2 py-3 text-xs font-black transition sm:gap-2 sm:px-4 sm:text-sm ${
             converterType === "boards"
               ? "bg-[#FC2C38] text-white shadow-sm"
               : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           }`}
         >
-          <Ruler aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
+          <Ruler aria-hidden="true" className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.5} />
           <span className="sm:hidden">Board</span>
           <span className="hidden sm:inline">Boards</span>
         </button>
         <button
           type="button"
           onClick={() => setConverterType("item")}
-          className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black transition ${
+          className={`flex min-w-0 items-center justify-center gap-1 rounded-xl px-2 py-3 text-xs font-black transition sm:gap-2 sm:px-4 sm:text-sm ${
             converterType === "item"
               ? "bg-[#FC2C38] text-white shadow-sm"
               : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
           }`}
         >
-          <Package aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
+          <Package aria-hidden="true" className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.5} />
           Item
         </button>
       </div>

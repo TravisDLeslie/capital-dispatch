@@ -25,83 +25,28 @@ const navigationItems = [
   },
   {
     group: "Receiving",
-    id: "check-in",
-    label: "Check In Items",
-  },
-  {
-    group: "Receiving",
-    id: "today",
-    label: "Today's Checked In Items",
-  },
-  {
-    group: "Receiving",
-    id: "search",
-    label: "Search POs",
+    id: "receiving",
+    label: "Receiving",
   },
   {
     group: "South",
-    id: "supplier-runs-add",
-    label: "Add POs for South",
-  },
-  {
-    group: "South",
-    id: "supplier-runs-dispatch",
-    label: "Needs Dispatch",
-  },
-  {
-    group: "South",
-    id: "supplier-runs-check",
-    label: "View POs To Pick Up",
-  },
-  {
-    group: "South",
-    id: "supplier-runs-history",
-    label: "South PO History",
+    id: "south",
+    label: "South",
   },
   {
     group: "Deliveries",
-    id: "deliveries-add",
-    label: "Add Deliveries",
-  },
-  {
-    group: "Deliveries",
-    id: "deliveries-queue",
+    id: "deliveries",
     label: "Deliveries",
   },
   {
-    group: "Deliveries",
-    id: "deliveries-history",
-    label: "Delivery History",
-  },
-  {
     group: "Sales",
-    id: "customers-add",
-    label: "Add Customer",
-  },
-  {
-    group: "Sales",
-    id: "customers-view",
-    label: "View Customers",
-  },
-  {
-    group: "Sales",
-    id: "sales-converter",
-    label: "Converter",
+    id: "sales",
+    label: "Sales",
   },
   {
     group: "Admin",
-    id: "user-admin",
-    label: "User Access",
-  },
-  {
-    group: "Admin",
-    id: "email-list",
-    label: "Email List",
-  },
-  {
-    group: "Admin",
-    id: "bouncie",
-    label: "Vehicles",
+    id: "admin",
+    label: "Admin",
   },
 ];
 
@@ -126,6 +71,29 @@ function getActionNavButtonClass(isActive, isMobile = false) {
 }
 
 function getCurrentPageLabel(currentPage) {
+  if (String(currentPage || "").startsWith("supplier-runs")) {
+    return "South";
+  }
+
+  if (["check-in", "today", "search"].includes(currentPage)) {
+    return "Receiving";
+  }
+
+  if (String(currentPage || "").startsWith("deliveries-")) {
+    return "Deliveries";
+  }
+
+  if (
+    String(currentPage || "").startsWith("customers-") ||
+    currentPage === "sales-converter"
+  ) {
+    return "Sales";
+  }
+
+  if (["user-admin", "email-list", "bouncie"].includes(currentPage)) {
+    return "Admin";
+  }
+
   const currentItem = navigationItems.find(
     (item) => item.id === currentPage,
   );
@@ -135,6 +103,40 @@ function getCurrentPageLabel(currentPage) {
   }
 
   return `${currentItem.group} / ${currentItem.label}`;
+}
+
+function getCurrentPageGroup(currentPage) {
+  if (String(currentPage || "").startsWith("supplier-runs")) {
+    return "South";
+  }
+
+  if (["receiving", "check-in", "today", "search"].includes(currentPage)) {
+    return "Receiving";
+  }
+
+  if (
+    currentPage === "deliveries" ||
+    String(currentPage || "").startsWith("deliveries-")
+  ) {
+    return "Deliveries";
+  }
+
+  if (
+    currentPage === "sales" ||
+    String(currentPage || "").startsWith("customers-") ||
+    currentPage === "sales-converter"
+  ) {
+    return "Sales";
+  }
+
+  if (
+    currentPage === "admin" ||
+    ["user-admin", "email-list", "bouncie"].includes(currentPage)
+  ) {
+    return "Admin";
+  }
+
+  return navigationItems.find((item) => item.id === currentPage)?.group || "";
 }
 
 function getNavGroupIcon(group) {
@@ -189,11 +191,9 @@ export default function AppHeader({
     .toUpperCase();
 
   useEffect(() => {
-    const currentItem = navigationItems.find(
-      (item) => item.id === currentPage,
-    );
+    const currentGroup = getCurrentPageGroup(currentPage);
 
-    if (!currentItem) {
+    if (!currentGroup) {
       return;
     }
 
@@ -204,7 +204,7 @@ export default function AppHeader({
       Deliveries: false,
       Sales: false,
       Admin: false,
-      [currentItem.group]: true,
+      [currentGroup]: true,
     });
   }, [currentPage]);
 
@@ -233,16 +233,44 @@ export default function AppHeader({
     return ["Dashboard", "Receiving", "South", "Deliveries", "Sales", "Admin"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
-          !allowedPageIds || allowedPageIds.includes(item.id);
+          !allowedPageIds ||
+          allowedPageIds.includes(item.id) ||
+          (item.id === "south" &&
+            allowedPageIds.some((pageId) =>
+              String(pageId).startsWith("supplier-runs"),
+            )) ||
+          (item.id === "receiving" &&
+            allowedPageIds.some((pageId) =>
+              ["check-in", "today", "search"].includes(pageId),
+            )) ||
+          (item.id === "deliveries" &&
+            allowedPageIds.some((pageId) =>
+              String(pageId).startsWith("deliveries-"),
+            )) ||
+          (item.id === "sales" &&
+            allowedPageIds.some(
+              (pageId) =>
+                String(pageId).startsWith("customers-") ||
+                pageId === "sales-converter",
+            )) ||
+          (item.id === "admin" &&
+            allowedPageIds.some((pageId) =>
+              ["user-admin", "email-list", "bouncie"].includes(pageId),
+            ));
 
         return item.group === group && pageIsAllowed;
       });
       const isGroupOpen = openNavGroups[group];
       const NavGroupIcon = getNavGroupIcon(group);
       const hasGroupItems = groupItems.length > 0;
-      const groupIsActive = groupItems.some(
-        (item) => item.id === currentPage,
-      );
+      const groupIsActive = getCurrentPageGroup(currentPage) === group;
+      const isSinglePageGroup = [
+        "Receiving",
+        "South",
+        "Deliveries",
+        "Sales",
+        "Admin",
+      ].includes(group);
 
       return hasGroupItems ? (
         <div
@@ -252,7 +280,9 @@ export default function AppHeader({
           <button
             type="button"
             onClick={() => {
-              if (hasGroupItems) {
+              if (isSinglePageGroup) {
+                handlePageChange(groupItems[0].id);
+              } else if (hasGroupItems) {
                 toggleNavGroup(group);
               }
             }}
@@ -261,7 +291,7 @@ export default function AppHeader({
                 ? "bg-red-50 text-[#FC2C38]"
                 : "text-slate-900 hover:bg-slate-50"
             }`}
-            aria-expanded={isGroupOpen}
+            aria-expanded={isSinglePageGroup ? undefined : isGroupOpen}
           >
             <span className="flex items-center gap-4 leading-none">
               <NavGroupIcon
@@ -271,7 +301,7 @@ export default function AppHeader({
               />
               {group}
             </span>
-            {hasGroupItems ? (
+            {hasGroupItems && !isSinglePageGroup ? (
               <span className="text-slate-400">
                 <ChevronDown
                   aria-hidden="true"
@@ -284,7 +314,7 @@ export default function AppHeader({
             ) : null}
           </button>
 
-          {hasGroupItems && isGroupOpen ? (
+          {hasGroupItems && isGroupOpen && !isSinglePageGroup ? (
             <div className="mt-3 space-y-2">
               {groupItems.map((item) => {
                 const isActive = currentPage === item.id;

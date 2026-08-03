@@ -1,3 +1,4 @@
+import Breadcrumbs from "../components/Breadcrumbs";
 import CheckInCard from "../components/CheckInCard";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
@@ -11,6 +12,7 @@ export default function TodayPage({
   customers,
   onDeleteCheckIn,
   onUpdateAssignment,
+  onPageChange,
 }) {
   const todaysCheckIns = checkIns
     .filter((checkIn) => isToday(checkIn.checkedInAt))
@@ -28,6 +30,13 @@ export default function TodayPage({
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "Receiving", onClick: () => onPageChange?.("receiving") },
+          { label: "Today's Check-Ins" },
+        ]}
+      />
+
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
+import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { deliveryDrivers } from "../data/options";
 
@@ -25,6 +26,7 @@ const permissionGroups = [
   {
     title: "Receiving",
     permissions: [
+      { id: "receiving", label: "Receiving" },
       { id: "check-in", label: "Check In" },
       { id: "today", label: "Today's Check-Ins" },
       { id: "search", label: "Search PO" },
@@ -33,6 +35,7 @@ const permissionGroups = [
   {
     title: "South",
     permissions: [
+      { id: "south", label: "South" },
       { id: "supplier-runs-add", label: "Add POs" },
       { id: "supplier-runs-dispatch", label: "Needs Dispatch" },
       { id: "supplier-runs-check", label: "View POs to Pick Up" },
@@ -42,6 +45,7 @@ const permissionGroups = [
   {
     title: "Deliveries",
     permissions: [
+      { id: "deliveries", label: "Deliveries" },
       { id: "deliveries-add", label: "Add Deliveries" },
       { id: "deliveries-queue", label: "To Be Delivered" },
       { id: "deliveries-history", label: "Delivery History" },
@@ -50,6 +54,7 @@ const permissionGroups = [
   {
     title: "Sales",
     permissions: [
+      { id: "sales", label: "Sales" },
       { id: "customers-add", label: "Add Customer" },
       { id: "customers-view", label: "View Customers" },
       { id: "sales-converter", label: "Converter" },
@@ -58,6 +63,7 @@ const permissionGroups = [
   {
     title: "Admin",
     permissions: [
+      { id: "admin", label: "Admin" },
       { id: "user-admin", label: "User Access" },
       { id: "email-list", label: "Email List" },
       { id: "bouncie", label: "Vehicles" },
@@ -71,17 +77,26 @@ const allPermissionIds = permissionGroups.flatMap((group) =>
 
 const rolePermissionPresets = {
   pending: [],
-  driver: ["driver-dashboard", "supplier-runs-check", "deliveries-queue"],
-  receiving: ["check-in", "today", "search"],
+  driver: [
+    "driver-dashboard",
+    "south",
+    "supplier-runs-check",
+    "deliveries",
+    "deliveries-queue",
+  ],
+  receiving: ["receiving", "check-in", "today", "search"],
   south: [
+    "south",
     "supplier-runs-add",
     "supplier-runs-dispatch",
     "supplier-runs-check",
     "supplier-runs-history",
   ],
-  delivery: ["deliveries-queue", "deliveries-history"],
+  delivery: ["deliveries", "deliveries-queue", "deliveries-history"],
   sales: [
+    "south",
     "supplier-runs-add",
+    "sales",
     "customers-add",
     "customers-view",
     "sales-converter",
@@ -124,6 +139,7 @@ export default function UserAdminPage({
   users,
   currentUserProfile,
   onUpdateUserProfile,
+  onPageChange,
 }) {
   const [drafts, setDrafts] = useState({});
   const [savingUserId, setSavingUserId] = useState("");
@@ -254,6 +270,13 @@ export default function UserAdminPage({
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "Admin", onClick: () => onPageChange?.("admin") },
+          { label: "User Access" },
+        ]}
+      />
+
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
           Admin

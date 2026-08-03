@@ -1,6 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
+import {
+  Calculator,
+  ClipboardCheck,
+  History,
+  Mail,
+  Package,
+  PackageCheck,
+  Plus,
+  Search,
+  ShieldCheck,
+  Truck,
+  UsersRound,
+} from "lucide-react";
 import AppHeader from "./components/AppHeader";
+import SectionHubPage from "./components/SectionHubPage";
 import BounciePage from "./pages/BounciePage";
 import CheckInPage from "./pages/CheckInPage";
 import CustomersPage from "./pages/CustomersPage";
@@ -13,6 +27,7 @@ import EmailListPage from "./pages/EmailListPage";
 import LoginPage from "./components/LoginPage";
 import SearchPage from "./pages/SearchPage";
 import SalesConverterPage from "./pages/SalesConverterPage";
+import SouthHubPage from "./pages/SouthHubPage";
 import SupplierRunsPage from "./pages/SupplierRunsPage";
 import TodayPage from "./pages/TodayPage";
 import UserAdminPage from "./pages/UserAdminPage";
@@ -254,19 +269,24 @@ function getAllowedPageIdsForRole(role: string) {
     return [
       "dashboard",
       "driver-dashboard",
+      "receiving",
       "check-in",
       "today",
       "search",
+      "south",
       "supplier-runs-add",
       "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-history",
+      "deliveries",
       "deliveries-add",
       "deliveries-queue",
       "deliveries-history",
+      "sales",
       "customers-add",
       "customers-view",
       "sales-converter",
+      "admin",
       "user-admin",
       "email-list",
       "bouncie",
@@ -277,30 +297,36 @@ function getAllowedPageIdsForRole(role: string) {
     return [
       "dashboard",
       "driver-dashboard",
+      "receiving",
       "check-in",
       "today",
       "search",
+      "south",
       "supplier-runs-add",
       "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-history",
+      "deliveries",
       "deliveries-add",
       "deliveries-queue",
       "deliveries-history",
+      "sales",
       "customers-add",
       "customers-view",
       "sales-converter",
+      "admin",
       "email-list",
       "bouncie",
     ];
   }
 
   if (role === "receiving") {
-    return ["check-in", "today", "search"];
+    return ["receiving", "check-in", "today", "search"];
   }
 
   if (role === "south") {
     return [
+      "south",
       "supplier-runs-add",
       "supplier-runs-dispatch",
       "supplier-runs-check",
@@ -309,12 +335,14 @@ function getAllowedPageIdsForRole(role: string) {
   }
 
   if (role === "delivery") {
-    return ["deliveries-queue", "deliveries-history"];
+    return ["deliveries", "deliveries-queue", "deliveries-history"];
   }
 
   if (role === "sales") {
     return [
+      "south",
       "supplier-runs-add",
+      "sales",
       "customers-add",
       "customers-view",
       "sales-converter",
@@ -322,7 +350,13 @@ function getAllowedPageIdsForRole(role: string) {
   }
 
   if (role === "driver") {
-    return ["driver-dashboard", "supplier-runs-check", "deliveries-queue"];
+    return [
+      "driver-dashboard",
+      "south",
+      "supplier-runs-check",
+      "deliveries",
+      "deliveries-queue",
+    ];
   }
 
   return [];
@@ -437,10 +471,11 @@ export default function App() {
   );
   const driverName = userProfile?.driverName || "";
   const canReadReceiving = allowedPageIds.some((pageId) =>
-    ["check-in", "today", "search"].includes(pageId),
+    ["receiving", "check-in", "today", "search"].includes(pageId),
   );
   const canReadSouth = allowedPageIds.some((pageId) =>
     [
+      "south",
       "supplier-runs-add",
       "supplier-runs-dispatch",
       "supplier-runs-check",
@@ -452,13 +487,17 @@ export default function App() {
   );
   const canReadDeliveries = allowedPageIds.some((pageId) =>
     [
+      "deliveries",
       "deliveries-add",
       "deliveries-queue",
       "deliveries-history",
     ].includes(pageId),
   );
   const canReadSales = allowedPageIds.some((pageId) =>
-    ["customers-add", "customers-view", "sales-converter"].includes(pageId),
+    ["sales", "customers-add", "customers-view", "sales-converter"].includes(pageId),
+  );
+  const canReadAdmin = allowedPageIds.some((pageId) =>
+    ["admin", "user-admin", "email-list", "bouncie"].includes(pageId),
   );
   const canReadEmailList = allowedPageIds.includes("email-list");
   const canReadCustomers = canReadSales || canReadReceiving || canReadEmailList;
@@ -1175,6 +1214,297 @@ export default function App() {
   }
 
   function renderCurrentPage() {
+    if (currentPage === "receiving" && canReadReceiving) {
+      const todayCheckIns = checkIns.filter((checkIn) => {
+        const checkedAt =
+          typeof checkIn.checkedInAt === "string"
+            ? checkIn.checkedInAt
+            : "";
+
+        return checkedAt.slice(0, 10) === new Date().toISOString().slice(0, 10);
+      });
+
+      return (
+        <SectionHubPage
+          title="Receiving"
+          description="Check in vendor POs, review today's work, and search past receiving records."
+          icon={Package}
+          primaryAction={
+            allowedPageIds.includes("check-in")
+              ? {
+                  label: "Check In PO",
+                  icon: Plus,
+                  onClick: () => setCurrentPage("check-in"),
+                }
+              : null
+          }
+          stats={[
+            {
+              icon: ClipboardCheck,
+              label: "Today",
+              value: todayCheckIns.length,
+              note: "Checked in",
+            },
+            {
+              icon: Search,
+              label: "Records",
+              value: checkIns.length,
+              note: "Searchable POs",
+            },
+            {
+              icon: Package,
+              label: "Photos",
+              value: checkIns.filter((checkIn) =>
+                Array.isArray(checkIn.materials)
+                  ? checkIn.materials.some((material) => material.locationPhoto)
+                  : false,
+              ).length,
+              note: "With material photos",
+            },
+          ]}
+          actions={[
+            allowedPageIds.includes("today")
+              ? {
+                  icon: ClipboardCheck,
+                  label: "Daily Board",
+                  title: "Today's Check-Ins",
+                  description: "Review what has been checked in today.",
+                  metric: todayCheckIns.length,
+                  metricLabel: "Today",
+                  onClick: () => setCurrentPage("today"),
+                }
+              : null,
+            allowedPageIds.includes("search")
+              ? {
+                  icon: Search,
+                  label: "Lookup",
+                  title: "Search POs",
+                  description: "Find receiving records by PO, customer, vendor, item, or location.",
+                  metric: checkIns.length,
+                  metricLabel: "Records",
+                  onClick: () => setCurrentPage("search"),
+                }
+              : null,
+          ].filter(Boolean)}
+        />
+      );
+    }
+
+    if (currentPage === "south" && canReadSouth) {
+      return (
+        <SouthHubPage
+          supplierRuns={visibleSupplierRuns}
+          allowedPageIds={allowedPageIds}
+          onPageChange={setCurrentPage}
+        />
+      );
+    }
+
+    if (currentPage === "deliveries" && canReadDeliveries) {
+      const openDeliveries = visibleDeliveries.filter(
+        (delivery) => delivery.status !== "complete",
+      );
+      const completedDeliveries = visibleDeliveries.filter(
+        (delivery) => delivery.status === "complete",
+      );
+      const hardwareOpen = openDeliveries.filter(
+        (delivery) => delivery.hasHardware && !delivery.hardwareChecked,
+      );
+
+      return (
+        <SectionHubPage
+          title="Deliveries"
+          description="Create delivery orders, track driver work, and review completed deliveries."
+          icon={Truck}
+          primaryAction={
+            allowedPageIds.includes("deliveries-add")
+              ? {
+                  label: "Add Delivery",
+                  icon: Plus,
+                  onClick: () => setCurrentPage("deliveries-add"),
+                }
+              : null
+          }
+          stats={[
+            {
+              icon: PackageCheck,
+              label: "Open",
+              value: openDeliveries.length,
+              note: "To be delivered",
+            },
+            {
+              icon: Package,
+              label: "Hardware",
+              value: hardwareOpen.length,
+              note: "Needs checkoff",
+            },
+            {
+              icon: History,
+              label: "Completed",
+              value: completedDeliveries.length,
+              note: "Delivery history",
+            },
+          ]}
+          actions={[
+            allowedPageIds.includes("deliveries-queue")
+              ? {
+                  icon: PackageCheck,
+                  label: "Driver Board",
+                  title: "Deliveries",
+                  description: "Open assigned orders, photo capture, hardware reminders, and directions.",
+                  metric: openDeliveries.length,
+                  metricLabel: "Open",
+                  tone: hardwareOpen.length > 0 ? "warning" : "default",
+                  onClick: () => setCurrentPage("deliveries-queue"),
+                }
+              : null,
+            allowedPageIds.includes("deliveries-history")
+              ? {
+                  icon: History,
+                  label: "Archive",
+                  title: "Delivery History",
+                  description: "Search and review completed delivery records.",
+                  metric: completedDeliveries.length,
+                  metricLabel: "Complete",
+                  onClick: () => setCurrentPage("deliveries-history"),
+                }
+              : null,
+          ].filter(Boolean)}
+        />
+      );
+    }
+
+    if (currentPage === "sales" && canReadSales) {
+      return (
+        <SectionHubPage
+          title="Sales"
+          description="Manage customers, build email lists, and use quick pricing tools."
+          icon={UsersRound}
+          primaryAction={
+            allowedPageIds.includes("customers-add")
+              ? {
+                  label: "Add Customer",
+                  icon: Plus,
+                  onClick: () => setCurrentPage("customers-add"),
+                }
+              : null
+          }
+          stats={[
+            {
+              icon: UsersRound,
+              label: "Customers",
+              value: customers.length,
+              note: "Saved accounts",
+            },
+            {
+              icon: Calculator,
+              label: "Tools",
+              value: allowedPageIds.includes("sales-converter") ? 1 : 0,
+              note: "Pricing converter",
+            },
+            {
+              icon: Mail,
+              label: "Emails",
+              value: emailList.length,
+              note: "List entries",
+            },
+          ]}
+          actions={[
+            allowedPageIds.includes("customers-view")
+              ? {
+                  icon: Search,
+                  label: "Customer Lookup",
+                  title: "View Customers",
+                  description: "Search customer records, account numbers, contacts, and addresses.",
+                  metric: customers.length,
+                  metricLabel: "Customers",
+                  onClick: () => setCurrentPage("customers-view"),
+                }
+              : null,
+            allowedPageIds.includes("sales-converter")
+              ? {
+                  icon: Calculator,
+                  label: "Pricing",
+                  title: "Converter",
+                  description: "Convert panels, boards, and item pricing with margin targets.",
+                  metric: "$",
+                  metricLabel: "Margin",
+                  onClick: () => setCurrentPage("sales-converter"),
+                }
+              : null,
+          ].filter(Boolean)}
+        />
+      );
+    }
+
+    if (currentPage === "admin" && canReadAdmin) {
+      const pendingUsers = users.filter((user) => user.status === "pending");
+
+      return (
+        <SectionHubPage
+          title="Admin"
+          description="Control user access, vehicle settings, and email list tools."
+          icon={ShieldCheck}
+          stats={[
+            {
+              icon: UsersRound,
+              label: "Users",
+              value: users.length,
+              note: "Known sign-ins",
+            },
+            {
+              icon: ShieldCheck,
+              label: "Pending",
+              value: pendingUsers.length,
+              note: "Need approval",
+            },
+            {
+              icon: Mail,
+              label: "Emails",
+              value: emailList.length,
+              note: "List entries",
+            },
+          ]}
+          actions={[
+            allowedPageIds.includes("user-admin")
+              ? {
+                  icon: ShieldCheck,
+                  label: "Access",
+                  title: "User Access",
+                  description: "Approve people, assign roles, and manage page access.",
+                  metric: pendingUsers.length,
+                  metricLabel: "Pending",
+                  tone: pendingUsers.length > 0 ? "warning" : "default",
+                  onClick: () => setCurrentPage("user-admin"),
+                }
+              : null,
+            allowedPageIds.includes("email-list")
+              ? {
+                  icon: Mail,
+                  label: "Marketing",
+                  title: "Email List",
+                  description: "Build groups, add email contacts, and export CSV lists.",
+                  metric: emailList.length,
+                  metricLabel: "Emails",
+                  onClick: () => setCurrentPage("email-list"),
+                }
+              : null,
+            allowedPageIds.includes("bouncie")
+              ? {
+                  icon: Truck,
+                  label: "Fleet",
+                  title: "Vehicles",
+                  description: "Connect Bouncie, name trucks, and manage map badges.",
+                  metric: "GPS",
+                  metricLabel: "Fleet",
+                  onClick: () => setCurrentPage("bouncie"),
+                }
+              : null,
+          ].filter(Boolean)}
+        />
+      );
+    }
+
     if (!allowedPageIds.includes(currentPage)) {
       return null;
     }
@@ -1201,6 +1531,7 @@ export default function App() {
             users={users}
             currentUserProfile={userProfile}
             onUpdateUserProfile={handleUpdateUserProfile}
+            onPageChange={setCurrentPage}
           />
         );
 
@@ -1211,11 +1542,12 @@ export default function App() {
             emailList={emailList}
             onAddEmailListEntry={handleAddEmailListEntry}
             onDeleteEmailListEntry={handleDeleteEmailListEntry}
+            onPageChange={setCurrentPage}
           />
         );
 
       case "bouncie":
-        return <BounciePage />;
+        return <BounciePage onPageChange={setCurrentPage} />;
 
       case "today":
         return (
@@ -1226,6 +1558,7 @@ export default function App() {
             onUpdateAssignment={
               handleUpdateAssignment
             }
+            onPageChange={setCurrentPage}
           />
         );
 
@@ -1237,6 +1570,7 @@ export default function App() {
             onUpdateAssignment={
               handleUpdateAssignment
             }
+            onPageChange={setCurrentPage}
           />
         );
 
@@ -1257,6 +1591,7 @@ export default function App() {
               handleUpdateSupplierRunItemDescription
             }
             onDeleteSupplierRun={handleDeleteSupplierRun}
+            onPageChange={setCurrentPage}
           />
         );
 
@@ -1276,6 +1611,7 @@ export default function App() {
               handleUpdateSupplierRunItemDescription
             }
             onDeleteSupplierRun={handleDeleteSupplierRun}
+            onPageChange={setCurrentPage}
           />
         );
 
@@ -1294,6 +1630,7 @@ export default function App() {
               handleUpdateSupplierRunItemDescription
             }
             onDeleteSupplierRun={handleDeleteSupplierRun}
+            onPageChange={setCurrentPage}
           />
         );
 
@@ -1312,6 +1649,7 @@ export default function App() {
               handleUpdateSupplierRunItemDescription
             }
             onDeleteSupplierRun={handleDeleteSupplierRun}
+            onPageChange={setCurrentPage}
           />
         );
 
@@ -1325,6 +1663,7 @@ export default function App() {
             editingDeliveryId={editingDeliveryId}
             onEditDelivery={handleEditDelivery}
             onCancelEditDelivery={handleCancelEditDelivery}
+            onPageChange={setCurrentPage}
           />
         );
 
@@ -1334,12 +1673,16 @@ export default function App() {
             deliveries={visibleDeliveries}
             onUpdateDelivery={handleUpdateDelivery}
             onEditDelivery={handleEditDelivery}
+            onPageChange={setCurrentPage}
           />
         );
 
       case "deliveries-history":
         return (
-          <DeliveryHistoryPage deliveries={visibleDeliveries} />
+          <DeliveryHistoryPage
+            deliveries={visibleDeliveries}
+            onPageChange={setCurrentPage}
+          />
         );
 
       case "customers-add":
@@ -1349,6 +1692,7 @@ export default function App() {
             customers={customers}
             onAddCustomer={handleAddCustomer}
             onUpdateCustomer={handleUpdateCustomer}
+            onPageChange={setCurrentPage}
           />
         );
 
@@ -1359,11 +1703,12 @@ export default function App() {
             customers={customers}
             onAddCustomer={handleAddCustomer}
             onUpdateCustomer={handleUpdateCustomer}
+            onPageChange={setCurrentPage}
           />
         );
 
       case "sales-converter":
-        return <SalesConverterPage />;
+        return <SalesConverterPage onPageChange={setCurrentPage} />;
 
       case "check-in":
       default:
@@ -1373,6 +1718,7 @@ export default function App() {
             onViewToday={() =>
               setCurrentPage("today")
             }
+            onPageChange={setCurrentPage}
           />
         );
     }

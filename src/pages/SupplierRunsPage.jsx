@@ -10,6 +10,7 @@ import {
   GripVertical,
   X,
 } from "lucide-react";
+import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
@@ -234,6 +235,91 @@ function getMonthLabel(monthDate) {
   });
 }
 
+function getSouthPageTitle(mode) {
+  if (mode === "history") {
+    return "History";
+  }
+
+  if (mode === "dispatch") {
+    return "Needs Dispatch";
+  }
+
+  if (mode === "check") {
+    return "Check South POs";
+  }
+
+  return "Add South POs";
+}
+
+function normalizeSearchText(value) {
+  return String(value || "").toLowerCase().trim();
+}
+
+function supplierRunMatchesSearch(supplierRun, searchTerm) {
+  if (!searchTerm) {
+    return true;
+  }
+
+  const itemText = Array.isArray(supplierRun.items)
+    ? supplierRun.items
+        .map((item) =>
+          [
+            item.quantity,
+            item.description,
+            item.internalReference,
+            item.materialUse,
+            item.orderNumber,
+          ]
+            .filter(Boolean)
+            .join(" "),
+        )
+        .join(" ")
+    : "";
+  const searchableText = [
+    supplierRun.poNumber,
+    supplierRun.vendor,
+    supplierRun.driver,
+    supplierRun.vehicleTitle,
+    supplierRun.vehicleBadge,
+    supplierRun.orderedBy,
+    supplierRun.createdByName,
+    supplierRun.createdByEmail,
+    supplierRun.supplierAddress,
+    getSupplierRunDateKey(supplierRun),
+    supplierRun.completedAt,
+    supplierRun.updatedAt,
+    itemText,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return searchableText.includes(searchTerm);
+}
+
+function getHistoryDriverDateLabel(group) {
+  const dateKeys = [
+    ...new Set(
+      group.vendorGroups
+        .flatMap((vendorGroup) => vendorGroup.runs)
+        .map(getSupplierRunDateKey)
+        .filter(Boolean),
+    ),
+  ].sort();
+
+  if (dateKeys.length === 0) {
+    return "";
+  }
+
+  if (dateKeys.length === 1) {
+    return formatDateInput(dateKeys[0]);
+  }
+
+  return `${formatDateInput(dateKeys[0])} - ${formatDateInput(
+    dateKeys[dateKeys.length - 1],
+  )}`;
+}
+
 export default function SupplierRunsPage({
   mode = "add",
   supplierRuns,
@@ -245,6 +331,7 @@ export default function SupplierRunsPage({
   createdBy = {},
   vehicleOptions,
   canAssignRoute = false,
+  onPageChange,
 }) {
   const safeVehicleOptions = Array.isArray(vehicleOptions)
     ? vehicleOptions
@@ -267,6 +354,7 @@ export default function SupplierRunsPage({
   const [routeOrderError, setRouteOrderError] = useState("");
   const [dispatchDrafts, setDispatchDrafts] = useState({});
   const [savingDispatchRunId, setSavingDispatchRunId] = useState("");
+  const [historySearch, setHistorySearch] = useState("");
 
   useEffect(() => {
     if (!successMessage) {
@@ -640,6 +728,10 @@ export default function SupplierRunsPage({
       supplierRun.status === "complete" &&
       !isToday(supplierRun.completedAt || supplierRun.updatedAt),
   );
+  const historySearchTerm = normalizeSearchText(historySearch);
+  const filteredHistoryRuns = historyRuns.filter((supplierRun) =>
+    supplierRunMatchesSearch(supplierRun, historySearchTerm),
+  );
 
   const visibleRuns =
     mode === "history" ? historyRuns : dailyRuns;
@@ -687,29 +779,31 @@ export default function SupplierRunsPage({
     0,
   );
   const historyRunGroups =
-    groupRunsByDriverAndVendor(historyRuns);
+    groupRunsByDriverAndVendor(filteredHistoryRuns);
   const dispatchRuns = supplierRuns.filter(
     (supplierRun) =>
       supplierRun.status !== "complete" &&
       (supplierRun.dispatchStatus === "needsDispatch" ||
         !supplierRun.driver),
   );
+  const pageTitle = getSouthPageTitle(mode);
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "South", onClick: () => onPageChange?.("south") },
+          { label: pageTitle },
+        ]}
+      />
+
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">
           Driver / South
         </p>
 
         <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
-          {mode === "history"
-            ? "History"
-            : mode === "dispatch"
-              ? "Needs Dispatch"
-            : mode === "check"
-              ? "Check South POs"
-              : "Add South POs"}
+          {pageTitle}
         </h2>
 
         {mode === "check" ? (
@@ -943,14 +1037,53 @@ export default function SupplierRunsPage({
             </p>
 
             <p className="mt-1 text-3xl font-black text-slate-900">
-              {historyRuns.length}
+              {filteredHistoryRuns.length}
             </p>
+
+            {historySearchTerm ? (
+              <p className="mt-1 text-sm font-bold text-slate-500">
+                Showing {filteredHistoryRuns.length} of {historyRuns.length}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <label
+              htmlFor="south-history-search"
+              className="mb-2 block text-sm font-black text-slate-700"
+            >
+              Search South history
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="south-history-search"
+                type="search"
+                value={historySearch}
+                onChange={(event) => setHistorySearch(event.target.value)}
+                placeholder="Search PO, vendor, driver, item, order #..."
+                className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-sm placeholder:font-semibold placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              />
+              {historySearch ? (
+                <button
+                  type="button"
+                  onClick={() => setHistorySearch("")}
+                  className="min-h-[48px] rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-600 shadow-sm transition hover:bg-slate-50"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {historyRuns.length === 0 ? (
             <EmptyState
               title="No older completed South POs"
               description="Completed pickups will move here after today."
+            />
+          ) : filteredHistoryRuns.length === 0 ? (
+            <EmptyState
+              title="No South history matches"
+              description="Try searching by PO number, vendor, driver, item, or date."
             />
           ) : (
             <div className="space-y-5">
@@ -960,6 +1093,7 @@ export default function SupplierRunsPage({
                   group.driver,
                   "history",
                 );
+                const driverDateLabel = getHistoryDriverDateLabel(group);
 
                 return (
                   <div
@@ -990,6 +1124,12 @@ export default function SupplierRunsPage({
                           <h4 className="truncate text-lg font-black tracking-tight text-slate-800">
                             {group.driver}
                           </h4>
+
+                          {driverDateLabel ? (
+                            <p className="mt-0.5 text-sm font-bold text-slate-500">
+                              {driverDateLabel}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
 

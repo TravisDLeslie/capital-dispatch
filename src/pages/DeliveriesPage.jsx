@@ -9,6 +9,7 @@ import {
   Truck,
   UserRound,
 } from "lucide-react";
+import Breadcrumbs from "../components/Breadcrumbs";
 import DeliveryOrderForm from "../components/DeliveryOrderForm";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
@@ -40,6 +41,7 @@ export default function DeliveriesPage({
   editingDeliveryId,
   onEditDelivery,
   onCancelEditDelivery,
+  onPageChange,
 }) {
   const editingDelivery = deliveries.find(
     (delivery) => delivery.id === editingDeliveryId,
@@ -56,6 +58,13 @@ export default function DeliveriesPage({
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "Deliveries", onClick: () => onPageChange?.("deliveries") },
+          { label: "Add Orders" },
+        ]}
+      />
+
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
           Deliveries

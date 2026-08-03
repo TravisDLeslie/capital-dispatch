@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import {
   saveBouncieVehicleSetting,
@@ -41,7 +42,7 @@ async function readApiJson(response, routeName) {
   );
 }
 
-export default function BounciePage() {
+export default function BounciePage({ onPageChange }) {
   const [status, setStatus] = useState(null);
   const [vehicles, setVehicles] = useState([]);
   const [vehicleSettings, setVehicleSettings] = useState([]);
@@ -186,6 +187,13 @@ export default function BounciePage() {
 
   return (
     <PageContainer>
+      <Breadcrumbs
+        items={[
+          { label: "Admin", onClick: () => onPageChange?.("admin") },
+          { label: "Vehicles" },
+        ]}
+      />
+
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
           Admin
