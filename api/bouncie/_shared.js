@@ -130,6 +130,65 @@ export async function callBouncieApi(path) {
     return tokenResult;
   }
 
+  const requestBouncieApi = (accessToken) =>
+    fetch(`${BOUNCIE_API_BASE_URL}${path}`, {
+      headers: {
+        Authorization: accessToken,
+        "Content-Type": "application/json",
+      },
+    });
+
+  let apiResponse = await requestBouncieApi(tokenResult.accessToken);
+  let data = await apiResponse.json().catch(() => ({}));
+  let refreshedToken = null;
+
+  if (apiResponse.status === 401 && tokenResult.config?.refreshToken) {
+    const refreshedTokenResult = await refreshBouncieToken(tokenResult.config);
+
+    if (refreshedTokenResult.error) {
+      return refreshedTokenResult;
+    }
+
+    refreshedToken = refreshedTokenResult;
+    apiResponse = await requestBouncieApi(refreshedToken.accessToken);
+    data = await apiResponse.json().catch(() => ({}));
+  }
+
+  if (!apiResponse.ok) {
+    const baseError =
+      data?.errors ||
+      data?.error ||
+      `Bouncie API request failed with status ${apiResponse.status}.`;
+    const tokenHelp =
+      apiResponse.status === 401
+        ? " Bouncie rejected the access token and the refresh retry did not work. Reconnect Bouncie from Admin > Vehicles > Connect Bouncie, paste the new access token into BOUNCIE_ACCESS_TOKEN and the new refresh token into BOUNCIE_REFRESH_TOKEN, then redeploy Vercel."
+        : "";
+
+    return {
+      error: `${baseError}${tokenHelp}`,
+      status: apiResponse.status,
+      data,
+    };
+  }
+
+  return {
+    data,
+    refreshedAccessToken: refreshedToken?.accessToken || "",
+    rotatedRefreshToken:
+      refreshedToken?.refreshToken &&
+      refreshedToken.refreshToken !== tokenResult.refreshToken
+        ? refreshedToken.refreshToken
+        : "",
+  };
+}
+
+export async function callBouncieApiWithoutRefresh(path) {
+  const tokenResult = await getBouncieAccessToken();
+
+  if (tokenResult.error) {
+    return tokenResult;
+  }
+
   const apiResponse = await fetch(`${BOUNCIE_API_BASE_URL}${path}`, {
     headers: {
       Authorization: tokenResult.accessToken,
