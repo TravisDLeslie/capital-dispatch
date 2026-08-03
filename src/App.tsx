@@ -1734,6 +1734,7 @@ export default function App() {
         <SouthHubPage
           supplierRuns={visibleSupplierRuns}
           allowedPageIds={effectiveAllowedPageIds}
+          canViewAvailableTrucks={effectiveUserRole !== "driver"}
           onPageChange={setCurrentPage}
         />
       );

@@ -240,6 +240,7 @@ function ActionCard({
 export default function SouthHubPage({
   supplierRuns,
   allowedPageIds,
+  canViewAvailableTrucks = true,
   onPageChange,
 }) {
   const [vehicles, setVehicles] = useState([]);
@@ -368,23 +369,25 @@ export default function SouthHubPage({
       ),
     [currentTruckGroups],
   );
-  const availableVehicles = vehicles
-    .map((vehicle, index) => {
-      const id = getVehicleKey(vehicle, index);
+  const availableVehicles = canViewAvailableTrucks
+    ? vehicles
+        .map((vehicle, index) => {
+          const id = getVehicleKey(vehicle, index);
 
-      return {
-        id,
-        vehicle,
-        title: vehicleTitles[index],
-        badge: vehicleBadges[index],
-        yearMakeModel: getVehicleYearMakeModel(vehicle),
-        locationLabel: getVehicleLocationLabel(vehicle),
-        lastUpdated: getVehicleLastUpdated(vehicle),
-        freshnessLabel: getVehicleFreshnessLabel(vehicle),
-        mapUrl: getVehicleMapUrl(vehicle),
-      };
-    })
-    .filter((vehicle) => !assignedVehicleIds.has(vehicle.id));
+          return {
+            id,
+            vehicle,
+            title: vehicleTitles[index],
+            badge: vehicleBadges[index],
+            yearMakeModel: getVehicleYearMakeModel(vehicle),
+            locationLabel: getVehicleLocationLabel(vehicle),
+            lastUpdated: getVehicleLastUpdated(vehicle),
+            freshnessLabel: getVehicleFreshnessLabel(vehicle),
+            mapUrl: getVehicleMapUrl(vehicle),
+          };
+        })
+        .filter((vehicle) => !assignedVehicleIds.has(vehicle.id))
+    : [];
   const actionCards = [
     canOpen("supplier-runs-dispatch")
       ? {
@@ -557,7 +560,9 @@ export default function SouthHubPage({
         </div>
       </section>
 
-      {currentTruckGroups.length > 0 || availableVehicles.length > 0 || vehicleError ? (
+      {currentTruckGroups.length > 0 ||
+      availableVehicles.length > 0 ||
+      (canViewAvailableTrucks && vehicleError) ? (
         <section className="mb-5 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
