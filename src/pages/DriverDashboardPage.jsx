@@ -116,6 +116,17 @@ function DriverActionCard({
   );
 }
 
+/**
+ * @param {{
+ *   supplierRuns: Array<Record<string, any>>;
+ *   deliveries: Array<Record<string, any>>;
+ *   users: Array<Record<string, any>>;
+ *   driverName?: string;
+ *   isSuperAdmin?: boolean;
+ *   onPageChange: (pageId: string) => void;
+ *   headerAccessory?: import("react").ReactNode;
+ * }} props
+ */
 export default function DriverDashboardPage({
   supplierRuns,
   deliveries,
@@ -123,6 +134,7 @@ export default function DriverDashboardPage({
   driverName = "",
   isSuperAdmin = false,
   onPageChange,
+  headerAccessory = null,
 }) {
   const safeUsers = Array.isArray(users) ? users : [];
   const driverOptions = getDriverOptions({
@@ -163,7 +175,7 @@ export default function DriverDashboardPage({
             </p>
           </div>
 
-          {isSuperAdmin ? (
+          {headerAccessory || (isSuperAdmin ? (
             <label className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm lg:min-w-72">
               <span className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
                 <ShieldCheck
@@ -185,7 +197,7 @@ export default function DriverDashboardPage({
                 ))}
               </select>
             </label>
-          ) : null}
+          ) : null)}
         </div>
       </div>
 

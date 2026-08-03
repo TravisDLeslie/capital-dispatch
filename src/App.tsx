@@ -321,11 +321,12 @@ function getAllowedPageIdsForRole(role: string) {
   }
 
   if (role === "receiving") {
-    return ["receiving", "check-in", "today", "search"];
+    return ["dashboard", "receiving", "check-in", "today", "search"];
   }
 
   if (role === "south") {
     return [
+      "dashboard",
       "south",
       "supplier-runs-add",
       "supplier-runs-dispatch",
@@ -335,11 +336,17 @@ function getAllowedPageIdsForRole(role: string) {
   }
 
   if (role === "delivery") {
-    return ["deliveries", "deliveries-queue", "deliveries-history"];
+    return [
+      "dashboard",
+      "deliveries",
+      "deliveries-queue",
+      "deliveries-history",
+    ];
   }
 
   if (role === "sales") {
     return [
+      "dashboard",
       "south",
       "supplier-runs-add",
       "sales",
@@ -351,7 +358,7 @@ function getAllowedPageIdsForRole(role: string) {
 
   if (role === "driver") {
     return [
-      "driver-dashboard",
+      "dashboard",
       "south",
       "supplier-runs-check",
       "deliveries",
@@ -371,10 +378,13 @@ function getAllowedPageIds(
   }
 
   if (Array.isArray(permissions) && permissions.length > 0) {
-    return permissions.filter(
-      (permission): permission is string =>
-        typeof permission === "string",
-    );
+    return [
+      "dashboard",
+      ...permissions.filter(
+        (permission): permission is string =>
+          typeof permission === "string",
+      ),
+    ].filter((pageId, index, pageIds) => pageIds.indexOf(pageId) === index);
   }
 
   return getAllowedPageIdsForRole(role);
@@ -439,7 +449,9 @@ function PendingApproval({
 
 export default function App() {
   const [currentPage, setCurrentPage] =
-    useState("check-in");
+    useState("dashboard");
+  const [previewUserId, setPreviewUserId] =
+    useState("");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] =
     useState<UserProfile | null>(null);
@@ -469,11 +481,67 @@ export default function App() {
     () => getAllowedPageIds(userRole, userProfile?.permissions),
     [userRole, userProfile?.permissions],
   );
-  const driverName = userProfile?.driverName || "";
-  const canReadReceiving = allowedPageIds.some((pageId) =>
+  const dashboardPreviewUsers = useMemo(() => {
+    const savedUsers = Array.isArray(users) ? users : [];
+    const currentProfile =
+      userProfile || currentUser
+        ? {
+            id: currentUser?.uid || userProfile?.id || "",
+            uid: currentUser?.uid || userProfile?.uid || "",
+            email: currentUser?.email || userProfile?.email || "",
+            displayName:
+              currentUser?.displayName || userProfile?.displayName || "",
+            role: userRole,
+            status: isApproved ? "approved" : userProfile?.status || "pending",
+            driverName: userProfile?.driverName || "",
+            permissions: userProfile?.permissions,
+          }
+        : null;
+    const userMap = new Map<string, UserProfile>();
+
+    [...(currentProfile ? [currentProfile] : []), ...savedUsers].forEach(
+      (profile) => {
+        const profileId = profile.uid || profile.id || profile.email || "";
+
+        if (profileId) {
+          userMap.set(profileId, profile);
+        }
+      },
+    );
+
+    return [...userMap.values()].sort((firstUser, secondUser) =>
+      String(firstUser.displayName || firstUser.email || "").localeCompare(
+        String(secondUser.displayName || secondUser.email || ""),
+      ),
+    );
+  }, [currentUser, isApproved, userProfile, userRole, users]);
+  const selectedPreviewProfile =
+    dashboardPreviewUsers.find(
+      (previewUser) =>
+        (previewUser.uid || previewUser.id || previewUser.email) ===
+        previewUserId,
+    ) ||
+    dashboardPreviewUsers.find(
+      (previewUser) =>
+        previewUser.uid === currentUser?.uid ||
+        previewUser.id === currentUser?.uid ||
+        previewUser.email === currentUser?.email,
+    ) ||
+    dashboardPreviewUsers[0] ||
+    userProfile;
+  const effectiveUserRole = isSuperAdmin
+    ? getUserRole(selectedPreviewProfile, selectedPreviewProfile?.email)
+    : userRole;
+  const effectiveAllowedPageIds = isSuperAdmin
+    ? getAllowedPageIds(effectiveUserRole, selectedPreviewProfile?.permissions)
+    : allowedPageIds;
+  const driverName = isSuperAdmin
+    ? selectedPreviewProfile?.driverName || ""
+    : userProfile?.driverName || "";
+  const canReadReceiving = effectiveAllowedPageIds.some((pageId) =>
     ["receiving", "check-in", "today", "search"].includes(pageId),
   );
-  const canReadSouth = allowedPageIds.some((pageId) =>
+  const canReadSouth = effectiveAllowedPageIds.some((pageId) =>
     [
       "south",
       "supplier-runs-add",
@@ -482,10 +550,10 @@ export default function App() {
       "supplier-runs-history",
     ].includes(pageId),
   );
-  const canAssignSouthRoutes = allowedPageIds.includes(
+  const canAssignSouthRoutes = effectiveAllowedPageIds.includes(
     "supplier-runs-dispatch",
   );
-  const canReadDeliveries = allowedPageIds.some((pageId) =>
+  const canReadDeliveries = effectiveAllowedPageIds.some((pageId) =>
     [
       "deliveries",
       "deliveries-add",
@@ -493,16 +561,16 @@ export default function App() {
       "deliveries-history",
     ].includes(pageId),
   );
-  const canReadSales = allowedPageIds.some((pageId) =>
+  const canReadSales = effectiveAllowedPageIds.some((pageId) =>
     ["sales", "customers-add", "customers-view", "sales-converter"].includes(pageId),
   );
-  const canReadAdmin = allowedPageIds.some((pageId) =>
+  const canReadAdmin = effectiveAllowedPageIds.some((pageId) =>
     ["admin", "user-admin", "email-list", "bouncie"].includes(pageId),
   );
-  const canReadEmailList = allowedPageIds.includes("email-list");
+  const canReadEmailList = effectiveAllowedPageIds.includes("email-list");
   const canReadCustomers = canReadSales || canReadReceiving || canReadEmailList;
   const visibleSupplierRuns =
-    userRole === "driver"
+    effectiveUserRole === "driver"
       ? supplierRuns.filter(
           (supplierRun) => supplierRun.driver === driverName,
         )
@@ -513,7 +581,7 @@ export default function App() {
       Boolean(supplierRun.driver),
   );
   const visibleDeliveries =
-    userRole === "driver"
+    effectiveUserRole === "driver"
       ? deliveries.filter((delivery) => delivery.driver === driverName)
       : deliveries;
   const currentUserDisplayName =
@@ -526,6 +594,37 @@ export default function App() {
     id: currentUser?.uid || userProfile?.uid || userProfile?.id || "",
     name: currentUserDisplayName,
     email: currentUser?.email || userProfile?.email || "",
+  };
+  const adminDashboardOperations = {
+    receivingToday: checkIns.filter((checkIn) => {
+      const checkedAt =
+        typeof checkIn.checkedInAt === "string" ? checkIn.checkedInAt : "";
+
+      return checkedAt.slice(0, 10) === new Date().toISOString().slice(0, 10);
+    }).length,
+    southNeedsDispatch: supplierRuns.filter(
+      (supplierRun) =>
+        supplierRun.status !== "complete" &&
+        (supplierRun.dispatchStatus === "needsDispatch" ||
+          !supplierRun.driver),
+    ).length,
+    southOpen: supplierRuns.filter(
+      (supplierRun) =>
+        supplierRun.status !== "complete" &&
+        supplierRun.dispatchStatus !== "needsDispatch" &&
+        supplierRun.driver,
+    ).length,
+    deliveryOpen: deliveries.filter(
+      (delivery) => delivery.status !== "complete",
+    ).length,
+    hardwareOpen: deliveries.filter(
+      (delivery) =>
+        delivery.status !== "complete" &&
+        delivery.hasHardware &&
+        !delivery.hardwareChecked,
+    ).length,
+    customerCount: customers.length,
+    emailCount: emailList.length,
   };
   const southVehicleOptions = vehicleSettings
     .map((vehicleSetting) => ({
@@ -671,14 +770,14 @@ export default function App() {
   useEffect(() => {
     if (
       !isApproved ||
-      allowedPageIds.length === 0 ||
-      allowedPageIds.includes(currentPage)
+      effectiveAllowedPageIds.length === 0 ||
+      effectiveAllowedPageIds.includes(currentPage)
     ) {
       return;
     }
 
-    setCurrentPage(allowedPageIds[0]);
-  }, [allowedPageIds, currentPage, isApproved]);
+    setCurrentPage(effectiveAllowedPageIds[0]);
+  }, [currentPage, effectiveAllowedPageIds, isApproved]);
 
   useEffect(() => {
     if (isAuthLoading || isProfileLoading) {
@@ -765,7 +864,7 @@ export default function App() {
               setIsLoading(false);
             }
           },
-          userRole === "driver" ? driverName : "",
+          effectiveUserRole === "driver" ? driverName : "",
         );
       } else {
         setSupplierRuns([]);
@@ -788,7 +887,7 @@ export default function App() {
               setIsLoading(false);
             }
           },
-          userRole === "driver" ? driverName : "",
+          effectiveUserRole === "driver" ? driverName : "",
         );
       } else {
         setDeliveries([]);
@@ -938,7 +1037,7 @@ export default function App() {
     isApproved,
     isAuthLoading,
     isProfileLoading,
-    userRole,
+    effectiveUserRole,
   ]);
 
   async function handleSignOut() {
@@ -947,7 +1046,7 @@ export default function App() {
     }
 
     await signOut(auth);
-    setCurrentPage("check-in");
+    setCurrentPage("dashboard");
     setEditingDeliveryId("");
   }
 
@@ -1213,8 +1312,33 @@ export default function App() {
     setSyncError("");
   }
 
-  function renderCurrentPage() {
-    if (currentPage === "receiving" && canReadReceiving) {
+  function renderDashboardPage() {
+    const dashboardRole = effectiveUserRole;
+    const dashboardAllowedPageIds = effectiveAllowedPageIds;
+
+    if (dashboardRole === "driver") {
+      return (
+        <DriverDashboardPage
+          supplierRuns={supplierRuns}
+          deliveries={deliveries}
+          users={users}
+          driverName={driverName}
+          isSuperAdmin={false}
+          onPageChange={setCurrentPage}
+        />
+      );
+    }
+
+    if (dashboardRole === "superAdmin" || dashboardRole === "admin") {
+      return (
+        <DashboardPage
+          operations={adminDashboardOperations}
+          onPageChange={setCurrentPage}
+        />
+      );
+    }
+
+    if (dashboardRole === "receiving") {
       const todayCheckIns = checkIns.filter((checkIn) => {
         const checkedAt =
           typeof checkIn.checkedInAt === "string"
@@ -1226,15 +1350,16 @@ export default function App() {
 
       return (
         <SectionHubPage
-          title="Receiving"
-          description="Check in vendor POs, review today's work, and search past receiving records."
+          title="Receiving Dashboard"
+          eyebrow="Receiving"
+          description="The receiving work this account can open."
           icon={Package}
           primaryAction={
-            allowedPageIds.includes("check-in")
+            dashboardAllowedPageIds.includes("check-in")
               ? {
                   label: "Check In PO",
                   icon: Plus,
-                  onClick: () => setCurrentPage("check-in"),
+                  onClick: () => setCurrentPage("dashboard"),
                 }
               : null
           }
@@ -1263,7 +1388,7 @@ export default function App() {
             },
           ]}
           actions={[
-            allowedPageIds.includes("today")
+            dashboardAllowedPageIds.includes("today")
               ? {
                   icon: ClipboardCheck,
                   label: "Daily Board",
@@ -1274,7 +1399,314 @@ export default function App() {
                   onClick: () => setCurrentPage("today"),
                 }
               : null,
-            allowedPageIds.includes("search")
+            dashboardAllowedPageIds.includes("search")
+              ? {
+                  icon: Search,
+                  label: "Lookup",
+                  title: "Search POs",
+                  description: "Find receiving records by PO, customer, vendor, item, or location.",
+                  metric: checkIns.length,
+                  metricLabel: "Records",
+                  onClick: () => setCurrentPage("search"),
+                }
+              : null,
+          ]}
+        />
+      );
+    }
+
+    if (dashboardRole === "south") {
+      const needsDispatchRuns = supplierRuns.filter(
+        (supplierRun) =>
+          supplierRun.status !== "complete" &&
+          (supplierRun.dispatchStatus === "needsDispatch" ||
+            !supplierRun.driver),
+      );
+      const openRuns = supplierRuns.filter(
+        (supplierRun) =>
+          supplierRun.status !== "complete" &&
+          supplierRun.dispatchStatus !== "needsDispatch" &&
+          supplierRun.driver,
+      );
+      const completeRuns = supplierRuns.filter(
+        (supplierRun) => supplierRun.status === "complete",
+      );
+
+      return (
+        <SectionHubPage
+          title="South Dashboard"
+          eyebrow="South"
+          description="Dispatch and pickup work for South runs."
+          icon={Truck}
+          primaryAction={
+            dashboardAllowedPageIds.includes("supplier-runs-add")
+              ? {
+                  label: "Add PO",
+                  icon: Plus,
+                  onClick: () => setCurrentPage("supplier-runs-add"),
+                }
+              : null
+          }
+          stats={[
+            {
+              icon: ShieldCheck,
+              label: "Dispatch",
+              value: needsDispatchRuns.length,
+              note: "Waiting",
+            },
+            {
+              icon: PackageCheck,
+              label: "Open",
+              value: openRuns.length,
+              note: "POs to pick up",
+            },
+            {
+              icon: History,
+              label: "Complete",
+              value: completeRuns.length,
+              note: "South history",
+            },
+          ]}
+          actions={[
+            dashboardAllowedPageIds.includes("supplier-runs-dispatch")
+              ? {
+                  icon: ShieldCheck,
+                  label: "Dispatch",
+                  title: "Needs Dispatch",
+                  description: "Assign driver and truck before pickup.",
+                  metric: needsDispatchRuns.length,
+                  metricLabel: "Waiting",
+                  tone: needsDispatchRuns.length > 0 ? "warning" : "default",
+                  onClick: () => setCurrentPage("supplier-runs-dispatch"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("supplier-runs-check")
+              ? {
+                  icon: PackageCheck,
+                  label: "Driver Board",
+                  title: "POs To Pick Up",
+                  description: "Open supplier stops and item checkoffs.",
+                  metric: openRuns.length,
+                  metricLabel: "Open",
+                  onClick: () => setCurrentPage("supplier-runs-check"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("supplier-runs-history")
+              ? {
+                  icon: History,
+                  label: "Archive",
+                  title: "South History",
+                  description: "Review completed South pickups.",
+                  metric: completeRuns.length,
+                  metricLabel: "Done",
+                  onClick: () => setCurrentPage("supplier-runs-history"),
+                }
+              : null,
+          ]}
+        />
+      );
+    }
+
+    if (dashboardRole === "delivery") {
+      const openDeliveries = deliveries.filter(
+        (delivery) => delivery.status !== "complete",
+      );
+      const completedDeliveries = deliveries.filter(
+        (delivery) => delivery.status === "complete",
+      );
+      const hardwareOpen = openDeliveries.filter(
+        (delivery) => delivery.hasHardware && !delivery.hardwareChecked,
+      );
+
+      return (
+        <SectionHubPage
+          title="Delivery Dashboard"
+          eyebrow="Deliveries"
+          description="Delivery work and completed order history."
+          icon={Truck}
+          stats={[
+            {
+              icon: PackageCheck,
+              label: "Open",
+              value: openDeliveries.length,
+              note: "To be delivered",
+            },
+            {
+              icon: Package,
+              label: "Hardware",
+              value: hardwareOpen.length,
+              note: "Needs checkoff",
+            },
+            {
+              icon: History,
+              label: "Completed",
+              value: completedDeliveries.length,
+              note: "Delivery history",
+            },
+          ]}
+          actions={[
+            dashboardAllowedPageIds.includes("deliveries-queue")
+              ? {
+                  icon: PackageCheck,
+                  label: "Driver Board",
+                  title: "Deliveries",
+                  description: "Open assigned orders, photos, reminders, and directions.",
+                  metric: openDeliveries.length,
+                  metricLabel: "Open",
+                  tone: hardwareOpen.length > 0 ? "warning" : "default",
+                  onClick: () => setCurrentPage("deliveries-queue"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("deliveries-history")
+              ? {
+                  icon: History,
+                  label: "Archive",
+                  title: "Delivery History",
+                  description: "Search and review completed deliveries.",
+                  metric: completedDeliveries.length,
+                  metricLabel: "Done",
+                  onClick: () => setCurrentPage("deliveries-history"),
+                }
+              : null,
+          ]}
+        />
+      );
+    }
+
+    if (dashboardRole === "sales") {
+      return (
+        <SectionHubPage
+          title="Sales Dashboard"
+          eyebrow="Sales"
+          description="Customer records and pricing tools for sales work."
+          icon={UsersRound}
+          primaryAction={
+            dashboardAllowedPageIds.includes("customers-add")
+              ? {
+                  label: "Add Customer",
+                  icon: Plus,
+                  onClick: () => setCurrentPage("customers-add"),
+                }
+              : null
+          }
+          stats={[
+            {
+              icon: UsersRound,
+              label: "Customers",
+              value: customers.length,
+              note: "Saved accounts",
+            },
+            {
+              icon: Calculator,
+              label: "Tools",
+              value: dashboardAllowedPageIds.includes("sales-converter") ? 1 : 0,
+              note: "Pricing converter",
+            },
+            {
+              icon: Mail,
+              label: "Emails",
+              value: emailList.length,
+              note: "List entries",
+            },
+          ]}
+          actions={[
+            dashboardAllowedPageIds.includes("customers-view")
+              ? {
+                  icon: Search,
+                  label: "Customer Lookup",
+                  title: "View Customers",
+                  description: "Search customer records and contacts.",
+                  metric: customers.length,
+                  metricLabel: "Customers",
+                  onClick: () => setCurrentPage("customers-view"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("sales-converter")
+              ? {
+                  icon: Calculator,
+                  label: "Pricing",
+                  title: "Converter",
+                  description: "Convert sheets, boards, and item pricing.",
+                  metric: "$",
+                  metricLabel: "Margin",
+                  onClick: () => setCurrentPage("sales-converter"),
+                }
+              : null,
+          ]}
+        />
+      );
+    }
+
+    return (
+      <DashboardPage
+        operations={adminDashboardOperations}
+        onPageChange={setCurrentPage}
+      />
+    );
+  }
+
+  function renderCurrentPage() {
+    if (currentPage === "receiving" && canReadReceiving) {
+      const todayCheckIns = checkIns.filter((checkIn) => {
+        const checkedAt =
+          typeof checkIn.checkedInAt === "string"
+            ? checkIn.checkedInAt
+            : "";
+
+        return checkedAt.slice(0, 10) === new Date().toISOString().slice(0, 10);
+      });
+
+      return (
+        <SectionHubPage
+          title="Receiving"
+          description="Check in vendor POs, review today's work, and search past receiving records."
+          icon={Package}
+          primaryAction={
+            effectiveAllowedPageIds.includes("check-in")
+              ? {
+                  label: "Check In PO",
+                  icon: Plus,
+                  onClick: () => setCurrentPage("dashboard"),
+                }
+              : null
+          }
+          stats={[
+            {
+              icon: ClipboardCheck,
+              label: "Today",
+              value: todayCheckIns.length,
+              note: "Checked in",
+            },
+            {
+              icon: Search,
+              label: "Records",
+              value: checkIns.length,
+              note: "Searchable POs",
+            },
+            {
+              icon: Package,
+              label: "Photos",
+              value: checkIns.filter((checkIn) =>
+                Array.isArray(checkIn.materials)
+                  ? checkIn.materials.some((material) => material.locationPhoto)
+                  : false,
+              ).length,
+              note: "With material photos",
+            },
+          ]}
+          actions={[
+            effectiveAllowedPageIds.includes("today")
+              ? {
+                  icon: ClipboardCheck,
+                  label: "Daily Board",
+                  title: "Today's Check-Ins",
+                  description: "Review what has been checked in today.",
+                  metric: todayCheckIns.length,
+                  metricLabel: "Today",
+                  onClick: () => setCurrentPage("today"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("search")
               ? {
                   icon: Search,
                   label: "Lookup",
@@ -1294,7 +1726,7 @@ export default function App() {
       return (
         <SouthHubPage
           supplierRuns={visibleSupplierRuns}
-          allowedPageIds={allowedPageIds}
+          allowedPageIds={effectiveAllowedPageIds}
           onPageChange={setCurrentPage}
         />
       );
@@ -1317,7 +1749,7 @@ export default function App() {
           description="Create delivery orders, track driver work, and review completed deliveries."
           icon={Truck}
           primaryAction={
-            allowedPageIds.includes("deliveries-add")
+            effectiveAllowedPageIds.includes("deliveries-add")
               ? {
                   label: "Add Delivery",
                   icon: Plus,
@@ -1346,7 +1778,7 @@ export default function App() {
             },
           ]}
           actions={[
-            allowedPageIds.includes("deliveries-queue")
+            effectiveAllowedPageIds.includes("deliveries-queue")
               ? {
                   icon: PackageCheck,
                   label: "Driver Board",
@@ -1358,7 +1790,7 @@ export default function App() {
                   onClick: () => setCurrentPage("deliveries-queue"),
                 }
               : null,
-            allowedPageIds.includes("deliveries-history")
+            effectiveAllowedPageIds.includes("deliveries-history")
               ? {
                   icon: History,
                   label: "Archive",
@@ -1381,7 +1813,7 @@ export default function App() {
           description="Manage customers, build email lists, and use quick pricing tools."
           icon={UsersRound}
           primaryAction={
-            allowedPageIds.includes("customers-add")
+            effectiveAllowedPageIds.includes("customers-add")
               ? {
                   label: "Add Customer",
                   icon: Plus,
@@ -1399,7 +1831,7 @@ export default function App() {
             {
               icon: Calculator,
               label: "Tools",
-              value: allowedPageIds.includes("sales-converter") ? 1 : 0,
+              value: effectiveAllowedPageIds.includes("sales-converter") ? 1 : 0,
               note: "Pricing converter",
             },
             {
@@ -1410,7 +1842,7 @@ export default function App() {
             },
           ]}
           actions={[
-            allowedPageIds.includes("customers-view")
+            effectiveAllowedPageIds.includes("customers-view")
               ? {
                   icon: Search,
                   label: "Customer Lookup",
@@ -1421,7 +1853,7 @@ export default function App() {
                   onClick: () => setCurrentPage("customers-view"),
                 }
               : null,
-            allowedPageIds.includes("sales-converter")
+            effectiveAllowedPageIds.includes("sales-converter")
               ? {
                   icon: Calculator,
                   label: "Pricing",
@@ -1466,7 +1898,7 @@ export default function App() {
             },
           ]}
           actions={[
-            allowedPageIds.includes("user-admin")
+            effectiveAllowedPageIds.includes("user-admin")
               ? {
                   icon: ShieldCheck,
                   label: "Access",
@@ -1478,7 +1910,7 @@ export default function App() {
                   onClick: () => setCurrentPage("user-admin"),
                 }
               : null,
-            allowedPageIds.includes("email-list")
+            effectiveAllowedPageIds.includes("email-list")
               ? {
                   icon: Mail,
                   label: "Marketing",
@@ -1489,7 +1921,7 @@ export default function App() {
                   onClick: () => setCurrentPage("email-list"),
                 }
               : null,
-            allowedPageIds.includes("bouncie")
+            effectiveAllowedPageIds.includes("bouncie")
               ? {
                   icon: Truck,
                   label: "Fleet",
@@ -1505,13 +1937,13 @@ export default function App() {
       );
     }
 
-    if (!allowedPageIds.includes(currentPage)) {
+    if (!effectiveAllowedPageIds.includes(currentPage)) {
       return null;
     }
 
     switch (currentPage) {
       case "dashboard":
-        return <DashboardPage />;
+        return renderDashboardPage();
 
       case "driver-dashboard":
         return (
@@ -1748,8 +2180,19 @@ export default function App() {
             onPageChange={setCurrentPage}
             currentUser={currentUser}
             currentUserProfile={userProfile}
-            allowedPageIds={allowedPageIds}
+            allowedPageIds={effectiveAllowedPageIds}
             isSuperAdmin={isSuperAdmin}
+            previewUsers={dashboardPreviewUsers}
+            selectedPreviewUserId={
+              selectedPreviewProfile?.uid ||
+              selectedPreviewProfile?.id ||
+              selectedPreviewProfile?.email ||
+              ""
+            }
+            onPreviewUserChange={(nextPreviewUserId: string) => {
+              setPreviewUserId(nextPreviewUserId);
+              setCurrentPage("dashboard");
+            }}
             onSignOut={handleSignOut}
           />
 

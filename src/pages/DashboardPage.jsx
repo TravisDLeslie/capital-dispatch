@@ -1,10 +1,14 @@
 import {
+  AlertTriangle,
   Car,
+  ClipboardCheck,
   MapPin,
   Navigation,
+  PackageCheck,
   RefreshCw,
-  Route,
   Satellite,
+  Truck,
+  UsersRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import PageContainer from "../components/PageContainer";
@@ -59,7 +63,98 @@ function getVehicleMapUrl(vehicle) {
   )}`;
 }
 
-export default function DashboardPage() {
+/**
+ * @param {{
+ *   title: string;
+ *   description: string;
+ *   icon: import("lucide-react").LucideIcon;
+ *   value: string | number;
+ *   note: string;
+ *   tone?: "default" | "warning" | "success";
+ *   onClick?: () => void;
+ * }} props
+ */
+function HeartbeatCard({
+  title,
+  description,
+  icon: Icon,
+  value,
+  note,
+  tone = "default",
+  onClick,
+}) {
+  const toneClasses = {
+    default: "bg-slate-50 text-slate-700 border-slate-200",
+    warning: "bg-amber-50 text-amber-700 border-amber-200",
+    success: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  };
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-4">
+        <span
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${toneClasses[tone]}`}
+        >
+          <Icon aria-hidden="true" className="h-6 w-6" strokeWidth={2.4} />
+        </span>
+
+        <span className="text-right">
+          <span className="block text-3xl font-black text-slate-950">
+            {value}
+          </span>
+          <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+            {note}
+          </span>
+        </span>
+      </div>
+
+      <h2 className="mt-4 text-xl font-black text-slate-950">
+        {title}
+      </h2>
+      <p className="mt-1 text-sm font-semibold leading-5 text-slate-500">
+        {description}
+      </p>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="rounded-[22px] border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-red-200 hover:bg-red-50/30"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <article className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
+      {content}
+    </article>
+  );
+}
+
+/**
+ * @param {{
+ *   headerAccessory?: import("react").ReactNode;
+ *   onPageChange?: (pageId: string) => void;
+ *   operations?: {
+ *     receivingToday?: number;
+ *     southNeedsDispatch?: number;
+ *     southOpen?: number;
+ *     deliveryOpen?: number;
+ *     hardwareOpen?: number;
+ *     customerCount?: number;
+ *     emailCount?: number;
+ *   };
+ * }} props
+ */
+export default function DashboardPage({
+  headerAccessory = null,
+  onPageChange,
+  operations = {},
+}) {
   const [vehicles, setVehicles] = useState([]);
   const [vehicleSettings, setVehicleSettings] = useState([]);
   const [error, setError] = useState("");
@@ -174,27 +269,32 @@ export default function DashboardPage() {
           </p>
 
           <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
-            Fleet Snapshot
+            Operations Dashboard
           </h1>
 
           <p className="mt-2 max-w-3xl text-lg text-slate-500">
-            A quick look at where the Capital trucks are reporting from.
+            A quick heartbeat for receiving, South runs, deliveries, sales, and
+            the fleet.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={loadDashboardVehicles}
-          disabled={isLoading}
-          className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-black text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
-        >
-          <RefreshCw
-            aria-hidden="true"
-            className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-            strokeWidth={2.5}
-          />
-          Refresh Fleet
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {headerAccessory}
+
+          <button
+            type="button"
+            onClick={loadDashboardVehicles}
+            disabled={isLoading}
+            className="inline-flex min-h-[46px] items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 text-sm font-black text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            <RefreshCw
+              aria-hidden="true"
+              className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+              strokeWidth={2.5}
+            />
+            Refresh Fleet
+          </button>
+        </div>
       </div>
 
       {error ? (
@@ -202,6 +302,46 @@ export default function DashboardPage() {
           {error}
         </div>
       ) : null}
+
+      <section className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <HeartbeatCard
+          icon={ClipboardCheck}
+          title="Receiving"
+          description="POs checked in today."
+          value={operations.receivingToday || 0}
+          note="Today"
+          onClick={() => onPageChange?.("today")}
+        />
+
+        <HeartbeatCard
+          icon={AlertTriangle}
+          title="South Dispatch"
+          description="PO requests waiting for driver and truck assignment."
+          value={operations.southNeedsDispatch || 0}
+          note="Waiting"
+          tone={operations.southNeedsDispatch > 0 ? "warning" : "success"}
+          onClick={() => onPageChange?.("supplier-runs-dispatch")}
+        />
+
+        <HeartbeatCard
+          icon={Truck}
+          title="Deliveries"
+          description="Open deliveries with hardware reminders called out."
+          value={operations.deliveryOpen || 0}
+          note={`${operations.hardwareOpen || 0} hardware`}
+          tone={operations.hardwareOpen > 0 ? "warning" : "default"}
+          onClick={() => onPageChange?.("deliveries-queue")}
+        />
+
+        <HeartbeatCard
+          icon={UsersRound}
+          title="Sales"
+          description="Customer records and email list growth."
+          value={operations.customerCount || 0}
+          note={`${operations.emailCount || 0} emails`}
+          onClick={() => onPageChange?.("sales")}
+        />
+      </section>
 
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
@@ -236,17 +376,37 @@ export default function DashboardPage() {
 
         <div className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-            <Route aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
-            Dispatch Pulse
+            <PackageCheck aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
+            South Pickups
           </p>
           <p className="mt-3 text-4xl font-black text-[#FC2C38]">
-            Live
+            {operations.southOpen || 0}
           </p>
           <p className="mt-1 text-sm font-bold text-slate-500">
-            Ready for route work
+            Open POs assigned to drivers
           </p>
         </div>
       </section>
+
+      <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+            Fleet Detail
+          </p>
+          <h2 className="mt-1 text-2xl font-black text-slate-950">
+            Map and truck locations
+          </h2>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onPageChange?.("bouncie")}
+          className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-800 shadow-sm transition hover:bg-slate-50"
+        >
+          <Car aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
+          Manage Vehicles
+        </button>
+      </div>
 
       <section className="mt-5 grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
         <div className="relative min-h-[420px] overflow-hidden rounded-[28px] border border-slate-200 bg-slate-950 p-5 text-white shadow-sm">

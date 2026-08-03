@@ -100,6 +100,7 @@ function ActionRow({
  *     note: string;
  *   }>;
  *   actions: Array<Record<string, unknown> | null>;
+ *   headerAccessory?: import("react").ReactNode;
  * }} props
  */
 export default function SectionHubPage({
@@ -110,6 +111,7 @@ export default function SectionHubPage({
   primaryAction = null,
   stats,
   actions,
+  headerAccessory = null,
 }) {
   const PrimaryActionIcon = primaryAction?.icon;
 
@@ -132,21 +134,27 @@ export default function SectionHubPage({
           </p>
         </div>
 
-        {primaryAction ? (
-          <button
-            type="button"
-            onClick={primaryAction.onClick}
-            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:mt-1"
-          >
-            {PrimaryActionIcon ? (
-              <PrimaryActionIcon
-                aria-hidden="true"
-                className="h-5 w-5"
-                strokeWidth={2.7}
-              />
+        {headerAccessory || primaryAction ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+            {headerAccessory}
+
+            {primaryAction ? (
+              <button
+                type="button"
+                onClick={primaryAction.onClick}
+                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:mt-1"
+              >
+                {PrimaryActionIcon ? (
+                  <PrimaryActionIcon
+                    aria-hidden="true"
+                    className="h-5 w-5"
+                    strokeWidth={2.7}
+                  />
+                ) : null}
+                {primaryAction.label}
+              </button>
             ) : null}
-            {primaryAction.label}
-          </button>
+          </div>
         ) : null}
       </div>
 

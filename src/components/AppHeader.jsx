@@ -8,6 +8,7 @@ import {
   Plus,
   ShieldCheck,
   Truck,
+  UserRound,
   UsersRound,
 } from "lucide-react";
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
@@ -15,13 +16,8 @@ import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 const navigationItems = [
   {
     group: "Dashboard",
-    id: "driver-dashboard",
-    label: "Driver Dashboard",
-  },
-  {
-    group: "Dashboard",
     id: "dashboard",
-    label: "Fleet Dashboard",
+    label: "Dashboard",
   },
   {
     group: "Receiving",
@@ -163,6 +159,20 @@ function getNavGroupIcon(group) {
   return Package;
 }
 
+/**
+ * @param {{
+ *   currentPage: string;
+ *   onPageChange: (pageId: string) => void;
+ *   currentUser: Record<string, any> | null;
+ *   currentUserProfile: Record<string, any> | null;
+ *   allowedPageIds?: string[];
+ *   isSuperAdmin?: boolean;
+ *   previewUsers?: Array<Record<string, any>>;
+ *   selectedPreviewUserId?: string;
+ *   onPreviewUserChange?: (userId: string) => void;
+ *   onSignOut: () => void;
+ * }} props
+ */
 export default function AppHeader({
   currentPage,
   onPageChange,
@@ -170,6 +180,9 @@ export default function AppHeader({
   currentUserProfile,
   allowedPageIds,
   isSuperAdmin = false,
+  previewUsers = [],
+  selectedPreviewUserId = "",
+  onPreviewUserChange,
   onSignOut,
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -265,6 +278,7 @@ export default function AppHeader({
       const hasGroupItems = groupItems.length > 0;
       const groupIsActive = getCurrentPageGroup(currentPage) === group;
       const isSinglePageGroup = [
+        "Dashboard",
         "Receiving",
         "South",
         "Deliveries",
@@ -363,12 +377,54 @@ export default function AppHeader({
     });
   }
 
+  function getPreviewUserId(user) {
+    return user?.uid || user?.id || user?.email || "";
+  }
+
+  function renderPreviewSelect() {
+    if (!isSuperAdmin || !Array.isArray(previewUsers) || previewUsers.length === 0) {
+      return null;
+    }
+
+    return (
+      <label className="block border-b border-slate-200 px-4 py-3">
+        <span className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+          <UserRound
+            aria-hidden="true"
+            className="h-3.5 w-3.5"
+            strokeWidth={2.5}
+          />
+          View App As
+        </span>
+
+        <select
+          value={selectedPreviewUserId}
+          onChange={(event) => onPreviewUserChange?.(event.target.value)}
+          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+        >
+          {previewUsers.map((previewUser) => {
+            const previewUserId = getPreviewUserId(previewUser);
+            const previewUserName =
+              previewUser.displayName || previewUser.email || "User";
+            const previewRole = previewUser.role || "pending";
+
+            return (
+              <option key={previewUserId} value={previewUserId}>
+                {previewUserName} ({previewRole})
+              </option>
+            );
+          })}
+        </select>
+      </label>
+    );
+  }
+
   return (
     <>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-slate-200 bg-white md:flex">
         <button
           type="button"
-          onClick={() => handlePageChange("check-in")}
+          onClick={() => handlePageChange("dashboard")}
           className="block px-8 pb-8 pt-8 text-left"
         >
           <img
@@ -384,6 +440,8 @@ export default function AppHeader({
 
         <div className="border-t border-slate-200 p-5">
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {renderPreviewSelect()}
+
             <div className="flex items-center gap-3 px-4 py-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FC2C38] text-sm font-black text-white">
                 {userInitial}
@@ -463,7 +521,7 @@ export default function AppHeader({
 
             <button
               type="button"
-              onClick={() => handlePageChange("check-in")}
+              onClick={() => handlePageChange("dashboard")}
               className="min-w-0 flex-1 text-center"
             >
               <img
@@ -498,7 +556,7 @@ export default function AppHeader({
             <div className="flex items-center justify-between px-6 pb-5 pt-6">
               <button
                 type="button"
-                onClick={() => handlePageChange("check-in")}
+                onClick={() => handlePageChange("dashboard")}
                 className="min-w-0 text-left"
               >
                 <img
@@ -523,7 +581,10 @@ export default function AppHeader({
             </nav>
 
             <div className="border-t border-slate-200 px-5 py-3">
-              <div className="flex items-center gap-3">
+              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                {renderPreviewSelect()}
+
+                <div className="flex items-center gap-3 px-3 py-3">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-xs font-bold text-slate-600">
                     {currentUser?.displayName ||
@@ -554,6 +615,7 @@ export default function AppHeader({
                   />
                   Sign out
                 </button>
+                </div>
               </div>
             </div>
           </aside>
