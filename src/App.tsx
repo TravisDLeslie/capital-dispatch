@@ -1396,6 +1396,7 @@ export default function App() {
                   description: "Review what has been checked in today.",
                   metric: todayCheckIns.length,
                   metricLabel: "Today",
+                  tone: "success",
                   onClick: () => setCurrentPage("today"),
                 }
               : null,
@@ -1407,6 +1408,7 @@ export default function App() {
                   description: "Find receiving records by PO, customer, vendor, item, or location.",
                   metric: checkIns.length,
                   metricLabel: "Records",
+                  tone: "archive",
                   onClick: () => setCurrentPage("search"),
                 }
               : null,
@@ -1476,7 +1478,7 @@ export default function App() {
                   description: "Assign driver and truck before pickup.",
                   metric: needsDispatchRuns.length,
                   metricLabel: "Waiting",
-                  tone: needsDispatchRuns.length > 0 ? "warning" : "default",
+                  tone: "dispatch",
                   onClick: () => setCurrentPage("supplier-runs-dispatch"),
                 }
               : null,
@@ -1488,6 +1490,7 @@ export default function App() {
                   description: "Open supplier stops and item checkoffs.",
                   metric: openRuns.length,
                   metricLabel: "Open",
+                  tone: "success",
                   onClick: () => setCurrentPage("supplier-runs-check"),
                 }
               : null,
@@ -1499,6 +1502,7 @@ export default function App() {
                   description: "Review completed South pickups.",
                   metric: completeRuns.length,
                   metricLabel: "Done",
+                  tone: "archive",
                   onClick: () => setCurrentPage("supplier-runs-history"),
                 }
               : null,
@@ -1548,12 +1552,12 @@ export default function App() {
             dashboardAllowedPageIds.includes("deliveries-queue")
               ? {
                   icon: PackageCheck,
-                  label: "Driver Board",
-                  title: "Deliveries",
+                  label: "Live Queue",
+                  title: "To Be Delivered",
                   description: "Open assigned orders, photos, reminders, and directions.",
                   metric: openDeliveries.length,
                   metricLabel: "Open",
-                  tone: hardwareOpen.length > 0 ? "warning" : "default",
+                  tone: hardwareOpen.length > 0 ? "warning" : "success",
                   onClick: () => setCurrentPage("deliveries-queue"),
                 }
               : null,
@@ -1565,6 +1569,7 @@ export default function App() {
                   description: "Search and review completed deliveries.",
                   metric: completedDeliveries.length,
                   metricLabel: "Done",
+                  tone: "archive",
                   onClick: () => setCurrentPage("deliveries-history"),
                 }
               : null,
@@ -1703,6 +1708,7 @@ export default function App() {
                   description: "Review what has been checked in today.",
                   metric: todayCheckIns.length,
                   metricLabel: "Today",
+                  tone: "success",
                   onClick: () => setCurrentPage("today"),
                 }
               : null,
@@ -1714,6 +1720,7 @@ export default function App() {
                   description: "Find receiving records by PO, customer, vendor, item, or location.",
                   metric: checkIns.length,
                   metricLabel: "Records",
+                  tone: "archive",
                   onClick: () => setCurrentPage("search"),
                 }
               : null,
@@ -1781,12 +1788,12 @@ export default function App() {
             effectiveAllowedPageIds.includes("deliveries-queue")
               ? {
                   icon: PackageCheck,
-                  label: "Driver Board",
-                  title: "Deliveries",
+                  label: "Live Queue",
+                  title: "To Be Delivered",
                   description: "Open assigned orders, photo capture, hardware reminders, and directions.",
                   metric: openDeliveries.length,
                   metricLabel: "Open",
-                  tone: hardwareOpen.length > 0 ? "warning" : "default",
+                  tone: hardwareOpen.length > 0 ? "warning" : "success",
                   onClick: () => setCurrentPage("deliveries-queue"),
                 }
               : null,
@@ -1798,6 +1805,7 @@ export default function App() {
                   description: "Search and review completed delivery records.",
                   metric: completedDeliveries.length,
                   metricLabel: "Complete",
+                  tone: "archive",
                   onClick: () => setCurrentPage("deliveries-history"),
                 }
               : null,
@@ -1906,7 +1914,7 @@ export default function App() {
                   description: "Approve people, assign roles, and manage page access.",
                   metric: pendingUsers.length,
                   metricLabel: "Pending",
-                  tone: pendingUsers.length > 0 ? "warning" : "default",
+                  tone: pendingUsers.length > 0 ? "warning" : "dispatch",
                   onClick: () => setCurrentPage("user-admin"),
                 }
               : null,
@@ -1918,6 +1926,7 @@ export default function App() {
                   description: "Build groups, add email contacts, and export CSV lists.",
                   metric: emailList.length,
                   metricLabel: "Emails",
+                  tone: "marketing",
                   onClick: () => setCurrentPage("email-list"),
                 }
               : null,
@@ -1929,6 +1938,7 @@ export default function App() {
                   description: "Connect Bouncie, name trucks, and manage map badges.",
                   metric: "GPS",
                   metricLabel: "Fleet",
+                  tone: "fleet",
                   onClick: () => setCurrentPage("bouncie"),
                 }
               : null,

@@ -29,22 +29,67 @@ function ActionRow({
   tone = "default",
   onClick,
 }) {
-  const isWarning = tone === "warning";
+  const toneClasses = {
+    default: {
+      button:
+        "border-slate-200 bg-white hover:border-red-200 hover:bg-red-50/30",
+      icon: "bg-slate-100 text-slate-700",
+      metric: "bg-slate-50 text-slate-950",
+      arrow: "text-[#FC2C38]",
+    },
+    warning: {
+      button:
+        "border-amber-200 bg-white hover:border-amber-300 hover:bg-amber-50/40",
+      icon: "bg-amber-50 text-amber-700",
+      metric: "bg-amber-50 text-amber-900",
+      arrow: "text-amber-700",
+    },
+    dispatch: {
+      button:
+        "border-blue-200 bg-blue-50/40 hover:border-blue-300 hover:bg-blue-50",
+      icon: "bg-white text-blue-700",
+      metric: "bg-white text-blue-900",
+      arrow: "text-blue-700",
+    },
+    marketing: {
+      button:
+        "border-rose-200 bg-rose-50/40 hover:border-rose-300 hover:bg-rose-50",
+      icon: "bg-white text-rose-700",
+      metric: "bg-white text-rose-900",
+      arrow: "text-rose-700",
+    },
+    fleet: {
+      button:
+        "border-cyan-200 bg-cyan-50/40 hover:border-cyan-300 hover:bg-cyan-50",
+      icon: "bg-white text-cyan-700",
+      metric: "bg-white text-cyan-900",
+      arrow: "text-cyan-700",
+    },
+    success: {
+      button:
+        "border-emerald-200 bg-emerald-50/40 hover:border-emerald-300 hover:bg-emerald-50",
+      icon: "bg-emerald-100 text-emerald-700",
+      metric: "bg-white text-emerald-800",
+      arrow: "text-emerald-700",
+    },
+    archive: {
+      button:
+        "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white",
+      icon: "bg-white text-slate-500",
+      metric: "bg-white text-slate-700",
+      arrow: "text-slate-500",
+    },
+  };
+  const selectedTone = toneClasses[tone] || toneClasses.default;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`group flex h-full items-center gap-4 rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:border-red-200 hover:bg-red-50/30 sm:p-5 ${
-        isWarning ? "border-amber-200" : "border-slate-200"
-      }`}
+      className={`group flex h-full items-center gap-4 rounded-2xl border p-4 text-left shadow-sm transition sm:p-5 ${selectedTone.button}`}
     >
       <span
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${
-          isWarning
-            ? "bg-amber-50 text-amber-700"
-            : "bg-slate-100 text-slate-700"
-        }`}
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${selectedTone.icon}`}
       >
         <Icon aria-hidden="true" className="h-6 w-6" strokeWidth={2.4} />
       </span>
@@ -63,8 +108,8 @@ function ActionRow({
 
       <span className="flex shrink-0 items-center gap-3">
         {metric !== undefined ? (
-          <span className="rounded-2xl bg-slate-50 px-3 py-2 text-right">
-            <span className="block text-xl font-black text-slate-950">
+          <span className={`rounded-2xl px-3 py-2 text-right ${selectedTone.metric}`}>
+            <span className="block text-xl font-black">
               {metric}
             </span>
             <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
@@ -74,7 +119,7 @@ function ActionRow({
         ) : null}
         <ArrowRight
           aria-hidden="true"
-          className="h-5 w-5 text-[#FC2C38] transition group-hover:translate-x-1"
+          className={`h-5 w-5 transition group-hover:translate-x-1 ${selectedTone.arrow}`}
           strokeWidth={2.6}
         />
       </span>
