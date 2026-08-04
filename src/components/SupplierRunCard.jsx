@@ -495,6 +495,7 @@ export default function SupplierRunCard({
   supplierRun,
   onToggleItem,
   onUpdateItemDescription,
+  onEdit,
   onDelete,
   isCompletedSection = false,
   defaultItemsOpen = false,
@@ -907,16 +908,18 @@ export default function SupplierRunCard({
                         />
                       ) : null}
 
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          startEditingItem(item);
-                        }}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-                      >
-                        Edit
-                      </button>
+                      {!item.pickedUp ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            startEditingItem(item);
+                          }}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                        >
+                          Edit
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ) : (
@@ -1102,7 +1105,17 @@ export default function SupplierRunCard({
       ) : null}
 
       {!isCompactClosed ? (
-        <div className="mt-4 flex justify-end border-t border-slate-100 pt-3">
+        <div className="mt-4 flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-3">
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={() => onEdit(supplierRun)}
+              className="text-xs font-bold text-blue-600 transition hover:text-blue-800"
+            >
+              Edit PO
+            </button>
+          ) : null}
+
           <button
             type="button"
             onClick={() => onDelete(supplierRun.id)}

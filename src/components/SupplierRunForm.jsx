@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   favoriteSouthDrivers,
   southDrivers,
@@ -80,6 +80,8 @@ export default function SupplierRunForm({
   createdBy,
   vehicleOptions,
   canAssignRoute = false,
+  initialSupplierRun = null,
+  onCancel,
 }) {
   const safeVehicleOptions = Array.isArray(vehicleOptions)
     ? vehicleOptions
@@ -99,6 +101,47 @@ export default function SupplierRunForm({
   const selectedVehicle = safeVehicleOptions.find(
     (vehicleOption) => vehicleOption.id === vehicleId,
   );
+  const isEditing = Boolean(initialSupplierRun?.id);
+
+  function getInitialItems(supplierRun) {
+    const pickupItems = Array.isArray(supplierRun?.items)
+      ? supplierRun.items
+      : [];
+
+    if (pickupItems.length === 0) {
+      return [createEmptyPickupItem()];
+    }
+
+    return pickupItems.map((item) => ({
+      ...item,
+      id: item.id || createId(),
+      quantity: item.quantity || "",
+      description: item.description || "",
+      internalReference: item.internalReference || "",
+      materialUse: item.materialUse || "order",
+      orderNumber: item.orderNumber || "",
+      saved: true,
+      pickedUp: Boolean(item.pickedUp),
+    }));
+  }
+
+  useEffect(() => {
+    if (!initialSupplierRun) {
+      return;
+    }
+
+    setPoNumber(initialSupplierRun.poNumber || "");
+    setScheduledDate(
+      initialSupplierRun.scheduledDate || getDateInputValue(),
+    );
+    setOrderedBy(initialSupplierRun.orderedBy || "");
+    setVendor(initialSupplierRun.vendor || "");
+    setSupplierAddress(initialSupplierRun.supplierAddress || "");
+    setDriver(initialSupplierRun.driver || "");
+    setVehicleId(initialSupplierRun.vehicleId || "");
+    setItems(getInitialItems(initialSupplierRun));
+    setError("");
+  }, [initialSupplierRun]);
 
   function clearError() {
     setError("");
@@ -208,6 +251,10 @@ export default function SupplierRunForm({
   }
 
   function removeItem(itemId) {
+    if (items.find((item) => item.id === itemId)?.pickedUp) {
+      return;
+    }
+
     setItems((currentItems) => {
       if (currentItems.length === 1) {
         return [createEmptyPickupItem()];
@@ -253,6 +300,10 @@ export default function SupplierRunForm({
   }
 
   function editItem(itemId) {
+    if (items.find((item) => item.id === itemId)?.pickedUp) {
+      return;
+    }
+
     setItems((currentItems) =>
       currentItems.map((item) =>
         item.id === itemId
@@ -304,13 +355,14 @@ export default function SupplierRunForm({
       return;
     }
 
-    if (canAssignRoute && !southDrivers.includes(driver)) {
+    if (!isEditing && canAssignRoute && !southDrivers.includes(driver)) {
       setError("Select the driver for this South PO.");
       return;
     }
 
     if (
       canAssignRoute &&
+      !isEditing &&
       safeVehicleOptions.length > 0 &&
       !selectedVehicle
     ) {
@@ -320,18 +372,24 @@ export default function SupplierRunForm({
 
     const pickupItems = items
       .filter((item) => item.description.trim())
-      .map((item) => ({
-        id: item.id,
-        quantity: item.quantity?.trim() || "",
-        description: item.description.trim(),
-        internalReference: item.internalReference?.trim() || "",
-        materialUse: item.materialUse || "order",
-        orderNumber:
-          usesOrderNumber(item.materialUse)
-            ? formatOrderNumber(item.orderNumber || "")
-            : "",
-        pickedUp: false,
-      }));
+      .map((item) => {
+        const itemData = { ...item };
+        delete itemData.saved;
+
+        return {
+          ...itemData,
+          id: item.id || createId(),
+          quantity: item.quantity?.trim() || "",
+          description: item.description.trim(),
+          internalReference: item.internalReference?.trim() || "",
+          materialUse: item.materialUse || "order",
+          orderNumber:
+            usesOrderNumber(item.materialUse)
+              ? formatOrderNumber(item.orderNumber || "")
+              : "",
+          pickedUp: Boolean(item.pickedUp),
+        };
+      });
 
     if (pickupItems.length === 0) {
       setError("Add at least one item for the driver to pick up.");
@@ -349,24 +407,36 @@ export default function SupplierRunForm({
 
     const now = new Date().toISOString();
     const supplierRun = {
-      id: createId(),
+      ...(initialSupplierRun || {}),
+      id: initialSupplierRun?.id || createId(),
       poNumber,
       scheduledDate,
       orderedBy,
       vendor: matchedVendor,
       supplierAddress: supplierAddress.trim(),
-      driver: canAssignRoute ? driver : "",
-      vehicleId: canAssignRoute ? selectedVehicle?.id || "" : "",
-      vehicleTitle: canAssignRoute ? selectedVehicle?.title || "" : "",
-      vehicleBadge: canAssignRoute ? selectedVehicle?.badge || "" : "",
+      driver: canAssignRoute ? driver : initialSupplierRun?.driver || "",
+      vehicleId: canAssignRoute
+        ? selectedVehicle?.id || initialSupplierRun?.vehicleId || ""
+        : initialSupplierRun?.vehicleId || "",
+      vehicleTitle: canAssignRoute
+        ? selectedVehicle?.title || initialSupplierRun?.vehicleTitle || ""
+        : initialSupplierRun?.vehicleTitle || "",
+      vehicleBadge: canAssignRoute
+        ? selectedVehicle?.badge || initialSupplierRun?.vehicleBadge || ""
+        : initialSupplierRun?.vehicleBadge || "",
       dispatchStatus:
-        canAssignRoute && driver ? "assigned" : "needsDispatch",
+        canAssignRoute && driver
+          ? "assigned"
+          : initialSupplierRun?.dispatchStatus || "needsDispatch",
       items: pickupItems,
-      status: "open",
-      createdByName: createdBy?.name || "",
-      createdByEmail: createdBy?.email || "",
-      createdById: createdBy?.id || "",
-      createdAt: now,
+      status: initialSupplierRun?.status || "open",
+      createdByName:
+        initialSupplierRun?.createdByName || createdBy?.name || "",
+      createdByEmail:
+        initialSupplierRun?.createdByEmail || createdBy?.email || "",
+      createdById:
+        initialSupplierRun?.createdById || createdBy?.id || "",
+      createdAt: initialSupplierRun?.createdAt || now,
       updatedAt: now,
     };
 
@@ -374,7 +444,9 @@ export default function SupplierRunForm({
 
     try {
       await onSubmit(supplierRun);
-      resetForm();
+      if (!isEditing) {
+        resetForm();
+      }
     } catch (submitError) {
       console.error("Unable to save supplier run:", submitError);
       setError(getFirebaseErrorMessage(submitError));
@@ -390,16 +462,17 @@ export default function SupplierRunForm({
     >
       <div className="mb-7">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">
-          Driver Pickup
+          {isEditing ? "Edit Pickup" : "Driver Pickup"}
         </p>
 
         <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
-          Add South PO
+          {isEditing ? `Edit PO ${poNumber}` : "Add South PO"}
         </h2>
 
         <p className="mt-2 text-slate-500">
-          Add the PO, supplier, and items. Dispatch will assign the driver
-          and truck from Needs Dispatch.
+          {isEditing
+            ? "Update the PO, supplier, driver, and pickup items without removing it from the route."
+            : "Add the PO, supplier, and items. Dispatch will assign the driver and truck from Needs Dispatch."}
         </p>
       </div>
 
@@ -730,21 +803,27 @@ export default function SupplierRunForm({
                       Item {index + 1}
                     </h4>
 
-                    {item.saved ? (
+                    {item.pickedUp ? (
+                      <p className="mt-1 text-sm font-semibold text-emerald-700">
+                        Picked up - locked
+                      </p>
+                    ) : item.saved ? (
                       <p className="mt-1 text-sm font-semibold text-emerald-700">
                         ✓ Item saved
                       </p>
                     ) : null}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.id)}
-                    disabled={isSubmitting}
-                    className="text-sm font-semibold text-red-600 hover:text-red-800"
-                  >
-                    Remove
-                  </button>
+                  {!item.pickedUp ? (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.id)}
+                      disabled={isSubmitting}
+                      className="text-sm font-semibold text-red-600 hover:text-red-800"
+                    >
+                      Remove
+                    </button>
+                  ) : null}
                 </div>
 
                 {item.saved ? (
@@ -773,14 +852,16 @@ export default function SupplierRunForm({
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => editItem(item.id)}
-                      disabled={isSubmitting}
-                      className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
-                    >
-                      Edit
-                    </button>
+                    {!item.pickedUp ? (
+                      <button
+                        type="button"
+                        onClick={() => editItem(item.id)}
+                        disabled={isSubmitting}
+                        className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                      >
+                        Edit
+                      </button>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -946,13 +1027,30 @@ export default function SupplierRunForm({
           </div>
         ) : null}
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full rounded-xl bg-blue-700 px-6 py-4 text-lg font-black text-white shadow-md transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-400"
-        >
-          {isSubmitting ? "Saving South PO..." : "Send to Driver"}
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          {onCancel ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isSubmitting}
+              className="rounded-xl border border-slate-300 bg-white px-6 py-4 text-lg font-black text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200 disabled:cursor-not-allowed disabled:text-slate-400 sm:w-48"
+            >
+              Cancel
+            </button>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full rounded-xl bg-blue-700 px-6 py-4 text-lg font-black text-white shadow-md transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-400"
+          >
+            {isSubmitting
+              ? "Saving South PO..."
+              : isEditing
+                ? "Save PO Changes"
+                : "Send to Driver"}
+          </button>
+        </div>
       </div>
     </form>
   );

@@ -332,6 +332,7 @@ export default function SupplierRunsPage({
   vehicleOptions,
   canAssignRoute = false,
   canReorderRoute = false,
+  canEditSupplierRuns = canAssignRoute || canReorderRoute,
   canReadAllRouteOrders = canReorderRoute,
   routeOrderDriverName = "",
   onPageChange,
@@ -351,6 +352,8 @@ export default function SupplierRunsPage({
     useState(todayKey);
   const [checkViewMode, setCheckViewMode] = useState("list");
   const [viewingSupplierRun, setViewingSupplierRun] =
+    useState(null);
+  const [editingSupplierRun, setEditingSupplierRun] =
     useState(null);
   const [southRouteOrders, setSouthRouteOrders] = useState([]);
   const [draggingStop, setDraggingStop] = useState(null);
@@ -405,6 +408,16 @@ export default function SupplierRunsPage({
             supplierRun.scheduledDate,
           )} and sent to ${supplierRun.driver}'s South list.`,
     );
+  }
+
+  async function handleEditSubmit(supplierRun) {
+    if (!editingSupplierRun?.id || !canEditSupplierRuns) {
+      return;
+    }
+
+    await onUpdateSupplierRun(editingSupplierRun.id, supplierRun);
+    setEditingSupplierRun(null);
+    setSuccessMessage(`PO ${supplierRun.poNumber} was updated.`);
   }
 
   function toggleStop(driver, vendor, scope = "open") {
@@ -1036,6 +1049,16 @@ export default function SupplierRunsPage({
                             ? "Assigning..."
                             : "Assign"}
                         </button>
+
+                        {canEditSupplierRuns ? (
+                          <button
+                            type="button"
+                            onClick={() => setEditingSupplierRun(supplierRun)}
+                            className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 sm:col-span-3"
+                          >
+                            Edit PO
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </article>
@@ -1816,6 +1839,11 @@ export default function SupplierRunsPage({
                                     onUpdateItemDescription={
                                       onUpdateSupplierRunItemDescription
                                     }
+                                    onEdit={
+                                      canEditSupplierRuns
+                                        ? setEditingSupplierRun
+                                        : undefined
+                                    }
                                     onDelete={onDeleteSupplierRun}
                                     defaultItemsOpen={
                                       vendorGroup.runs.length === 1
@@ -2033,6 +2061,61 @@ export default function SupplierRunsPage({
           ) : null}
         </section>
       )}
+
+      {editingSupplierRun && canEditSupplierRuns ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-6">
+          <button
+            type="button"
+            className="absolute inset-0"
+            aria-label="Close PO editor"
+            onClick={() => setEditingSupplierRun(null)}
+          />
+
+          <section
+            className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:max-w-5xl sm:rounded-3xl"
+            aria-modal="true"
+            role="dialog"
+            aria-label={`Edit South PO ${
+              editingSupplierRun.poNumber || ""
+            }`.trim()}
+          >
+            <div className="sticky top-0 z-20 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                  Edit South PO
+                </p>
+                <h3 className="mt-1 truncate text-2xl font-black tracking-tight text-slate-900">
+                  {editingSupplierRun.poNumber || "No PO #"}
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingSupplierRun(null)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+                aria-label="Close PO editor"
+              >
+                <X
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                  strokeWidth={2.5}
+                />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6">
+              <SupplierRunForm
+                onSubmit={handleEditSubmit}
+                createdBy={createdBy}
+                vehicleOptions={safeVehicleOptions}
+                canAssignRoute
+                initialSupplierRun={editingSupplierRun}
+                onCancel={() => setEditingSupplierRun(null)}
+              />
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {selectedSupplierRunDetails ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-6">

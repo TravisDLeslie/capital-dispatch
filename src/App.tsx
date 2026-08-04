@@ -2171,6 +2171,7 @@ export default function App() {
             supplierRuns={assignedVisibleSupplierRuns}
             vehicleOptions={southVehicleOptions}
             canReorderRoute={canAssignSouthRoutes}
+            canEditSupplierRuns={canAssignSouthRoutes}
             canReadAllRouteOrders={
               effectiveUserRole !== "driver" && canReadSouth
             }
