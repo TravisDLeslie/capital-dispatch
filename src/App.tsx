@@ -307,6 +307,7 @@ function getAllowedPageIdsForRole(role: string) {
       "customers-view",
       "sales-converter",
       "sales-report",
+      "fleet",
       "admin",
       "user-admin",
       "email-list",
@@ -338,7 +339,6 @@ function getAllowedPageIdsForRole(role: string) {
       "sales-report",
       "admin",
       "email-list",
-      "bouncie",
     ];
   }
 
@@ -404,7 +404,8 @@ function getAllowedPageIds(
       "dashboard",
       ...permissions.filter(
         (permission): permission is string =>
-          typeof permission === "string",
+          typeof permission === "string" &&
+          !["fleet", "bouncie"].includes(permission),
       ),
     ].filter((pageId, index, pageIds) => pageIds.indexOf(pageId) === index);
   }
@@ -594,7 +595,10 @@ export default function App() {
     ].includes(pageId),
   );
   const canReadAdmin = effectiveAllowedPageIds.some((pageId) =>
-    ["admin", "user-admin", "email-list", "bouncie"].includes(pageId),
+    ["admin", "user-admin", "email-list"].includes(pageId),
+  );
+  const canReadFleet = effectiveAllowedPageIds.some((pageId) =>
+    ["fleet", "bouncie"].includes(pageId),
   );
   const canReadEmailList = effectiveAllowedPageIds.includes("email-list");
   const canReadSalesReport = effectiveAllowedPageIds.includes("sales-report");
@@ -1426,6 +1430,7 @@ export default function App() {
         <DashboardPage
           operations={adminDashboardOperations}
           onPageChange={setCurrentPage}
+          allowedPageIds={dashboardAllowedPageIds}
         />
       );
     }
@@ -1995,7 +2000,7 @@ export default function App() {
       return (
         <SectionHubPage
           title="Admin"
-          description="Control user access, vehicle settings, and email list tools."
+          description="Control user access and email list tools."
           icon={ShieldCheck}
           stats={[
             {
@@ -2042,10 +2047,30 @@ export default function App() {
                   onClick: () => setCurrentPage("email-list"),
                 }
               : null,
+          ].filter(Boolean)}
+        />
+      );
+    }
+
+    if (currentPage === "fleet" && canReadFleet) {
+      return (
+        <SectionHubPage
+          title="Fleet"
+          description="Vehicle location, Bouncie connection, truck names, and map badges."
+          icon={Truck}
+          stats={[
+            {
+              icon: Truck,
+              label: "Vehicles",
+              value: vehicleSettings.length,
+              note: "Saved settings",
+            },
+          ]}
+          actions={[
             effectiveAllowedPageIds.includes("bouncie")
               ? {
                   icon: Truck,
-                  label: "Fleet",
+                  label: "Bouncie",
                   title: "Vehicles",
                   description: "Connect Bouncie, name trucks, and manage map badges.",
                   metric: "GPS",

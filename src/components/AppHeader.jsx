@@ -8,6 +8,7 @@ import {
   Plus,
   ShieldCheck,
   Truck,
+  Wrench,
   UserRound,
   UsersRound,
 } from "lucide-react";
@@ -43,6 +44,11 @@ const navigationItems = [
     group: "Admin",
     id: "admin",
     label: "Admin",
+  },
+  {
+    group: "Fleet",
+    id: "fleet",
+    label: "Fleet",
   },
 ];
 
@@ -87,8 +93,12 @@ function getCurrentPageLabel(currentPage) {
     return "Sales";
   }
 
-  if (["user-admin", "email-list", "bouncie"].includes(currentPage)) {
+  if (["user-admin", "email-list"].includes(currentPage)) {
     return "Admin";
+  }
+
+  if (["fleet", "bouncie"].includes(currentPage)) {
+    return "Fleet";
   }
 
   const currentItem = navigationItems.find(
@@ -129,9 +139,13 @@ function getCurrentPageGroup(currentPage) {
 
   if (
     currentPage === "admin" ||
-    ["user-admin", "email-list", "bouncie"].includes(currentPage)
+    ["user-admin", "email-list"].includes(currentPage)
   ) {
     return "Admin";
+  }
+
+  if (currentPage === "fleet" || currentPage === "bouncie") {
+    return "Fleet";
   }
 
   return navigationItems.find((item) => item.id === currentPage)?.group || "";
@@ -156,6 +170,10 @@ function getNavGroupIcon(group) {
 
   if (group === "Admin") {
     return ShieldCheck;
+  }
+
+  if (group === "Fleet") {
+    return Wrench;
   }
 
   return Package;
@@ -195,6 +213,7 @@ export default function AppHeader({
     Deliveries: false,
     Sales: false,
     Admin: false,
+    Fleet: false,
   });
   const userInitial = (
     currentUser?.displayName ||
@@ -219,6 +238,7 @@ export default function AppHeader({
       Deliveries: false,
       Sales: false,
       Admin: false,
+      Fleet: false,
       [currentGroup]: true,
     });
   }, [currentPage]);
@@ -239,13 +259,14 @@ export default function AppHeader({
         Deliveries: false,
         Sales: false,
         Admin: false,
+        Fleet: false,
         [group]: nextIsOpen,
       };
     });
   }
 
   function renderNavigation(isMobile = false) {
-    return ["Dashboard", "Receiving", "South", "Deliveries", "Sales", "Admin"].map((group) => {
+    return ["Dashboard", "Receiving", "South", "Deliveries", "Sales", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||
@@ -271,7 +292,11 @@ export default function AppHeader({
             )) ||
           (item.id === "admin" &&
             allowedPageIds.some((pageId) =>
-              ["user-admin", "email-list", "bouncie"].includes(pageId),
+              ["user-admin", "email-list"].includes(pageId),
+            )) ||
+          (item.id === "fleet" &&
+            allowedPageIds.some((pageId) =>
+              ["fleet", "bouncie"].includes(pageId),
             ));
 
         return item.group === group && pageIsAllowed;
@@ -287,6 +312,7 @@ export default function AppHeader({
         "Deliveries",
         "Sales",
         "Admin",
+        "Fleet",
       ].includes(group);
 
       return hasGroupItems ? (

@@ -66,7 +66,6 @@ const permissionGroups = [
       { id: "admin", label: "Admin" },
       { id: "user-admin", label: "User Access" },
       { id: "email-list", label: "Email List" },
-      { id: "bouncie", label: "Vehicles" },
     ],
   },
 ];
@@ -104,7 +103,8 @@ const rolePermissionPresets = {
     "sales-converter",
   ],
   admin: allPermissionIds.filter(
-    (permissionId) => permissionId !== "user-admin",
+    (permissionId) =>
+      !["user-admin", "fleet", "bouncie"].includes(permissionId),
   ),
   superAdmin: allPermissionIds,
 };
