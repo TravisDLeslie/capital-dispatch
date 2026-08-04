@@ -355,27 +355,29 @@ function sortSupplierRunsByClosestPickupDate(supplierRuns) {
   });
 }
 
-function getHistoryDriverDateLabel(group) {
-  const dateKeys = [
-    ...new Set(
-      group.vendorGroups
-        .flatMap((vendorGroup) => vendorGroup.runs)
-        .map(getSupplierRunDateKey)
-        .filter(Boolean),
-    ),
-  ].sort();
+function groupHistoryRunsByPickupDate(supplierRuns) {
+  const groupsByDate = supplierRuns.reduce((groups, supplierRun) => {
+    const dateKey = getSupplierRunDateKey(supplierRun) || "no-date";
 
-  if (dateKeys.length === 0) {
-    return "";
-  }
+    return {
+      ...groups,
+      [dateKey]: [...(groups[dateKey] || []), supplierRun],
+    };
+  }, {});
 
-  if (dateKeys.length === 1) {
-    return formatDateInput(dateKeys[0]);
-  }
-
-  return `${formatDateInput(dateKeys[0])} - ${formatDateInput(
-    dateKeys[dateKeys.length - 1],
-  )}`;
+  return Object.entries(groupsByDate)
+    .sort(([firstDateKey], [secondDateKey]) =>
+      secondDateKey.localeCompare(firstDateKey),
+    )
+    .map(([dateKey, runs]) => ({
+      dateKey,
+      label:
+        dateKey === "no-date"
+          ? "No pickup date"
+          : formatDateInput(dateKey),
+      runs,
+      driverGroups: groupRunsByDriverAndVendor(runs),
+    }));
 }
 
 export default function SupplierRunsPage({
@@ -811,9 +813,7 @@ export default function SupplierRunsPage({
   );
 
   const historyRuns = supplierRuns.filter(
-    (supplierRun) =>
-      supplierRun.status === "complete" &&
-      !isToday(supplierRun.completedAt || supplierRun.updatedAt),
+    (supplierRun) => supplierRun.status === "complete",
   );
   const historySearchTerm = normalizeSearchText(historySearch);
   const filteredHistoryRuns = historyRuns.filter((supplierRun) =>
@@ -865,8 +865,8 @@ export default function SupplierRunsPage({
         : 0),
     0,
   );
-  const historyRunGroups =
-    groupRunsByDriverAndVendor(filteredHistoryRuns);
+  const historyDateGroups =
+    groupHistoryRunsByPickupDate(filteredHistoryRuns);
   const dispatchRuns = supplierRuns.filter(
     (supplierRun) =>
       supplierRun.status !== "complete" &&
@@ -1183,7 +1183,7 @@ export default function SupplierRunsPage({
         <section>
           <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-              Completed Before Today
+              Completed South POs
             </p>
 
             <p className="mt-1 text-3xl font-black text-slate-900">
@@ -1227,8 +1227,8 @@ export default function SupplierRunsPage({
 
           {historyRuns.length === 0 ? (
             <EmptyState
-              title="No older completed South POs"
-              description="Completed pickups will move here after today."
+              title="No completed South POs"
+              description="Completed pickups will show here by route date."
             />
           ) : filteredHistoryRuns.length === 0 ? (
             <EmptyState
@@ -1237,159 +1237,179 @@ export default function SupplierRunsPage({
             />
           ) : (
             <div className="space-y-5">
-              {historyRunGroups.map((group) => {
-                const driverAvatar = getDriverAvatar(group.driver);
-                const driverIsOpen = isDriverOpen(
-                  group.driver,
-                  "history",
-                );
-                const driverDateLabel = getHistoryDriverDateLabel(group);
+              {historyDateGroups.map((dateGroup) => (
+                <div
+                  key={dateGroup.dateKey}
+                  className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
+                >
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1 py-1">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                        Route Date
+                      </p>
+                      <h4 className="mt-1 text-xl font-black tracking-tight text-slate-900">
+                        {dateGroup.label}
+                      </h4>
+                    </div>
 
-                return (
-                  <div
-                    key={group.driver}
-                    className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4"
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        toggleDriver(group.driver, "history")
-                      }
-                      className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition hover:bg-slate-100"
-                      aria-expanded={driverIsOpen}
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
+                    <div className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-black text-slate-600">
+                      {dateGroup.runs.length}{" "}
+                      {dateGroup.runs.length === 1 ? "PO" : "POs"}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    {dateGroup.driverGroups.map((group) => {
+                      const driverAvatar = getDriverAvatar(group.driver);
+                      const driverKey = `${dateGroup.dateKey}::${group.driver}`;
+                      const driverIsOpen = isDriverOpen(
+                        driverKey,
+                        "history",
+                      );
+
+                      return (
                         <div
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-black ${driverAvatar.colorClass}`}
-                          aria-hidden="true"
+                          key={driverKey}
+                          className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4"
                         >
-                          {driverAvatar.initial}
-                        </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              toggleDriver(driverKey, "history")
+                            }
+                            className="flex w-full flex-wrap items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition hover:bg-slate-100"
+                            aria-expanded={driverIsOpen}
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div
+                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-black ${driverAvatar.colorClass}`}
+                                aria-hidden="true"
+                              >
+                                {driverAvatar.initial}
+                              </div>
 
-                        <div className="min-w-0">
-                          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-                            Driver
-                          </p>
+                              <div className="min-w-0">
+                                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                                  Driver
+                                </p>
 
-                          <h4 className="truncate text-lg font-black tracking-tight text-slate-800">
-                            {group.driver}
-                          </h4>
+                                <h5 className="truncate text-lg font-black tracking-tight text-slate-800">
+                                  {group.driver}
+                                </h5>
+                              </div>
+                            </div>
 
-                          {driverDateLabel ? (
-                            <p className="mt-0.5 text-sm font-bold text-slate-500">
-                              {driverDateLabel}
-                            </p>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-600 shadow-sm">
+                                {group.vendorGroups.reduce(
+                                  (count, vendorGroup) =>
+                                    count + vendorGroup.runs.length,
+                                  0,
+                                )}{" "}
+                                POs
+                              </div>
+
+                              <span className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
+                                <ChevronDown
+                                  aria-hidden="true"
+                                  className={`h-5 w-5 transition-transform ${
+                                    driverIsOpen ? "rotate-180" : ""
+                                  }`}
+                                  strokeWidth={2.6}
+                                />
+                              </span>
+                            </div>
+                          </button>
+
+                          {driverIsOpen ? (
+                            <div className="mt-3 space-y-4">
+                              {group.vendorGroups.map((vendorGroup) => {
+                                const stats =
+                                  getVendorGroupStats(vendorGroup);
+                                const stopKey = `${dateGroup.dateKey}::${group.driver}::${vendorGroup.vendor}`;
+                                const stopIsOpen = isStopOpen(
+                                  group.driver,
+                                  stopKey,
+                                  "history",
+                                );
+
+                                return (
+                                  <div
+                                    key={vendorGroup.vendor}
+                                    className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        toggleStop(
+                                          group.driver,
+                                          stopKey,
+                                          "history",
+                                        )
+                                      }
+                                      className="flex w-full min-w-0 flex-col gap-3 px-4 py-3 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
+                                      aria-expanded={stopIsOpen}
+                                    >
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                                          Stop
+                                        </p>
+
+                                        <h6 className="truncate text-base font-black text-slate-800">
+                                          {vendorGroup.vendor}
+                                        </h6>
+
+                                        <p className="mt-1 text-sm font-semibold text-slate-500">
+                                          {stats.poCount}{" "}
+                                          {stats.poCount === 1
+                                            ? "PO"
+                                            : "POs"}{" "}
+                                          • {stats.itemCount} items
+                                        </p>
+                                      </div>
+
+                                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
+                                        <ChevronDown
+                                          aria-hidden="true"
+                                          className={`h-5 w-5 transition-transform ${
+                                            stopIsOpen ? "rotate-180" : ""
+                                          }`}
+                                          strokeWidth={2.6}
+                                        />
+                                      </span>
+                                    </button>
+
+                                    {stopIsOpen ? (
+                                      <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-3">
+                                        {vendorGroup.runs.map(
+                                          (supplierRun) => (
+                                            <SupplierRunCard
+                                              key={supplierRun.id}
+                                              supplierRun={supplierRun}
+                                              onToggleItem={
+                                                onToggleSupplierRunItem
+                                              }
+                                              onUpdateItemDescription={
+                                                onUpdateSupplierRunItemDescription
+                                              }
+                                              onDelete={onDeleteSupplierRun}
+                                              isCompletedSection
+                                            />
+                                          ),
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           ) : null}
                         </div>
-                      </div>
-
-                      <div className="flex shrink-0 items-center gap-2">
-                        <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-600 shadow-sm">
-                          {group.vendorGroups.reduce(
-                            (count, vendorGroup) =>
-                              count + vendorGroup.runs.length,
-                            0,
-                          )}{" "}
-                          POs
-                        </div>
-
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
-                          <ChevronDown
-                            aria-hidden="true"
-                            className={`h-5 w-5 transition-transform ${
-                              driverIsOpen ? "rotate-180" : ""
-                            }`}
-                            strokeWidth={2.6}
-                          />
-                        </span>
-                      </div>
-                    </button>
-
-                    {driverIsOpen ? (
-                      <div className="mt-3 space-y-4">
-                        {group.vendorGroups.map((vendorGroup) => {
-                          const stats =
-                            getVendorGroupStats(vendorGroup);
-                          const stopIsOpen = isStopOpen(
-                            group.driver,
-                            vendorGroup.vendor,
-                            "history",
-                          );
-
-                          return (
-                            <div
-                              key={vendorGroup.vendor}
-                              className="overflow-hidden rounded-xl border border-slate-200 bg-white"
-                            >
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  toggleStop(
-                                    group.driver,
-                                    vendorGroup.vendor,
-                                    "history",
-                                  )
-                                }
-                                className="flex w-full min-w-0 flex-col gap-3 px-4 py-3 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
-                                aria-expanded={stopIsOpen}
-                              >
-                                <div className="min-w-0">
-                                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                                    Stop
-                                  </p>
-
-                                  <h5 className="truncate text-base font-black text-slate-800">
-                                    {vendorGroup.vendor}
-                                  </h5>
-
-                                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                                    {stats.poCount}{" "}
-                                    {stats.poCount === 1
-                                      ? "PO"
-                                      : "POs"}{" "}
-                                    • {stats.itemCount} items
-                                  </p>
-                                </div>
-
-                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
-                                  <ChevronDown
-                                    aria-hidden="true"
-                                    className={`h-5 w-5 transition-transform ${
-                                      stopIsOpen ? "rotate-180" : ""
-                                    }`}
-                                    strokeWidth={2.6}
-                                  />
-                                </span>
-                              </button>
-
-                              {stopIsOpen ? (
-                                <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-3">
-                                  {vendorGroup.runs.map(
-                                    (supplierRun) => (
-                                      <SupplierRunCard
-                                        key={supplierRun.id}
-                                        supplierRun={supplierRun}
-                                        onToggleItem={
-                                          onToggleSupplierRunItem
-                                        }
-                                        onUpdateItemDescription={
-                                          onUpdateSupplierRunItemDescription
-                                        }
-                                        onDelete={onDeleteSupplierRun}
-                                        isCompletedSection
-                                      />
-                                    ),
-                                  )}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : null}
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
         </section>
@@ -1998,7 +2018,7 @@ export default function SupplierRunsPage({
                   </h3>
 
                   <p className="mt-1 text-sm font-semibold text-slate-500">
-                    Older completed South pickups move to History after today.
+                    Completed South pickups are also saved in History.
                   </p>
                 </div>
               </div>
