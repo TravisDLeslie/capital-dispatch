@@ -96,6 +96,24 @@ function getMaterialActionLabel(materialUse) {
   return "Item has been picked up";
 }
 
+function getSupplierRunActionLabel(items, isComplete) {
+  if (isComplete) {
+    return "Complete";
+  }
+
+  const openItems = items.filter((item) => !item.pickedUp);
+
+  if (openItems.some((item) => item.materialUse === "return")) {
+    return "Needs Returned";
+  }
+
+  if (openItems.some((item) => item.materialUse === "swap")) {
+    return "Needs Swapped";
+  }
+
+  return "Needs Pickup";
+}
+
 function formatPickupItemsForPrint(items) {
   if (items.length === 0) {
     return `
@@ -522,6 +540,7 @@ export default function SupplierRunCard({
 
   const isComplete =
     items.length > 0 && pickedUpCount === items.length;
+  const actionLabel = getSupplierRunActionLabel(items, isComplete);
   const remainingCount = items.length - pickedUpCount;
   const itemLabel = items.length === 1 ? "Item" : "Items";
   const compactItemSummary =
@@ -669,17 +688,32 @@ export default function SupplierRunCard({
       >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            {isItemsOpen ? (
+              <button
+                type="button"
+                onClick={openPickupSheet}
+                aria-label={`Open pickup PDF for PO ${supplierRun.poNumber}`}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:hidden"
+              >
+                <FileText
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  strokeWidth={2.4}
+                />
+              </button>
+            ) : null}
+
             <h2 className="text-lg font-black tracking-tight text-slate-900">
               {supplierRun.poNumber}
             </h2>
 
             {isComplete ? (
               <span className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-black uppercase tracking-wide text-emerald-800">
-                Complete
+                {actionLabel}
               </span>
             ) : (
               <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-black uppercase tracking-wide text-amber-800">
-                Needs Pickup
+                {actionLabel}
               </span>
             )}
           </div>
@@ -728,7 +762,7 @@ export default function SupplierRunCard({
                 type="button"
                 onClick={openPickupSheet}
                 aria-label={`Open pickup PDF for PO ${supplierRun.poNumber}`}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
+                className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 sm:inline-flex sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
               >
                 <FileText
                   aria-hidden="true"

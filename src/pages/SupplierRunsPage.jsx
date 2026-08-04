@@ -2430,7 +2430,13 @@ export default function SupplierRunsPage({
                                 : "bg-amber-100 text-amber-700"
                             }`}
                           >
-                            {item.pickedUp ? "Picked Up" : "Needs Pickup"}
+                            {item.pickedUp
+                              ? "Picked Up"
+                              : item.materialUse === "return"
+                                ? "Needs Returned"
+                                : item.materialUse === "swap"
+                                  ? "Needs Swapped"
+                                  : "Needs Pickup"}
                           </span>
                         </div>
                       </div>
