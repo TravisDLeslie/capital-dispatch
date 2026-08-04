@@ -96,6 +96,18 @@ function getMaterialActionLabel(materialUse) {
   return "Item has been picked up";
 }
 
+function getMaterialPhotoReminder(materialUse) {
+  if (materialUse === "return") {
+    return "Take a photo of the item being returned before it leaves.";
+  }
+
+  if (materialUse === "swap") {
+    return "Take a photo of the item being swapped before it leaves.";
+  }
+
+  return "";
+}
+
 function getSupplierRunActionLabel(items, isComplete) {
   if (isComplete) {
     return "Complete";
@@ -838,6 +850,9 @@ export default function SupplierRunCard({
               item.materialUse,
               item.pickedUp,
             );
+            const photoReminder = getMaterialPhotoReminder(
+              item.materialUse,
+            );
 
             return (
               <div
@@ -906,6 +921,11 @@ export default function SupplierRunCard({
                         </span>
                       ) : null}
 
+                      {!item.pickedUp && photoReminder ? (
+                        <span className="mt-3 block rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700">
+                          {photoReminder}
+                        </span>
+                      ) : null}
                       <span className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
                         <span
                           className={`text-xs font-black uppercase tracking-[0.08em] ${
