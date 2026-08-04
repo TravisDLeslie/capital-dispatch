@@ -38,6 +38,10 @@ function usesOrderNumber(materialUse) {
   return ["order", "return", "swap"].includes(materialUse);
 }
 
+function usesReturnNotes(materialUse) {
+  return ["return", "swap"].includes(materialUse);
+}
+
 function getMaterialUseLabel(materialUse) {
   const labels = {
     order: "Order",
@@ -112,6 +116,13 @@ function formatPickupItemsForPrint(items) {
               item.internalReference
                 ? `<span>SKU / Item # / SO#: ${escapeHtml(
                     item.internalReference,
+                  )}</span>`
+                : ""
+            }
+            ${
+              item.returnNotes
+                ? `<span>Return / swap notes: ${escapeHtml(
+                    item.returnNotes,
                   )}</span>`
                 : ""
             }
@@ -532,6 +543,7 @@ export default function SupplierRunCard({
   const [editingMaterialUse, setEditingMaterialUse] =
     useState("order");
   const [editingOrderNumber, setEditingOrderNumber] = useState("");
+  const [editingReturnNotes, setEditingReturnNotes] = useState("");
   const [editError, setEditError] = useState("");
   const [photoError, setPhotoError] = useState("");
   const [processingPhotoItemId, setProcessingPhotoItemId] =
@@ -548,6 +560,7 @@ export default function SupplierRunCard({
     setEditingInternalReference(item.internalReference || "");
     setEditingMaterialUse(item.materialUse || "order");
     setEditingOrderNumber(item.orderNumber || "");
+    setEditingReturnNotes(item.returnNotes || "");
     setEditError("");
     setIsItemsOpen(true);
   }
@@ -559,6 +572,7 @@ export default function SupplierRunCard({
     setEditingInternalReference("");
     setEditingMaterialUse("order");
     setEditingOrderNumber("");
+    setEditingReturnNotes("");
     setEditError("");
   }
 
@@ -570,6 +584,16 @@ export default function SupplierRunCard({
       return;
     }
 
+    if (
+      usesReturnNotes(editingMaterialUse) &&
+      !editingReturnNotes.trim()
+    ) {
+      setEditError(
+        "Add return notes so the driver knows where it is and what it looks like.",
+      );
+      return;
+    }
+
     await onUpdateItemDescription(
       supplierRun.id,
       itemId,
@@ -578,6 +602,7 @@ export default function SupplierRunCard({
       editingQuantity.trim(),
       editingMaterialUse,
       usesOrderNumber(editingMaterialUse) ? editingOrderNumber.trim() : "",
+      usesReturnNotes(editingMaterialUse) ? editingReturnNotes.trim() : "",
     );
 
     cancelEditingItem();
@@ -838,6 +863,15 @@ export default function SupplierRunCard({
                         </span>
                       ) : null}
 
+                      {item.returnNotes ? (
+                        <span className="mt-3 block rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                          <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
+                            Return / swap notes
+                          </span>
+                          {item.returnNotes}
+                        </span>
+                      ) : null}
+
                       <span className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
                         <span
                           className={`text-xs font-black uppercase tracking-[0.08em] ${
@@ -998,6 +1032,9 @@ export default function SupplierRunCard({
                           if (!usesOrderNumber(nextMaterialUse)) {
                             setEditingOrderNumber("");
                           }
+                          if (!usesReturnNotes(nextMaterialUse)) {
+                            setEditingReturnNotes("");
+                          }
                           setEditError("");
                         }}
                         className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
@@ -1039,6 +1076,29 @@ export default function SupplierRunCard({
                       />
                     </div>
                   </div>
+
+                  {usesReturnNotes(editingMaterialUse) ? (
+                    <div className="mt-3">
+                      <label
+                        htmlFor={`supplier-item-return-notes-${supplierRun.id}-${item.id}`}
+                        className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-amber-700"
+                      >
+                        Return / swap notes
+                      </label>
+
+                      <textarea
+                        id={`supplier-item-return-notes-${supplierRun.id}-${item.id}`}
+                        value={editingReturnNotes}
+                        onChange={(event) => {
+                          setEditingReturnNotes(event.target.value);
+                          setEditError("");
+                        }}
+                        rows={3}
+                        placeholder="Where it is, what it looks like, condition, labels, or anything the driver should know"
+                        className="w-full resize-y rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none placeholder:text-amber-700/70 focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+                      />
+                    </div>
+                  ) : null}
 
                   {editError ? (
                     <p className="mt-2 text-sm font-semibold text-red-600">

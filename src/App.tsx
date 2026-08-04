@@ -117,6 +117,7 @@ type SupplierRunItem = {
   internalReference?: string;
   materialUse?: string;
   orderNumber?: string;
+  returnNotes?: string;
   pickedUp: boolean;
   pickedUpAt?: string | null;
   pickupPhoto?: unknown | null;
@@ -1334,6 +1335,7 @@ export default function App() {
     quantity?: string,
     materialUse?: string,
     orderNumber?: string,
+    returnNotes?: string,
   ) {
     const supplierRun = supplierRuns.find(
       (currentSupplierRun) =>
@@ -1363,6 +1365,10 @@ export default function App() {
               typeof orderNumber === "string"
                 ? orderNumber
                 : item.orderNumber,
+            returnNotes:
+              typeof returnNotes === "string"
+                ? returnNotes
+                : item.returnNotes,
           }
         : item,
     );

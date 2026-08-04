@@ -17,6 +17,7 @@ function createEmptyPickupItem() {
     internalReference: "",
     materialUse: "order",
     orderNumber: "",
+    returnNotes: "",
     saved: false,
     pickedUp: false,
   };
@@ -24,6 +25,10 @@ function createEmptyPickupItem() {
 
 function usesOrderNumber(materialUse) {
   return ["order", "return", "swap"].includes(materialUse);
+}
+
+function usesReturnNotes(materialUse) {
+  return ["return", "swap"].includes(materialUse);
 }
 
 function getMaterialUseLabel(materialUse) {
@@ -120,6 +125,7 @@ export default function SupplierRunForm({
       internalReference: item.internalReference || "",
       materialUse: item.materialUse || "order",
       orderNumber: item.orderNumber || "",
+      returnNotes: item.returnNotes || "",
       saved: true,
       pickedUp: Boolean(item.pickedUp),
     }));
@@ -216,6 +222,8 @@ export default function SupplierRunForm({
               materialUse,
               orderNumber:
                 usesOrderNumber(materialUse) ? item.orderNumber : "",
+              returnNotes:
+                usesReturnNotes(materialUse) ? item.returnNotes : "",
               saved: false,
             }
           : item,
@@ -232,6 +240,22 @@ export default function SupplierRunForm({
           ? {
               ...item,
               orderNumber,
+              saved: false,
+            }
+          : item,
+      ),
+    );
+
+    clearError();
+  }
+
+  function updateItemReturnNotes(itemId, returnNotes) {
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              returnNotes,
               saved: false,
             }
           : item,
@@ -276,6 +300,17 @@ export default function SupplierRunForm({
       return;
     }
 
+    if (
+      usesReturnNotes(item.materialUse) &&
+      !item.pickedUp &&
+      !item.returnNotes?.trim()
+    ) {
+      setError(
+        "Add return notes so the driver knows where it is and what it looks like.",
+      );
+      return;
+    }
+
     setItems((currentItems) =>
       currentItems.map((pickupItem) =>
         pickupItem.id === itemId
@@ -289,6 +324,10 @@ export default function SupplierRunForm({
               orderNumber:
                 usesOrderNumber(pickupItem.materialUse)
                   ? formatOrderNumber(pickupItem.orderNumber || "")
+                  : "",
+              returnNotes:
+                usesReturnNotes(pickupItem.materialUse)
+                  ? pickupItem.returnNotes.trim()
                   : "",
               saved: true,
             }
@@ -387,12 +426,30 @@ export default function SupplierRunForm({
             usesOrderNumber(item.materialUse)
               ? formatOrderNumber(item.orderNumber || "")
               : "",
+          returnNotes:
+            usesReturnNotes(item.materialUse)
+              ? item.returnNotes?.trim() || ""
+              : "",
           pickedUp: Boolean(item.pickedUp),
         };
       });
 
     if (pickupItems.length === 0) {
       setError("Add at least one item for the driver to pick up.");
+      return;
+    }
+
+    const returnItemMissingNotes = pickupItems.find(
+      (item) =>
+        usesReturnNotes(item.materialUse) &&
+        !item.pickedUp &&
+        !item.returnNotes?.trim(),
+    );
+
+    if (returnItemMissingNotes) {
+      setError(
+        "Add return notes for each return or swap item before sending it to the driver.",
+      );
       return;
     }
 
@@ -850,6 +907,12 @@ export default function SupplierRunForm({
                         {getMaterialUseLabel(item.materialUse)}
                         {item.orderNumber ? ` ${item.orderNumber}` : ""}
                       </p>
+
+                      {item.returnNotes ? (
+                        <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                          {item.returnNotes}
+                        </p>
+                      ) : null}
                     </div>
 
                     {!item.pickedUp ? (
@@ -1002,6 +1065,32 @@ export default function SupplierRunForm({
                         Save Item
                       </button>
                     </div>
+
+                    {usesReturnNotes(item.materialUse) ? (
+                      <div>
+                        <label
+                          htmlFor={`supplier-item-return-notes-${item.id}`}
+                          className="sr-only"
+                        >
+                          Return or swap notes
+                        </label>
+
+                        <textarea
+                          id={`supplier-item-return-notes-${item.id}`}
+                          value={item.returnNotes || ""}
+                          onChange={(event) =>
+                            updateItemReturnNotes(
+                              item.id,
+                              event.target.value,
+                            )
+                          }
+                          disabled={isSubmitting}
+                          rows={3}
+                          placeholder="Return notes: where it is, what it looks like, condition, labels, or anything the driver should know"
+                          className="w-full resize-y rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-slate-900 outline-none transition placeholder:text-amber-700/70 focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>

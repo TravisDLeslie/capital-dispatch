@@ -255,6 +255,10 @@ function normalizeSearchText(value) {
   return String(value || "").toLowerCase().trim();
 }
 
+function normalizeSearchNumbers(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 function supplierRunMatchesSearch(supplierRun, searchTerm) {
   if (!searchTerm) {
     return true;
@@ -269,6 +273,7 @@ function supplierRunMatchesSearch(supplierRun, searchTerm) {
             item.internalReference,
             item.materialUse,
             item.orderNumber,
+            item.returnNotes,
           ]
             .filter(Boolean)
             .join(" "),
@@ -293,8 +298,61 @@ function supplierRunMatchesSearch(supplierRun, searchTerm) {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+  const numericSearchTerm = normalizeSearchNumbers(searchTerm);
+  const searchableNumbers = [
+    supplierRun.poNumber,
+    ...(
+      Array.isArray(supplierRun.items)
+        ? supplierRun.items.map((item) => item.orderNumber)
+        : []
+    ),
+  ]
+    .map(normalizeSearchNumbers)
+    .filter(Boolean);
 
-  return searchableText.includes(searchTerm);
+  return (
+    searchableText.includes(searchTerm) ||
+    (numericSearchTerm.length > 0 &&
+      searchableNumbers.some((searchableNumber) =>
+        searchableNumber.includes(numericSearchTerm),
+      ))
+  );
+}
+
+function getDateSortValue(supplierRun) {
+  const dateKey = getSupplierRunDateKey(supplierRun);
+  const parsedDate = dateKey ? new Date(`${dateKey}T00:00:00`) : null;
+
+  return parsedDate && !Number.isNaN(parsedDate.getTime())
+    ? parsedDate.getTime()
+    : Number.MAX_SAFE_INTEGER;
+}
+
+function sortSupplierRunsByClosestPickupDate(supplierRuns) {
+  const todayTime = new Date(`${getDateInputValue()}T00:00:00`).getTime();
+
+  return [...supplierRuns].sort((firstRun, secondRun) => {
+    const firstTime = getDateSortValue(firstRun);
+    const secondTime = getDateSortValue(secondRun);
+    const firstIsUpcoming = firstTime >= todayTime;
+    const secondIsUpcoming = secondTime >= todayTime;
+
+    if (firstIsUpcoming !== secondIsUpcoming) {
+      return firstIsUpcoming ? -1 : 1;
+    }
+
+    if (firstIsUpcoming && secondIsUpcoming) {
+      return firstTime - secondTime;
+    }
+
+    if (!firstIsUpcoming && !secondIsUpcoming) {
+      return secondTime - firstTime;
+    }
+
+    return String(firstRun.poNumber || "").localeCompare(
+      String(secondRun.poNumber || ""),
+    );
+  });
 }
 
 function getHistoryDriverDateLabel(group) {
@@ -360,6 +418,7 @@ export default function SupplierRunsPage({
   const [routeOrderError, setRouteOrderError] = useState("");
   const [dispatchDrafts, setDispatchDrafts] = useState({});
   const [savingDispatchRunId, setSavingDispatchRunId] = useState("");
+  const [dispatchSearch, setDispatchSearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
 
   useEffect(() => {
@@ -814,6 +873,12 @@ export default function SupplierRunsPage({
       (supplierRun.dispatchStatus === "needsDispatch" ||
         !supplierRun.driver),
   );
+  const dispatchSearchTerm = normalizeSearchText(dispatchSearch);
+  const filteredDispatchRuns = sortSupplierRunsByClosestPickupDate(
+    dispatchRuns.filter((supplierRun) =>
+      supplierRunMatchesSearch(supplierRun, dispatchSearchTerm),
+    ),
+  );
   const pageTitle = getSouthPageTitle(mode);
 
   return (
@@ -895,9 +960,48 @@ export default function SupplierRunsPage({
             <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
               Waiting For Assignment
             </p>
-            <p className="mt-1 text-3xl font-black text-slate-900">
-              {dispatchRuns.length}
-            </p>
+            <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <p className="text-3xl font-black text-slate-900">
+                {filteredDispatchRuns.length}
+              </p>
+
+              {dispatchSearchTerm ? (
+                <p className="text-sm font-bold text-slate-500">
+                  Showing {filteredDispatchRuns.length} of{" "}
+                  {dispatchRuns.length}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            <label
+              htmlFor="south-dispatch-search"
+              className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
+            >
+              Search Needs Dispatch
+            </label>
+
+            <div className="flex gap-2">
+              <input
+                id="south-dispatch-search"
+                type="search"
+                value={dispatchSearch}
+                onChange={(event) => setDispatchSearch(event.target.value)}
+                placeholder="Search PO, vendor, date, ordered by, item, or notes"
+                className="min-h-[46px] flex-1 rounded-xl border border-slate-300 bg-white px-4 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+              />
+
+              {dispatchSearch ? (
+                <button
+                  type="button"
+                  onClick={() => setDispatchSearch("")}
+                  className="rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {routeOrderError ? (
@@ -906,14 +1010,22 @@ export default function SupplierRunsPage({
             </div>
           ) : null}
 
-          {dispatchRuns.length === 0 ? (
+          {filteredDispatchRuns.length === 0 ? (
             <EmptyState
-              title="No South POs need dispatch"
-              description="Sales-created PO requests will appear here until dispatch assigns a driver and truck."
+              title={
+                dispatchSearchTerm
+                  ? "No Needs Dispatch POs match that search"
+                  : "No South POs need dispatch"
+              }
+              description={
+                dispatchSearchTerm
+                  ? "Clear the search to see every PO waiting for assignment."
+                  : "Sales-created PO requests will appear here until dispatch assigns a driver and truck."
+              }
             />
           ) : (
             <div className="space-y-4">
-              {dispatchRuns.map((supplierRun) => {
+              {filteredDispatchRuns.map((supplierRun) => {
                 const draft = getDispatchDraft(supplierRun);
                 const itemCount = Array.isArray(supplierRun.items)
                   ? supplierRun.items.length
@@ -2300,6 +2412,15 @@ export default function SupplierRunsPage({
                                   : ""}
                               </span>
                             </div>
+
+                            {item.returnNotes ? (
+                              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
+                                  Return / swap notes
+                                </p>
+                                <p className="mt-1">{item.returnNotes}</p>
+                              </div>
+                            ) : null}
                           </div>
 
                           <span
