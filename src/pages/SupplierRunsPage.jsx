@@ -331,6 +331,7 @@ export default function SupplierRunsPage({
   createdBy = {},
   vehicleOptions,
   canAssignRoute = false,
+  canReorderRoute = false,
   onPageChange,
 }) {
   const safeVehicleOptions = Array.isArray(vehicleOptions)
@@ -468,6 +469,11 @@ export default function SupplierRunsPage({
   }
 
   async function handleStopDrop(driver, targetVendor, vendorGroups) {
+    if (!canReorderRoute) {
+      setDraggingStop(null);
+      return;
+    }
+
     if (!draggingStop || draggingStop.driver !== driver) {
       setDraggingStop(null);
       return;
@@ -492,6 +498,10 @@ export default function SupplierRunsPage({
   }
 
   async function handleMoveStop(driver, vendorGroups, vendor, offset) {
+    if (!canReorderRoute) {
+      return;
+    }
+
     const currentVendorOrder = vendorGroups.map(
       (vendorGroup) => vendorGroup.vendor,
     );
@@ -1612,12 +1622,17 @@ export default function SupplierRunsPage({
                         return (
                           <div
                             key={vendorGroup.vendor}
-                            draggable={driverGroup.vendorGroups.length > 1}
+                            draggable={
+                              canReorderRoute &&
+                              driverGroup.vendorGroups.length > 1
+                            }
                             onDragStart={() =>
-                              setDraggingStop({
-                                driver: driverGroup.driver,
-                                vendor: vendorGroup.vendor,
-                              })
+                              canReorderRoute
+                                ? setDraggingStop({
+                                    driver: driverGroup.driver,
+                                    vendor: vendorGroup.vendor,
+                                  })
+                                : undefined
                             }
                             onDragOver={(event) => {
                               if (
@@ -1642,7 +1657,8 @@ export default function SupplierRunsPage({
                             }`}
                           >
                             <div className="flex items-stretch gap-2">
-                              {driverGroup.vendorGroups.length > 1 ? (
+                              {canReorderRoute &&
+                              driverGroup.vendorGroups.length > 1 ? (
                                 <div
                                   className="flex w-11 shrink-0 flex-col items-center justify-center gap-1 border-r border-slate-100 bg-slate-50 px-1 sm:w-10 sm:cursor-grab sm:px-0 sm:active:cursor-grabbing"
                                   title="Drag to reorder this stop"

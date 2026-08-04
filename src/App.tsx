@@ -2151,6 +2151,7 @@ export default function App() {
             supplierRuns={supplierRuns}
             vehicleOptions={southVehicleOptions}
             canAssignRoute
+            canReorderRoute={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
             onToggleSupplierRunItem={
@@ -2170,6 +2171,7 @@ export default function App() {
             mode="check"
             supplierRuns={assignedVisibleSupplierRuns}
             vehicleOptions={southVehicleOptions}
+            canReorderRoute={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
             onToggleSupplierRunItem={
