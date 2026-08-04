@@ -5,6 +5,7 @@ import {
   orderBy,
   query,
   setDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -57,15 +58,23 @@ export function getSouthRouteOrderId(driver, dateKey) {
   )}`;
 }
 
-export function subscribeToSouthRouteOrders(onRouteOrders, onError) {
+export function subscribeToSouthRouteOrders(
+  onRouteOrders,
+  onError,
+  options = {},
+) {
   if (!db) {
     onRouteOrders(getLocalRouteOrders());
     return () => {};
   }
 
+  const constraints = options.driverName
+    ? [where("driver", "==", options.driverName)]
+    : [orderBy("updatedAt", "desc")];
+
   const routeOrdersQuery = query(
     collection(db, ROUTE_ORDERS_COLLECTION),
-    orderBy("updatedAt", "desc"),
+    ...constraints,
   );
 
   return onSnapshot(

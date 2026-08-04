@@ -332,6 +332,8 @@ export default function SupplierRunsPage({
   vehicleOptions,
   canAssignRoute = false,
   canReorderRoute = false,
+  canReadAllRouteOrders = canReorderRoute,
+  routeOrderDriverName = "",
   onPageChange,
 }) {
   const safeVehicleOptions = Array.isArray(vehicleOptions)
@@ -384,8 +386,11 @@ export default function SupplierRunsPage({
             "Unable to sync route order. Publish Firestore rules for South route orders.",
           );
         },
+        canReadAllRouteOrders
+          ? {}
+          : { driverName: routeOrderDriverName },
       ),
-    [],
+    [canReadAllRouteOrders, routeOrderDriverName],
   );
 
   async function handleSubmit(supplierRun) {
