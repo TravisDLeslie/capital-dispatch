@@ -98,12 +98,9 @@ function getMaterialActionLabel(materialUse) {
 
 function getMaterialPhotoReminder(materialUse) {
   if (materialUse === "return") {
-    return "Take a photo of the item being returned before it leaves.";
+    return "Take a photo before they pickup item, on truck is fine.";
   }
 
-  if (materialUse === "swap") {
-    return "Take a photo of the item being swapped before it leaves.";
-  }
 
   return "";
 }
