@@ -87,6 +87,7 @@ import { subscribeToBouncieVehicleSettings } from "./utils/bouncieVehicleStorage
 const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
 const SOUTH_PICKUP_AUTO_REFRESH_MS = 5 * 60 * 1000;
+const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
 
 type UserProfile = {
   id: string;
@@ -534,6 +535,16 @@ function isSouthPickupRefreshWindow(date = new Date()) {
   return minutesSinceMidnight >= 8 * 60 + 30 && minutesSinceMidnight <= 15 * 60 + 30;
 }
 
+function refreshAndRestorePage(pageId: string) {
+  try {
+    sessionStorage.setItem(REFRESH_PAGE_STORAGE_KEY, pageId);
+  } catch (error) {
+    console.warn("Unable to save refresh page:", error);
+  }
+
+  window.location.reload();
+}
+
 function PullToRefresh() {
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -634,7 +645,13 @@ function PullToRefresh() {
 
 export default function App() {
   const [currentPage, setCurrentPage] =
-    useState("dashboard");
+    useState(() => {
+      try {
+        return sessionStorage.getItem(REFRESH_PAGE_STORAGE_KEY) || "dashboard";
+      } catch {
+        return "dashboard";
+      }
+    });
   const [previewUserId, setPreviewUserId] =
     useState("");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -880,7 +897,7 @@ export default function App() {
         return;
       }
 
-      window.location.reload();
+      refreshAndRestorePage("supplier-runs-check");
     }, SOUTH_PICKUP_AUTO_REFRESH_MS);
 
     return () => {
@@ -1010,7 +1027,25 @@ export default function App() {
       return;
     }
 
+    try {
+      sessionStorage.removeItem(REFRESH_PAGE_STORAGE_KEY);
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+
     setCurrentPage(effectiveAllowedPageIds[0]);
+  }, [currentPage, effectiveAllowedPageIds, isApproved]);
+
+  useEffect(() => {
+    if (!isApproved || !effectiveAllowedPageIds.includes(currentPage)) {
+      return;
+    }
+
+    try {
+      sessionStorage.removeItem(REFRESH_PAGE_STORAGE_KEY);
+    } catch {
+      // Ignore storage cleanup failures.
+    }
   }, [currentPage, effectiveAllowedPageIds, isApproved]);
 
   useEffect(() => {
@@ -2457,6 +2492,7 @@ export default function App() {
             }
             onDeleteSupplierRun={handleDeleteSupplierRun}
             onPageChange={setCurrentPage}
+            onRefreshPage={() => refreshAndRestorePage("supplier-runs-add")}
           />
         );
 
@@ -2478,6 +2514,9 @@ export default function App() {
             }
             onDeleteSupplierRun={handleDeleteSupplierRun}
             onPageChange={setCurrentPage}
+            onRefreshPage={() =>
+              refreshAndRestorePage("supplier-runs-dispatch")
+            }
           />
         );
 
@@ -2503,6 +2542,7 @@ export default function App() {
             }
             onDeleteSupplierRun={handleDeleteSupplierRun}
             onPageChange={setCurrentPage}
+            onRefreshPage={() => refreshAndRestorePage("supplier-runs-check")}
           />
         );
 
@@ -2522,6 +2562,9 @@ export default function App() {
             }
             onDeleteSupplierRun={handleDeleteSupplierRun}
             onPageChange={setCurrentPage}
+            onRefreshPage={() =>
+              refreshAndRestorePage("supplier-runs-history")
+            }
           />
         );
 

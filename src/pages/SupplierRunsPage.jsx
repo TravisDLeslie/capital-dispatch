@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   GripVertical,
+  RefreshCw,
   X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -402,6 +403,7 @@ export default function SupplierRunsPage({
   canReadAllRouteOrders = canReorderRoute,
   routeOrderDriverName = "",
   onPageChange,
+  onRefreshPage,
 }) {
   const safeVehicleOptions = Array.isArray(vehicleOptions)
     ? vehicleOptions
@@ -970,13 +972,31 @@ export default function SupplierRunsPage({
       />
 
       <div className="mb-6">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">
-          Driver / South
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">
+              Driver / South
+            </p>
 
-        <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
-          {pageTitle}
-        </h2>
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
+              {pageTitle}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => onRefreshPage?.()}
+            className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-[#FC2C38]"
+            aria-label="Refresh South"
+            title="Refresh South"
+          >
+            <RefreshCw
+              aria-hidden="true"
+              className="h-4 w-4"
+              strokeWidth={2.6}
+            />
+          </button>
+        </div>
 
         {mode === "check" ? (
           <div className="mt-3 flex flex-wrap items-center gap-2">
