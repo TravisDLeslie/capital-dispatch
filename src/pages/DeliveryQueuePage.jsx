@@ -17,7 +17,11 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
-import { getDeliveryTimeRange } from "../utils/deliverySchedule";
+import {
+  getDeliveryBackAroundLabel,
+  getDeliveryBlockSummary,
+  getDeliveryTimeRange,
+} from "../utils/deliverySchedule";
 
 function getDirectionsUrl(address) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
@@ -402,6 +406,11 @@ export default function DeliveryQueuePage({
                               {getDeliveryTimeRange(delivery)}
                             </span>
 
+                            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-700">
+                              Back around{" "}
+                              {getDeliveryBackAroundLabel(delivery)}
+                            </span>
+
                             {contactPhone ? (
                               <a
                                 href={`tel:${contactPhone.replace(/\D/g, "")}`}
@@ -447,22 +456,83 @@ export default function DeliveryQueuePage({
                         </div>
                       </div>
 
-                      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+                        <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
+                            <Clock
+                              className="h-4 w-4 text-[#FC2C38]"
+                              aria-hidden="true"
+                            />
+                            Schedule & Route
+                          </p>
+
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl bg-slate-50 px-4 py-3">
+                              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                                Window
+                              </p>
+                              <p className="mt-1 text-sm font-black text-slate-900">
+                                {delivery.deliveryDate || "No date"} ·{" "}
+                                {getDeliveryTimeRange(delivery)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-xl bg-emerald-50 px-4 py-3">
+                              <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
+                                Back Around
+                              </p>
+                              <p className="mt-1 text-lg font-black text-emerald-800">
+                                {getDeliveryBackAroundLabel(delivery)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <p className="mt-3 text-sm font-bold text-slate-500">
+                            {getDeliveryBlockSummary(delivery)}
+                          </p>
+
+                          <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                            Leaving From
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-600">
+                            {delivery.deliveryOriginName || "Capital Lumber"}
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">
+                            {delivery.deliveryOriginAddress ||
+                              "3105 W State St, Boise, ID 83703"}
+                          </p>
+                        </section>
+
+                        <section className="rounded-2xl border border-slate-200 bg-white p-4">
                         <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
                           <MapPin
                             className="h-4 w-4 text-[#FC2C38]"
                             aria-hidden="true"
                           />
-                          Address
+                          Delivery Address
                         </p>
 
                         <p className="text-sm font-semibold text-slate-600">
                           {delivery.address}
                         </p>
+
+                          <a
+                            href={getDirectionsUrl(delivery.address)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-3 inline-flex items-center gap-2 text-sm font-black text-[#FC2C38] transition hover:text-red-700"
+                          >
+                            Directions
+                            <ExternalLink
+                              className="h-4 w-4"
+                              aria-hidden="true"
+                            />
+                          </a>
+                        </section>
                       </div>
 
                       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <section className="rounded-2xl border border-slate-200 bg-white p-4">
                           <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
                             <UserRound
                               className="h-4 w-4 text-[#FC2C38]"
@@ -478,10 +548,10 @@ export default function DeliveryQueuePage({
                           <p className="mt-1 text-sm font-semibold text-slate-600">
                             {contactPhone || "No contact phone added"}
                           </p>
-                        </div>
+                        </section>
 
                         {deliveryLocationNotes ? (
-                          <div className="rounded-2xl border border-red-100 bg-white p-4">
+                          <section className="rounded-2xl border border-red-100 bg-white p-4">
                             <p className="text-sm font-black text-slate-900">
                               Delivery Location Notes
                             </p>
@@ -489,12 +559,12 @@ export default function DeliveryQueuePage({
                             <p className="mt-1 text-sm font-semibold text-slate-600">
                               {deliveryLocationNotes}
                             </p>
-                          </div>
+                          </section>
                         ) : null}
                       </div>
 
                       {generalNotes ? (
-                        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                        <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                           <p className="text-sm font-black text-slate-900">
                             General Notes
                           </p>
@@ -502,11 +572,11 @@ export default function DeliveryQueuePage({
                           <p className="mt-1 text-sm font-semibold text-slate-600">
                             {generalNotes}
                           </p>
-                        </div>
+                        </section>
                       ) : null}
 
                       {delivery.hasHardware ? (
-                        <div className="mt-4 rounded-2xl border-2 border-[#FC2C38] bg-red-50 p-4">
+                        <section className="mt-4 rounded-2xl border-2 border-[#FC2C38] bg-red-50 p-4">
                           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-start gap-3">
                               <ShieldAlert
@@ -592,10 +662,10 @@ export default function DeliveryQueuePage({
                               label="hardware photo"
                             />
                           </div>
-                        </div>
+                        </section>
                       ) : null}
 
-                      <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                      <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                         <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
                           <Package
                             className="h-4 w-4"
@@ -633,9 +703,17 @@ export default function DeliveryQueuePage({
                             ))}
                           </ul>
                         ) : null}
-                      </div>
+                      </section>
 
-                      <div className="mt-4 space-y-3">
+                      <section className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+                        <p className="flex items-center gap-2 text-sm font-black text-slate-900">
+                          <Camera
+                            className="h-4 w-4 text-[#FC2C38]"
+                            aria-hidden="true"
+                          />
+                          Completion
+                        </p>
+
                         <div className="grid gap-3 lg:grid-cols-2">
                         <label className="flex min-w-0 cursor-pointer flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-red-200 hover:bg-red-50">
                           <span className="flex items-center gap-2 text-sm font-black text-slate-900">
@@ -696,7 +774,7 @@ export default function DeliveryQueuePage({
                           />
                           Complete Delivery
                         </button>
-                      </div>
+                      </section>
                     </article>
                   );
                 })}

@@ -13,9 +13,21 @@ import {
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
-import { deliveryDrivers, favoriteDeliveryDrivers } from "../data/options";
+import {
+  deliveryDrivers,
+  deliveryOriginOptions,
+  favoriteDeliveryDrivers,
+} from "../data/options";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
-import { getDeliveryTimeRange } from "../utils/deliverySchedule";
+import {
+  getDeliveryBackAroundLabel,
+  getDeliveryBlockSummary,
+  getDeliveryTimeRange,
+  getDeliveryTimeWindow,
+  getTodayDateValue,
+  deliveryTimeSlotOptions,
+  scheduleWindowsOverlap,
+} from "../utils/deliverySchedule";
 
 function normalizeSearch(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -25,6 +37,12 @@ function getDirectionsUrl(address) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
     address,
   )}`;
+}
+
+function getRouteDirectionsUrl(originAddress, destinationAddress) {
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
+    originAddress || "",
+  )}&destination=${encodeURIComponent(destinationAddress || "")}`;
 }
 
 function formatCreatedAt(value) {
@@ -80,6 +98,86 @@ function getVehicleLabel(vehicleOption) {
     : vehicleOption.title;
 }
 
+function getOriginAddress(originName) {
+  return (
+    deliveryOriginOptions.find(
+      (originOption) => originOption.name === originName,
+    )?.address || deliveryOriginOptions[0].address
+  );
+}
+
+function getInitialSchedule(delivery) {
+  const originName = delivery.deliveryOriginName || "Capital Lumber";
+
+  return {
+    deliveryDate: delivery.deliveryDate || getTodayDateValue(),
+    deliveryTimeSlot: delivery.deliveryTimeSlot || "",
+    deliveryOriginName: originName,
+    deliveryOriginAddress:
+      delivery.deliveryOriginAddress || getOriginAddress(originName),
+    oneWayDriveMinutes: delivery.oneWayDriveMinutes
+      ? String(delivery.oneWayDriveMinutes)
+      : "",
+  };
+}
+
+function deliveryIncludesDriver(delivery, driverName) {
+  const drivers = Array.isArray(delivery.drivers) ? delivery.drivers : [];
+  const dispatchAssignments = Array.isArray(delivery.dispatchAssignments)
+    ? delivery.dispatchAssignments
+    : [];
+
+  return (
+    delivery.driver === driverName ||
+    drivers.includes(driverName) ||
+    dispatchAssignments.some((assignment) => assignment.driver === driverName)
+  );
+}
+
+function findScheduleConflict(currentDelivery, assignments, deliveries) {
+  const currentWindow = getDeliveryTimeWindow(currentDelivery);
+
+  if (!currentDelivery.deliveryDate || !currentWindow) {
+    return null;
+  }
+
+  const assignedDrivers = assignments
+    .map((assignment) => assignment.driver)
+    .filter(Boolean);
+
+  return deliveries.find((delivery) => {
+    if (
+      delivery.id === currentDelivery.id ||
+      delivery.status === "complete" ||
+      delivery.dispatchStatus === "needsDispatch" ||
+      delivery.deliveryDate !== currentDelivery.deliveryDate
+    ) {
+      return false;
+    }
+
+    return (
+      assignedDrivers.some((driverName) =>
+        deliveryIncludesDriver(delivery, driverName),
+      ) &&
+      scheduleWindowsOverlap(currentWindow, getDeliveryTimeWindow(delivery))
+    );
+  });
+}
+
+function getConflictingDriverNames(delivery, assignments) {
+  return assignments
+    .map((assignment) => assignment.driver)
+    .filter((driverName) => deliveryIncludesDriver(delivery, driverName));
+}
+
+function assignmentsReady(assignments, vehicleOptions) {
+  return assignments.every(
+    (assignment) =>
+      deliveryDrivers.includes(assignment.driver) &&
+      (vehicleOptions.length === 0 || assignment.vehicleId),
+  );
+}
+
 /**
  * @param {{
  *   deliveries: Array<Record<string, any>>;
@@ -100,6 +198,7 @@ export default function DeliveryDispatchPage({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [draftAssignments, setDraftAssignments] = useState({});
+  const [draftSchedules, setDraftSchedules] = useState({});
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
   const [error, setError] = useState("");
 
@@ -145,6 +244,38 @@ export default function DeliveryDispatchPage({
 
   function getAssignments(delivery) {
     return draftAssignments[delivery.id] || getInitialAssignments(delivery);
+  }
+
+  function getSchedule(delivery) {
+    return draftSchedules[delivery.id] || getInitialSchedule(delivery);
+  }
+
+  function getDeliveryWithDraftSchedule(delivery) {
+    const schedule = getSchedule(delivery);
+
+    return {
+      ...delivery,
+      ...schedule,
+      oneWayDriveMinutes: Number(schedule.oneWayDriveMinutes) || 0,
+    };
+  }
+
+  function updateSchedule(delivery, field, value) {
+    const currentSchedule = getSchedule(delivery);
+    const nextSchedule = {
+      ...currentSchedule,
+      [field]: value,
+    };
+
+    if (field === "deliveryOriginName") {
+      nextSchedule.deliveryOriginAddress = getOriginAddress(value);
+    }
+
+    setDraftSchedules((currentDraftSchedules) => ({
+      ...currentDraftSchedules,
+      [delivery.id]: nextSchedule,
+    }));
+    setError("");
   }
 
   function updateAssignment(delivery, assignmentIndex, field, value) {
@@ -212,6 +343,38 @@ export default function DeliveryDispatchPage({
       return;
     }
 
+    const schedule = getSchedule(delivery);
+
+    if (!schedule.deliveryDate || !schedule.deliveryTimeSlot) {
+      setError(
+        `Select a delivery date and time slot for order ${delivery.orderNumber}.`,
+      );
+      return;
+    }
+
+    const deliveryWithSchedule = getDeliveryWithDraftSchedule(delivery);
+    const scheduleConflict = findScheduleConflict(
+      deliveryWithSchedule,
+      assignments,
+      deliveries,
+    );
+
+    if (scheduleConflict) {
+      const conflictingDrivers = assignments
+        .map((assignment) => assignment.driver)
+        .filter((driverName) =>
+          deliveryIncludesDriver(scheduleConflict, driverName),
+        )
+        .join(", ");
+
+      setError(
+        `${conflictingDrivers} already has order ${scheduleConflict.orderNumber} scheduled ${getDeliveryTimeRange(
+          scheduleConflict,
+        )}. Adjust the delivery time before dispatching.`,
+      );
+      return;
+    }
+
     const primaryAssignment = assignments[0];
 
     setSavingDeliveryId(delivery.id);
@@ -225,6 +388,11 @@ export default function DeliveryDispatchPage({
         vehicleTitle: primaryAssignment.vehicleTitle,
         vehicleBadge: primaryAssignment.vehicleBadge,
         dispatchAssignments: assignments,
+        deliveryDate: schedule.deliveryDate,
+        deliveryTimeSlot: schedule.deliveryTimeSlot,
+        deliveryOriginName: schedule.deliveryOriginName,
+        deliveryOriginAddress: schedule.deliveryOriginAddress,
+        oneWayDriveMinutes: Number(schedule.oneWayDriveMinutes) || 0,
         dispatchStatus: "assigned",
         status: delivery.status || "open",
         updatedAt: new Date().toISOString(),
@@ -277,7 +445,7 @@ export default function DeliveryDispatchPage({
         </div>
       ) : null}
 
-        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <label
           htmlFor="delivery-dispatch-search"
           className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900"
@@ -319,6 +487,15 @@ export default function DeliveryDispatchPage({
               delivery.contactPhone || delivery.phoneNumber || "";
             const isSaving = savingDeliveryId === delivery.id;
             const assignments = getAssignments(delivery);
+            const canScheduleDelivery = assignmentsReady(
+              assignments,
+              vehicleOptions,
+            );
+            const schedule = getSchedule(delivery);
+            const scheduledDelivery = getDeliveryWithDraftSchedule(delivery);
+            const selectedScheduleConflict = schedule.deliveryTimeSlot
+              ? findScheduleConflict(scheduledDelivery, assignments, deliveries)
+              : null;
             const scopeSummary = getDeliveryScopeSummary(delivery);
 
             return (
@@ -367,8 +544,13 @@ export default function DeliveryDispatchPage({
 
                       <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
                         <Clock className="h-4 w-4" aria-hidden="true" />
-                        {delivery.deliveryDate || "No date"} ·{" "}
-                        {getDeliveryTimeRange(delivery)}
+                        {schedule.deliveryDate || "No date"} ·{" "}
+                        {getDeliveryTimeRange(scheduledDelivery)}
+                      </span>
+
+                      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-700">
+                        Back around{" "}
+                        {getDeliveryBackAroundLabel(scheduledDelivery)}
                       </span>
 
                       {delivery.createdAt ? (
@@ -392,97 +574,83 @@ export default function DeliveryDispatchPage({
                 </div>
 
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:mt-5 sm:p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <p className="text-sm font-black text-slate-900">
-                        Number of trucks
-                      </p>
-                      <p className="mt-1 hidden text-sm font-semibold text-slate-500 sm:block">
-                        Add another driver and truck when one delivery needs multiple rigs.
-                      </p>
+                  <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <p className="text-sm font-black text-slate-900">
+                          Assign Driver & Truck
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-slate-500">
+                          Choose who is taking it first, then test the time slot below.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-slate-50 p-1 shadow-sm sm:gap-2">
+                        {[1, 2, 3].map((truckCount) => {
+                          const isSelected = assignments.length === truckCount;
+
+                          return (
+                            <button
+                              key={truckCount}
+                              type="button"
+                              onClick={() =>
+                                updateTruckCount(delivery, truckCount)
+                              }
+                              disabled={isSaving}
+                              className={`rounded-xl px-2 py-2.5 text-sm font-black transition sm:px-5 ${
+                                isSelected
+                                  ? "bg-[#FC2C38] text-white"
+                                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                              }`}
+                            >
+                              <span className="sm:hidden">{truckCount}</span>
+                              <span className="hidden sm:inline">
+                                {truckCount}{" "}
+                                {truckCount === 1 ? "Truck" : "Trucks"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-1 rounded-2xl bg-white p-1 shadow-sm sm:gap-2">
-                      {[1, 2, 3].map((truckCount) => {
-                        const isSelected = assignments.length === truckCount;
-
-                        return (
-                          <button
-                            key={truckCount}
-                            type="button"
-                            onClick={() =>
-                              updateTruckCount(delivery, truckCount)
-                            }
-                            disabled={isSaving}
-                            className={`rounded-xl px-2 py-2.5 text-sm font-black transition sm:px-5 ${
-                              isSelected
-                                ? "bg-[#FC2C38] text-white"
-                                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                            }`}
-                          >
-                            <span className="sm:hidden">{truckCount}</span>
-                            <span className="hidden sm:inline">
-                              {truckCount}{" "}
-                              {truckCount === 1 ? "Truck" : "Trucks"}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 grid gap-3 sm:mt-4">
-                    {assignments.map((assignment, assignmentIndex) => (
-                      <div
-                        key={assignment.id}
-                        className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 lg:grid-cols-[auto_1fr_1fr]"
-                      >
-                        <div className="flex items-center gap-2 lg:block">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-[#FC2C38] lg:h-11 lg:w-11">
-                            #{assignmentIndex + 1}
+                    <div className="mt-3 grid gap-3 sm:mt-4">
+                      {assignments.map((assignment, assignmentIndex) => (
+                        <div
+                          key={assignment.id}
+                          className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[auto_1fr_1fr]"
+                        >
+                          <div className="flex items-center gap-2 lg:block">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-[#FC2C38] lg:h-11 lg:w-11">
+                              #{assignmentIndex + 1}
+                            </div>
+                            <p className="text-sm font-black text-slate-900 lg:hidden">
+                              Truck Assignment
+                            </p>
                           </div>
-                          <p className="text-sm font-black text-slate-900 lg:hidden">
-                            Truck Assignment
-                          </p>
-                        </div>
 
-                        <label className="block">
-                          <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                            Driver
-                          </span>
+                          <label className="block">
+                            <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                              Driver
+                            </span>
 
-                          <select
-                            value={assignment.driver}
-                            onChange={(event) =>
-                              updateAssignment(
-                                delivery,
-                                assignmentIndex,
-                                "driver",
-                                event.target.value,
-                              )
-                            }
-                            disabled={isSaving}
-                            className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                          >
-                            <option value="">Assign driver...</option>
-
-                            <optgroup label="Favorites">
-                              {favoriteDeliveryDrivers.map((driverOption) => (
-                                <option key={driverOption} value={driverOption}>
-                                  {driverOption}
-                                </option>
-                              ))}
-                            </optgroup>
-
-                            <optgroup label="All Drivers">
-                              {deliveryDrivers
-                                .filter(
-                                  (driverOption) =>
-                                    !favoriteDeliveryDrivers.includes(
-                                      driverOption,
-                                    ),
+                            <select
+                              value={assignment.driver}
+                              onChange={(event) =>
+                                updateAssignment(
+                                  delivery,
+                                  assignmentIndex,
+                                  "driver",
+                                  event.target.value,
                                 )
-                                .map((driverOption) => (
+                              }
+                              disabled={isSaving}
+                              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                            >
+                              <option value="">Assign driver...</option>
+
+                              <optgroup label="Favorites">
+                                {favoriteDeliveryDrivers.map((driverOption) => (
                                   <option
                                     key={driverOption}
                                     value={driverOption}
@@ -490,47 +658,304 @@ export default function DeliveryDispatchPage({
                                     {driverOption}
                                   </option>
                                 ))}
-                            </optgroup>
-                          </select>
-                        </label>
+                              </optgroup>
 
+                              <optgroup label="All Drivers">
+                                {deliveryDrivers
+                                  .filter(
+                                    (driverOption) =>
+                                      !favoriteDeliveryDrivers.includes(
+                                        driverOption,
+                                      ),
+                                  )
+                                  .map((driverOption) => (
+                                    <option
+                                      key={driverOption}
+                                      value={driverOption}
+                                    >
+                                      {driverOption}
+                                    </option>
+                                  ))}
+                              </optgroup>
+                            </select>
+                          </label>
+
+                          <label className="block">
+                            <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                              Truck
+                            </span>
+
+                            <select
+                              value={assignment.vehicleId}
+                              onChange={(event) =>
+                                updateAssignment(
+                                  delivery,
+                                  assignmentIndex,
+                                  "vehicleId",
+                                  event.target.value,
+                                )
+                              }
+                              disabled={isSaving || vehicleOptions.length === 0}
+                              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
+                            >
+                              <option value="">
+                                {vehicleOptions.length === 0
+                                  ? "No trucks configured"
+                                  : "Assign truck..."}
+                              </option>
+
+                              {vehicleOptions.map((vehicleOption) => (
+                                <option
+                                  key={vehicleOption.id}
+                                  value={vehicleOption.id}
+                                >
+                                  {getVehicleLabel(vehicleOption)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section
+                    className={`mt-5 rounded-2xl border p-4 transition ${
+                      canScheduleDelivery
+                        ? "border-slate-200 bg-white"
+                        : "border-slate-200 bg-slate-100 opacity-80"
+                    }`}
+                  >
+                    <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-sm font-black text-slate-900">
+                          Delivery Schedule
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-slate-500">
+                          {canScheduleDelivery
+                            ? "Pick a time slot after choosing the driver so conflicts are easier to catch."
+                            : "Assign the driver and truck first, then schedule the delivery."}
+                        </p>
+                      </div>
+
+                      <div
+                        className={`rounded-2xl px-4 py-3 text-left lg:text-right ${
+                          canScheduleDelivery
+                            ? "bg-emerald-50"
+                            : "bg-slate-200"
+                        }`}
+                      >
+                        <p
+                          className={`text-xs font-black uppercase tracking-[0.12em] ${
+                            canScheduleDelivery
+                              ? "text-emerald-700"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          Driver Back Around
+                        </p>
+                        <p
+                          className={`mt-1 text-xl font-black ${
+                            canScheduleDelivery
+                              ? "text-emerald-800"
+                              : "text-slate-600"
+                          }`}
+                        >
+                          {getDeliveryBackAroundLabel(scheduledDelivery)}
+                        </p>
+                        <p
+                          className={`mt-1 text-xs font-bold ${
+                            canScheduleDelivery
+                              ? "text-emerald-700"
+                              : "text-slate-500"
+                          }`}
+                        >
+                          {getDeliveryBlockSummary(scheduledDelivery)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                          Delivery Date
+                        </span>
+
+                        <input
+                          type="date"
+                          value={schedule.deliveryDate}
+                          onChange={(event) =>
+                            updateSchedule(
+                              delivery,
+                              "deliveryDate",
+                              event.target.value,
+                            )
+                          }
+                          disabled={isSaving || !canScheduleDelivery}
+                          className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                          Time Slot
+                        </span>
+
+                        <select
+                          value={schedule.deliveryTimeSlot}
+                          onChange={(event) =>
+                            updateSchedule(
+                              delivery,
+                              "deliveryTimeSlot",
+                              event.target.value,
+                            )
+                          }
+                          disabled={isSaving || !canScheduleDelivery}
+                          className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                        >
+                          <option value="">
+                            {canScheduleDelivery
+                              ? "Choose time..."
+                              : "Assign driver/truck first..."}
+                          </option>
+
+                          {deliveryTimeSlotOptions.map((timeSlot) => {
+                            const candidateDelivery = {
+                              ...scheduledDelivery,
+                              deliveryTimeSlot: timeSlot.value,
+                            };
+                            const conflict = findScheduleConflict(
+                              candidateDelivery,
+                              assignments,
+                              deliveries,
+                            );
+                            const conflictingDrivers = conflict
+                              ? getConflictingDriverNames(conflict, assignments)
+                              : [];
+                            const conflictLabel = conflictingDrivers.length
+                              ? `${conflictingDrivers.join(", ")} busy until ${getDeliveryBackAroundLabel(
+                                  conflict,
+                                )}`
+                              : "Driver busy";
+
+                            return (
+                              <option
+                                key={timeSlot.value}
+                                value={timeSlot.value}
+                                disabled={Boolean(conflict)}
+                              >
+                                {conflict
+                                  ? `${timeSlot.label} - ${conflictLabel}`
+                                  : timeSlot.label}
+                              </option>
+                            );
+                          })}
+                        </select>
+
+                        {selectedScheduleConflict ? (
+                          <span className="mt-2 block rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
+                            {getConflictingDriverNames(
+                              selectedScheduleConflict,
+                              assignments,
+                            ).join(", ")}{" "}
+                            is already blocked until{" "}
+                            {getDeliveryBackAroundLabel(
+                              selectedScheduleConflict,
+                            )}
+                            .
+                          </span>
+                        ) : null}
+                      </label>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px]">
+                      <div>
                         <label className="block">
                           <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                            Truck
+                            Where is the delivery leaving from?
                           </span>
 
                           <select
-                            value={assignment.vehicleId}
+                            value={schedule.deliveryOriginName}
                             onChange={(event) =>
-                              updateAssignment(
+                              updateSchedule(
                                 delivery,
-                                assignmentIndex,
-                                "vehicleId",
+                                "deliveryOriginName",
                                 event.target.value,
                               )
                             }
-                            disabled={isSaving || vehicleOptions.length === 0}
-                            className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
+                            disabled={isSaving || !canScheduleDelivery}
+                            className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                           >
-                            <option value="">
-                              {vehicleOptions.length === 0
-                                ? "No trucks configured"
-                                : "Assign truck..."}
-                            </option>
-
-                            {vehicleOptions.map((vehicleOption) => (
+                            {deliveryOriginOptions.map((originOption) => (
                               <option
-                                key={vehicleOption.id}
-                                value={vehicleOption.id}
+                                key={originOption.name}
+                                value={originOption.name}
                               >
-                                {getVehicleLabel(vehicleOption)}
+                                {originOption.name}
                               </option>
                             ))}
                           </select>
                         </label>
+
+                        <p className="mt-2 text-sm font-semibold text-slate-500">
+                          {schedule.deliveryOriginAddress}
+                        </p>
+
+                        {delivery.address ? (
+                          <a
+                            href={getRouteDirectionsUrl(
+                              schedule.deliveryOriginAddress,
+                              delivery.address,
+                            )}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-3 inline-flex items-center gap-2 text-sm font-black text-[#FC2C38] transition hover:text-red-700"
+                          >
+                            Open live route ETA
+                            <ExternalLink
+                              className="h-4 w-4"
+                              aria-hidden="true"
+                            />
+                          </a>
+                        ) : null}
                       </div>
-                    ))}
-                  </div>
+
+                      <label className="block">
+                        <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                          One-way ETA
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            max="240"
+                            step="1"
+                            value={schedule.oneWayDriveMinutes}
+                            onChange={(event) =>
+                              updateSchedule(
+                                delivery,
+                                "oneWayDriveMinutes",
+                                event.target.value,
+                              )
+                            }
+                            disabled={isSaving || !canScheduleDelivery}
+                            placeholder="18"
+                            className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                          />
+
+                          <span className="text-sm font-black text-slate-500">
+                            min
+                          </span>
+                        </div>
+
+                        <span className="mt-2 block text-xs font-bold text-slate-500">
+                          Counts there and back.
+                        </span>
+                      </label>
+                    </div>
+                  </section>
 
                   <button
                     type="button"
@@ -543,8 +968,54 @@ export default function DeliveryDispatchPage({
                   </button>
                 </div>
 
-                <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mt-5 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
+                      <Clock
+                        className="h-4 w-4 text-[#FC2C38]"
+                        aria-hidden="true"
+                      />
+                      Schedule & Route
+                    </p>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl bg-white px-4 py-3">
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                          Window
+                        </p>
+                        <p className="mt-1 text-sm font-black text-slate-900">
+                          {schedule.deliveryDate || "No date"} ·{" "}
+                          {getDeliveryTimeRange(scheduledDelivery)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl bg-emerald-50 px-4 py-3">
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
+                          Driver Back Around
+                        </p>
+                        <p className="mt-1 text-lg font-black text-emerald-800">
+                          {getDeliveryBackAroundLabel(scheduledDelivery)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-sm font-bold text-slate-500">
+                      {getDeliveryBlockSummary(scheduledDelivery)}
+                    </p>
+
+                    <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                      Leaving From
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-600">
+                      {schedule.deliveryOriginName || "Capital Lumber"}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      {schedule.deliveryOriginAddress ||
+                        "3105 W State St, Boise, ID 83703"}
+                    </p>
+                  </section>
+
+                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
                       <MapPin
                         className="h-4 w-4 text-[#FC2C38]"
@@ -566,9 +1037,11 @@ export default function DeliveryDispatchPage({
                       Directions
                       <ExternalLink className="h-4 w-4" aria-hidden="true" />
                     </a>
-                  </div>
+                  </section>
+                </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
                       <UserRound
                         className="h-4 w-4 text-[#FC2C38]"
@@ -584,10 +1057,28 @@ export default function DeliveryDispatchPage({
                     <p className="mt-1 text-sm font-semibold text-slate-600">
                       {contactPhone || "No contact phone added"}
                     </p>
-                  </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
+                      <Truck
+                        className="h-4 w-4 text-[#FC2C38]"
+                        aria-hidden="true"
+                      />
+                      Delivery Type
+                    </p>
+
+                    <p className="text-sm font-black text-slate-900">
+                      {delivery.unloadType}
+                    </p>
+
+                    <p className="mt-1 text-sm font-semibold text-slate-600">
+                      {scopeSummary.shortLabel}
+                    </p>
+                  </section>
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
                     <Package className="h-4 w-4" aria-hidden="true" />
                     Delivery Scope
@@ -622,7 +1113,7 @@ export default function DeliveryDispatchPage({
                       ))}
                     </ul>
                   ) : null}
-                </div>
+                </section>
               </article>
             );
           })}

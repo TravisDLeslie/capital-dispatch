@@ -195,6 +195,9 @@ type Delivery = {
   deliveryScopeNotes?: string;
   deliveryDate?: string;
   deliveryTimeSlot?: string;
+  deliveryOriginName?: string;
+  deliveryOriginAddress?: string;
+  oneWayDriveMinutes?: number;
   estimatedDurationMinutes?: number;
   drivers?: string[];
   vehicleId?: string;
@@ -1848,6 +1851,14 @@ export default function App() {
     setEditingDeliveryId("");
   }
 
+  function navigateToPage(pageId: string) {
+    if (pageId === "deliveries-add") {
+      setEditingDeliveryId("");
+    }
+
+    setCurrentPage(pageId);
+  }
+
   async function handleToggleSupplierRunItem(
     supplierRunId: string,
     itemId: string,
@@ -1974,7 +1985,7 @@ export default function App() {
           users={users}
           driverName={driverName}
           isSuperAdmin={false}
-          onPageChange={setCurrentPage}
+          onPageChange={navigateToPage}
         />
       );
     }
@@ -1983,7 +1994,7 @@ export default function App() {
       return (
         <DashboardPage
           operations={adminDashboardOperations}
-          onPageChange={setCurrentPage}
+          onPageChange={navigateToPage}
           allowedPageIds={dashboardAllowedPageIds}
         />
       );
@@ -2332,7 +2343,7 @@ export default function App() {
     return (
       <DashboardPage
         operations={adminDashboardOperations}
-        onPageChange={setCurrentPage}
+        onPageChange={navigateToPage}
       />
     );
   }
@@ -2421,7 +2432,7 @@ export default function App() {
         <SouthHubPage
           supplierRuns={visibleSupplierRuns}
           allowedPageIds={effectiveAllowedPageIds}
-          onPageChange={setCurrentPage}
+          onPageChange={navigateToPage}
         />
       );
     }
@@ -2459,7 +2470,7 @@ export default function App() {
               ? {
                   label: "Add Delivery",
                   icon: Plus,
-                  onClick: () => setCurrentPage("deliveries-add"),
+                  onClick: () => navigateToPage("deliveries-add"),
                 }
               : null
           }
@@ -2777,7 +2788,7 @@ export default function App() {
             users={users}
             driverName={driverName}
             isSuperAdmin={isSuperAdmin}
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
           />
         );
 
@@ -2787,7 +2798,7 @@ export default function App() {
             users={users}
             currentUserProfile={userProfile}
             onUpdateUserProfile={handleUpdateUserProfile}
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
           />
         );
 
@@ -2798,7 +2809,7 @@ export default function App() {
             emailList={emailList}
             onAddEmailListEntry={handleAddEmailListEntry}
             onDeleteEmailListEntry={handleDeleteEmailListEntry}
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
           />
         );
 
@@ -2807,7 +2818,7 @@ export default function App() {
           <DeliverySettingsPage
             deliverySettings={deliverySettings}
             onSaveDeliverySettings={handleSaveDeliverySettings}
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
           />
         );
 
@@ -2823,7 +2834,7 @@ export default function App() {
             onUpdateAssignment={
               handleUpdateAssignment
             }
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
           />
         );
 
@@ -2937,6 +2948,7 @@ export default function App() {
         return (
           <DeliveriesPage
             deliveries={deliveries}
+            customers={customers}
             deliverySettings={deliverySettings}
             canEditDeliveries={canEditDeliveryDetails}
             onAddDelivery={handleAddDelivery}
@@ -2945,7 +2957,7 @@ export default function App() {
             editingDeliveryId={editingDeliveryId}
             onEditDelivery={handleEditDelivery}
             onCancelEditDelivery={handleCancelEditDelivery}
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
           />
         );
 
@@ -2956,7 +2968,7 @@ export default function App() {
             onUpdateDelivery={handleUpdateDelivery}
             canEditDeliveries={canEditDeliveryDetails}
             onEditDelivery={handleEditDelivery}
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
           />
         );
 
@@ -2968,7 +2980,7 @@ export default function App() {
             canEditDeliveries={canEditDeliveryDetails}
             onUpdateDelivery={handleUpdateDelivery}
             onEditDelivery={handleEditDelivery}
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
           />
         );
 
@@ -2978,7 +2990,7 @@ export default function App() {
             deliveries={visibleDeliveries}
             canEditDeliveries={canEditDeliveryDetails}
             onEditDelivery={handleEditDelivery}
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
           />
         );
 
@@ -2986,7 +2998,7 @@ export default function App() {
         return (
           <DeliveryHistoryPage
             deliveries={visibleDeliveries}
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
           />
         );
 
@@ -3074,7 +3086,7 @@ export default function App() {
         <>
           <AppHeader
             currentPage={currentPage}
-            onPageChange={setCurrentPage}
+            onPageChange={navigateToPage}
             currentUser={currentUser}
             currentUserProfile={userProfile}
             allowedPageIds={effectiveAllowedPageIds}

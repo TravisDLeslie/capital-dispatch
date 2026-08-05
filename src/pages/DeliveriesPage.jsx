@@ -36,6 +36,7 @@ function getDirectionsUrl(address) {
 
 export default function DeliveriesPage({
   deliveries,
+  customers,
   deliverySettings,
   canEditDeliveries = false,
   onAddDelivery,
@@ -85,6 +86,7 @@ export default function DeliveriesPage({
       <DeliveryOrderForm
         key={editingDelivery?.id || "new-delivery"}
         initialDelivery={editingDelivery || null}
+        customers={customers || []}
         deliverySettings={deliverySettings}
         onSubmit={
           editingDelivery ? handleUpdateSubmit : handleSubmit

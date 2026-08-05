@@ -39,6 +39,20 @@ export const supplierAddresses = {
   Handy: "700 E King St, Meridian, ID 83642",
 };
 
+export const capitalLumberAddress =
+  "3105 W State St, Boise, ID 83703";
+
+export const deliveryOriginOptions = [
+  {
+    name: "Capital Lumber",
+    address: capitalLumberAddress,
+  },
+  ...Object.entries(supplierAddresses).map(([name, address]) => ({
+    name,
+    address,
+  })),
+];
+
 export const locations = [
   "Building C - Bay 1 Floor",
   "Building C - Bay 1 Rack",

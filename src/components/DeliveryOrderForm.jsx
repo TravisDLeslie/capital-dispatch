@@ -1,27 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Check,
+  ExternalLink,
   MapPin,
   Package,
   Phone,
   Plus,
   ShieldCheck,
-  Timer,
   Trash2,
   UserRound,
 } from "lucide-react";
-import { deliveryUnloadTypes } from "../data/options";
+import {
+  deliveryOriginOptions,
+  deliveryUnloadTypes,
+} from "../data/options";
 import {
   defaultDeliveryScheduleSettings,
-  deliveryTimeSlotOptions,
   getDeliveryDurationMinutes,
-  getTodayDateValue,
 } from "../utils/deliverySchedule";
 import {
   deliveryScopeOptions,
   getDeliveryScopeOption,
 } from "../utils/deliveryScope";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
+import { getGoogleMapsApiKey, loadGooglePlaces } from "../utils/googlePlaces";
 import { createId } from "../utils/idHelpers";
 
 function createEmptyDeliveryItem() {
@@ -79,14 +81,64 @@ function formatPhoneNumber(value) {
   return "";
 }
 
+function getDirectionsUrl(originAddress, destinationAddress) {
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
+    originAddress || "",
+  )}&destination=${encodeURIComponent(destinationAddress || "")}`;
+}
+
+function getOriginAddress(originName) {
+  return (
+    deliveryOriginOptions.find(
+      (originOption) => originOption.name === originName,
+    )?.address || deliveryOriginOptions[0].address
+  );
+}
+
+function normalizeLookup(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function getCustomerDisplayName(customer) {
+  return customer?.companyName || customer?.name || "";
+}
+
+function getCustomerAddress(customer) {
+  if (!customer) {
+    return "";
+  }
+
+  return (
+    customer.address ||
+    [customer.streetAddress, customer.city, customer.state, customer.zip]
+      .filter(Boolean)
+      .join(", ")
+  );
+}
+
+function getPrimaryCustomerContact(customer) {
+  if (!Array.isArray(customer?.contacts)) {
+    return null;
+  }
+
+  return (
+    customer.contacts.find(
+      (contact) => contact.name || contact.phone || contact.email,
+    ) || null
+  );
+}
+
 export default function DeliveryOrderForm({
   initialDelivery = null,
   deliverySettings = defaultDeliveryScheduleSettings,
   onSubmit,
   onCancel,
   onDelete,
+  customers = [],
 }) {
   const isEditing = Boolean(initialDelivery);
+  const addressInputRef = useRef(null);
+  const hasGooglePlacesKey = Boolean(getGoogleMapsApiKey());
   const [orderNumber, setOrderNumber] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [address, setAddress] = useState("");
@@ -94,16 +146,14 @@ export default function DeliveryOrderForm({
   const [contactPhone, setContactPhone] = useState("");
   const [driver, setDriver] = useState("");
   const [unloadType, setUnloadType] = useState("Forklift");
-  const [deliveryDate, setDeliveryDate] = useState(getTodayDateValue());
+  const [deliveryDate, setDeliveryDate] = useState("");
   const [deliveryTimeSlot, setDeliveryTimeSlot] = useState("");
-  const [estimatedDurationMinutes, setEstimatedDurationMinutes] =
-    useState(
-      getDeliveryDurationMinutes(
-        "Forklift",
-        null,
-        deliverySettings,
-      ),
-    );
+  const [deliveryOriginName, setDeliveryOriginName] =
+    useState("Capital Lumber");
+  const [deliveryOriginAddress, setDeliveryOriginAddress] = useState(
+    getOriginAddress("Capital Lumber"),
+  );
+  const [oneWayDriveMinutes, setOneWayDriveMinutes] = useState("");
   const [deliveryScope, setDeliveryScope] = useState("shipOrderComplete");
   const [deliveryScopeNotes, setDeliveryScopeNotes] = useState("");
   const [hasHardware, setHasHardware] = useState(false);
@@ -128,14 +178,19 @@ export default function DeliveryOrderForm({
     );
     setDriver(initialDelivery.driver || "");
     setUnloadType(initialDelivery.unloadType || "Forklift");
-    setDeliveryDate(initialDelivery.deliveryDate || getTodayDateValue());
+    setDeliveryDate(initialDelivery.deliveryDate || "");
     setDeliveryTimeSlot(initialDelivery.deliveryTimeSlot || "");
-    setEstimatedDurationMinutes(
-      getDeliveryDurationMinutes(
-        initialDelivery.unloadType || "Forklift",
-        initialDelivery.estimatedDurationMinutes,
-        deliverySettings,
-      ),
+    setDeliveryOriginName(
+      initialDelivery.deliveryOriginName || "Capital Lumber",
+    );
+    setDeliveryOriginAddress(
+      initialDelivery.deliveryOriginAddress ||
+        getOriginAddress(initialDelivery.deliveryOriginName || "Capital Lumber"),
+    );
+    setOneWayDriveMinutes(
+      initialDelivery.oneWayDriveMinutes
+        ? String(initialDelivery.oneWayDriveMinutes)
+        : "",
     );
     setDeliveryScope(getDeliveryScopeOption(initialDelivery).value);
     setDeliveryScopeNotes(initialDelivery.deliveryScopeNotes || "");
@@ -148,20 +203,93 @@ export default function DeliveryOrderForm({
     setGeneralNotes(initialDelivery.generalNotes || "");
     setItems(createItemsFromDelivery(initialDelivery));
     setError("");
-  }, [deliverySettings, initialDelivery]);
+  }, [initialDelivery]);
 
   useEffect(() => {
-    if (initialDelivery) {
-      return;
+    let listener = null;
+    let isMounted = true;
+
+    if (!addressInputRef.current || !hasGooglePlacesKey) {
+      return () => {};
     }
 
-    setEstimatedDurationMinutes(
-      getDeliveryDurationMinutes(unloadType, null, deliverySettings),
-    );
-  }, [deliverySettings, initialDelivery, unloadType]);
+    loadGooglePlaces()
+      .then((google) => {
+        if (!isMounted || !google?.maps?.places || !addressInputRef.current) {
+          return;
+        }
+
+        const autocomplete = new google.maps.places.Autocomplete(
+          addressInputRef.current,
+          {
+            componentRestrictions: { country: "us" },
+            fields: ["formatted_address", "name"],
+            types: ["address"],
+          },
+        );
+
+        listener = autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace();
+          const nextAddress =
+            place.formatted_address || addressInputRef.current?.value || "";
+
+          setAddress(nextAddress);
+          clearError();
+        });
+      })
+      .catch((placesError) => {
+        console.warn("Unable to load Google Places:", placesError);
+      });
+
+    return () => {
+      isMounted = false;
+      if (listener?.remove) {
+        listener.remove();
+      }
+    };
+  }, [hasGooglePlacesKey]);
 
   function clearError() {
     setError("");
+  }
+
+  function findMatchingCustomer(value) {
+    const normalizedValue = normalizeLookup(value);
+
+    if (!normalizedValue) {
+      return null;
+    }
+
+    return (
+      customers.find((customer) =>
+        [customer.companyName, customer.name, customer.accountNumber]
+          .filter(Boolean)
+          .some(
+            (lookupValue) => normalizeLookup(lookupValue) === normalizedValue,
+          ),
+      ) || null
+    );
+  }
+
+  function applyCustomerDetails(customer, force = false) {
+    if (!customer) {
+      return;
+    }
+
+    const matchedAddress = getCustomerAddress(customer);
+    const primaryContact = getPrimaryCustomerContact(customer);
+
+    if (matchedAddress && (force || !address.trim())) {
+      setAddress(matchedAddress);
+    }
+
+    if (primaryContact?.name && (force || !contactName.trim())) {
+      setContactName(primaryContact.name);
+    }
+
+    if (primaryContact?.phone && (force || !contactPhone.trim())) {
+      setContactPhone(formatPhoneNumber(primaryContact.phone));
+    }
   }
 
   function updateItem(itemId, field, value) {
@@ -250,11 +378,11 @@ export default function DeliveryOrderForm({
     setContactPhone("");
     setDriver("");
     setUnloadType("Forklift");
-    setDeliveryDate(getTodayDateValue());
+    setDeliveryDate("");
     setDeliveryTimeSlot("");
-    setEstimatedDurationMinutes(
-      getDeliveryDurationMinutes("Forklift", null, deliverySettings),
-    );
+    setDeliveryOriginName("Capital Lumber");
+    setDeliveryOriginAddress(getOriginAddress("Capital Lumber"));
+    setOneWayDriveMinutes("");
     setDeliveryScope("shipOrderComplete");
     setDeliveryScopeNotes("");
     setHasHardware(false);
@@ -284,11 +412,6 @@ export default function DeliveryOrderForm({
 
     if (!deliveryUnloadTypes.includes(unloadType)) {
       setError("Select the delivery unload type.");
-      return;
-    }
-
-    if (!deliveryDate) {
-      setError("Select the delivery date.");
       return;
     }
 
@@ -336,6 +459,9 @@ export default function DeliveryOrderForm({
       unloadType,
       deliveryDate,
       deliveryTimeSlot,
+      deliveryOriginName,
+      deliveryOriginAddress,
+      oneWayDriveMinutes: Number(oneWayDriveMinutes) || 0,
       estimatedDurationMinutes: getDeliveryDurationMinutes(
         unloadType,
         null,
@@ -440,15 +566,41 @@ export default function DeliveryOrderForm({
               id="delivery-customer"
               type="text"
               autoComplete="organization"
+              list="delivery-customers"
               value={customerName}
               onChange={(event) => {
-                setCustomerName(event.target.value);
+                const nextCustomerName = event.target.value;
+                const matchedCustomer = findMatchingCustomer(nextCustomerName);
+
+                setCustomerName(nextCustomerName);
+                applyCustomerDetails(matchedCustomer, true);
                 clearError();
               }}
+              onBlur={() =>
+                applyCustomerDetails(findMatchingCustomer(customerName), true)
+              }
               disabled={isSubmitting}
               placeholder="Customer name"
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
+
+            <datalist id="delivery-customers">
+              {customers.map((customer) => {
+                const displayName = getCustomerDisplayName(customer);
+
+                if (!displayName) {
+                  return null;
+                }
+
+                return (
+                  <option
+                    key={customer.id}
+                    value={displayName}
+                    label={customer.accountNumber || customer.name || ""}
+                  />
+                );
+              })}
+            </datalist>
           </div>
         </div>
 
@@ -463,6 +615,7 @@ export default function DeliveryOrderForm({
             </label>
 
             <input
+              ref={addressInputRef}
               id="delivery-address"
               type="text"
               autoComplete="street-address"
@@ -475,6 +628,12 @@ export default function DeliveryOrderForm({
               placeholder="Delivery address"
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
+
+            {hasGooglePlacesKey ? (
+              <p className="mt-2 text-xs font-bold text-slate-500">
+                Start typing for Google address suggestions.
+              </p>
+            ) : null}
           </div>
 
           <div>
@@ -541,13 +700,6 @@ export default function DeliveryOrderForm({
                   type="button"
                   onClick={() => {
                     setUnloadType(unloadOption);
-                    setEstimatedDurationMinutes(
-                      getDeliveryDurationMinutes(
-                        unloadOption,
-                        null,
-                        deliverySettings,
-                      ),
-                    );
                     clearError();
                   }}
                   disabled={isSubmitting}
@@ -576,76 +728,94 @@ export default function DeliveryOrderForm({
         <section>
           <div className="mb-3">
             <h3 className="text-sm font-bold text-slate-700">
-              Delivery Schedule
+              Where is the delivery leaving from?
             </h3>
 
             <p className="mt-1 text-sm text-slate-500">
-              Pick a day and time block so dispatch can see the delivery calendar.
+              Capital Lumber is the default. Pick a supplier if the truck is
+              leaving from a pickup.
             </p>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(160px,0.45fr)]">
             <div>
               <label
-                htmlFor="delivery-date"
+                htmlFor="delivery-origin"
                 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
               >
-                <Timer className="h-4 w-4" aria-hidden="true" />
-                Delivery Date
-              </label>
-
-              <input
-                id="delivery-date"
-                type="date"
-                value={deliveryDate}
-                onChange={(event) => {
-                  setDeliveryDate(event.target.value);
-                  clearError();
-                }}
-                disabled={isSubmitting}
-                className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="delivery-time-slot"
-                className="mb-2 block text-sm font-bold text-slate-700"
-              >
-                Time Slot
+                <MapPin className="h-4 w-4" aria-hidden="true" />
+                Origin
               </label>
 
               <select
-                id="delivery-time-slot"
-                value={deliveryTimeSlot}
+                id="delivery-origin"
+                value={deliveryOriginName}
                 onChange={(event) => {
-                  setDeliveryTimeSlot(event.target.value);
+                  const originName = event.target.value;
+
+                  setDeliveryOriginName(originName);
+                  setDeliveryOriginAddress(getOriginAddress(originName));
                   clearError();
                 }}
                 disabled={isSubmitting}
                 className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
               >
-                <option value="">Set later in dispatch...</option>
-
-                {deliveryTimeSlotOptions.map((timeSlot) => (
-                  <option key={timeSlot.value} value={timeSlot.value}>
-                    {timeSlot.label}
+                {deliveryOriginOptions.map((originOption) => (
+                  <option key={originOption.name} value={originOption.name}>
+                    {originOption.name}
                   </option>
                 ))}
               </select>
+
+              <p className="mt-2 text-sm font-semibold text-slate-500">
+                {deliveryOriginAddress}
+              </p>
+
+              {address.trim() ? (
+                <a
+                  href={getDirectionsUrl(deliveryOriginAddress, address)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center gap-2 text-sm font-black text-[#FC2C38] transition hover:text-red-700"
+                >
+                  Open live route ETA
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                </a>
+              ) : null}
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-bold text-slate-700">
-                Auto Estimated Time
-              </p>
+            <div>
+              <label
+                htmlFor="one-way-drive-minutes"
+                className="mb-2 block text-sm font-bold text-slate-700"
+              >
+                One-way route ETA
+              </label>
 
-              <p className="mt-2 text-3xl font-black text-slate-900">
-                {estimatedDurationMinutes} min
-              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  id="one-way-drive-minutes"
+                  type="number"
+                  min="0"
+                  max="240"
+                  step="1"
+                  value={oneWayDriveMinutes}
+                  onChange={(event) => {
+                    setOneWayDriveMinutes(event.target.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  placeholder="18"
+                  className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
 
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                Based on {unloadType}. Adjust defaults in Admin.
+                <span className="shrink-0 text-sm font-black text-slate-500">
+                  min
+                </span>
+              </div>
+
+              <p className="mt-2 text-xs font-bold text-slate-500">
+                Used twice for out-and-back time.
               </p>
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   CalendarDays,
-  Clock,
+  ChevronDown,
   Edit3,
   MapPin,
   Package,
@@ -12,8 +12,9 @@ import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 import {
-  deliveryTimeSlotOptions,
-  getDeliveryDurationMinutes,
+  getDeliveryBackAroundLabel,
+  getDeliveryBlockSummary,
+  getDeliveryDriveMinutes,
   getDeliveryTimeRange,
   getTodayDateValue,
 } from "../utils/deliverySchedule";
@@ -47,6 +48,131 @@ function getScheduledDeliveries(deliveries, selectedDate) {
     );
 }
 
+function getDeliveryDrivers(delivery) {
+  const drivers = Array.isArray(delivery.drivers)
+    ? delivery.drivers.filter(Boolean)
+    : [];
+
+  return [...new Set([delivery.driver, ...drivers].filter(Boolean))];
+}
+
+function groupDeliveriesByDriver(deliveries) {
+  return deliveries.reduce((groups, delivery) => {
+    const drivers = getDeliveryDrivers(delivery);
+
+    drivers.forEach((driver) => {
+      groups[driver] = [...(groups[driver] || []), delivery];
+    });
+
+    return groups;
+  }, {});
+}
+
+function CompactDeliveryCard({
+  delivery,
+  expanded,
+  canEditDeliveries,
+  onEditDelivery,
+  onToggle,
+}) {
+  const scopeSummary = getDeliveryScopeSummary(delivery);
+  const driveMinutes = getDeliveryDriveMinutes(delivery);
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+            Order {delivery.orderNumber}
+          </p>
+          <h3 className="mt-1 truncate text-lg font-black text-slate-900">
+            {delivery.customerName}
+          </h3>
+          <p className="mt-1 text-sm font-black text-slate-600">
+            {getDeliveryTimeRange(delivery)}
+          </p>
+        </div>
+
+        {canEditDeliveries ? (
+          <button
+            type="button"
+            onClick={() => onEditDelivery(delivery.id)}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+            aria-label={`Edit delivery ${delivery.orderNumber}`}
+          >
+            <Edit3 className="h-4 w-4" aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <span className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">
+          ETA {driveMinutes || 0} min
+        </span>
+        <span className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">
+          Back {getDeliveryBackAroundLabel(delivery)}
+        </span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-slate-700">
+          {delivery.unloadType}
+        </span>
+        <span className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-black text-[#FC2C38]">
+          {scopeSummary.shortLabel}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onToggle(delivery.id)}
+        className="mt-3 flex w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-700 shadow-sm transition hover:text-[#FC2C38]"
+        aria-expanded={expanded}
+      >
+        {expanded ? "Close details" : "View details"}
+        <ChevronDown
+          className={`h-4 w-4 transition-transform ${
+            expanded ? "rotate-180" : ""
+          }`}
+          aria-hidden="true"
+        />
+      </button>
+
+      {expanded ? (
+        <div className="mt-3 space-y-3">
+          <div className="rounded-xl bg-white px-4 py-3">
+            <p className="flex items-start gap-2 text-sm font-black text-slate-900">
+              <MapPin
+                className="mt-0.5 h-4 w-4 shrink-0"
+                aria-hidden="true"
+              />
+              {delivery.address}
+            </p>
+            <p className="mt-1 text-xs font-bold text-slate-500">
+              From {delivery.deliveryOriginName || "Capital Lumber"}
+            </p>
+          </div>
+
+          <p className="rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-700">
+            {getDeliveryBlockSummary(delivery)}
+          </p>
+
+          <div className="flex flex-wrap gap-2 text-sm font-bold text-slate-600">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5">
+              <Truck className="h-4 w-4" aria-hidden="true" />
+              {getDeliveryDrivers(delivery).join(", ")}
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5">
+              <Package className="h-4 w-4" aria-hidden="true" />
+              {scopeSummary.label}
+            </span>
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 export default function DeliveryCalendarPage({
   deliveries,
   canEditDeliveries = false,
@@ -54,29 +180,26 @@ export default function DeliveryCalendarPage({
   onPageChange,
 }) {
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
+  const [expandedDeliveryIds, setExpandedDeliveryIds] = useState({});
 
   const scheduledDeliveries = useMemo(
     () => getScheduledDeliveries(deliveries, selectedDate),
     [deliveries, selectedDate],
   );
-  const deliveriesByTimeSlot = useMemo(
-    () =>
-      scheduledDeliveries.reduce((groups, delivery) => {
-        const timeSlot = delivery.deliveryTimeSlot || "unscheduled";
-
-        return {
-          ...groups,
-          [timeSlot]: [...(groups[timeSlot] || []), delivery],
-        };
-      }, {}),
+  const deliveriesByDriver = useMemo(
+    () => groupDeliveriesByDriver(scheduledDeliveries),
     [scheduledDeliveries],
   );
-  const unscheduledDeliveries = scheduledDeliveries.filter(
-    (delivery) => !delivery.deliveryTimeSlot,
+  const driverNames = Object.keys(deliveriesByDriver).sort((first, second) =>
+    first.localeCompare(second),
   );
-  const visibleTimeSlots = deliveryTimeSlotOptions.filter(
-    (timeSlot) => deliveriesByTimeSlot[timeSlot.value]?.length > 0,
-  );
+
+  function toggleDelivery(deliveryId) {
+    setExpandedDeliveryIds((currentExpandedDeliveryIds) => ({
+      ...currentExpandedDeliveryIds,
+      [deliveryId]: !currentExpandedDeliveryIds[deliveryId],
+    }));
+  }
 
   return (
     <PageContainer>
@@ -98,7 +221,7 @@ export default function DeliveryCalendarPage({
           </h1>
 
           <p className="mt-2 text-base font-semibold text-slate-500 sm:text-lg">
-            See assigned deliveries by time block for the day.
+            See each driver&apos;s delivery blocks and return windows.
           </p>
         </div>
 
@@ -126,7 +249,8 @@ export default function DeliveryCalendarPage({
             <p className="mt-1 text-sm font-semibold text-slate-500">
               {scheduledDeliveries.length}{" "}
               {scheduledDeliveries.length === 1 ? "delivery" : "deliveries"}{" "}
-              scheduled
+              across {driverNames.length}{" "}
+              {driverNames.length === 1 ? "driver" : "drivers"}
             </p>
           </div>
 
@@ -144,142 +268,105 @@ export default function DeliveryCalendarPage({
       {scheduledDeliveries.length === 0 ? (
         <EmptyState
           title="No deliveries scheduled"
-          description="Assigned deliveries with this date will show here by time slot."
+          description="Assigned deliveries with this date will show here by driver."
         />
       ) : (
-        <div className="space-y-4">
-          {visibleTimeSlots.map((timeSlot) => (
-            <section
-              key={timeSlot.value}
-              className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
-            >
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
-                  <Clock className="h-5 w-5" aria-hidden="true" />
-                </div>
-
-                <div>
-                  <h2 className="text-xl font-black text-slate-900">
-                    {timeSlot.label}
-                  </h2>
-                  <p className="text-sm font-bold text-slate-500">
-                    {(deliveriesByTimeSlot[timeSlot.value] || []).length} stop
-                    {(deliveriesByTimeSlot[timeSlot.value] || []).length === 1
-                      ? ""
-                      : "s"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 xl:grid-cols-2">
-                {(deliveriesByTimeSlot[timeSlot.value] || []).map(
-                  (delivery) => {
-                    const scopeSummary = getDeliveryScopeSummary(delivery);
-                    const duration = getDeliveryDurationMinutes(
-                      delivery.unloadType,
-                      delivery.estimatedDurationMinutes,
-                    );
-
-                    return (
-                      <article
-                        key={delivery.id}
-                        className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                              Order {delivery.orderNumber}
-                            </p>
-                            <h3 className="mt-1 truncate text-xl font-black text-slate-900">
-                              {delivery.customerName}
-                            </h3>
-                          </div>
-
-                          {canEditDeliveries ? (
-                          <button
-                            type="button"
-                            onClick={() => onEditDelivery(delivery.id)}
-                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
-                            aria-label={`Edit delivery ${delivery.orderNumber}`}
-                          >
-                            <Edit3 className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                          ) : null}
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <span className="rounded-full bg-white px-3 py-1.5 text-sm font-black text-slate-700">
-                            {getDeliveryTimeRange(delivery)}
-                          </span>
-                          <span className="rounded-full bg-white px-3 py-1.5 text-sm font-black text-slate-700">
-                            {duration} min
-                          </span>
-                          <span className="rounded-full bg-white px-3 py-1.5 text-sm font-black text-slate-700">
-                            {delivery.unloadType}
-                          </span>
-                          <span className="rounded-full bg-red-50 px-3 py-1.5 text-sm font-black text-[#FC2C38]">
-                            {scopeSummary.shortLabel}
-                          </span>
-                        </div>
-
-                        <div className="mt-3 rounded-xl bg-white px-4 py-3">
-                          <p className="flex items-center gap-2 text-sm font-black text-slate-900">
-                            <MapPin className="h-4 w-4" aria-hidden="true" />
-                            {delivery.address}
-                          </p>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2 text-sm font-bold text-slate-600">
-                          <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5">
-                            <Truck className="h-4 w-4" aria-hidden="true" />
-                            {delivery.driver}
-                          </span>
-                          <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5">
-                            <Package className="h-4 w-4" aria-hidden="true" />
-                            {scopeSummary.label}
-                          </span>
-                        </div>
-                      </article>
-                    );
-                  },
-                )}
-              </div>
-            </section>
-          ))}
-
-          {unscheduledDeliveries.length > 0 ? (
-            <section className="rounded-3xl border border-amber-200 bg-white p-4 shadow-sm sm:p-5">
-              <h2 className="text-xl font-black text-slate-900">
-                Date Set, Time Not Set
-              </h2>
-              <div className="mt-4 grid gap-3 xl:grid-cols-2">
-                {unscheduledDeliveries.map((delivery) => (
-                  <article
-                    key={delivery.id}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                  >
+        <>
+          <div className="hidden gap-4 lg:grid lg:grid-cols-3 2xl:grid-cols-4">
+            {driverNames.map((driverName) => (
+              <section
+                key={driverName}
+                className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                      Order {delivery.orderNumber}
+                      Driver
                     </p>
-                    <p className="mt-1 text-xl font-black text-slate-900">
-                      {delivery.customerName}
+                    <h2 className="truncate text-2xl font-black text-slate-900">
+                      {driverName}
+                    </h2>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-black text-slate-600">
+                    {deliveriesByDriver[driverName].length}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {deliveriesByDriver[driverName].map((delivery) => (
+                    <CompactDeliveryCard
+                      key={delivery.id}
+                      delivery={delivery}
+                      expanded={Boolean(expandedDeliveryIds[delivery.id])}
+                      canEditDeliveries={canEditDeliveries}
+                      onEditDelivery={onEditDelivery}
+                      onToggle={toggleDelivery}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+
+          <div className="space-y-4 lg:hidden">
+            {driverNames.map((driverName) => (
+              <section
+                key={driverName}
+                className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleDelivery(`driver-${driverName}`)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                  aria-expanded={Boolean(
+                    expandedDeliveryIds[`driver-${driverName}`],
+                  )}
+                >
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                      Driver
                     </p>
-                    {canEditDeliveries ? (
-                    <button
-                      type="button"
-                      onClick={() => onEditDelivery(delivery.id)}
-                      className="mt-3 inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700"
-                    >
-                      <Edit3 className="h-4 w-4" aria-hidden="true" />
-                      Set Time
-                    </button>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </div>
+                    <h2 className="text-2xl font-black text-slate-900">
+                      {driverName}
+                    </h2>
+                    <p className="text-sm font-bold text-slate-500">
+                      {deliveriesByDriver[driverName].length}{" "}
+                      {deliveriesByDriver[driverName].length === 1
+                        ? "delivery"
+                        : "deliveries"}
+                    </p>
+                  </div>
+
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
+                    <ChevronDown
+                      className={`h-5 w-5 transition-transform ${
+                        expandedDeliveryIds[`driver-${driverName}`]
+                          ? "rotate-180"
+                          : ""
+                      }`}
+                      aria-hidden="true"
+                    />
+                  </span>
+                </button>
+
+                {expandedDeliveryIds[`driver-${driverName}`] ? (
+                  <div className="mt-4 space-y-3">
+                    {deliveriesByDriver[driverName].map((delivery) => (
+                      <CompactDeliveryCard
+                        key={delivery.id}
+                        delivery={delivery}
+                        expanded={Boolean(expandedDeliveryIds[delivery.id])}
+                        canEditDeliveries={canEditDeliveries}
+                        onEditDelivery={onEditDelivery}
+                        onToggle={toggleDelivery}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            ))}
+          </div>
+        </>
       )}
     </PageContainer>
   );
