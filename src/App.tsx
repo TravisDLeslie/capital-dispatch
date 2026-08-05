@@ -645,24 +645,12 @@ function PullToRefresh() {
 }
 
 function DriverSouthAssignedModal({
-  assignedRuns,
   onDismiss,
   onViewRoute,
 }: {
-  assignedRuns: SupplierRun[];
   onDismiss: () => void;
   onViewRoute: () => void;
 }) {
-  const poCount = assignedRuns.length;
-  const itemCount = assignedRuns.reduce(
-    (count, supplierRun) =>
-      count +
-      (Array.isArray(supplierRun.items)
-        ? supplierRun.items.filter((item) => !item.pickedUp).length
-        : 0),
-    0,
-  );
-
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 px-4 py-6">
       <section
@@ -687,10 +675,8 @@ function DriverSouthAssignedModal({
         </h2>
 
         <p className="mt-3 text-base font-semibold leading-7 text-slate-500">
-          You have {poCount} South {poCount === 1 ? "PO" : "POs"} assigned
-          {itemCount > 0
-            ? ` with ${itemCount} ${itemCount === 1 ? "item" : "items"} left.`
-            : "."}
+          Your South route has been assigned. Check with dispatch before
+          heading out.
         </p>
 
         <div className="mt-6 grid gap-3">
@@ -2841,7 +2827,6 @@ export default function App() {
 
           {showDriverSouthAlert ? (
             <DriverSouthAssignedModal
-              assignedRuns={actualDriverActiveSouthRuns}
               onDismiss={dismissDriverSouthAlert}
               onViewRoute={viewDriverSouthRouteFromAlert}
             />
