@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import {
   Calculator,
+  CalendarDays,
   ClipboardCheck,
   DollarSign,
   History,
@@ -23,8 +24,11 @@ import CustomersPage from "./pages/CustomersPage";
 import CustomerPaymentLinksPage from "./pages/CustomerPaymentLinksPage";
 import DashboardPage from "./pages/DashboardPage";
 import DriverDashboardPage from "./pages/DriverDashboardPage";
+import DeliveryCalendarPage from "./pages/DeliveryCalendarPage";
+import DeliveryDispatchPage from "./pages/DeliveryDispatchPage";
 import DeliveryHistoryPage from "./pages/DeliveryHistoryPage";
 import DeliveryQueuePage from "./pages/DeliveryQueuePage";
+import DeliverySettingsPage from "./pages/DeliverySettingsPage";
 import DeliveriesPage from "./pages/DeliveriesPage";
 import EmailListPage from "./pages/EmailListPage";
 import LoginPage from "./components/LoginPage";
@@ -83,6 +87,13 @@ import {
   subscribeToSalesReports,
 } from "./utils/salesReportStorage";
 import { subscribeToBouncieVehicleSettings } from "./utils/bouncieVehicleStorage";
+import {
+  defaultDeliveryScheduleSettings,
+} from "./utils/deliverySchedule";
+import {
+  saveDeliverySettings,
+  subscribeToDeliverySettings,
+} from "./utils/deliverySettingsStorage";
 
 const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
@@ -179,6 +190,23 @@ type Delivery = {
   deliveryPhoto?: unknown | null;
   hardwarePhoto?: unknown | null;
   deliveredAt?: string;
+  dispatchStatus?: string;
+  deliveryScope?: string;
+  deliveryScopeNotes?: string;
+  deliveryDate?: string;
+  deliveryTimeSlot?: string;
+  estimatedDurationMinutes?: number;
+  drivers?: string[];
+  vehicleId?: string;
+  vehicleTitle?: string;
+  vehicleBadge?: string;
+  dispatchAssignments?: Array<{
+    id?: string;
+    driver?: string;
+    vehicleId?: string;
+    vehicleTitle?: string;
+    vehicleBadge?: string;
+  }>;
   status: string;
   createdAt: string;
   updatedAt: string;
@@ -267,6 +295,13 @@ type VehicleSetting = {
   [key: string]: unknown;
 };
 
+type DeliverySettings = {
+  id?: string;
+  unloadDurations?: Record<string, number>;
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
 function canDeleteRecord(label: string) {
   const enteredCode = window.prompt(
     `Enter the internal delete code to delete ${label}.`,
@@ -332,6 +367,8 @@ function getAllowedPageIdsForRole(role: string) {
       "supplier-runs-history",
       "deliveries",
       "deliveries-add",
+      "deliveries-dispatch",
+      "deliveries-calendar",
       "deliveries-queue",
       "deliveries-history",
       "sales",
@@ -344,6 +381,7 @@ function getAllowedPageIdsForRole(role: string) {
       "admin",
       "user-admin",
       "email-list",
+      "delivery-settings",
       "bouncie",
     ];
   }
@@ -363,6 +401,8 @@ function getAllowedPageIdsForRole(role: string) {
       "supplier-runs-history",
       "deliveries",
       "deliveries-add",
+      "deliveries-dispatch",
+      "deliveries-calendar",
       "deliveries-queue",
       "deliveries-history",
       "sales",
@@ -373,6 +413,7 @@ function getAllowedPageIdsForRole(role: string) {
       "sales-report",
       "admin",
       "email-list",
+      "delivery-settings",
     ];
   }
 
@@ -395,6 +436,9 @@ function getAllowedPageIdsForRole(role: string) {
     return [
       "dashboard",
       "deliveries",
+      "deliveries-add",
+      "deliveries-dispatch",
+      "deliveries-calendar",
       "deliveries-queue",
       "deliveries-history",
     ];
@@ -732,6 +776,8 @@ export default function App() {
   const [emailList, setEmailList] = useState<EmailListEntry[]>([]);
   const [salesReports, setSalesReports] = useState<SalesReport[]>([]);
   const [vehicleSettings, setVehicleSettings] = useState<VehicleSetting[]>([]);
+  const [deliverySettings, setDeliverySettings] =
+    useState<DeliverySettings>(defaultDeliveryScheduleSettings);
   const [editingDeliveryId, setEditingDeliveryId] =
     useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -822,9 +868,14 @@ export default function App() {
     [
       "deliveries",
       "deliveries-add",
+      "deliveries-dispatch",
+      "deliveries-calendar",
       "deliveries-queue",
       "deliveries-history",
     ].includes(pageId),
+  );
+  const canEditDeliveryDetails = ["superAdmin", "admin"].includes(
+    effectiveUserRole,
   );
   const canReadSales = effectiveAllowedPageIds.some((pageId) =>
     [
@@ -837,7 +888,7 @@ export default function App() {
     ].includes(pageId),
   );
   const canReadAdmin = effectiveAllowedPageIds.some((pageId) =>
-    ["admin", "user-admin", "email-list"].includes(pageId),
+    ["admin", "user-admin", "email-list", "delivery-settings"].includes(pageId),
   );
   const canReadFleet = effectiveAllowedPageIds.some((pageId) =>
     ["fleet", "bouncie"].includes(pageId),
@@ -878,7 +929,46 @@ export default function App() {
   ].join(":");
   const visibleDeliveries =
     effectiveUserRole === "driver"
-      ? deliveries.filter((delivery) => delivery.driver === driverName)
+      ? deliveries
+          .filter((delivery) => {
+            const drivers = Array.isArray(delivery.drivers)
+              ? delivery.drivers
+              : [];
+            const dispatchAssignments = Array.isArray(
+              delivery.dispatchAssignments,
+            )
+              ? delivery.dispatchAssignments
+              : [];
+
+            return (
+              delivery.dispatchStatus !== "needsDispatch" &&
+              (delivery.driver === driverName ||
+                drivers.includes(driverName) ||
+                dispatchAssignments.some(
+                  (assignment) => assignment.driver === driverName,
+                ))
+            );
+          })
+          .map((delivery) => {
+            const dispatchAssignments = Array.isArray(
+              delivery.dispatchAssignments,
+            )
+              ? delivery.dispatchAssignments
+              : [];
+            const driverAssignment = dispatchAssignments.find(
+              (assignment) => assignment.driver === driverName,
+            );
+
+            return {
+              ...delivery,
+              driver: driverName,
+              vehicleId: driverAssignment?.vehicleId || delivery.vehicleId,
+              vehicleTitle:
+                driverAssignment?.vehicleTitle || delivery.vehicleTitle,
+              vehicleBadge:
+                driverAssignment?.vehicleBadge || delivery.vehicleBadge,
+            };
+          })
       : deliveries;
   const currentUserDisplayName =
     currentUser?.displayName ||
@@ -917,12 +1007,22 @@ export default function App() {
         supplierRun.dispatchStatus !== "needsDispatch" &&
         supplierRun.driver,
     ).length,
+    deliveryNeedsDispatch: deliveries.filter(
+      (delivery) =>
+        delivery.status !== "complete" &&
+        (delivery.dispatchStatus === "needsDispatch" || !delivery.driver),
+    ).length,
     deliveryOpen: deliveries.filter(
-      (delivery) => delivery.status !== "complete",
+      (delivery) =>
+        delivery.status !== "complete" &&
+        delivery.dispatchStatus !== "needsDispatch" &&
+        delivery.driver,
     ).length,
     hardwareOpen: deliveries.filter(
       (delivery) =>
         delivery.status !== "complete" &&
+        delivery.dispatchStatus !== "needsDispatch" &&
+        delivery.driver &&
         delivery.hasHardware &&
         !delivery.hardwareChecked,
     ).length,
@@ -1107,7 +1207,7 @@ export default function App() {
   useEffect(() => {
     if (!isApproved || !canAssignSouthRoutes) {
       setVehicleSettings([]);
-      return;
+      return () => {};
     }
 
     return subscribeToBouncieVehicleSettings(
@@ -1121,6 +1221,24 @@ export default function App() {
       },
     );
   }, [canAssignSouthRoutes, isApproved]);
+
+  useEffect(() => {
+    if (!isApproved || (!canReadDeliveries && !canReadAdmin)) {
+      setDeliverySettings(defaultDeliveryScheduleSettings);
+      return () => {};
+    }
+
+    return subscribeToDeliverySettings(
+      (savedDeliverySettings: DeliverySettings) => {
+        setDeliverySettings(savedDeliverySettings);
+        setSyncError("");
+      },
+      (error: Error) => {
+        console.error("Unable to sync delivery settings:", error);
+        setSyncError(getFirebaseErrorMessage(error));
+      },
+    );
+  }, [canReadAdmin, canReadDeliveries, isApproved]);
 
   useEffect(() => {
     if (
@@ -1555,6 +1673,17 @@ export default function App() {
     setSyncError("");
   }
 
+  async function handleSaveDeliverySettings(
+    updatedDeliverySettings: DeliverySettings,
+  ) {
+    const savedDeliverySettings = await saveDeliverySettings(
+      updatedDeliverySettings,
+    );
+
+    setDeliverySettings(savedDeliverySettings);
+    setSyncError("");
+  }
+
   async function handleEnsureMonthlyPaymentLinks(month: string) {
     const updatedPaymentLinks = await ensureMonthlyPaymentLinks(
       customers,
@@ -1642,7 +1771,12 @@ export default function App() {
   }
 
   async function handleAddDelivery(delivery: Delivery) {
-    const updatedDeliveries = await addDelivery(delivery);
+    const updatedDeliveries = await addDelivery({
+      ...delivery,
+      dispatchStatus: delivery.driver
+        ? "assigned"
+        : delivery.dispatchStatus || "needsDispatch",
+    });
 
     setDeliveries(updatedDeliveries);
     setSyncError("");
@@ -1702,6 +1836,10 @@ export default function App() {
   }
 
   function handleEditDelivery(deliveryId: string) {
+    if (!canEditDeliveryDetails) {
+      return;
+    }
+
     setEditingDeliveryId(deliveryId);
     setCurrentPage("deliveries-add");
   }
@@ -2025,14 +2163,26 @@ export default function App() {
     }
 
     if (dashboardRole === "delivery") {
+      const needsDispatchDeliveries = deliveries.filter(
+        (delivery) =>
+          delivery.status !== "complete" &&
+          (delivery.dispatchStatus === "needsDispatch" || !delivery.driver),
+      );
       const openDeliveries = deliveries.filter(
-        (delivery) => delivery.status !== "complete",
+        (delivery) =>
+          delivery.status !== "complete" &&
+          delivery.dispatchStatus !== "needsDispatch" &&
+          delivery.driver,
       );
       const completedDeliveries = deliveries.filter(
         (delivery) => delivery.status === "complete",
       );
       const hardwareOpen = openDeliveries.filter(
         (delivery) => delivery.hasHardware && !delivery.hardwareChecked,
+      );
+      const scheduledTodayDeliveries = openDeliveries.filter(
+        (delivery) =>
+          delivery.deliveryDate === new Date().toISOString().slice(0, 10),
       );
 
       return (
@@ -2049,10 +2199,16 @@ export default function App() {
               note: "To be delivered",
             },
             {
-              icon: Package,
-              label: "Hardware",
-              value: hardwareOpen.length,
-              note: "Needs checkoff",
+              icon: Truck,
+              label: "Dispatch",
+              value: needsDispatchDeliveries.length,
+              note: "Need driver",
+            },
+            {
+              icon: CalendarDays,
+              label: "Today",
+              value: scheduledTodayDeliveries.length,
+              note: "Scheduled",
             },
             {
               icon: History,
@@ -2062,6 +2218,18 @@ export default function App() {
             },
           ]}
           actions={[
+            dashboardAllowedPageIds.includes("deliveries-dispatch")
+              ? {
+                  icon: Truck,
+                  label: "Hold",
+                  title: "Needs Dispatch",
+                  description: "Assign drivers before orders hit the delivery queue.",
+                  metric: needsDispatchDeliveries.length,
+                  metricLabel: "Waiting",
+                  tone: needsDispatchDeliveries.length > 0 ? "warning" : "dispatch",
+                  onClick: () => setCurrentPage("deliveries-dispatch"),
+                }
+              : null,
             dashboardAllowedPageIds.includes("deliveries-queue")
               ? {
                   icon: PackageCheck,
@@ -2072,6 +2240,18 @@ export default function App() {
                   metricLabel: "Open",
                   tone: hardwareOpen.length > 0 ? "warning" : "success",
                   onClick: () => setCurrentPage("deliveries-queue"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("deliveries-calendar")
+              ? {
+                  icon: CalendarDays,
+                  label: "Schedule",
+                  title: "Delivery Calendar",
+                  description: "View assigned deliveries by date, time slot, and unload duration.",
+                  metric: scheduledTodayDeliveries.length,
+                  metricLabel: "Today",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("deliveries-calendar"),
                 }
               : null,
             dashboardAllowedPageIds.includes("deliveries-history")
@@ -2247,14 +2427,26 @@ export default function App() {
     }
 
     if (currentPage === "deliveries" && canReadDeliveries) {
+      const needsDispatchDeliveries = visibleDeliveries.filter(
+        (delivery) =>
+          delivery.status !== "complete" &&
+          (delivery.dispatchStatus === "needsDispatch" || !delivery.driver),
+      );
       const openDeliveries = visibleDeliveries.filter(
-        (delivery) => delivery.status !== "complete",
+        (delivery) =>
+          delivery.status !== "complete" &&
+          delivery.dispatchStatus !== "needsDispatch" &&
+          delivery.driver,
       );
       const completedDeliveries = visibleDeliveries.filter(
         (delivery) => delivery.status === "complete",
       );
       const hardwareOpen = openDeliveries.filter(
         (delivery) => delivery.hasHardware && !delivery.hardwareChecked,
+      );
+      const scheduledTodayDeliveries = openDeliveries.filter(
+        (delivery) =>
+          delivery.deliveryDate === new Date().toISOString().slice(0, 10),
       );
 
       return (
@@ -2279,10 +2471,16 @@ export default function App() {
               note: "To be delivered",
             },
             {
-              icon: Package,
-              label: "Hardware",
-              value: hardwareOpen.length,
-              note: "Needs checkoff",
+              icon: Truck,
+              label: "Dispatch",
+              value: needsDispatchDeliveries.length,
+              note: "Need driver",
+            },
+            {
+              icon: CalendarDays,
+              label: "Today",
+              value: scheduledTodayDeliveries.length,
+              note: "Scheduled",
             },
             {
               icon: History,
@@ -2292,6 +2490,18 @@ export default function App() {
             },
           ]}
           actions={[
+            effectiveAllowedPageIds.includes("deliveries-dispatch")
+              ? {
+                  icon: Truck,
+                  label: "Hold",
+                  title: "Needs Dispatch",
+                  description: "Assign drivers before orders show on the delivery board.",
+                  metric: needsDispatchDeliveries.length,
+                  metricLabel: "Waiting",
+                  tone: needsDispatchDeliveries.length > 0 ? "warning" : "dispatch",
+                  onClick: () => setCurrentPage("deliveries-dispatch"),
+                }
+              : null,
             effectiveAllowedPageIds.includes("deliveries-queue")
               ? {
                   icon: PackageCheck,
@@ -2302,6 +2512,18 @@ export default function App() {
                   metricLabel: "Open",
                   tone: hardwareOpen.length > 0 ? "warning" : "success",
                   onClick: () => setCurrentPage("deliveries-queue"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("deliveries-calendar")
+              ? {
+                  icon: CalendarDays,
+                  label: "Schedule",
+                  title: "Delivery Calendar",
+                  description: "View assigned deliveries by date, time slot, and unload duration.",
+                  metric: scheduledTodayDeliveries.length,
+                  metricLabel: "Today",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("deliveries-calendar"),
                 }
               : null,
             effectiveAllowedPageIds.includes("deliveries-history")
@@ -2490,6 +2712,18 @@ export default function App() {
                   onClick: () => setCurrentPage("email-list"),
                 }
               : null,
+            effectiveAllowedPageIds.includes("delivery-settings")
+              ? {
+                  icon: CalendarDays,
+                  label: "Schedule",
+                  title: "Delivery Settings",
+                  description: "Adjust default unload times used by the delivery calendar.",
+                  metric: "Min",
+                  metricLabel: "Defaults",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("delivery-settings"),
+                }
+              : null,
           ].filter(Boolean)}
         />
       );
@@ -2564,6 +2798,15 @@ export default function App() {
             emailList={emailList}
             onAddEmailListEntry={handleAddEmailListEntry}
             onDeleteEmailListEntry={handleDeleteEmailListEntry}
+            onPageChange={setCurrentPage}
+          />
+        );
+
+      case "delivery-settings":
+        return (
+          <DeliverySettingsPage
+            deliverySettings={deliverySettings}
+            onSaveDeliverySettings={handleSaveDeliverySettings}
             onPageChange={setCurrentPage}
           />
         );
@@ -2694,6 +2937,8 @@ export default function App() {
         return (
           <DeliveriesPage
             deliveries={deliveries}
+            deliverySettings={deliverySettings}
+            canEditDeliveries={canEditDeliveryDetails}
             onAddDelivery={handleAddDelivery}
             onUpdateDelivery={handleUpdateDelivery}
             onDeleteDelivery={handleDeleteDelivery}
@@ -2709,6 +2954,29 @@ export default function App() {
           <DeliveryQueuePage
             deliveries={visibleDeliveries}
             onUpdateDelivery={handleUpdateDelivery}
+            canEditDeliveries={canEditDeliveryDetails}
+            onEditDelivery={handleEditDelivery}
+            onPageChange={setCurrentPage}
+          />
+        );
+
+      case "deliveries-dispatch":
+        return (
+          <DeliveryDispatchPage
+            deliveries={deliveries}
+            vehicleOptions={southVehicleOptions}
+            canEditDeliveries={canEditDeliveryDetails}
+            onUpdateDelivery={handleUpdateDelivery}
+            onEditDelivery={handleEditDelivery}
+            onPageChange={setCurrentPage}
+          />
+        );
+
+      case "deliveries-calendar":
+        return (
+          <DeliveryCalendarPage
+            deliveries={visibleDeliveries}
+            canEditDeliveries={canEditDeliveryDetails}
             onEditDelivery={handleEditDelivery}
             onPageChange={setCurrentPage}
           />

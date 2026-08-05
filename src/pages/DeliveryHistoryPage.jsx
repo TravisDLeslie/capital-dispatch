@@ -13,6 +13,7 @@ import {
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
+import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 
 function normalizeText(value) {
   return String(value || "")
@@ -110,8 +111,11 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
       const addressMatches = normalizeText(delivery.address).includes(
         textSearch,
       );
+      const scopeMatches = normalizeText(
+        `${delivery.deliveryScope || ""} ${delivery.deliveryScopeNotes || ""}`,
+      ).includes(textSearch);
 
-      return orderMatches || customerMatches || addressMatches;
+      return orderMatches || customerMatches || addressMatches || scopeMatches;
     });
   }, [completedDeliveries, searchValue]);
 
@@ -205,6 +209,7 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
             const deliveryIsOpen = Boolean(
               openDeliveryKeys[delivery.id],
             );
+            const scopeSummary = getDeliveryScopeSummary(delivery);
 
             return (
               <article
@@ -336,24 +341,38 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
                 <div className="mt-5">
                   <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
                     <Package className="h-4 w-4" aria-hidden="true" />
-                    Items
+                    Delivery Scope
                   </p>
 
-                  <ul className="space-y-2">
-                    {items.map((item) => (
-                      <li
-                        key={item.id}
-                        className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
-                      >
-                        {item.quantity ? (
-                          <span className="mr-2 font-black text-[#FC2C38]">
-                            {item.quantity}
-                          </span>
-                        ) : null}
-                        {item.description}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="rounded-xl bg-slate-50 px-4 py-3">
+                    <p className="text-sm font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+                      {scopeSummary.label}
+                    </p>
+
+                    {scopeSummary.detail ? (
+                      <p className="mt-1 text-sm font-semibold text-slate-700">
+                        {scopeSummary.detail}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {scopeSummary.usesItems ? (
+                    <ul className="mt-3 space-y-2">
+                      {items.map((item) => (
+                        <li
+                          key={item.id}
+                          className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
+                        >
+                          {item.quantity ? (
+                            <span className="mr-2 font-black text-[#FC2C38]">
+                              {item.quantity}
+                            </span>
+                          ) : null}
+                          {item.description}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </div>
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">

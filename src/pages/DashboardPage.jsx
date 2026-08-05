@@ -127,6 +127,7 @@ function HeartbeatCard({
  *     receivingToday?: number;
  *     southNeedsDispatch?: number;
  *     southOpen?: number;
+ *     deliveryNeedsDispatch?: number;
  *     deliveryOpen?: number;
  *     hardwareOpen?: number;
  *     customerCount?: number;
@@ -279,11 +280,23 @@ export default function DashboardPage({
         <HeartbeatCard
           icon={Truck}
           title="Deliveries"
-          description="Open deliveries with hardware reminders called out."
+          description="Assigned deliveries, dispatch holds, and hardware reminders."
           value={operations.deliveryOpen || 0}
-          note={`${operations.hardwareOpen || 0} hardware`}
-          tone={operations.hardwareOpen > 0 ? "warning" : "success"}
-          onClick={() => onPageChange?.("deliveries-queue")}
+          note={`${operations.deliveryNeedsDispatch || 0} dispatch · ${
+            operations.hardwareOpen || 0
+          } hardware`}
+          tone={
+            operations.deliveryNeedsDispatch > 0 || operations.hardwareOpen > 0
+              ? "warning"
+              : "success"
+          }
+          onClick={() =>
+            onPageChange?.(
+              operations.deliveryNeedsDispatch > 0
+                ? "deliveries-dispatch"
+                : "deliveries-queue",
+            )
+          }
         />
 
         <HeartbeatCard

@@ -46,6 +46,8 @@ const permissionGroups = [
     permissions: [
       { id: "deliveries", label: "Deliveries" },
       { id: "deliveries-add", label: "Add Deliveries" },
+      { id: "deliveries-dispatch", label: "Needs Dispatch" },
+      { id: "deliveries-calendar", label: "Delivery Calendar" },
       { id: "deliveries-queue", label: "To Be Delivered" },
       { id: "deliveries-history", label: "Delivery History" },
     ],
@@ -67,6 +69,7 @@ const permissionGroups = [
       { id: "admin", label: "Admin" },
       { id: "user-admin", label: "User Access" },
       { id: "email-list", label: "Email List" },
+      { id: "delivery-settings", label: "Delivery Settings" },
     ],
   },
 ];
@@ -93,7 +96,14 @@ const rolePermissionPresets = {
     "supplier-runs-check",
     "supplier-runs-history",
   ],
-  delivery: ["dashboard", "deliveries", "deliveries-queue", "deliveries-history"],
+  delivery: [
+    "dashboard",
+    "deliveries",
+    "deliveries-add",
+    "deliveries-dispatch",
+    "deliveries-queue",
+    "deliveries-history",
+  ],
   sales: [
     "dashboard",
     "south",

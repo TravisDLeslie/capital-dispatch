@@ -13,6 +13,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import DeliveryOrderForm from "../components/DeliveryOrderForm";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
+import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 
 function formatCreatedAt(value) {
   if (!value) {
@@ -35,6 +36,8 @@ function getDirectionsUrl(address) {
 
 export default function DeliveriesPage({
   deliveries,
+  deliverySettings,
+  canEditDeliveries = false,
   onAddDelivery,
   onUpdateDelivery,
   onDeleteDelivery,
@@ -75,14 +78,14 @@ export default function DeliveriesPage({
         </h1>
 
         <p className="mt-2 text-lg text-slate-500">
-          Build delivery orders by driver, customer stop, unload type,
-          notes, and item list.
+          Build delivery orders, then hold them for dispatch or assign a driver.
         </p>
       </div>
 
       <DeliveryOrderForm
         key={editingDelivery?.id || "new-delivery"}
         initialDelivery={editingDelivery || null}
+        deliverySettings={deliverySettings}
         onSubmit={
           editingDelivery ? handleUpdateSubmit : handleSubmit
         }
@@ -126,6 +129,10 @@ export default function DeliveriesPage({
                 delivery.deliveryNotes ||
                 "";
               const generalNotes = delivery.generalNotes || "";
+              const needsDispatch =
+                delivery.dispatchStatus === "needsDispatch" ||
+                !delivery.driver;
+              const scopeSummary = getDeliveryScopeSummary(delivery);
 
               return (
                 <article
@@ -143,6 +150,16 @@ export default function DeliveriesPage({
                       </h3>
 
                       <div className="mt-3 flex flex-wrap gap-2">
+                        {needsDispatch ? (
+                          <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1.5 text-sm font-black text-amber-800">
+                            Needs Dispatch
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-700">
+                            Assigned
+                          </span>
+                        )}
+
                         <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
                           <Truck
                             className="h-4 w-4"
@@ -166,7 +183,7 @@ export default function DeliveriesPage({
                             className="h-4 w-4"
                             aria-hidden="true"
                           />
-                          {delivery.driver}
+                          {delivery.driver || "No driver yet"}
                         </span>
 
                         {delivery.createdAt ? (
@@ -178,6 +195,7 @@ export default function DeliveriesPage({
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row">
+                      {canEditDeliveries ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -195,6 +213,7 @@ export default function DeliveriesPage({
                         />
                         Edit
                       </button>
+                      ) : null}
 
                       <a
                         href={getDirectionsUrl(delivery.address)}
@@ -295,24 +314,38 @@ export default function DeliveriesPage({
                         className="h-4 w-4"
                         aria-hidden="true"
                       />
-                      Items
+                      Delivery Scope
                     </p>
 
-                    <ul className="space-y-2">
-                      {items.map((item) => (
-                        <li
-                          key={item.id}
-                          className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
-                        >
-                          {item.quantity ? (
-                            <span className="mr-2 font-black text-[#FC2C38]">
-                              {item.quantity}
-                            </span>
-                          ) : null}
-                          {item.description}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="rounded-xl bg-slate-50 px-4 py-3">
+                      <p className="text-sm font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+                        {scopeSummary.label}
+                      </p>
+
+                      {scopeSummary.detail ? (
+                        <p className="mt-1 text-sm font-semibold text-slate-700">
+                          {scopeSummary.detail}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    {scopeSummary.usesItems ? (
+                      <ul className="mt-3 space-y-2">
+                        {items.map((item) => (
+                          <li
+                            key={item.id}
+                            className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
+                          >
+                            {item.quantity ? (
+                              <span className="mr-2 font-black text-[#FC2C38]">
+                                {item.quantity}
+                              </span>
+                            ) : null}
+                            {item.description}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
                 </article>
               );

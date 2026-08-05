@@ -6,15 +6,21 @@ import {
   Phone,
   Plus,
   ShieldCheck,
+  Timer,
   Trash2,
-  Truck,
   UserRound,
 } from "lucide-react";
+import { deliveryUnloadTypes } from "../data/options";
 import {
-  deliveryDrivers,
-  deliveryUnloadTypes,
-  favoriteDeliveryDrivers,
-} from "../data/options";
+  defaultDeliveryScheduleSettings,
+  deliveryTimeSlotOptions,
+  getDeliveryDurationMinutes,
+  getTodayDateValue,
+} from "../utils/deliverySchedule";
+import {
+  deliveryScopeOptions,
+  getDeliveryScopeOption,
+} from "../utils/deliveryScope";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
 
@@ -75,6 +81,7 @@ function formatPhoneNumber(value) {
 
 export default function DeliveryOrderForm({
   initialDelivery = null,
+  deliverySettings = defaultDeliveryScheduleSettings,
   onSubmit,
   onCancel,
   onDelete,
@@ -87,6 +94,18 @@ export default function DeliveryOrderForm({
   const [contactPhone, setContactPhone] = useState("");
   const [driver, setDriver] = useState("");
   const [unloadType, setUnloadType] = useState("Forklift");
+  const [deliveryDate, setDeliveryDate] = useState(getTodayDateValue());
+  const [deliveryTimeSlot, setDeliveryTimeSlot] = useState("");
+  const [estimatedDurationMinutes, setEstimatedDurationMinutes] =
+    useState(
+      getDeliveryDurationMinutes(
+        "Forklift",
+        null,
+        deliverySettings,
+      ),
+    );
+  const [deliveryScope, setDeliveryScope] = useState("shipOrderComplete");
+  const [deliveryScopeNotes, setDeliveryScopeNotes] = useState("");
   const [hasHardware, setHasHardware] = useState(false);
   const [deliveryLocationNotes, setDeliveryLocationNotes] =
     useState("");
@@ -109,6 +128,17 @@ export default function DeliveryOrderForm({
     );
     setDriver(initialDelivery.driver || "");
     setUnloadType(initialDelivery.unloadType || "Forklift");
+    setDeliveryDate(initialDelivery.deliveryDate || getTodayDateValue());
+    setDeliveryTimeSlot(initialDelivery.deliveryTimeSlot || "");
+    setEstimatedDurationMinutes(
+      getDeliveryDurationMinutes(
+        initialDelivery.unloadType || "Forklift",
+        initialDelivery.estimatedDurationMinutes,
+        deliverySettings,
+      ),
+    );
+    setDeliveryScope(getDeliveryScopeOption(initialDelivery).value);
+    setDeliveryScopeNotes(initialDelivery.deliveryScopeNotes || "");
     setHasHardware(Boolean(initialDelivery.hasHardware));
     setDeliveryLocationNotes(
       initialDelivery.deliveryLocationNotes ||
@@ -118,7 +148,17 @@ export default function DeliveryOrderForm({
     setGeneralNotes(initialDelivery.generalNotes || "");
     setItems(createItemsFromDelivery(initialDelivery));
     setError("");
-  }, [initialDelivery]);
+  }, [deliverySettings, initialDelivery]);
+
+  useEffect(() => {
+    if (initialDelivery) {
+      return;
+    }
+
+    setEstimatedDurationMinutes(
+      getDeliveryDurationMinutes(unloadType, null, deliverySettings),
+    );
+  }, [deliverySettings, initialDelivery, unloadType]);
 
   function clearError() {
     setError("");
@@ -210,6 +250,13 @@ export default function DeliveryOrderForm({
     setContactPhone("");
     setDriver("");
     setUnloadType("Forklift");
+    setDeliveryDate(getTodayDateValue());
+    setDeliveryTimeSlot("");
+    setEstimatedDurationMinutes(
+      getDeliveryDurationMinutes("Forklift", null, deliverySettings),
+    );
+    setDeliveryScope("shipOrderComplete");
+    setDeliveryScopeNotes("");
     setHasHardware(false);
     setDeliveryLocationNotes("");
     setGeneralNotes("");
@@ -235,13 +282,20 @@ export default function DeliveryOrderForm({
       return;
     }
 
-    if (!deliveryDrivers.includes(driver)) {
-      setError("Select the driver for this delivery.");
+    if (!deliveryUnloadTypes.includes(unloadType)) {
+      setError("Select the delivery unload type.");
       return;
     }
 
-    if (!deliveryUnloadTypes.includes(unloadType)) {
-      setError("Select the delivery unload type.");
+    if (!deliveryDate) {
+      setError("Select the delivery date.");
+      return;
+    }
+
+    const selectedScope = getDeliveryScopeOption(deliveryScope);
+
+    if (selectedScope.requiresNotes && !deliveryScopeNotes.trim()) {
+      setError(`Enter ${selectedScope.noteLabel.toLowerCase()}.`);
       return;
     }
 
@@ -254,7 +308,7 @@ export default function DeliveryOrderForm({
         delivered: Boolean(item.delivered),
       }));
 
-    if (deliveryItems.length === 0) {
+    if (selectedScope.usesItems && deliveryItems.length === 0) {
       setError("Add at least one item for the driver to deliver.");
       return;
     }
@@ -263,7 +317,7 @@ export default function DeliveryOrderForm({
       (item) => item.description.trim() && !item.saved,
     );
 
-    if (unsavedItem) {
+    if (selectedScope.usesItems && unsavedItem) {
       setError("Save each delivery item before sending the order to the driver.");
       return;
     }
@@ -278,7 +332,17 @@ export default function DeliveryOrderForm({
       contactPhone: contactPhone.trim(),
       phoneNumber: contactPhone.trim(),
       driver,
+      dispatchStatus: driver ? "assigned" : "needsDispatch",
       unloadType,
+      deliveryDate,
+      deliveryTimeSlot,
+      estimatedDurationMinutes: getDeliveryDurationMinutes(
+        unloadType,
+        null,
+        deliverySettings,
+      ),
+      deliveryScope: selectedScope.value,
+      deliveryScopeNotes: deliveryScopeNotes.trim(),
       hasHardware,
       hardwareChecked: hasHardware
         ? Boolean(initialDelivery?.hardwareChecked)
@@ -289,7 +353,7 @@ export default function DeliveryOrderForm({
       deliveryLocationNotes: deliveryLocationNotes.trim(),
       generalNotes: generalNotes.trim(),
       deliveryNotes: deliveryLocationNotes.trim(),
-      items: deliveryItems,
+      items: selectedScope.usesItems ? deliveryItems : [],
       deliveryPhoto: initialDelivery?.deliveryPhoto || null,
       deliveredAt: initialDelivery?.deliveredAt || null,
       status: initialDelivery?.status || "open",
@@ -330,13 +394,13 @@ export default function DeliveryOrderForm({
 
         <p className="mt-2 text-slate-500">
           {isEditing
-            ? "Update the driver, customer stop, unload method, notes, and delivery items."
-            : "Assign the driver, customer stop, unload method, notes, and delivery items."}
+            ? "Update the customer stop, unload method, notes, and delivery items."
+            : "Build the order now. Dispatch can assign the driver when it is ready."}
         </p>
       </div>
 
       <div className="space-y-7">
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-5 lg:grid-cols-2">
           <div>
             <label
               htmlFor="delivery-order-number"
@@ -385,50 +449,6 @@ export default function DeliveryOrderForm({
               placeholder="Customer name"
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
-          </div>
-
-          <div>
-            <label
-              htmlFor="delivery-driver"
-              className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
-            >
-              <Truck className="h-4 w-4" aria-hidden="true" />
-              Driver
-            </label>
-
-            <select
-              id="delivery-driver"
-              value={driver}
-              onChange={(event) => {
-                setDriver(event.target.value);
-                clearError();
-              }}
-              disabled={isSubmitting}
-              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-            >
-              <option value="">Select a driver...</option>
-
-              <optgroup label="Favorites">
-                {favoriteDeliveryDrivers.map((driverOption) => (
-                  <option key={driverOption} value={driverOption}>
-                    {driverOption}
-                  </option>
-                ))}
-              </optgroup>
-
-              <optgroup label="All Drivers">
-                {deliveryDrivers
-                  .filter(
-                    (driverOption) =>
-                      !favoriteDeliveryDrivers.includes(driverOption),
-                  )
-                  .map((driverOption) => (
-                    <option key={driverOption} value={driverOption}>
-                      {driverOption}
-                    </option>
-                  ))}
-              </optgroup>
-            </select>
           </div>
         </div>
 
@@ -521,6 +541,13 @@ export default function DeliveryOrderForm({
                   type="button"
                   onClick={() => {
                     setUnloadType(unloadOption);
+                    setEstimatedDurationMinutes(
+                      getDeliveryDurationMinutes(
+                        unloadOption,
+                        null,
+                        deliverySettings,
+                      ),
+                    );
                     clearError();
                   }}
                   disabled={isSubmitting}
@@ -543,6 +570,161 @@ export default function DeliveryOrderForm({
                 </button>
               );
             })}
+          </div>
+        </section>
+
+        <section>
+          <div className="mb-3">
+            <h3 className="text-sm font-bold text-slate-700">
+              Delivery Schedule
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Pick a day and time block so dispatch can see the delivery calendar.
+            </p>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            <div>
+              <label
+                htmlFor="delivery-date"
+                className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
+              >
+                <Timer className="h-4 w-4" aria-hidden="true" />
+                Delivery Date
+              </label>
+
+              <input
+                id="delivery-date"
+                type="date"
+                value={deliveryDate}
+                onChange={(event) => {
+                  setDeliveryDate(event.target.value);
+                  clearError();
+                }}
+                disabled={isSubmitting}
+                className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="delivery-time-slot"
+                className="mb-2 block text-sm font-bold text-slate-700"
+              >
+                Time Slot
+              </label>
+
+              <select
+                id="delivery-time-slot"
+                value={deliveryTimeSlot}
+                onChange={(event) => {
+                  setDeliveryTimeSlot(event.target.value);
+                  clearError();
+                }}
+                disabled={isSubmitting}
+                className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              >
+                <option value="">Set later in dispatch...</option>
+
+                {deliveryTimeSlotOptions.map((timeSlot) => (
+                  <option key={timeSlot.value} value={timeSlot.value}>
+                    {timeSlot.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-bold text-slate-700">
+                Auto Estimated Time
+              </p>
+
+              <p className="mt-2 text-3xl font-black text-slate-900">
+                {estimatedDurationMinutes} min
+              </p>
+
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                Based on {unloadType}. Adjust defaults in Admin.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div className="mb-3">
+            <h3 className="text-sm font-bold text-slate-700">
+              Delivery Scope
+            </h3>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Use this instead of writing every item for large deliveries.
+            </p>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-4">
+            {deliveryScopeOptions.map((scopeOption) => {
+              const isSelected = deliveryScope === scopeOption.value;
+
+              return (
+                <button
+                  key={scopeOption.value}
+                  type="button"
+                  onClick={() => {
+                    setDeliveryScope(scopeOption.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                    isSelected
+                      ? "border-[#FC2C38] bg-red-50 text-slate-900 shadow-sm"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-3 text-sm font-black">
+                    {scopeOption.label}
+                    {isSelected ? (
+                      <Check
+                        className="h-4 w-4 text-[#FC2C38]"
+                        aria-hidden="true"
+                        strokeWidth={3}
+                      />
+                    ) : null}
+                  </span>
+
+                  <span className="mt-2 block text-sm font-semibold leading-5 text-slate-500">
+                    {scopeOption.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4">
+            <label
+              htmlFor="delivery-scope-notes"
+              className="mb-2 block text-sm font-bold text-slate-700"
+            >
+              {getDeliveryScopeOption(deliveryScope).noteLabel}
+              {getDeliveryScopeOption(deliveryScope).requiresNotes ? (
+                <span className="ml-2 text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+                  Required
+                </span>
+              ) : null}
+            </label>
+
+            <textarea
+              id="delivery-scope-notes"
+              value={deliveryScopeNotes}
+              onChange={(event) => {
+                setDeliveryScopeNotes(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              rows={3}
+              placeholder={getDeliveryScopeOption(deliveryScope).notePlaceholder}
+              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+            />
           </div>
         </section>
 
@@ -620,6 +802,7 @@ export default function DeliveryOrderForm({
           </div>
         </div>
 
+        {getDeliveryScopeOption(deliveryScope).usesItems ? (
         <section>
           <div className="mb-4">
             <h3 className="text-sm font-bold text-slate-700">
@@ -760,6 +943,7 @@ export default function DeliveryOrderForm({
             Add Item
           </button>
         </section>
+        ) : null}
 
         {error ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
@@ -788,7 +972,7 @@ export default function DeliveryOrderForm({
               ? "Saving Delivery..."
               : isEditing
                 ? "Save Order Changes"
-            : "Send Delivery to Driver"}
+                : "Send to Needs Dispatch"}
           </button>
         </div>
 

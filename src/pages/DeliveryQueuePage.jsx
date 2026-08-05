@@ -3,6 +3,7 @@ import {
   Camera,
   CheckCircle2,
   ChevronDown,
+  Clock,
   Edit3,
   ExternalLink,
   MapPin,
@@ -15,6 +16,8 @@ import {
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
+import { getDeliveryScopeSummary } from "../utils/deliveryScope";
+import { getDeliveryTimeRange } from "../utils/deliverySchedule";
 
 function getDirectionsUrl(address) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
@@ -122,6 +125,7 @@ function PhotoPreview({ photo, label }) {
 export default function DeliveryQueuePage({
   deliveries,
   onUpdateDelivery,
+  canEditDeliveries = false,
   onEditDelivery,
   onPageChange,
 }) {
@@ -131,7 +135,10 @@ export default function DeliveryQueuePage({
   const [openDriverKeys, setOpenDriverKeys] = useState({});
 
   const openDeliveries = deliveries.filter(
-    (delivery) => delivery.status !== "complete",
+    (delivery) =>
+      delivery.status !== "complete" &&
+      delivery.dispatchStatus !== "needsDispatch" &&
+      delivery.driver,
   );
   const driverNames = [
     ...new Set(
@@ -361,6 +368,7 @@ export default function DeliveryQueuePage({
                     delivery.deliveryNotes ||
                     "";
                   const generalNotes = delivery.generalNotes || "";
+                  const scopeSummary = getDeliveryScopeSummary(delivery);
 
                   return (
                     <article
@@ -386,6 +394,14 @@ export default function DeliveryQueuePage({
                               {delivery.unloadType}
                             </span>
 
+                            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-700">
+                              <Clock
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                              />
+                              {getDeliveryTimeRange(delivery)}
+                            </span>
+
                             {contactPhone ? (
                               <a
                                 href={`tel:${contactPhone.replace(/\D/g, "")}`}
@@ -402,6 +418,7 @@ export default function DeliveryQueuePage({
                         </div>
 
                         <div className="flex flex-col gap-2 sm:flex-row">
+                          {canEditDeliveries ? (
                           <button
                             type="button"
                             onClick={() => onEditDelivery(delivery.id)}
@@ -413,6 +430,7 @@ export default function DeliveryQueuePage({
                             />
                             Edit
                           </button>
+                          ) : null}
 
                           <a
                             href={getDirectionsUrl(delivery.address)}
@@ -583,24 +601,38 @@ export default function DeliveryQueuePage({
                             className="h-4 w-4"
                             aria-hidden="true"
                           />
-                          Items
+                          Delivery Scope
                         </p>
 
-                        <ul className="space-y-2">
-                          {items.map((item) => (
-                            <li
-                              key={item.id}
-                              className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
-                            >
-                              {item.quantity ? (
-                                <span className="mr-2 font-black text-[#FC2C38]">
-                                  {item.quantity}
-                                </span>
-                              ) : null}
-                              {item.description}
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="rounded-xl bg-slate-50 px-4 py-3">
+                          <p className="text-sm font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+                            {scopeSummary.label}
+                          </p>
+
+                          {scopeSummary.detail ? (
+                            <p className="mt-1 text-base font-black text-slate-900">
+                              {scopeSummary.detail}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        {scopeSummary.usesItems ? (
+                          <ul className="mt-3 space-y-2">
+                            {items.map((item) => (
+                              <li
+                                key={item.id}
+                                className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
+                              >
+                                {item.quantity ? (
+                                  <span className="mr-2 font-black text-[#FC2C38]">
+                                    {item.quantity}
+                                  </span>
+                                ) : null}
+                                {item.description}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
                       </div>
 
                       <div className="mt-4 space-y-3">
