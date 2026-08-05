@@ -98,6 +98,9 @@ export default function CustomersPage({
   const [state, setState] = useState("");
   const [zip, setZip] = useState("");
   const [contacts, setContacts] = useState(createDefaultContacts);
+  const [needsPaymentLink, setNeedsPaymentLink] = useState(false);
+  const [paymentLinkContactId, setPaymentLinkContactId] = useState("");
+  const [paymentLinkNotes, setPaymentLinkNotes] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -159,6 +162,9 @@ export default function CustomersPage({
     setState("");
     setZip("");
     setContacts(createDefaultContacts());
+    setNeedsPaymentLink(false);
+    setPaymentLinkContactId("");
+    setPaymentLinkNotes("");
     setEditingCustomerId("");
   }
 
@@ -175,6 +181,9 @@ export default function CustomersPage({
     setCity(customer.city || "");
     setState(customer.state || "");
     setZip(customer.zip || "");
+    setNeedsPaymentLink(Boolean(customer.needsPaymentLink));
+    setPaymentLinkContactId(customer.paymentLinkContactId || "");
+    setPaymentLinkNotes(customer.paymentLinkNotes || "");
     setContacts(
       Array.isArray(customer.contacts) && customer.contacts.length > 0
         ? customer.contacts.map((contact) => ({
@@ -245,6 +254,10 @@ export default function CustomersPage({
         .filter(Boolean)
         .join(", "),
       contacts: savedContacts,
+      needsPaymentLink,
+      paymentLinkContactId:
+        needsPaymentLink && paymentLinkContactId ? paymentLinkContactId : "",
+      paymentLinkNotes: needsPaymentLink ? paymentLinkNotes.trim() : "",
     };
 
     setIsSubmitting(true);
@@ -641,6 +654,86 @@ export default function CustomersPage({
             </div>
           </section>
 
+          <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={needsPaymentLink}
+                onChange={(event) => {
+                  setNeedsPaymentLink(event.target.checked);
+                  clearFeedback();
+                }}
+                disabled={isSubmitting}
+                className="mt-1 h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-red-200"
+              />
+
+              <span>
+                <span className="block text-base font-black text-slate-900">
+                  Needs monthly payment link
+                </span>
+                <span className="mt-1 block text-sm font-semibold text-slate-500">
+                  Include this customer on the monthly payment link checklist.
+                </span>
+              </span>
+            </label>
+
+            {needsPaymentLink ? (
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-slate-700">
+                    Payment Link Contact
+                  </span>
+                  <select
+                    value={paymentLinkContactId}
+                    onChange={(event) => {
+                      setPaymentLinkContactId(event.target.value);
+                      clearFeedback();
+                    }}
+                    disabled={isSubmitting}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                  >
+                    <option value="">Use main customer email</option>
+                    {contacts
+                      .filter(
+                        (contact) =>
+                          contact.name ||
+                          contact.label ||
+                          contact.email,
+                      )
+                      .map((contact) => (
+                        <option key={contact.id} value={contact.id}>
+                          {[
+                            contact.label,
+                            contact.name,
+                            contact.email,
+                          ]
+                            .filter(Boolean)
+                            .join(" - ")}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-bold text-slate-700">
+                    Payment Link Notes
+                  </span>
+                  <input
+                    type="text"
+                    value={paymentLinkNotes}
+                    onChange={(event) => {
+                      setPaymentLinkNotes(event.target.value);
+                      clearFeedback();
+                    }}
+                    disabled={isSubmitting}
+                    placeholder="Send to AP, monthly statement, etc."
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                  />
+                </label>
+              </div>
+            ) : null}
+          </section>
+
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             {editingCustomerId ? (
               <button
@@ -772,6 +865,12 @@ export default function CustomersPage({
                       {customer.website ? (
                         <p className="mt-1 text-sm font-bold text-slate-600">
                           {customer.website}
+                        </p>
+                      ) : null}
+
+                      {customer.needsPaymentLink ? (
+                        <p className="mt-3 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
+                          Monthly Payment Link
                         </p>
                       ) : null}
 

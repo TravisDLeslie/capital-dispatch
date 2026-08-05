@@ -6,6 +6,7 @@ import {
   DollarSign,
   History,
   Mail,
+  MailCheck,
   Package,
   PackageCheck,
   Plus,
@@ -19,6 +20,7 @@ import SectionHubPage from "./components/SectionHubPage";
 import BounciePage from "./pages/BounciePage";
 import CheckInPage from "./pages/CheckInPage";
 import CustomersPage from "./pages/CustomersPage";
+import CustomerPaymentLinksPage from "./pages/CustomerPaymentLinksPage";
 import DashboardPage from "./pages/DashboardPage";
 import DriverDashboardPage from "./pages/DriverDashboardPage";
 import DeliveryHistoryPage from "./pages/DeliveryHistoryPage";
@@ -60,6 +62,11 @@ import {
   subscribeToCustomers,
   updateCustomer,
 } from "./utils/customerStorage";
+import {
+  ensureMonthlyPaymentLinks,
+  subscribeToCustomerPaymentLinks,
+  updateCustomerPaymentLink,
+} from "./utils/customerPaymentLinkStorage";
 import {
   ensureUserProfile,
   subscribeToUserProfile,
@@ -208,6 +215,28 @@ type Customer = {
   state?: string;
   zip?: string;
   contacts?: CustomerContact[];
+  needsPaymentLink?: boolean;
+  paymentLinkContactId?: string;
+  paymentLinkNotes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
+type CustomerPaymentLink = {
+  id: string;
+  month: string;
+  customerId: string;
+  customerName?: string;
+  accountNumber?: string;
+  contactId?: string;
+  contactLabel?: string;
+  contactName?: string;
+  contactEmail?: string;
+  status?: string;
+  notes?: string;
+  sentAt?: string;
+  paidAt?: string;
   createdAt?: string;
   updatedAt?: string;
   [key: string]: unknown;
@@ -305,6 +334,7 @@ function getAllowedPageIdsForRole(role: string) {
       "sales",
       "customers-add",
       "customers-view",
+      "customer-payment-links",
       "sales-converter",
       "sales-report",
       "fleet",
@@ -335,6 +365,7 @@ function getAllowedPageIdsForRole(role: string) {
       "sales",
       "customers-add",
       "customers-view",
+      "customer-payment-links",
       "sales-converter",
       "sales-report",
       "admin",
@@ -374,6 +405,7 @@ function getAllowedPageIdsForRole(role: string) {
       "sales",
       "customers-add",
       "customers-view",
+      "customer-payment-links",
       "sales-converter",
     ];
   }
@@ -489,6 +521,9 @@ export default function App() {
     Delivery[]
   >([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerPaymentLinks, setCustomerPaymentLinks] = useState<
+    CustomerPaymentLink[]
+  >([]);
   const [emailList, setEmailList] = useState<EmailListEntry[]>([]);
   const [salesReports, setSalesReports] = useState<SalesReport[]>([]);
   const [vehicleSettings, setVehicleSettings] = useState<VehicleSetting[]>([]);
@@ -590,6 +625,7 @@ export default function App() {
       "sales",
       "customers-add",
       "customers-view",
+      "customer-payment-links",
       "sales-converter",
       "sales-report",
     ].includes(pageId),
@@ -602,6 +638,9 @@ export default function App() {
   );
   const canReadEmailList = effectiveAllowedPageIds.includes("email-list");
   const canReadSalesReport = effectiveAllowedPageIds.includes("sales-report");
+  const canReadCustomerPaymentLinks = effectiveAllowedPageIds.includes(
+    "customer-payment-links",
+  );
   const canReadCustomers = canReadSales || canReadReceiving || canReadEmailList;
   const visibleSupplierRuns =
     effectiveUserRole === "driver"
@@ -831,6 +870,7 @@ export default function App() {
       setSupplierRuns([]);
       setDeliveries([]);
       setCustomers([]);
+      setCustomerPaymentLinks([]);
       setEmailList([]);
       setSalesReports([]);
       setIsLoading(false);
@@ -844,6 +884,7 @@ export default function App() {
     let unsubscribeFromSupplierRuns = () => {};
     let unsubscribeFromDeliveries = () => {};
     let unsubscribeFromCustomers = () => {};
+    let unsubscribeFromCustomerPaymentLinks = () => {};
     let unsubscribeFromEmailList = () => {};
     let unsubscribeFromSalesReports = () => {};
 
@@ -959,6 +1000,28 @@ export default function App() {
         setCustomers([]);
       }
 
+      if (canReadCustomerPaymentLinks) {
+        unsubscribeFromCustomerPaymentLinks = subscribeToCustomerPaymentLinks(
+          (savedCustomerPaymentLinks: CustomerPaymentLink[]) => {
+            if (isMounted) {
+              setCustomerPaymentLinks(savedCustomerPaymentLinks);
+              setSyncError("");
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to sync customer payment links:", error);
+
+            if (isMounted) {
+              setSyncError(getFirebaseErrorMessage(error));
+              setIsLoading(false);
+            }
+          },
+        );
+      } else {
+        setCustomerPaymentLinks([]);
+      }
+
       if (canReadEmailList) {
         unsubscribeFromEmailList = subscribeToEmailList(
           (savedEmailList: EmailListEntry[]) => {
@@ -1008,6 +1071,7 @@ export default function App() {
         !canReadSouth &&
         !canReadDeliveries &&
         !canReadCustomers &&
+        !canReadCustomerPaymentLinks &&
         !canReadEmailList &&
         !canReadSalesReport
       ) {
@@ -1068,6 +1132,22 @@ export default function App() {
         setCustomers([]);
       }
 
+      if (canReadCustomerPaymentLinks) {
+        subscribeToCustomerPaymentLinks(
+          (savedCustomerPaymentLinks: CustomerPaymentLink[]) => {
+            if (isMounted) {
+              setCustomerPaymentLinks(savedCustomerPaymentLinks);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load customer payment links:", error);
+          },
+        );
+      } else {
+        setCustomerPaymentLinks([]);
+      }
+
       if (canReadEmailList) {
         subscribeToEmailList(
           (savedEmailList: EmailListEntry[]) => {
@@ -1107,12 +1187,14 @@ export default function App() {
       unsubscribeFromSupplierRuns();
       unsubscribeFromDeliveries();
       unsubscribeFromCustomers();
+      unsubscribeFromCustomerPaymentLinks();
       unsubscribeFromEmailList();
       unsubscribeFromSalesReports();
     };
   }, [
     canReadEmailList,
     canReadCustomers,
+    canReadCustomerPaymentLinks,
     canReadSalesReport,
     currentUser,
     canReadDeliveries,
@@ -1160,6 +1242,30 @@ export default function App() {
   async function handleSaveSalesReport(salesReport: SalesReport) {
     const updatedSalesReports = await saveSalesReport(salesReport);
     setSalesReports(updatedSalesReports);
+    setSyncError("");
+  }
+
+  async function handleEnsureMonthlyPaymentLinks(month: string) {
+    const updatedPaymentLinks = await ensureMonthlyPaymentLinks(
+      customers,
+      month,
+      currentUserCreator,
+    );
+
+    setCustomerPaymentLinks(updatedPaymentLinks);
+    setSyncError("");
+  }
+
+  async function handleUpdateCustomerPaymentLink(
+    paymentLinkId: string,
+    updates: Partial<CustomerPaymentLink>,
+  ) {
+    const updatedPaymentLinks = await updateCustomerPaymentLink(
+      paymentLinkId,
+      updates,
+    );
+
+    setCustomerPaymentLinks(updatedPaymentLinks);
     setSyncError("");
   }
 
@@ -1933,6 +2039,18 @@ export default function App() {
               value: effectiveAllowedPageIds.includes("sales-converter") ? 1 : 0,
               note: "Pricing converter",
             },
+            ...(canReadCustomerPaymentLinks
+              ? [
+                  {
+                    icon: MailCheck,
+                    label: "Payment Links",
+                    value: customers.filter(
+                      (customer) => customer.needsPaymentLink,
+                    ).length,
+                    note: "Monthly customers",
+                  },
+                ]
+              : []),
             ...(canReadSalesReport
               ? [
                   {
@@ -1972,6 +2090,21 @@ export default function App() {
                   metric: "$",
                   metricLabel: "Margin",
                   onClick: () => setCurrentPage("sales-converter"),
+                }
+              : null,
+            canReadCustomerPaymentLinks
+              ? {
+                  icon: MailCheck,
+                  label: "A/R",
+                  title: "Payment Links",
+                  description: "Build and check off monthly customer payment link reminders.",
+                  metric: customerPaymentLinks.filter(
+                    (paymentLink) =>
+                      paymentLink.month === new Date().toISOString().slice(0, 7),
+                  ).length,
+                  metricLabel: "This Month",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("customer-payment-links"),
                 }
               : null,
             canReadSalesReport
@@ -2292,6 +2425,18 @@ export default function App() {
             onPageChange={setCurrentPage}
           />
         );
+
+      case "customer-payment-links":
+        return canReadCustomerPaymentLinks ? (
+          <CustomerPaymentLinksPage
+            customers={customers}
+            paymentLinks={customerPaymentLinks}
+            currentUser={currentUserCreator}
+            onEnsureMonth={handleEnsureMonthlyPaymentLinks}
+            onUpdatePaymentLink={handleUpdateCustomerPaymentLink}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
 
       case "sales-converter":
         return <SalesConverterPage onPageChange={setCurrentPage} />;

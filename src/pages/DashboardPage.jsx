@@ -158,6 +158,13 @@ export default function DashboardPage({
       tone: "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-200 hover:bg-blue-100/70",
     },
     {
+      id: "supplier-runs-check",
+      title: "POs to Pick Up",
+      description: "Open the driver pickup board.",
+      icon: ClipboardCheck,
+      tone: "bg-amber-50 text-amber-700 border-amber-100 hover:border-amber-200 hover:bg-amber-100/70",
+    },
+    {
       id: "sales-converter",
       title: "Converter",
       description: "Boards, sheets, items, and margin.",

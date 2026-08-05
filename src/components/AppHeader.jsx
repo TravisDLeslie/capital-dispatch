@@ -87,6 +87,7 @@ function getCurrentPageLabel(currentPage) {
 
   if (
     String(currentPage || "").startsWith("customers-") ||
+    currentPage === "customer-payment-links" ||
     currentPage === "sales-converter" ||
     currentPage === "sales-report"
   ) {
@@ -131,6 +132,7 @@ function getCurrentPageGroup(currentPage) {
   if (
     currentPage === "sales" ||
     String(currentPage || "").startsWith("customers-") ||
+    currentPage === "customer-payment-links" ||
     currentPage === "sales-converter" ||
     currentPage === "sales-report"
   ) {
@@ -287,6 +289,7 @@ export default function AppHeader({
             allowedPageIds.some(
               (pageId) =>
                 String(pageId).startsWith("customers-") ||
+                pageId === "customer-payment-links" ||
                 pageId === "sales-converter" ||
                 pageId === "sales-report",
             )) ||

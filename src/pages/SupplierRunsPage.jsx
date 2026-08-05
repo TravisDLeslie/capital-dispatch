@@ -207,6 +207,12 @@ function getSupplierRunDateKey(supplierRun) {
   return "";
 }
 
+function hasPickedUpItems(supplierRun) {
+  return Array.isArray(supplierRun?.items)
+    ? supplierRun.items.some((item) => item.pickedUp)
+    : false;
+}
+
 function getCalendarDays(monthDate) {
   const year = monthDate.getFullYear();
   const month = monthDate.getMonth();
@@ -422,6 +428,9 @@ export default function SupplierRunsPage({
   const [savingDispatchRunId, setSavingDispatchRunId] = useState("");
   const [dispatchSearch, setDispatchSearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
+  const [dateMoveDraft, setDateMoveDraft] = useState(todayKey);
+  const [dateMoveError, setDateMoveError] = useState("");
+  const [savingDateMove, setSavingDateMove] = useState(false);
 
   useEffect(() => {
     if (!successMessage) {
@@ -799,6 +808,68 @@ export default function SupplierRunsPage({
       ) || viewingSupplierRun
     : null;
 
+  useEffect(() => {
+    if (!selectedSupplierRunDetails) {
+      setDateMoveError("");
+      return;
+    }
+
+    setDateMoveDraft(
+      getSupplierRunDateKey(selectedSupplierRunDetails) || todayKey,
+    );
+    setDateMoveError("");
+  }, [selectedSupplierRunDetails, todayKey]);
+
+  async function handleMoveSelectedSupplierRunDate() {
+    if (!selectedSupplierRunDetails || !dateMoveDraft) {
+      setDateMoveError("Choose a pickup date.");
+      return;
+    }
+
+    if (!canEditSupplierRuns) {
+      setDateMoveError("You do not have access to move this PO.");
+      return;
+    }
+
+    if (
+      selectedSupplierRunDetails.status === "complete" ||
+      hasPickedUpItems(selectedSupplierRunDetails)
+    ) {
+      setDateMoveError(
+        "This PO cannot be moved after items have been picked up.",
+      );
+      return;
+    }
+
+    setSavingDateMove(true);
+    setDateMoveError("");
+
+    try {
+      await onUpdateSupplierRun(selectedSupplierRunDetails.id, {
+        scheduledDate: dateMoveDraft,
+      });
+
+      const [year, month] = dateMoveDraft.split("-").map(Number);
+
+      setViewingSupplierRun({
+        ...selectedSupplierRunDetails,
+        scheduledDate: dateMoveDraft,
+      });
+      setSelectedScheduleDate(dateMoveDraft);
+      setCalendarMonth(new Date(year, month - 1, 1));
+      setSuccessMessage(
+        `PO ${
+          selectedSupplierRunDetails.poNumber || ""
+        } was moved to ${formatDateInput(dateMoveDraft)}.`,
+      );
+    } catch (moveError) {
+      console.error("Unable to move South PO date:", moveError);
+      setDateMoveError("Unable to move this PO date. Check Firebase rules.");
+    } finally {
+      setSavingDateMove(false);
+    }
+  }
+
   const dailyRuns = supplierRuns.filter(
     (supplierRun) => {
       if (supplierRun.status === "complete") {
@@ -879,6 +950,14 @@ export default function SupplierRunsPage({
       supplierRunMatchesSearch(supplierRun, dispatchSearchTerm),
     ),
   );
+  const selectedSupplierRunDateIsLocked =
+    selectedSupplierRunDetails &&
+    (selectedSupplierRunDetails.status === "complete" ||
+      hasPickedUpItems(selectedSupplierRunDetails));
+  const canMoveSelectedSupplierRunDate =
+    selectedSupplierRunDetails &&
+    canEditSupplierRuns &&
+    !selectedSupplierRunDateIsLocked;
   const pageTitle = getSouthPageTitle(mode);
 
   return (
@@ -2317,13 +2396,57 @@ export default function SupplierRunsPage({
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                     Pickup Date
                   </p>
-                  <p className="mt-1 text-lg font-black text-slate-900">
-                    {formatDateInput(
-                      getSupplierRunDateKey(
-                        selectedSupplierRunDetails,
-                      ),
-                    )}
-                  </p>
+
+                  {canMoveSelectedSupplierRunDate ? (
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="date"
+                        value={dateMoveDraft}
+                        onChange={(event) => {
+                          setDateMoveDraft(event.target.value);
+                          setDateMoveError("");
+                        }}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={handleMoveSelectedSupplierRunDate}
+                        disabled={
+                          savingDateMove ||
+                          dateMoveDraft ===
+                            getSupplierRunDateKey(
+                              selectedSupplierRunDetails,
+                            )
+                        }
+                        className="inline-flex min-h-[40px] w-full items-center justify-center rounded-xl bg-[#FC2C38] px-4 text-sm font-black text-white transition hover:bg-[#dc1f2b] disabled:cursor-not-allowed disabled:bg-slate-300"
+                      >
+                        {savingDateMove ? "Moving..." : "Move PO Date"}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="mt-1 text-lg font-black text-slate-900">
+                        {formatDateInput(
+                          getSupplierRunDateKey(
+                            selectedSupplierRunDetails,
+                          ),
+                        )}
+                      </p>
+
+                      {selectedSupplierRunDateIsLocked ? (
+                        <p className="mt-1 text-xs font-bold text-slate-500">
+                          Date locked after pickup starts.
+                        </p>
+                      ) : null}
+                    </>
+                  )}
+
+                  {dateMoveError ? (
+                    <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                      {dateMoveError}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">

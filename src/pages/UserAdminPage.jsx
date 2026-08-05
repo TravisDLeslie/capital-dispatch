@@ -56,6 +56,7 @@ const permissionGroups = [
       { id: "sales", label: "Sales" },
       { id: "customers-add", label: "Add Customer" },
       { id: "customers-view", label: "View Customers" },
+      { id: "customer-payment-links", label: "Payment Links" },
       { id: "sales-converter", label: "Converter" },
       { id: "sales-report", label: "Sales Pulse" },
     ],
