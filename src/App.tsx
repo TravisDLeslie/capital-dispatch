@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import {
   Calculator,
@@ -86,6 +86,7 @@ import { subscribeToBouncieVehicleSettings } from "./utils/bouncieVehicleStorage
 
 const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
+const SOUTH_PICKUP_AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 type UserProfile = {
   id: string;
@@ -502,6 +503,135 @@ function PendingApproval({
   );
 }
 
+function isInteractiveElement(target: EventTarget | null) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(
+    target.closest(
+      'input, textarea, select, button, [contenteditable="true"]',
+    ),
+  );
+}
+
+function activeElementIsEditing() {
+  const activeElement = document.activeElement;
+
+  if (!(activeElement instanceof HTMLElement)) {
+    return false;
+  }
+
+  return (
+    ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement.tagName) ||
+    activeElement.isContentEditable
+  );
+}
+
+function isSouthPickupRefreshWindow(date = new Date()) {
+  const minutesSinceMidnight = date.getHours() * 60 + date.getMinutes();
+
+  return minutesSinceMidnight >= 8 * 60 + 30 && minutesSinceMidnight <= 15 * 60 + 30;
+}
+
+function PullToRefresh() {
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const startYRef = useRef(0);
+  const isTrackingRef = useRef(false);
+
+  useEffect(() => {
+    function handleTouchStart(event: TouchEvent) {
+      if (
+        event.touches.length !== 1 ||
+        window.scrollY > 2 ||
+        isInteractiveElement(event.target)
+      ) {
+        isTrackingRef.current = false;
+        return;
+      }
+
+      startYRef.current = event.touches[0]?.clientY || 0;
+      isTrackingRef.current = true;
+    }
+
+    function handleTouchMove(event: TouchEvent) {
+      if (!isTrackingRef.current || event.touches.length !== 1) {
+        return;
+      }
+
+      const currentY = event.touches[0]?.clientY || 0;
+      const distance = currentY - startYRef.current;
+
+      if (distance <= 0 || window.scrollY > 2) {
+        setPullDistance(0);
+        return;
+      }
+
+      if (distance > 12) {
+        event.preventDefault();
+      }
+
+      setPullDistance(Math.min(distance, 120));
+    }
+
+    function handleTouchEnd() {
+      if (!isTrackingRef.current) {
+        return;
+      }
+
+      isTrackingRef.current = false;
+
+      if (pullDistance >= 78) {
+        setIsRefreshing(true);
+        window.setTimeout(() => {
+          window.location.reload();
+        }, 150);
+        return;
+      }
+
+      setPullDistance(0);
+    }
+
+    window.addEventListener("touchstart", handleTouchStart, {
+      passive: true,
+    });
+    window.addEventListener("touchmove", handleTouchMove, {
+      passive: false,
+    });
+    window.addEventListener("touchend", handleTouchEnd);
+    window.addEventListener("touchcancel", handleTouchEnd);
+
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchcancel", handleTouchEnd);
+    };
+  }, [pullDistance]);
+
+  if (pullDistance <= 0 && !isRefreshing) {
+    return null;
+  }
+
+  return (
+    <div
+      className="pointer-events-none fixed inset-x-0 top-0 z-[70] flex justify-center px-4 pt-3"
+      style={{
+        transform: `translateY(${Math.max(0, pullDistance - 70)}px)`,
+      }}
+    >
+      <div className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-slate-600 shadow-lg">
+        {isRefreshing
+          ? "Refreshing..."
+          : pullDistance >= 78
+            ? "Release to refresh"
+            : "Pull to refresh"}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [currentPage, setCurrentPage] =
     useState("dashboard");
@@ -734,6 +864,29 @@ export default function App() {
     callbackUrl.search = window.location.search;
     window.location.replace(callbackUrl.toString());
   }, []);
+
+  useEffect(() => {
+    if (currentPage !== "supplier-runs-check") {
+      return undefined;
+    }
+
+    const refreshTimer = window.setInterval(() => {
+      if (
+        document.visibilityState !== "visible" ||
+        !navigator.onLine ||
+        activeElementIsEditing() ||
+        !isSouthPickupRefreshWindow()
+      ) {
+        return;
+      }
+
+      window.location.reload();
+    }, SOUTH_PICKUP_AUTO_REFRESH_MS);
+
+    return () => {
+      window.clearInterval(refreshTimer);
+    };
+  }, [currentPage]);
 
   useEffect(() => {
     if (!auth) {
@@ -2467,6 +2620,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F8F7F5]">
+      <PullToRefresh />
+
       {isAuthLoading || isProfileLoading ? (
         <div className="flex min-h-screen items-center justify-center px-4">
           <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold text-slate-600 shadow-sm">
