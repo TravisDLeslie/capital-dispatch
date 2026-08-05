@@ -2140,7 +2140,8 @@ export default function App() {
                   description: "Assign driver and truck before pickup.",
                   metric: needsDispatchRuns.length,
                   metricLabel: "Waiting",
-                  tone: "dispatch",
+                  tone: "warning",
+                  variant: "alert",
                   onClick: () => setCurrentPage("supplier-runs-dispatch"),
                 }
               : null,
@@ -2153,6 +2154,7 @@ export default function App() {
                   metric: openRuns.length,
                   metricLabel: "Open",
                   tone: "success",
+                  variant: "live",
                   onClick: () => setCurrentPage("supplier-runs-check"),
                 }
               : null,
@@ -2165,6 +2167,7 @@ export default function App() {
                   metric: completeRuns.length,
                   metricLabel: "Done",
                   tone: "archive",
+                  variant: "quiet",
                   onClick: () => setCurrentPage("supplier-runs-history"),
                 }
               : null,

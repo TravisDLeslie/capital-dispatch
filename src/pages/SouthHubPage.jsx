@@ -29,6 +29,7 @@ function ActionCard({
   metric,
   metricLabel,
   tone = "default",
+  variant = "default",
   onClick,
 }) {
   const toneClasses = {
@@ -38,6 +39,9 @@ function ActionCard({
       icon: "bg-slate-100 text-slate-700",
       metric: "bg-slate-50 text-slate-950",
       arrow: "text-[#FC2C38]",
+      label: "text-slate-400",
+      title: "text-slate-950",
+      description: "text-slate-500",
     },
     primary: {
       button:
@@ -45,13 +49,19 @@ function ActionCard({
       icon: "bg-red-50 text-[#FC2C38]",
       metric: "bg-red-50 text-red-900",
       arrow: "text-[#FC2C38]",
+      label: "text-[#FC2C38]",
+      title: "text-slate-950",
+      description: "text-slate-600",
     },
     warning: {
       button:
-        "border-amber-200 bg-white hover:border-amber-300 hover:bg-amber-50/40",
-      icon: "bg-amber-50 text-amber-700",
+        "border-amber-300 bg-amber-50/70 hover:border-amber-400 hover:bg-amber-50",
+      icon: "bg-white text-amber-700",
       metric: "bg-amber-50 text-amber-900",
       arrow: "text-amber-700",
+      label: "text-amber-700",
+      title: "text-slate-950",
+      description: "text-slate-600",
     },
     dispatch: {
       button:
@@ -59,50 +69,113 @@ function ActionCard({
       icon: "bg-white text-blue-700",
       metric: "bg-white text-blue-900",
       arrow: "text-blue-700",
+      label: "text-blue-700",
+      title: "text-slate-950",
+      description: "text-slate-600",
     },
     success: {
       button:
-        "border-emerald-200 bg-emerald-50/40 hover:border-emerald-300 hover:bg-emerald-50",
-      icon: "bg-emerald-100 text-emerald-700",
+        "border-emerald-300 bg-emerald-50/70 hover:border-emerald-400 hover:bg-emerald-50",
+      icon: "bg-white text-emerald-700",
       metric: "bg-white text-emerald-800",
       arrow: "text-emerald-700",
+      label: "text-emerald-700",
+      title: "text-slate-950",
+      description: "text-slate-600",
     },
     archive: {
       button:
-        "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white",
+        "border-slate-200 bg-slate-50/80 hover:border-slate-300 hover:bg-white",
       icon: "bg-white text-slate-500",
       metric: "bg-white text-slate-700",
       arrow: "text-slate-500",
+      label: "text-slate-400",
+      title: "text-slate-800",
+      description: "text-slate-500",
     },
   };
   const selectedTone = toneClasses[tone] || toneClasses.default;
+  const variantClasses = {
+    default: {
+      button: "items-center gap-4 p-4 sm:p-5",
+      icon: "h-12 w-12 rounded-2xl",
+      iconSvg: "h-6 w-6",
+      title: "text-xl",
+      metric: "rounded-2xl px-3 py-2",
+      bar: "",
+    },
+    alert: {
+      button: "items-center gap-4 p-4 sm:p-5 ring-1 ring-amber-100",
+      icon: "h-14 w-14 rounded-2xl",
+      iconSvg: "h-7 w-7",
+      title: "text-2xl",
+      metric: "rounded-2xl px-4 py-3",
+      bar: "bg-amber-500",
+    },
+    live: {
+      button: "items-center gap-4 p-5 sm:p-6 ring-1 ring-emerald-100",
+      icon: "h-14 w-14 rounded-2xl",
+      iconSvg: "h-7 w-7",
+      title: "text-2xl",
+      metric: "rounded-2xl px-4 py-3",
+      bar: "bg-emerald-600",
+    },
+    quiet: {
+      button: "items-center gap-4 p-4 sm:p-5 opacity-90",
+      icon: "h-11 w-11 rounded-xl",
+      iconSvg: "h-5 w-5",
+      title: "text-lg",
+      metric: "rounded-xl px-3 py-2",
+      bar: "bg-slate-300",
+    },
+  };
+  const selectedVariant = variantClasses[variant] || variantClasses.default;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`group flex h-full items-center gap-4 rounded-2xl border p-4 text-left shadow-sm transition sm:p-5 ${selectedTone.button}`}
+      className={`group relative flex h-full overflow-hidden rounded-2xl border text-left shadow-sm transition ${selectedVariant.button} ${selectedTone.button}`}
     >
+      {selectedVariant.bar ? (
+        <span
+          aria-hidden="true"
+          className={`absolute inset-y-0 left-0 w-1.5 ${selectedVariant.bar}`}
+        />
+      ) : null}
+
       <span
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${selectedTone.icon}`}
+        className={`flex shrink-0 items-center justify-center ${selectedVariant.icon} ${selectedTone.icon}`}
       >
-        <Icon aria-hidden="true" className="h-6 w-6" strokeWidth={2.4} />
+        <Icon
+          aria-hidden="true"
+          className={selectedVariant.iconSvg}
+          strokeWidth={2.4}
+        />
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+        <span
+          className={`block text-[10px] font-black uppercase tracking-[0.16em] ${selectedTone.label}`}
+        >
           {label}
         </span>
-        <span className="mt-1 block text-xl font-black text-slate-950">
+        <span
+          className={`mt-1 block font-black ${selectedVariant.title} ${selectedTone.title}`}
+        >
           {title}
         </span>
-        <span className="mt-1 block text-sm font-semibold leading-5 text-slate-500">
+        <span
+          className={`mt-1 block text-sm font-semibold leading-5 ${selectedTone.description}`}
+        >
           {description}
         </span>
       </span>
 
       <span className="flex shrink-0 items-center gap-3">
-        <span className={`rounded-2xl px-3 py-2 text-right ${selectedTone.metric}`}>
+        <span
+          className={`text-right shadow-sm ${selectedVariant.metric} ${selectedTone.metric}`}
+        >
           <span className="block text-xl font-black">
             {metric}
           </span>
@@ -151,7 +224,8 @@ export default function SouthHubPage({
             "Assign a driver before the pickup reaches the driver board.",
           metric: needsDispatchRuns.length,
           metricLabel: "Waiting",
-          tone: "dispatch",
+          tone: "warning",
+          variant: "alert",
           pageId: "supplier-runs-dispatch",
         }
       : null,
@@ -165,6 +239,7 @@ export default function SouthHubPage({
           metric: assignedOpenRuns.length,
           metricLabel: "Open POs",
           tone: "success",
+          variant: "live",
           pageId: "supplier-runs-check",
         }
       : null,
@@ -178,6 +253,7 @@ export default function SouthHubPage({
           metric: completedRuns.length,
           metricLabel: "Complete",
           tone: "archive",
+          variant: "quiet",
           pageId: "supplier-runs-history",
         }
       : null,

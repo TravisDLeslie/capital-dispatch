@@ -8,7 +8,6 @@ import {
   ExternalLink,
   MapPin,
   Package,
-  Phone,
   ShieldAlert,
   Truck,
   UserRound,
@@ -80,7 +79,21 @@ async function createPhotoFromFile(file) {
 }
 
 function groupDeliveriesByDriver(deliveries) {
-  return deliveries.reduce((groups, delivery) => {
+  const sortedDeliveries = [...deliveries].sort((firstDelivery, secondDelivery) => {
+    const firstDate = firstDelivery.deliveryDate || "9999-99-99";
+    const secondDate = secondDelivery.deliveryDate || "9999-99-99";
+    const dateComparison = firstDate.localeCompare(secondDate);
+
+    if (dateComparison !== 0) {
+      return dateComparison;
+    }
+
+    return String(firstDelivery.deliveryTimeSlot || "99:99").localeCompare(
+      String(secondDelivery.deliveryTimeSlot || "99:99"),
+    );
+  });
+
+  return sortedDeliveries.reduce((groups, delivery) => {
     const driver = delivery.driver || "Unassigned Driver";
     const existingGroup = groups.find(
       (group) => group.driver === driver,
@@ -137,6 +150,7 @@ export default function DeliveryQueuePage({
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
   const [selectedDriver, setSelectedDriver] = useState("All");
   const [openDriverKeys, setOpenDriverKeys] = useState({});
+  const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
 
   const openDeliveries = deliveries.filter(
     (delivery) =>
@@ -167,6 +181,21 @@ export default function DeliveryQueuePage({
       ...currentOpenDriverKeys,
       [driver]: !currentOpenDriverKeys[driver],
     }));
+  }
+
+  function isDriverOpen(driver) {
+    return openDriverKeys[driver] !== false;
+  }
+
+  function toggleDelivery(deliveryId) {
+    setOpenDeliveryKeys((currentOpenDeliveryKeys) => ({
+      ...currentOpenDeliveryKeys,
+      [deliveryId]: !currentOpenDeliveryKeys[deliveryId],
+    }));
+  }
+
+  function isDeliveryOpen(deliveryId, deliveryIndex) {
+    return openDeliveryKeys[deliveryId] ?? deliveryIndex === 0;
   }
 
   async function handlePhotoChange(deliveryId, file, photoField) {
@@ -321,9 +350,7 @@ export default function DeliveryQueuePage({
                 type="button"
                 onClick={() => toggleDriver(driverGroup.driver)}
                 className="flex w-full items-center justify-between gap-4 border-b border-slate-200 pb-4 text-left transition hover:text-[#FC2C38]"
-                aria-expanded={Boolean(
-                  openDriverKeys[driverGroup.driver],
-                )}
+                aria-expanded={isDriverOpen(driverGroup.driver)}
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
@@ -347,7 +374,7 @@ export default function DeliveryQueuePage({
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
                   <ChevronDown
                     className={`h-5 w-5 transition-transform ${
-                      openDriverKeys[driverGroup.driver]
+                      isDriverOpen(driverGroup.driver)
                         ? "rotate-180"
                         : ""
                     }`}
@@ -357,9 +384,9 @@ export default function DeliveryQueuePage({
                 </span>
               </button>
 
-              {openDriverKeys[driverGroup.driver] ? (
+              {isDriverOpen(driverGroup.driver) ? (
               <div className="mt-5 space-y-4">
-                {driverGroup.deliveries.map((delivery) => {
+                {driverGroup.deliveries.map((delivery, deliveryIndex) => {
                   const items = Array.isArray(delivery.items)
                     ? delivery.items
                     : [];
@@ -373,6 +400,10 @@ export default function DeliveryQueuePage({
                     "";
                   const generalNotes = delivery.generalNotes || "";
                   const scopeSummary = getDeliveryScopeSummary(delivery);
+                  const deliveryIsOpen = isDeliveryOpen(
+                    delivery.id,
+                    deliveryIndex,
+                  );
 
                   return (
                     <article
@@ -380,53 +411,53 @@ export default function DeliveryQueuePage({
                       className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
                     >
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                        <button
+                          type="button"
+                          onClick={() => toggleDelivery(delivery.id)}
+                          className="min-w-0 flex-1 text-left"
+                          aria-expanded={deliveryIsOpen}
+                        >
+                          <span className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                            {deliveryIndex === 0 ? "Next Delivery" : "Queued"} ·
                             Order {delivery.orderNumber}
-                          </p>
+                          </span>
 
-                          <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+                          <span className="mt-1 block text-2xl font-black tracking-tight text-slate-900">
                             {delivery.customerName}
-                          </h3>
+                          </span>
 
-                          <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="mt-3 flex flex-wrap gap-2">
                             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-700">
-                              <Truck
-                                className="h-4 w-4"
-                                aria-hidden="true"
-                              />
-                              {delivery.unloadType}
-                            </span>
-
-                            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-700">
-                              <Clock
-                                className="h-4 w-4"
-                                aria-hidden="true"
-                              />
+                              <Clock className="h-4 w-4" aria-hidden="true" />
                               {getDeliveryTimeRange(delivery)}
                             </span>
 
                             <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-700">
-                              Back around{" "}
-                              {getDeliveryBackAroundLabel(delivery)}
+                              Back {getDeliveryBackAroundLabel(delivery)}
                             </span>
 
-                            {contactPhone ? (
-                              <a
-                                href={`tel:${contactPhone.replace(/\D/g, "")}`}
-                                className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-700 transition hover:text-[#FC2C38]"
-                              >
-                                <Phone
-                                  className="h-4 w-4"
-                                  aria-hidden="true"
-                                />
-                                {contactPhone}
-                              </a>
-                            ) : null}
-                          </div>
-                        </div>
+                            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-700">
+                              <Truck className="h-4 w-4" aria-hidden="true" />
+                              {delivery.unloadType}
+                            </span>
+                          </span>
+                        </button>
 
-                        <div className="flex flex-col gap-2 sm:flex-row">
+                        <div className="flex flex-col gap-2 sm:flex-row lg:items-start">
+                          <button
+                            type="button"
+                            onClick={() => toggleDelivery(delivery.id)}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100"
+                          >
+                            {deliveryIsOpen ? "Close" : "Open"}
+                            <ChevronDown
+                              className={`h-4 w-4 transition-transform ${
+                                deliveryIsOpen ? "rotate-180" : ""
+                              }`}
+                              aria-hidden="true"
+                            />
+                          </button>
+
                           {canEditDeliveries ? (
                           <button
                             type="button"
@@ -456,6 +487,8 @@ export default function DeliveryQueuePage({
                         </div>
                       </div>
 
+                      {deliveryIsOpen ? (
+                      <>
                       <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
                         <section className="rounded-2xl border border-slate-200 bg-white p-4">
                           <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
@@ -775,6 +808,8 @@ export default function DeliveryQueuePage({
                           Complete Delivery
                         </button>
                       </section>
+                      </>
+                      ) : null}
                     </article>
                   );
                 })}
