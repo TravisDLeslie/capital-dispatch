@@ -162,6 +162,9 @@ export default function DeliveryOrderForm({
   const [generalNotes, setGeneralNotes] = useState("");
   const [items, setItems] = useState([createEmptyDeliveryItem()]);
   const [error, setError] = useState("");
+  const [placesStatus, setPlacesStatus] = useState(
+    hasGooglePlacesKey ? "loading" : "missing-key",
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -209,13 +212,25 @@ export default function DeliveryOrderForm({
     let listener = null;
     let isMounted = true;
 
-    if (!addressInputRef.current || !hasGooglePlacesKey) {
+    if (!hasGooglePlacesKey) {
+      setPlacesStatus("missing-key");
       return () => {};
     }
 
+    if (!addressInputRef.current) {
+      return () => {};
+    }
+
+    setPlacesStatus("loading");
+
     loadGooglePlaces()
       .then((google) => {
-        if (!isMounted || !google?.maps?.places || !addressInputRef.current) {
+        if (!isMounted) {
+          return;
+        }
+
+        if (!google?.maps?.places || !addressInputRef.current) {
+          setPlacesStatus("unavailable");
           return;
         }
 
@@ -236,9 +251,12 @@ export default function DeliveryOrderForm({
           setAddress(nextAddress);
           clearError();
         });
+
+        setPlacesStatus("ready");
       })
       .catch((placesError) => {
         console.warn("Unable to load Google Places:", placesError);
+        setPlacesStatus("error");
       });
 
     return () => {
@@ -629,11 +647,23 @@ export default function DeliveryOrderForm({
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
 
-            {hasGooglePlacesKey ? (
-              <p className="mt-2 text-xs font-bold text-slate-500">
-                Start typing for Google address suggestions.
-              </p>
-            ) : null}
+            <p
+              className={`mt-2 text-xs font-bold ${
+                placesStatus === "ready"
+                  ? "text-emerald-700"
+                  : placesStatus === "loading"
+                    ? "text-slate-500"
+                    : "text-amber-700"
+              }`}
+            >
+              {placesStatus === "ready"
+                ? "Google address suggestions are on."
+                : placesStatus === "loading"
+                  ? "Loading Google address suggestions..."
+                  : placesStatus === "missing-key"
+                    ? "Google address suggestions need VITE_GOOGLE_MAPS_API_KEY."
+                    : "Google address suggestions are not available. You can still type the address."}
+            </p>
           </div>
 
           <div>

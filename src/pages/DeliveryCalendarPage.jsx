@@ -12,11 +12,14 @@ import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 import {
+  deliveryTimeSlotOptions,
   getDeliveryBackAroundLabel,
   getDeliveryBlockSummary,
   getDeliveryDriveMinutes,
   getDeliveryTimeRange,
+  getDeliveryTimeWindow,
   getTodayDateValue,
+  scheduleWindowsOverlap,
 } from "../utils/deliverySchedule";
 
 function formatDateLabel(dateValue) {
@@ -68,11 +71,39 @@ function groupDeliveriesByDriver(deliveries) {
   }, {});
 }
 
+function deliveriesShareDriver(firstDelivery, secondDelivery) {
+  const firstDrivers = getDeliveryDrivers(firstDelivery);
+  const secondDrivers = getDeliveryDrivers(secondDelivery);
+
+  return firstDrivers.some((driver) => secondDrivers.includes(driver));
+}
+
+function findScheduleConflict(candidateDelivery, deliveries) {
+  const candidateWindow = getDeliveryTimeWindow(candidateDelivery);
+
+  if (!candidateDelivery.deliveryDate || !candidateWindow) {
+    return null;
+  }
+
+  return deliveries.find(
+    (delivery) =>
+      delivery.id !== candidateDelivery.id &&
+      delivery.status !== "complete" &&
+      delivery.dispatchStatus !== "needsDispatch" &&
+      delivery.deliveryDate === candidateDelivery.deliveryDate &&
+      deliveriesShareDriver(candidateDelivery, delivery) &&
+      scheduleWindowsOverlap(candidateWindow, getDeliveryTimeWindow(delivery)),
+  );
+}
+
 function CompactDeliveryCard({
   delivery,
+  deliveries,
   expanded,
   canEditDeliveries,
   onEditDelivery,
+  onUpdateDelivery,
+  isUpdating,
   onToggle,
 }) {
   const scopeSummary = getDeliveryScopeSummary(delivery);
@@ -157,6 +188,75 @@ function CompactDeliveryCard({
             {getDeliveryBlockSummary(delivery)}
           </p>
 
+          {canEditDeliveries ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                Move Delivery
+              </p>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-black text-slate-500">
+                    Date
+                  </span>
+                  <input
+                    type="date"
+                    value={delivery.deliveryDate || ""}
+                    onChange={(event) =>
+                      onUpdateDelivery(delivery, {
+                        deliveryDate: event.target.value,
+                      })
+                    }
+                    disabled={isUpdating}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1 block text-xs font-black text-slate-500">
+                    Time
+                  </span>
+                  <select
+                    value={delivery.deliveryTimeSlot || ""}
+                    onChange={(event) =>
+                      onUpdateDelivery(delivery, {
+                        deliveryTimeSlot: event.target.value,
+                      })
+                    }
+                    disabled={isUpdating}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                  >
+                    <option value="">Choose time...</option>
+                    {deliveryTimeSlotOptions.map((timeSlot) => {
+                      const candidateDelivery = {
+                        ...delivery,
+                        deliveryTimeSlot: timeSlot.value,
+                      };
+                      const conflict = findScheduleConflict(
+                        candidateDelivery,
+                        deliveries,
+                      );
+
+                      return (
+                        <option
+                          key={timeSlot.value}
+                          value={timeSlot.value}
+                          disabled={Boolean(conflict)}
+                        >
+                          {conflict
+                            ? `${timeSlot.label} - busy until ${getDeliveryBackAroundLabel(
+                                conflict,
+                              )}`
+                            : timeSlot.label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap gap-2 text-sm font-bold text-slate-600">
             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5">
               <Truck className="h-4 w-4" aria-hidden="true" />
@@ -177,10 +277,13 @@ export default function DeliveryCalendarPage({
   deliveries,
   canEditDeliveries = false,
   onEditDelivery,
+  onUpdateDelivery,
   onPageChange,
 }) {
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
   const [expandedDeliveryIds, setExpandedDeliveryIds] = useState({});
+  const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
+  const [error, setError] = useState("");
 
   const scheduledDeliveries = useMemo(
     () => getScheduledDeliveries(deliveries, selectedDate),
@@ -199,6 +302,42 @@ export default function DeliveryCalendarPage({
       ...currentExpandedDeliveryIds,
       [deliveryId]: !currentExpandedDeliveryIds[deliveryId],
     }));
+  }
+
+  async function handleMoveDelivery(delivery, updates) {
+    if (!onUpdateDelivery) {
+      return;
+    }
+
+    const candidateDelivery = {
+      ...delivery,
+      ...updates,
+    };
+    const conflict = findScheduleConflict(candidateDelivery, deliveries);
+
+    if (conflict) {
+      setError(
+        `${getDeliveryDrivers(delivery).join(", ")} is already scheduled on order ${
+          conflict.orderNumber
+        } until ${getDeliveryBackAroundLabel(conflict)}.`,
+      );
+      return;
+    }
+
+    setError("");
+    setUpdatingDeliveryId(delivery.id);
+
+    try {
+      await onUpdateDelivery(delivery.id, {
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (updateError) {
+      console.error("Unable to move delivery:", updateError);
+      setError("Unable to move that delivery. Try again.");
+    } finally {
+      setUpdatingDeliveryId("");
+    }
   }
 
   return (
@@ -265,6 +404,12 @@ export default function DeliveryCalendarPage({
         </div>
       </section>
 
+      {error ? (
+        <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          {error}
+        </div>
+      ) : null}
+
       {scheduledDeliveries.length === 0 ? (
         <EmptyState
           title="No deliveries scheduled"
@@ -297,9 +442,12 @@ export default function DeliveryCalendarPage({
                     <CompactDeliveryCard
                       key={delivery.id}
                       delivery={delivery}
+                      deliveries={deliveries}
                       expanded={Boolean(expandedDeliveryIds[delivery.id])}
                       canEditDeliveries={canEditDeliveries}
                       onEditDelivery={onEditDelivery}
+                      onUpdateDelivery={handleMoveDelivery}
+                      isUpdating={updatingDeliveryId === delivery.id}
                       onToggle={toggleDelivery}
                     />
                   ))}
@@ -355,9 +503,12 @@ export default function DeliveryCalendarPage({
                       <CompactDeliveryCard
                         key={delivery.id}
                         delivery={delivery}
+                        deliveries={deliveries}
                         expanded={Boolean(expandedDeliveryIds[delivery.id])}
                         canEditDeliveries={canEditDeliveries}
                         onEditDelivery={onEditDelivery}
+                        onUpdateDelivery={handleMoveDelivery}
+                        isUpdating={updatingDeliveryId === delivery.id}
                         onToggle={toggleDelivery}
                       />
                     ))}

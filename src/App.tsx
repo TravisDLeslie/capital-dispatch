@@ -2452,9 +2452,6 @@ export default function App() {
       const completedDeliveries = visibleDeliveries.filter(
         (delivery) => delivery.status === "complete",
       );
-      const hardwareOpen = openDeliveries.filter(
-        (delivery) => delivery.hasHardware && !delivery.hardwareChecked,
-      );
       const scheduledTodayDeliveries = openDeliveries.filter(
         (delivery) =>
           delivery.deliveryDate === new Date().toISOString().slice(0, 10),
@@ -2509,7 +2506,8 @@ export default function App() {
                   description: "Assign drivers before orders show on the delivery board.",
                   metric: needsDispatchDeliveries.length,
                   metricLabel: "Waiting",
-                  tone: needsDispatchDeliveries.length > 0 ? "warning" : "dispatch",
+                  tone: "warning",
+                  variant: "alert",
                   onClick: () => setCurrentPage("deliveries-dispatch"),
                 }
               : null,
@@ -2521,7 +2519,8 @@ export default function App() {
                   description: "Open assigned orders, photo capture, hardware reminders, and directions.",
                   metric: openDeliveries.length,
                   metricLabel: "Open",
-                  tone: hardwareOpen.length > 0 ? "warning" : "success",
+                  tone: "success",
+                  variant: "live",
                   onClick: () => setCurrentPage("deliveries-queue"),
                 }
               : null,
@@ -2533,7 +2532,8 @@ export default function App() {
                   description: "View assigned deliveries by date, time slot, and unload duration.",
                   metric: scheduledTodayDeliveries.length,
                   metricLabel: "Today",
-                  tone: "dispatch",
+                  tone: "schedule",
+                  variant: "compact",
                   onClick: () => setCurrentPage("deliveries-calendar"),
                 }
               : null,
@@ -2546,6 +2546,7 @@ export default function App() {
                   metric: completedDeliveries.length,
                   metricLabel: "Complete",
                   tone: "archive",
+                  variant: "quiet",
                   onClick: () => setCurrentPage("deliveries-history"),
                 }
               : null,
@@ -2990,6 +2991,7 @@ export default function App() {
             deliveries={visibleDeliveries}
             canEditDeliveries={canEditDeliveryDetails}
             onEditDelivery={handleEditDelivery}
+            onUpdateDelivery={handleUpdateDelivery}
             onPageChange={navigateToPage}
           />
         );

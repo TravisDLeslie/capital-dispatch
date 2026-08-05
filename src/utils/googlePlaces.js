@@ -34,6 +34,7 @@ export function loadGooglePlaces() {
     const params = new URLSearchParams({
       key: apiKey,
       libraries: "places",
+      loading: "async",
     });
 
     script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
