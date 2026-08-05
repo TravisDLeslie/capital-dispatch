@@ -367,6 +367,7 @@ function getAllowedPageIdsForRole(role: string) {
       "supplier-runs-add",
       "supplier-runs-dispatch",
       "supplier-runs-check",
+      "supplier-runs-calendar",
       "supplier-runs-history",
       "deliveries",
       "deliveries-add",
@@ -401,6 +402,7 @@ function getAllowedPageIdsForRole(role: string) {
       "supplier-runs-add",
       "supplier-runs-dispatch",
       "supplier-runs-check",
+      "supplier-runs-calendar",
       "supplier-runs-history",
       "deliveries",
       "deliveries-add",
@@ -431,6 +433,7 @@ function getAllowedPageIdsForRole(role: string) {
       "supplier-runs-add",
       "supplier-runs-dispatch",
       "supplier-runs-check",
+      "supplier-runs-calendar",
       "supplier-runs-history",
     ];
   }
@@ -465,6 +468,7 @@ function getAllowedPageIdsForRole(role: string) {
       "dashboard",
       "south",
       "supplier-runs-check",
+      "supplier-runs-calendar",
       "deliveries",
       "deliveries-queue",
     ];
@@ -861,6 +865,7 @@ export default function App() {
       "supplier-runs-add",
       "supplier-runs-dispatch",
       "supplier-runs-check",
+      "supplier-runs-calendar",
       "supplier-runs-history",
     ].includes(pageId),
   );
@@ -2158,6 +2163,19 @@ export default function App() {
                   onClick: () => setCurrentPage("supplier-runs-check"),
                 }
               : null,
+            dashboardAllowedPageIds.includes("supplier-runs-calendar")
+              ? {
+                  icon: CalendarDays,
+                  label: "Schedule",
+                  title: "South Calendar",
+                  description: "View scheduled South POs by route date.",
+                  metric: openRuns.length,
+                  metricLabel: "Scheduled",
+                  tone: "dispatch",
+                  variant: "default",
+                  onClick: () => setCurrentPage("supplier-runs-calendar"),
+                }
+              : null,
             dashboardAllowedPageIds.includes("supplier-runs-history")
               ? {
                   icon: History,
@@ -2923,6 +2941,35 @@ export default function App() {
             onDeleteSupplierRun={handleDeleteSupplierRun}
             onPageChange={setCurrentPage}
             onRefreshPage={() => refreshAndRestorePage("supplier-runs-check")}
+          />
+        );
+
+      case "supplier-runs-calendar":
+        return (
+          <SupplierRunsPage
+            mode="check"
+            supplierRuns={assignedVisibleSupplierRuns}
+            vehicleOptions={southVehicleOptions}
+            canReorderRoute={canAssignSouthRoutes}
+            canEditSupplierRuns={canAssignSouthRoutes}
+            canReadAllRouteOrders={
+              effectiveUserRole !== "driver" && canReadSouth
+            }
+            routeOrderDriverName={driverName}
+            initialCheckViewMode="calendar"
+            onAddSupplierRun={handleAddSupplierRun}
+            onUpdateSupplierRun={handleUpdateSupplierRun}
+            onToggleSupplierRunItem={
+              handleToggleSupplierRunItem
+            }
+            onUpdateSupplierRunItemDescription={
+              handleUpdateSupplierRunItemDescription
+            }
+            onDeleteSupplierRun={handleDeleteSupplierRun}
+            onPageChange={setCurrentPage}
+            onRefreshPage={() =>
+              refreshAndRestorePage("supplier-runs-calendar")
+            }
           />
         );
 

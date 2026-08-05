@@ -402,6 +402,7 @@ export default function SupplierRunsPage({
   canEditSupplierRuns = canAssignRoute || canReorderRoute,
   canReadAllRouteOrders = canReorderRoute,
   routeOrderDriverName = "",
+  initialCheckViewMode = "list",
   onPageChange,
   onRefreshPage,
 }) {
@@ -418,7 +419,7 @@ export default function SupplierRunsPage({
   });
   const [selectedScheduleDate, setSelectedScheduleDate] =
     useState(todayKey);
-  const [checkViewMode, setCheckViewMode] = useState("list");
+  const [checkViewMode, setCheckViewMode] = useState(initialCheckViewMode);
   const [viewingSupplierRun, setViewingSupplierRun] =
     useState(null);
   const [editingSupplierRun, setEditingSupplierRun] =
@@ -447,6 +448,12 @@ export default function SupplierRunsPage({
       window.clearTimeout(timer);
     };
   }, [successMessage]);
+
+  useEffect(() => {
+    if (mode === "check") {
+      setCheckViewMode(initialCheckViewMode);
+    }
+  }, [initialCheckViewMode, mode]);
 
   useEffect(
     () =>
@@ -961,13 +968,17 @@ export default function SupplierRunsPage({
     canEditSupplierRuns &&
     !selectedSupplierRunDateIsLocked;
   const pageTitle = getSouthPageTitle(mode);
+  const displayPageTitle =
+    mode === "check" && checkViewMode === "calendar"
+      ? "South Calendar"
+      : pageTitle;
 
   return (
     <PageContainer>
       <Breadcrumbs
         items={[
           { label: "South", onClick: () => onPageChange?.("south") },
-          { label: pageTitle },
+          { label: displayPageTitle },
         ]}
       />
 
@@ -979,7 +990,7 @@ export default function SupplierRunsPage({
             </p>
 
             <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
-              {pageTitle}
+              {displayPageTitle}
             </h2>
           </div>
 
@@ -1033,7 +1044,9 @@ export default function SupplierRunsPage({
             : mode === "dispatch"
               ? "Assign the driver and truck before the PO reaches the driver pickup board."
             : mode === "check"
-              ? "Drivers can check off scheduled South pickup items as they load them from each supplier."
+              ? checkViewMode === "calendar"
+                ? "See scheduled South POs by pickup date, then open a PO to review or move it."
+                : "Drivers can check off scheduled South pickup items as they load them from each supplier."
               : "Add South PO requests before the driver leaves, while they are on the road, or schedule them ahead. Dispatch assigns driver and truck next."}
         </p>
       </div>

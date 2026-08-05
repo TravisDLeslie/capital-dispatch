@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Check,
   ExternalLink,
@@ -10,6 +10,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
+import AddressAutocompleteInput from "./AddressAutocompleteInput";
 import {
   deliveryOriginOptions,
   deliveryUnloadTypes,
@@ -23,7 +24,6 @@ import {
   getDeliveryScopeOption,
 } from "../utils/deliveryScope";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
-import { getGoogleMapsApiKey, loadGooglePlaces } from "../utils/googlePlaces";
 import { createId } from "../utils/idHelpers";
 
 function createEmptyDeliveryItem() {
@@ -137,8 +137,6 @@ export default function DeliveryOrderForm({
   customers = [],
 }) {
   const isEditing = Boolean(initialDelivery);
-  const addressInputRef = useRef(null);
-  const hasGooglePlacesKey = Boolean(getGoogleMapsApiKey());
   const [orderNumber, setOrderNumber] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [address, setAddress] = useState("");
@@ -162,9 +160,6 @@ export default function DeliveryOrderForm({
   const [generalNotes, setGeneralNotes] = useState("");
   const [items, setItems] = useState([createEmptyDeliveryItem()]);
   const [error, setError] = useState("");
-  const [placesStatus, setPlacesStatus] = useState(
-    hasGooglePlacesKey ? "loading" : "missing-key",
-  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -207,65 +202,6 @@ export default function DeliveryOrderForm({
     setItems(createItemsFromDelivery(initialDelivery));
     setError("");
   }, [initialDelivery]);
-
-  useEffect(() => {
-    let listener = null;
-    let isMounted = true;
-
-    if (!hasGooglePlacesKey) {
-      setPlacesStatus("missing-key");
-      return () => {};
-    }
-
-    if (!addressInputRef.current) {
-      return () => {};
-    }
-
-    setPlacesStatus("loading");
-
-    loadGooglePlaces()
-      .then((google) => {
-        if (!isMounted) {
-          return;
-        }
-
-        if (!google?.maps?.places || !addressInputRef.current) {
-          setPlacesStatus("unavailable");
-          return;
-        }
-
-        const autocomplete = new google.maps.places.Autocomplete(
-          addressInputRef.current,
-          {
-            componentRestrictions: { country: "us" },
-            fields: ["formatted_address", "name"],
-            types: ["address"],
-          },
-        );
-
-        listener = autocomplete.addListener("place_changed", () => {
-          const place = autocomplete.getPlace();
-          const nextAddress =
-            place.formatted_address || addressInputRef.current?.value || "";
-
-          setAddress(nextAddress);
-          clearError();
-        });
-
-        setPlacesStatus("ready");
-      })
-      .catch((placesError) => {
-        console.warn("Unable to load Google Places:", placesError);
-        setPlacesStatus("error");
-      });
-
-    return () => {
-      isMounted = false;
-      if (listener?.remove) {
-        listener.remove();
-      }
-    };
-  }, [hasGooglePlacesKey]);
 
   function clearError() {
     setError("");
@@ -632,38 +568,17 @@ export default function DeliveryOrderForm({
               Address
             </label>
 
-            <input
-              ref={addressInputRef}
+            <AddressAutocompleteInput
               id="delivery-address"
-              type="text"
-              autoComplete="street-address"
               value={address}
-              onChange={(event) => {
-                setAddress(event.target.value);
+              onChange={(nextAddress) => {
+                setAddress(nextAddress);
                 clearError();
               }}
               disabled={isSubmitting}
               placeholder="Delivery address"
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
-
-            <p
-              className={`mt-2 text-xs font-bold ${
-                placesStatus === "ready"
-                  ? "text-emerald-700"
-                  : placesStatus === "loading"
-                    ? "text-slate-500"
-                    : "text-amber-700"
-              }`}
-            >
-              {placesStatus === "ready"
-                ? "Google address suggestions are on."
-                : placesStatus === "loading"
-                  ? "Loading Google address suggestions..."
-                  : placesStatus === "missing-key"
-                    ? "Google address suggestions need VITE_GOOGLE_MAPS_API_KEY."
-                    : "Google address suggestions are not available. You can still type the address."}
-            </p>
           </div>
 
           <div>

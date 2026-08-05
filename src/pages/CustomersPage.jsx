@@ -6,6 +6,7 @@ import {
   Search,
   UsersRound,
 } from "lucide-react";
+import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
@@ -44,6 +45,21 @@ function formatPhoneNumber(value) {
   }
 
   return "";
+}
+
+function getPlaceComponent(place, type, useShortName = false) {
+  const component = place?.address_components?.find((addressComponent) =>
+    addressComponent.types?.includes(type),
+  );
+
+  return useShortName ? component?.short_name || "" : component?.long_name || "";
+}
+
+function getStreetAddressFromPlace(place, fallbackAddress) {
+  const streetNumber = getPlaceComponent(place, "street_number");
+  const route = getPlaceComponent(place, "route");
+
+  return [streetNumber, route].filter(Boolean).join(" ") || fallbackAddress;
 }
 
 function customerMatchesSearch(customer, searchTerm) {
@@ -114,6 +130,26 @@ export default function CustomersPage({
   function clearFeedback() {
     setMessage("");
     setError("");
+  }
+
+  function applyGooglePlaceAddress(place, fallbackAddress) {
+    const nextStreetAddress = getStreetAddressFromPlace(place, fallbackAddress);
+    const nextCity =
+      getPlaceComponent(place, "locality") ||
+      getPlaceComponent(place, "postal_town") ||
+      getPlaceComponent(place, "administrative_area_level_2");
+    const nextState = getPlaceComponent(
+      place,
+      "administrative_area_level_1",
+      true,
+    );
+    const nextZip = getPlaceComponent(place, "postal_code");
+
+    setStreetAddress(nextStreetAddress);
+    setCity(nextCity);
+    setState(nextState);
+    setZip(nextZip);
+    clearFeedback();
   }
 
   function updateContact(contactId, field, value) {
@@ -461,13 +497,13 @@ export default function CustomersPage({
               <span className="mb-2 block text-sm font-bold text-slate-700">
                 Street Address
               </span>
-              <input
-                type="text"
+              <AddressAutocompleteInput
                 value={streetAddress}
-                onChange={(event) => {
-                  setStreetAddress(event.target.value);
+                onChange={(nextStreetAddress) => {
+                  setStreetAddress(nextStreetAddress);
                   clearFeedback();
                 }}
+                onPlaceSelected={applyGooglePlaceAddress}
                 disabled={isSubmitting}
                 placeholder="Street address"
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-red-500 focus:ring-4 focus:ring-red-100"

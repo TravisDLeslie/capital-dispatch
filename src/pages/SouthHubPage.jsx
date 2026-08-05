@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowRight,
+  CalendarDays,
   ClipboardList,
   History,
   PackageCheck,
@@ -241,6 +242,20 @@ export default function SouthHubPage({
           tone: "success",
           variant: "live",
           pageId: "supplier-runs-check",
+        }
+      : null,
+    canOpen("supplier-runs-calendar")
+      ? {
+          icon: CalendarDays,
+          label: "Schedule",
+          title: "South Calendar",
+          description:
+            "See scheduled South POs by pickup date before they hit the route.",
+          metric: assignedOpenRuns.length,
+          metricLabel: "Scheduled",
+          tone: "dispatch",
+          variant: "default",
+          pageId: "supplier-runs-calendar",
         }
       : null,
     canOpen("supplier-runs-history")

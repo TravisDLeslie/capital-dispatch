@@ -38,6 +38,7 @@ const permissionGroups = [
       { id: "supplier-runs-add", label: "Add POs" },
       { id: "supplier-runs-dispatch", label: "Needs Dispatch" },
       { id: "supplier-runs-check", label: "View POs to Pick Up" },
+      { id: "supplier-runs-calendar", label: "South Calendar" },
       { id: "supplier-runs-history", label: "South History" },
     ],
   },
@@ -84,6 +85,7 @@ const rolePermissionPresets = {
     "dashboard",
     "south",
     "supplier-runs-check",
+    "supplier-runs-calendar",
     "deliveries",
     "deliveries-queue",
   ],
@@ -94,6 +96,7 @@ const rolePermissionPresets = {
     "supplier-runs-add",
     "supplier-runs-dispatch",
     "supplier-runs-check",
+    "supplier-runs-calendar",
     "supplier-runs-history",
   ],
   delivery: [

@@ -76,9 +76,14 @@ export function getDeliveryDurationMinutes(
 }
 
 export function getTimeSlotLabel(timeValue) {
+  if (!timeValue) {
+    return "Unscheduled";
+  }
+
   return (
     deliveryTimeSlotOptions.find((timeSlot) => timeSlot.value === timeValue)
-      ?.label || timeValue || "Unscheduled"
+      ?.label ||
+    (/^\d{2}:\d{2}$/.test(timeValue) ? formatTimeLabel(timeValue) : timeValue)
   );
 }
 
@@ -181,6 +186,21 @@ export function getDeliveryBackAroundLabel(delivery) {
   );
 
   return backAroundTime ? getTimeSlotLabel(backAroundTime) : "Not scheduled";
+}
+
+export function getDeliverySiteArrivalLabel(delivery) {
+  const startTime = delivery?.deliveryTimeSlot || "";
+
+  if (!startTime) {
+    return "Not scheduled";
+  }
+
+  const siteArrivalTime = addMinutesToTime(
+    startTime,
+    deliveryLoadBufferMinutes + getDeliveryDriveMinutes(delivery),
+  );
+
+  return siteArrivalTime ? getTimeSlotLabel(siteArrivalTime) : "Not scheduled";
 }
 
 export function getDeliveryBlockSummary(delivery) {

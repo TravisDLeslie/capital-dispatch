@@ -22,6 +22,7 @@ import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 import {
   getDeliveryBackAroundLabel,
   getDeliveryBlockSummary,
+  getDeliverySiteArrivalLabel,
   getDeliveryTimeRange,
   getDeliveryTimeWindow,
   getTodayDateValue,
@@ -548,6 +549,11 @@ export default function DeliveryDispatchPage({
                         {getDeliveryTimeRange(scheduledDelivery)}
                       </span>
 
+                      <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700">
+                        Site around{" "}
+                        {getDeliverySiteArrivalLabel(scheduledDelivery)}
+                      </span>
+
                       <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-700">
                         Back around{" "}
                         {getDeliveryBackAroundLabel(scheduledDelivery)}
@@ -770,6 +776,8 @@ export default function DeliveryDispatchPage({
                               : "text-slate-500"
                           }`}
                         >
+                          Site around{" "}
+                          {getDeliverySiteArrivalLabel(scheduledDelivery)} ·{" "}
                           {getDeliveryBlockSummary(scheduledDelivery)}
                         </p>
                       </div>
@@ -1000,6 +1008,11 @@ export default function DeliveryDispatchPage({
                     </div>
 
                     <p className="mt-3 text-sm font-bold text-slate-500">
+                      Site arrival around{" "}
+                      {getDeliverySiteArrivalLabel(scheduledDelivery)}.
+                    </p>
+
+                    <p className="mt-2 text-sm font-bold text-slate-500">
                       {getDeliveryBlockSummary(scheduledDelivery)}
                     </p>
 

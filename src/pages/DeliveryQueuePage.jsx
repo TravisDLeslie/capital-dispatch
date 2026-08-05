@@ -19,6 +19,7 @@ import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 import {
   getDeliveryBackAroundLabel,
   getDeliveryBlockSummary,
+  getDeliverySiteArrivalLabel,
   getDeliveryTimeRange,
 } from "../utils/deliverySchedule";
 
@@ -436,6 +437,10 @@ export default function DeliveryQueuePage({
                               Back {getDeliveryBackAroundLabel(delivery)}
                             </span>
 
+                            <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700">
+                              Site around {getDeliverySiteArrivalLabel(delivery)}
+                            </span>
+
                             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-700">
                               <Truck className="h-4 w-4" aria-hidden="true" />
                               {delivery.unloadType}
@@ -521,6 +526,11 @@ export default function DeliveryQueuePage({
                           </div>
 
                           <p className="mt-3 text-sm font-bold text-slate-500">
+                            Site arrival around{" "}
+                            {getDeliverySiteArrivalLabel(delivery)}.
+                          </p>
+
+                          <p className="mt-2 text-sm font-bold text-slate-500">
                             {getDeliveryBlockSummary(delivery)}
                           </p>
 

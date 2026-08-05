@@ -16,11 +16,32 @@ import {
   getDeliveryBackAroundLabel,
   getDeliveryBlockSummary,
   getDeliveryDriveMinutes,
+  getDeliverySiteArrivalLabel,
   getDeliveryTimeRange,
   getDeliveryTimeWindow,
+  getDeliveryTotalBlockMinutes,
   getTodayDateValue,
   scheduleWindowsOverlap,
+  timeToMinutes,
 } from "../utils/deliverySchedule";
+
+const timelineStartMinutes = 8 * 60;
+const timelineEndMinutes = 17 * 60;
+const timelinePixelsPerMinute = 1.25;
+const timelineHeight =
+  (timelineEndMinutes - timelineStartMinutes) * timelinePixelsPerMinute;
+
+const timelineHourMarks = Array.from({ length: 10 }, (_, index) => {
+  const minutes = timelineStartMinutes + index * 60;
+  const hours = Math.floor(minutes / 60);
+  const period = hours >= 12 ? "PM" : "AM";
+  const displayHours = hours % 12 || 12;
+
+  return {
+    minutes,
+    label: `${displayHours} ${period}`,
+  };
+});
 
 function formatDateLabel(dateValue) {
   if (!dateValue) {
@@ -96,6 +117,161 @@ function findScheduleConflict(candidateDelivery, deliveries) {
   );
 }
 
+function getTimelineBlockStyle(delivery) {
+  const startMinutes = timeToMinutes(delivery.deliveryTimeSlot || "");
+  const safeStartMinutes =
+    startMinutes === null ? timelineStartMinutes : startMinutes;
+  const top = Math.max(
+    0,
+    (safeStartMinutes - timelineStartMinutes) * timelinePixelsPerMinute,
+  );
+  const height = Math.max(
+    128,
+    getDeliveryTotalBlockMinutes(delivery) * timelinePixelsPerMinute,
+  );
+
+  return {
+    top,
+    height,
+  };
+}
+
+function DeliveryTimelineBoard({
+  driverNames,
+  deliveriesByDriver,
+  selectedDeliveryId,
+  onSelectDelivery,
+}) {
+  return (
+    <section className="hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:block">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+            Driver Timeline
+          </p>
+          <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+            Day Board
+          </h2>
+        </div>
+
+        <p className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-black text-slate-600">
+          8 AM - 5 PM
+        </p>
+      </div>
+
+      <div className="overflow-x-auto pb-1">
+        <div
+          className="grid min-w-[980px] gap-3"
+          style={{
+            gridTemplateColumns: `72px repeat(${driverNames.length}, minmax(230px, 1fr))`,
+          }}
+        >
+          <div />
+          {driverNames.map((driverName) => (
+            <div
+              key={driverName}
+              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+            >
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+                Driver
+              </p>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <h3 className="truncate text-xl font-black text-slate-950">
+                  {driverName}
+                </h3>
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-600 shadow-sm">
+                  {deliveriesByDriver[driverName].length}
+                </span>
+              </div>
+            </div>
+          ))}
+
+          <div
+            className="relative border-r border-slate-200 pr-2"
+            style={{ height: timelineHeight }}
+          >
+            {timelineHourMarks.map((hourMark) => (
+              <div
+                key={hourMark.minutes}
+                className="absolute right-2 text-right text-[11px] font-black uppercase tracking-[0.08em] text-slate-400"
+                style={{
+                  top:
+                    (hourMark.minutes - timelineStartMinutes) *
+                    timelinePixelsPerMinute,
+                  transform: "translateY(-50%)",
+                }}
+              >
+                {hourMark.label}
+              </div>
+            ))}
+          </div>
+
+          {driverNames.map((driverName) => (
+            <div
+              key={driverName}
+              className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/80"
+              style={{ height: timelineHeight }}
+            >
+              {timelineHourMarks.map((hourMark) => (
+                <span
+                  key={hourMark.minutes}
+                  aria-hidden="true"
+                  className="absolute inset-x-0 border-t border-slate-200/80"
+                  style={{
+                    top:
+                      (hourMark.minutes - timelineStartMinutes) *
+                      timelinePixelsPerMinute,
+                  }}
+                />
+              ))}
+
+              {deliveriesByDriver[driverName].map((delivery) => {
+                const blockStyle = getTimelineBlockStyle(delivery);
+                const isSelected = selectedDeliveryId === delivery.id;
+
+                return (
+                  <button
+                    key={delivery.id}
+                    type="button"
+                    onClick={() => onSelectDelivery(delivery.id)}
+                    className={`absolute inset-x-2 flex flex-col overflow-hidden rounded-2xl border p-3 text-left shadow-sm transition ${
+                      isSelected
+                        ? "border-[#FC2C38] bg-red-50 ring-2 ring-red-100"
+                        : "border-blue-200 bg-white hover:border-[#FC2C38] hover:bg-red-50/40"
+                    }`}
+                    style={blockStyle}
+                  >
+                    <span className="min-h-0 flex-1">
+                      <span className="block truncate text-[11px] font-black uppercase tracking-[0.14em] text-[#FC2C38]">
+                        {getDeliveryTimeRange(delivery)}
+                      </span>
+                      <span className="mt-1 block truncate text-lg font-black text-slate-950">
+                        {delivery.customerName || "Unnamed customer"}
+                      </span>
+                      <span className="mt-1 block truncate text-sm font-bold text-slate-500">
+                        Order {delivery.orderNumber}
+                      </span>
+                    </span>
+
+                    <span className="mt-2 flex shrink-0 flex-wrap gap-1.5">
+                      <span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-black text-blue-700">
+                        Site {getDeliverySiteArrivalLabel(delivery)}
+                      </span>
+                      <span className="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-black text-emerald-700">
+                        Back {getDeliveryBackAroundLabel(delivery)}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CompactDeliveryCard({
   delivery,
   deliveries,
@@ -105,6 +281,7 @@ function CompactDeliveryCard({
   onUpdateDelivery,
   isUpdating,
   onToggle,
+  hideToggle = false,
 }) {
   const scopeSummary = getDeliveryScopeSummary(delivery);
   const driveMinutes = getDeliveryDriveMinutes(delivery);
@@ -138,7 +315,7 @@ function CompactDeliveryCard({
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <span className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700">
-          ETA {driveMinutes || 0} min
+          Site around {getDeliverySiteArrivalLabel(delivery)}
         </span>
         <span className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">
           Back {getDeliveryBackAroundLabel(delivery)}
@@ -154,20 +331,22 @@ function CompactDeliveryCard({
         </span>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onToggle(delivery.id)}
-        className="mt-3 flex w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-700 shadow-sm transition hover:text-[#FC2C38]"
-        aria-expanded={expanded}
-      >
-        {expanded ? "Close details" : "View details"}
-        <ChevronDown
-          className={`h-4 w-4 transition-transform ${
-            expanded ? "rotate-180" : ""
-          }`}
-          aria-hidden="true"
-        />
-      </button>
+      {hideToggle ? null : (
+        <button
+          type="button"
+          onClick={() => onToggle(delivery.id)}
+          className="mt-3 flex w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-700 shadow-sm transition hover:text-[#FC2C38]"
+          aria-expanded={expanded}
+        >
+          {expanded ? "Close details" : "View details"}
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${
+              expanded ? "rotate-180" : ""
+            }`}
+            aria-hidden="true"
+          />
+        </button>
+      )}
 
       {expanded ? (
         <div className="mt-3 space-y-3">
@@ -183,6 +362,11 @@ function CompactDeliveryCard({
               From {delivery.deliveryOriginName || "Capital Lumber"}
             </p>
           </div>
+
+          <p className="rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-700">
+            One-way drive ETA: {driveMinutes || 0} min · Site around{" "}
+            {getDeliverySiteArrivalLabel(delivery)}
+          </p>
 
           <p className="rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-700">
             {getDeliveryBlockSummary(delivery)}
@@ -282,6 +466,8 @@ export default function DeliveryCalendarPage({
 }) {
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
   const [expandedDeliveryIds, setExpandedDeliveryIds] = useState({});
+  const [selectedTimelineDeliveryId, setSelectedTimelineDeliveryId] =
+    useState("");
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
   const [error, setError] = useState("");
 
@@ -296,11 +482,22 @@ export default function DeliveryCalendarPage({
   const driverNames = Object.keys(deliveriesByDriver).sort((first, second) =>
     first.localeCompare(second),
   );
+  const selectedTimelineDelivery =
+    scheduledDeliveries.find(
+      (delivery) => delivery.id === selectedTimelineDeliveryId,
+    ) || scheduledDeliveries[0];
 
   function toggleDelivery(deliveryId) {
     setExpandedDeliveryIds((currentExpandedDeliveryIds) => ({
       ...currentExpandedDeliveryIds,
       [deliveryId]: !currentExpandedDeliveryIds[deliveryId],
+    }));
+  }
+
+  function toggleDriverSection(driverKey) {
+    setExpandedDeliveryIds((currentExpandedDeliveryIds) => ({
+      ...currentExpandedDeliveryIds,
+      [driverKey]: currentExpandedDeliveryIds[driverKey] === false,
     }));
   }
 
@@ -417,7 +614,30 @@ export default function DeliveryCalendarPage({
         />
       ) : (
         <>
-          <div className="hidden gap-4 lg:grid lg:grid-cols-3 2xl:grid-cols-4">
+          <DeliveryTimelineBoard
+            driverNames={driverNames}
+            deliveriesByDriver={deliveriesByDriver}
+            selectedDeliveryId={selectedTimelineDelivery?.id || ""}
+            onSelectDelivery={setSelectedTimelineDeliveryId}
+          />
+
+          {selectedTimelineDelivery ? (
+            <div className="mt-5 hidden xl:block">
+              <CompactDeliveryCard
+                delivery={selectedTimelineDelivery}
+                deliveries={deliveries}
+                expanded
+                canEditDeliveries={canEditDeliveries}
+                onEditDelivery={onEditDelivery}
+                onUpdateDelivery={handleMoveDelivery}
+                isUpdating={updatingDeliveryId === selectedTimelineDelivery.id}
+                onToggle={toggleDelivery}
+                hideToggle
+              />
+            </div>
+          ) : null}
+
+          <div className="hidden gap-4 lg:grid lg:grid-cols-3 2xl:grid-cols-4 xl:hidden">
             {driverNames.map((driverName) => (
               <section
                 key={driverName}
@@ -464,11 +684,11 @@ export default function DeliveryCalendarPage({
               >
                 <button
                   type="button"
-                  onClick={() => toggleDelivery(`driver-${driverName}`)}
+                  onClick={() => toggleDriverSection(`driver-${driverName}`)}
                   className="flex w-full items-center justify-between gap-3 text-left"
-                  aria-expanded={Boolean(
-                    expandedDeliveryIds[`driver-${driverName}`],
-                  )}
+                  aria-expanded={
+                    expandedDeliveryIds[`driver-${driverName}`] !== false
+                  }
                 >
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
@@ -488,7 +708,7 @@ export default function DeliveryCalendarPage({
                   <span className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
                     <ChevronDown
                       className={`h-5 w-5 transition-transform ${
-                        expandedDeliveryIds[`driver-${driverName}`]
+                        expandedDeliveryIds[`driver-${driverName}`] !== false
                           ? "rotate-180"
                           : ""
                       }`}
@@ -497,7 +717,7 @@ export default function DeliveryCalendarPage({
                   </span>
                 </button>
 
-                {expandedDeliveryIds[`driver-${driverName}`] ? (
+                {expandedDeliveryIds[`driver-${driverName}`] !== false ? (
                   <div className="mt-4 space-y-3">
                     {deliveriesByDriver[driverName].map((delivery) => (
                       <CompactDeliveryCard
