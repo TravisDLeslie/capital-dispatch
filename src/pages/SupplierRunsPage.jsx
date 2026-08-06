@@ -1962,7 +1962,7 @@ export default function SupplierRunsPage({
                               {driverAvatar.initial}
                             </div>
 
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">
                                 Driver Route
                               </p>
