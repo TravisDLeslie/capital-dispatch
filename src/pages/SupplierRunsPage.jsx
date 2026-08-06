@@ -9,6 +9,7 @@ import {
   ChevronRight,
   GripVertical,
   RefreshCw,
+  Search,
   X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -340,6 +341,54 @@ function supplierRunMatchesSearch(supplierRun, searchTerm) {
   );
 }
 
+function supplierRunMatchesPickupSearch(
+  supplierRun,
+  searchTerm,
+  includeCustomerName = false,
+) {
+  if (!searchTerm) {
+    return true;
+  }
+
+  const itemText = Array.isArray(supplierRun.items)
+    ? supplierRun.items
+        .map((item) =>
+          [
+            item.internalReference,
+            includeCustomerName ? item.customerName : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
+        )
+        .join(" ")
+    : "";
+  const searchableText = [
+    supplierRun.poNumber,
+    includeCustomerName ? supplierRun.customerName : "",
+    itemText,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const numericSearchTerm = normalizeSearchNumbers(searchTerm);
+  const searchableNumbers = [
+    supplierRun.poNumber,
+    ...(Array.isArray(supplierRun.items)
+      ? supplierRun.items.map((item) => item.internalReference)
+      : []),
+  ]
+    .map(normalizeSearchNumbers)
+    .filter(Boolean);
+
+  return (
+    searchableText.includes(searchTerm) ||
+    (numericSearchTerm.length > 0 &&
+      searchableNumbers.some((searchableNumber) =>
+        searchableNumber.includes(numericSearchTerm),
+      ))
+  );
+}
+
 function getDateSortValue(supplierRun) {
   const dateKey = getSupplierRunDateKey(supplierRun);
   const parsedDate = dateKey ? new Date(`${dateKey}T00:00:00`) : null;
@@ -445,6 +494,7 @@ export default function SupplierRunsPage({
   const [savingDispatchRunId, setSavingDispatchRunId] = useState("");
   const [dispatchSearch, setDispatchSearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
+  const [pickupSearch, setPickupSearch] = useState("");
   const [dateMoveDraft, setDateMoveDraft] = useState(todayKey);
   const [dateMoveError, setDateMoveError] = useState("");
   const [savingDateMove, setSavingDateMove] = useState(false);
@@ -916,12 +966,24 @@ export default function SupplierRunsPage({
 
   const visibleRuns =
     mode === "history" ? historyRuns : dailyRuns;
+  const canViewSouthCustomerName = canEditSupplierRuns;
+  const pickupSearchTerm = normalizeSearchText(pickupSearch);
+  const filteredVisibleRuns =
+    mode === "check" && checkViewMode === "list"
+      ? visibleRuns.filter((supplierRun) =>
+          supplierRunMatchesPickupSearch(
+            supplierRun,
+            pickupSearchTerm,
+            canViewSouthCustomerName,
+          ),
+        )
+      : visibleRuns;
 
-  const openRuns = visibleRuns.filter(
+  const openRuns = filteredVisibleRuns.filter(
     (supplierRun) => supplierRun.status !== "complete",
   );
 
-  const completeRuns = visibleRuns.filter(
+  const completeRuns = filteredVisibleRuns.filter(
     (supplierRun) => supplierRun.status === "complete",
   );
 
@@ -981,7 +1043,6 @@ export default function SupplierRunsPage({
     selectedSupplierRunDetails &&
     canEditSupplierRuns &&
     !selectedSupplierRunDateIsLocked;
-  const canViewSouthCustomerName = canEditSupplierRuns;
   const pageTitle = getSouthPageTitle(mode);
   const displayPageTitle =
     mode === "check" && checkViewMode === "calendar"
@@ -1755,6 +1816,47 @@ export default function SupplierRunsPage({
           {checkViewMode === "list" ? (
           <>
 
+          <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+            <label
+              htmlFor="south-pickup-search"
+              className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
+            >
+              Search POs To Pick Up
+            </label>
+
+            <div className="flex items-center gap-2">
+              <span className="relative flex-1">
+                <Search
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+                  strokeWidth={2.4}
+                />
+                <input
+                  id="south-pickup-search"
+                  type="search"
+                  value={pickupSearch}
+                  onChange={(event) => setPickupSearch(event.target.value)}
+                  placeholder={
+                    canViewSouthCustomerName
+                      ? "Search PO #, customer, or item #"
+                      : "Search PO # or item #"
+                  }
+                  className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-sm placeholder:font-semibold placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+              </span>
+
+              {pickupSearch ? (
+                <button
+                  type="button"
+                  onClick={() => setPickupSearch("")}
+                  className="min-h-[48px] rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-600 shadow-sm transition hover:bg-slate-50"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+          </div>
+
           <div className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-2 py-3 text-center sm:px-4 sm:text-left">
               <p className="text-[10px] font-black uppercase tracking-[0.08em] text-blue-700 sm:text-xs sm:tracking-[0.18em]">
@@ -1794,6 +1896,17 @@ export default function SupplierRunsPage({
             />
           ) : null}
 
+          {visibleRuns.length > 0 && filteredVisibleRuns.length === 0 ? (
+            <EmptyState
+              title="No South POs match that search"
+              description={
+                canViewSouthCustomerName
+                  ? "Search by PO number, customer name, or item number."
+                  : "Search by PO number or item number."
+              }
+            />
+          ) : null}
+
           {openRuns.length > 0 ? (
             <div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -1812,7 +1925,7 @@ export default function SupplierRunsPage({
                 {openRunGroups.map((driverGroup) => {
                   const driverStats = getDriverStatsForRuns(
                     driverGroup.driver,
-                    visibleRuns,
+                    filteredVisibleRuns,
                   );
                   const driverAvatar = getDriverAvatar(
                     driverGroup.driver,
@@ -1822,6 +1935,12 @@ export default function SupplierRunsPage({
                   );
                   const vehicleLabel =
                     getDriverGroupVehicleLabel(driverGroup);
+                  const driverPoCount =
+                    driverGroup.vendorGroups.reduce(
+                      (count, vendorGroup) =>
+                        count + vendorGroup.runs.length,
+                      0,
+                    );
 
                   return (
                     <div
@@ -1834,8 +1953,8 @@ export default function SupplierRunsPage({
                         className="mb-4 w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-left shadow-sm transition hover:bg-blue-50"
                         aria-expanded={driverIsOpen}
                       >
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                          <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex items-start justify-between gap-3 sm:gap-4">
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
                             <div
                               className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-lg font-black ${driverAvatar.colorClass}`}
                               aria-hidden="true"
@@ -1848,9 +1967,26 @@ export default function SupplierRunsPage({
                                 Driver Route
                               </p>
 
-                              <h4 className="mt-1 truncate text-2xl font-black tracking-tight text-slate-900">
-                                {driverGroup.driver}
-                              </h4>
+                              <div className="mt-1 flex min-w-0 items-center gap-2">
+                                <h4 className="min-w-0 flex-1 truncate text-2xl font-black tracking-tight text-slate-900">
+                                  {driverGroup.driver}
+                                </h4>
+
+                                <span className="shrink-0 rounded-xl bg-blue-50 px-3 py-2 text-sm font-black text-blue-800 sm:hidden">
+                                  {driverPoCount}{" "}
+                                  {driverPoCount === 1 ? "PO" : "POs"}
+                                </span>
+
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm sm:hidden">
+                                  <ChevronDown
+                                    aria-hidden="true"
+                                    className={`h-5 w-5 transition-transform ${
+                                      driverIsOpen ? "rotate-180" : ""
+                                    }`}
+                                    strokeWidth={2.6}
+                                  />
+                                </span>
+                              </div>
 
                               {vehicleLabel ? (
                                 <p className="mt-1 text-sm font-black text-slate-500">
@@ -1860,14 +1996,10 @@ export default function SupplierRunsPage({
                             </div>
                           </div>
 
-                          <div className="flex shrink-0 items-center gap-2">
+                          <div className="hidden shrink-0 items-center gap-2 sm:flex">
                             <div className="rounded-xl bg-blue-50 px-3 py-2 text-sm font-black text-blue-800">
-                              {driverGroup.vendorGroups.reduce(
-                                (count, vendorGroup) =>
-                                  count + vendorGroup.runs.length,
-                                0,
-                              )}{" "}
-                              POs
+                              {driverPoCount}{" "}
+                              {driverPoCount === 1 ? "PO" : "POs"}
                             </div>
 
                             <span className="flex h-10 w-10 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm">

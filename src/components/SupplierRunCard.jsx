@@ -752,11 +752,6 @@ export default function SupplierRunCard({
 
           {isItemsOpen ? (
             <>
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                Added {formatShortDate(supplierRun.createdAt)} at{" "}
-                {formatTime(supplierRun.createdAt)}
-              </p>
-
               {supplierRun.scheduledDate ? (
                 <p className="mt-1 text-sm font-black text-slate-700">
                   Pickup: {formatDateInput(supplierRun.scheduledDate)}
@@ -1255,11 +1250,25 @@ export default function SupplierRunCard({
         </p>
       ) : null}
 
-      {!isCompactClosed &&
+      {(!isCompactClosed || compactWhenClosed) &&
       (supplierRun.createdByName ||
         supplierRun.createdByEmail ||
-        supplierRun.orderedBy) ? (
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-400">
+        supplierRun.orderedBy ||
+        supplierRun.createdAt) ? (
+        <div
+          className={`flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-400 ${
+            isCompactClosed
+              ? "mt-3 border-t border-slate-100 pt-2 sm:hidden"
+              : "mt-2"
+          }`}
+        >
+          {supplierRun.createdAt ? (
+            <span>
+              Added {formatShortDate(supplierRun.createdAt)} at{" "}
+              {formatTime(supplierRun.createdAt)}
+            </span>
+          ) : null}
+
           {supplierRun.createdByName || supplierRun.createdByEmail ? (
             <span>
               Created by{" "}
