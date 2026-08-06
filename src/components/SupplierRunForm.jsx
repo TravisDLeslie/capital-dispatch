@@ -17,6 +17,7 @@ function createEmptyPickupItem() {
     internalReference: "",
     materialUse: "order",
     orderNumber: "",
+    customerName: "",
     returnNotes: "",
     saved: false,
     pickedUp: false,
@@ -96,6 +97,7 @@ export default function SupplierRunForm({
     getDateInputValue(),
   );
   const [orderedBy, setOrderedBy] = useState("");
+  const [customerName, setCustomerName] = useState("");
   const [vendor, setVendor] = useState("");
   const [supplierAddress, setSupplierAddress] = useState("");
   const [driver, setDriver] = useState("");
@@ -125,6 +127,7 @@ export default function SupplierRunForm({
       internalReference: item.internalReference || "",
       materialUse: item.materialUse || "order",
       orderNumber: item.orderNumber || "",
+      customerName: item.customerName || "",
       returnNotes: item.returnNotes || "",
       saved: true,
       pickedUp: Boolean(item.pickedUp),
@@ -141,6 +144,13 @@ export default function SupplierRunForm({
       initialSupplierRun.scheduledDate || getDateInputValue(),
     );
     setOrderedBy(initialSupplierRun.orderedBy || "");
+    setCustomerName(
+      initialSupplierRun.customerName ||
+        getInitialItems(initialSupplierRun).find((item) =>
+          usesOrderNumber(item.materialUse),
+        )?.customerName ||
+        "",
+    );
     setVendor(initialSupplierRun.vendor || "");
     setSupplierAddress(initialSupplierRun.supplierAddress || "");
     setDriver(initialSupplierRun.driver || "");
@@ -222,6 +232,8 @@ export default function SupplierRunForm({
               materialUse,
               orderNumber:
                 usesOrderNumber(materialUse) ? item.orderNumber : "",
+              customerName:
+                usesOrderNumber(materialUse) ? item.customerName : "",
               returnNotes:
                 usesReturnNotes(materialUse) ? item.returnNotes : "",
               saved: false,
@@ -321,6 +333,10 @@ export default function SupplierRunForm({
               internalReference:
                 pickupItem.internalReference.trim(),
               materialUse: pickupItem.materialUse || "order",
+              customerName:
+                usesOrderNumber(pickupItem.materialUse)
+                  ? pickupItem.customerName?.trim() || ""
+                  : "",
               orderNumber:
                 usesOrderNumber(pickupItem.materialUse)
                   ? formatOrderNumber(pickupItem.orderNumber || "")
@@ -361,6 +377,7 @@ export default function SupplierRunForm({
     setPoNumber("");
     setScheduledDate(getDateInputValue());
     setOrderedBy("");
+    setCustomerName("");
     setVendor("");
     setSupplierAddress("");
     setDriver("");
@@ -414,6 +431,7 @@ export default function SupplierRunForm({
       .map((item) => {
         const itemData = { ...item };
         delete itemData.saved;
+        const itemUsesCustomer = usesOrderNumber(item.materialUse);
 
         return {
           ...itemData,
@@ -422,6 +440,8 @@ export default function SupplierRunForm({
           description: item.description.trim(),
           internalReference: item.internalReference?.trim() || "",
           materialUse: item.materialUse || "order",
+          customerName:
+            itemUsesCustomer ? customerName.trim() || "" : "",
           orderNumber:
             usesOrderNumber(item.materialUse)
               ? formatOrderNumber(item.orderNumber || "")
@@ -463,12 +483,18 @@ export default function SupplierRunForm({
     }
 
     const now = new Date().toISOString();
+    const supplierRunCustomerName = pickupItems.some((item) =>
+      usesOrderNumber(item.materialUse),
+    )
+      ? customerName.trim()
+      : "";
     const supplierRun = {
       ...(initialSupplierRun || {}),
       id: initialSupplierRun?.id || createId(),
       poNumber,
       scheduledDate,
       orderedBy,
+      customerName: supplierRunCustomerName,
       vendor: matchedVendor,
       supplierAddress: supplierAddress.trim(),
       driver: canAssignRoute ? driver : initialSupplierRun?.driver || "",
@@ -628,6 +654,32 @@ export default function SupplierRunForm({
                   placeholder="123-456"
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-3xl font-black tracking-[0.12em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
                 />
+              </div>
+
+              <div className="lg:col-span-2 xl:col-span-1 2xl:col-span-2">
+                <label
+                  htmlFor="supplier-run-customer-name"
+                  className="mb-2 block text-sm font-bold text-slate-700"
+                >
+                  Customer Name
+                </label>
+
+                <input
+                  id="supplier-run-customer-name"
+                  type="text"
+                  value={customerName}
+                  onChange={(event) => {
+                    setCustomerName(event.target.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  placeholder="For order, return, or swap items"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                />
+
+                <p className="mt-1 text-xs font-bold text-slate-500">
+                  Not used for stock-only pickup items.
+                </p>
               </div>
             </div>
           </section>
@@ -999,7 +1051,7 @@ export default function SupplierRunForm({
                       </div>
                     </div>
 
-                    <div className="grid gap-3 lg:grid-cols-[180px_minmax(180px,0.45fr)_160px]">
+                    <div className="grid gap-3 lg:grid-cols-[180px_minmax(180px,0.55fr)_160px]">
                       <div>
                         <label
                           htmlFor={`supplier-item-use-${item.id}`}

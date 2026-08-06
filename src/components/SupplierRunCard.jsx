@@ -123,7 +123,7 @@ function getSupplierRunActionLabel(items, isComplete) {
   return "Needs Pickup";
 }
 
-function formatPickupItemsForPrint(items) {
+function formatPickupItemsForPrint(items, showCustomerName = false) {
   if (items.length === 0) {
     return `
       <tr>
@@ -139,6 +139,11 @@ function formatPickupItemsForPrint(items) {
           <td class="qty">${escapeHtml(item.quantity || "-")}</td>
           <td>
             <strong>${escapeHtml(item.description)}</strong>
+            ${
+              showCustomerName && item.customerName
+                ? `<span>Customer: ${escapeHtml(item.customerName)}</span>`
+                : ""
+            }
             ${
               item.internalReference
                 ? `<span>SKU / Item # / SO#: ${escapeHtml(
@@ -161,7 +166,7 @@ function formatPickupItemsForPrint(items) {
     .join("");
 }
 
-function createPickupSheetHtml(supplierRun, items) {
+function createPickupSheetHtml(supplierRun, items, showCustomerName = false) {
   const logoUrl = new URL(
     capitalLumberLogo,
     window.location.origin,
@@ -465,7 +470,7 @@ function createPickupSheetHtml(supplierRun, items) {
                 </tr>
               </thead>
               <tbody>
-                ${formatPickupItemsForPrint(items)}
+                ${formatPickupItemsForPrint(items, showCustomerName)}
               </tbody>
             </table>
           </section>
@@ -538,6 +543,7 @@ export default function SupplierRunCard({
   isCompletedSection = false,
   defaultItemsOpen = false,
   compactWhenClosed = true,
+  showCustomerName = false,
 }) {
   const items = Array.isArray(supplierRun.items)
     ? supplierRun.items
@@ -550,6 +556,11 @@ export default function SupplierRunCard({
   const isComplete =
     items.length > 0 && pickedUpCount === items.length;
   const actionLabel = getSupplierRunActionLabel(items, isComplete);
+  const supplierRunCustomerName =
+    supplierRun.customerName ||
+    items.find((item) => usesOrderNumber(item.materialUse) && item.customerName)
+      ?.customerName ||
+    "";
   const remainingCount = items.length - pickedUpCount;
   const itemLabel = items.length === 1 ? "Item" : "Items";
   const compactItemSummary =
@@ -571,6 +582,7 @@ export default function SupplierRunCard({
   const [editingMaterialUse, setEditingMaterialUse] =
     useState("order");
   const [editingOrderNumber, setEditingOrderNumber] = useState("");
+  const [editingCustomerName, setEditingCustomerName] = useState("");
   const [editingReturnNotes, setEditingReturnNotes] = useState("");
   const [editError, setEditError] = useState("");
   const [photoError, setPhotoError] = useState("");
@@ -588,6 +600,7 @@ export default function SupplierRunCard({
     setEditingInternalReference(item.internalReference || "");
     setEditingMaterialUse(item.materialUse || "order");
     setEditingOrderNumber(item.orderNumber || "");
+    setEditingCustomerName(item.customerName || "");
     setEditingReturnNotes(item.returnNotes || "");
     setEditError("");
     setIsItemsOpen(true);
@@ -600,6 +613,7 @@ export default function SupplierRunCard({
     setEditingInternalReference("");
     setEditingMaterialUse("order");
     setEditingOrderNumber("");
+    setEditingCustomerName("");
     setEditingReturnNotes("");
     setEditError("");
   }
@@ -630,6 +644,9 @@ export default function SupplierRunCard({
       editingQuantity.trim(),
       editingMaterialUse,
       usesOrderNumber(editingMaterialUse) ? editingOrderNumber.trim() : "",
+      showCustomerName && usesOrderNumber(editingMaterialUse)
+        ? editingCustomerName.trim()
+        : undefined,
       usesReturnNotes(editingMaterialUse) ? editingReturnNotes.trim() : "",
     );
 
@@ -674,7 +691,7 @@ export default function SupplierRunCard({
 
     pickupSheetWindow.document.open();
     pickupSheetWindow.document.write(
-      createPickupSheetHtml(supplierRun, items),
+      createPickupSheetHtml(supplierRun, items, showCustomerName),
     );
     pickupSheetWindow.document.close();
     pickupSheetWindow.focus();
@@ -725,6 +742,12 @@ export default function SupplierRunCard({
                 {actionLabel}
               </span>
             )}
+
+            {showCustomerName && supplierRunCustomerName ? (
+              <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-black normal-case tracking-normal text-violet-700 ring-1 ring-violet-200">
+                Customer: {supplierRunCustomerName}
+              </span>
+            ) : null}
           </div>
 
           {isItemsOpen ? (
@@ -909,6 +932,12 @@ export default function SupplierRunCard({
                         </span>
                       ) : null}
 
+                      {showCustomerName && item.customerName ? (
+                        <span className="mt-1 block text-xs font-bold text-slate-500">
+                          Customer: {item.customerName}
+                        </span>
+                      ) : null}
+
                       {item.returnNotes ? (
                         <span className="mt-3 block rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
                           <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
@@ -1065,7 +1094,7 @@ export default function SupplierRunCard({
                     className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
                   />
 
-                  <div className="mt-3 grid gap-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+                  <div className="mt-3 grid gap-3 lg:grid-cols-[180px_minmax(0,0.8fr)_minmax(0,1fr)]">
                     <div>
                       <label
                         htmlFor={`supplier-item-use-${supplierRun.id}-${item.id}`}
@@ -1082,6 +1111,7 @@ export default function SupplierRunCard({
                           setEditingMaterialUse(nextMaterialUse);
                           if (!usesOrderNumber(nextMaterialUse)) {
                             setEditingOrderNumber("");
+                            setEditingCustomerName("");
                           }
                           if (!usesReturnNotes(nextMaterialUse)) {
                             setEditingReturnNotes("");
@@ -1126,6 +1156,34 @@ export default function SupplierRunCard({
                         className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
                       />
                     </div>
+
+                    {showCustomerName ? (
+                      <div>
+                        <label
+                          htmlFor={`supplier-item-customer-${supplierRun.id}-${item.id}`}
+                          className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
+                        >
+                          Customer
+                        </label>
+
+                        <input
+                          id={`supplier-item-customer-${supplierRun.id}-${item.id}`}
+                          type="text"
+                          value={editingCustomerName}
+                          onChange={(event) => {
+                            setEditingCustomerName(event.target.value);
+                            setEditError("");
+                          }}
+                          disabled={!usesOrderNumber(editingMaterialUse)}
+                          placeholder={
+                            usesOrderNumber(editingMaterialUse)
+                              ? "Customer name"
+                              : "Not needed for stock"
+                          }
+                          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+                        />
+                      </div>
+                    ) : null}
                   </div>
 
                   {usesReturnNotes(editingMaterialUse) ? (

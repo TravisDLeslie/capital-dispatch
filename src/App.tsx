@@ -138,6 +138,7 @@ type SupplierRunItem = {
   internalReference?: string;
   materialUse?: string;
   orderNumber?: string;
+  customerName?: string;
   returnNotes?: string;
   pickedUp: boolean;
   pickedUpAt?: string | null;
@@ -150,6 +151,7 @@ type SupplierRun = {
   vendor?: string;
   scheduledDate?: string;
   orderedBy?: string;
+  customerName?: string;
   driver?: string;
   supplierAddress?: string;
   createdByName?: string;
@@ -1909,6 +1911,7 @@ export default function App() {
     quantity?: string,
     materialUse?: string,
     orderNumber?: string,
+    customerName?: string,
     returnNotes?: string,
   ) {
     const supplierRun = supplierRuns.find(
@@ -1939,6 +1942,10 @@ export default function App() {
               typeof orderNumber === "string"
                 ? orderNumber
                 : item.orderNumber,
+            customerName:
+              typeof customerName === "string"
+                ? customerName
+                : item.customerName,
             returnNotes:
               typeof returnNotes === "string"
                 ? returnNotes
@@ -2979,6 +2986,7 @@ export default function App() {
             mode="history"
             supplierRuns={assignedVisibleSupplierRuns}
             vehicleOptions={southVehicleOptions}
+            canEditSupplierRuns={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
             onToggleSupplierRunItem={

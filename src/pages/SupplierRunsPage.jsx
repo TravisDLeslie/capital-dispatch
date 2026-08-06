@@ -176,6 +176,18 @@ function getMaterialUseLabel(materialUse) {
   return labels[materialUse] || "Order";
 }
 
+function getSupplierRunCustomerName(supplierRun) {
+  return (
+    supplierRun.customerName ||
+    (Array.isArray(supplierRun.items)
+      ? supplierRun.items.find(
+          (item) => item.materialUse !== "stock" && item.customerName,
+        )?.customerName
+      : "") ||
+    ""
+  );
+}
+
 function getMaterialUseBadgeClass(materialUse) {
   if (materialUse === "return") {
     return "bg-amber-100 text-amber-800";
@@ -279,6 +291,7 @@ function supplierRunMatchesSearch(supplierRun, searchTerm) {
             item.description,
             item.internalReference,
             item.materialUse,
+            item.customerName,
             item.orderNumber,
             item.returnNotes,
           ]
@@ -294,6 +307,7 @@ function supplierRunMatchesSearch(supplierRun, searchTerm) {
     supplierRun.vehicleTitle,
     supplierRun.vehicleBadge,
     supplierRun.orderedBy,
+    supplierRun.customerName,
     supplierRun.createdByName,
     supplierRun.createdByEmail,
     supplierRun.supplierAddress,
@@ -967,6 +981,7 @@ export default function SupplierRunsPage({
     selectedSupplierRunDetails &&
     canEditSupplierRuns &&
     !selectedSupplierRunDateIsLocked;
+  const canViewSouthCustomerName = canEditSupplierRuns;
   const pageTitle = getSouthPageTitle(mode);
   const displayPageTitle =
     mode === "check" && checkViewMode === "calendar"
@@ -1142,6 +1157,8 @@ export default function SupplierRunsPage({
                 const itemCount = Array.isArray(supplierRun.items)
                   ? supplierRun.items.length
                   : 0;
+                const runCustomerName =
+                  getSupplierRunCustomerName(supplierRun);
 
                 return (
                   <article
@@ -1153,9 +1170,18 @@ export default function SupplierRunsPage({
                         <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                           South Request
                         </p>
-                        <h3 className="mt-1 text-2xl font-black text-slate-950">
-                          PO {supplierRun.poNumber}
-                        </h3>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <h3 className="text-2xl font-black text-slate-950">
+                            PO {supplierRun.poNumber}
+                          </h3>
+
+                          {canViewSouthCustomerName && runCustomerName ? (
+                            <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-black text-violet-700 ring-1 ring-violet-200">
+                              Customer: {runCustomerName}
+                            </span>
+                          ) : null}
+                        </div>
+
                         <p className="mt-1 text-sm font-bold text-slate-500">
                           {supplierRun.vendor || "Unknown Supplier"} •{" "}
                           {formatDateInput(
@@ -1506,6 +1532,9 @@ export default function SupplierRunsPage({
                                               }
                                               onDelete={onDeleteSupplierRun}
                                               isCompletedSection
+                                              showCustomerName={
+                                                canViewSouthCustomerName
+                                              }
                                             />
                                           ),
                                         )}
@@ -1663,6 +1692,8 @@ export default function SupplierRunsPage({
                         )
                           ? supplierRun.items.length
                           : 0;
+                        const runCustomerName =
+                          getSupplierRunCustomerName(supplierRun);
 
                         return (
                           <button
@@ -1683,6 +1714,13 @@ export default function SupplierRunsPage({
                                   {supplierRun.vendor ||
                                     "Unknown Supplier"}
                                 </p>
+
+                                {canViewSouthCustomerName &&
+                                runCustomerName ? (
+                                  <p className="mt-1 truncate text-xs font-black uppercase tracking-[0.1em] text-blue-700">
+                                    {runCustomerName}
+                                  </p>
+                                ) : null}
                               </div>
 
                               <span
@@ -2089,6 +2127,9 @@ export default function SupplierRunsPage({
                                         : undefined
                                     }
                                     onDelete={onDeleteSupplierRun}
+                                    showCustomerName={
+                                      canViewSouthCustomerName
+                                    }
                                     defaultItemsOpen={
                                       vendorGroup.runs.length === 1
                                     }
@@ -2286,6 +2327,9 @@ export default function SupplierRunsPage({
                                     }
                                     onDelete={onDeleteSupplierRun}
                                     isCompletedSection
+                                    showCustomerName={
+                                      canViewSouthCustomerName
+                                    }
                                   />
                                 ))}
                               </div>
@@ -2424,6 +2468,18 @@ export default function SupplierRunsPage({
                     {selectedSupplierRunDetails.driver || "Unassigned"}
                   </p>
                 </div>
+
+                {canViewSouthCustomerName &&
+                getSupplierRunCustomerName(selectedSupplierRunDetails) ? (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                      Customer
+                    </p>
+                    <p className="mt-1 text-lg font-black text-slate-900">
+                      {getSupplierRunCustomerName(selectedSupplierRunDetails)}
+                    </p>
+                  </div>
+                ) : null}
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
