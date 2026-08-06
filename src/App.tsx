@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Truck,
   UsersRound,
+  Warehouse,
 } from "lucide-react";
 import AppHeader from "./components/AppHeader";
 import SectionHubPage from "./components/SectionHubPage";
@@ -39,6 +40,7 @@ import SouthHubPage from "./pages/SouthHubPage";
 import SupplierRunsPage from "./pages/SupplierRunsPage";
 import TodayPage from "./pages/TodayPage";
 import UserAdminPage from "./pages/UserAdminPage";
+import VendorSettingsPage from "./pages/VendorSettingsPage";
 import {
   addCheckIn,
   deleteCheckIn,
@@ -94,6 +96,14 @@ import {
   saveDeliverySettings,
   subscribeToDeliverySettings,
 } from "./utils/deliverySettingsStorage";
+import {
+  defaultVendorSettings,
+  saveVendorSettings,
+  subscribeToVendorSettings,
+} from "./utils/vendorSettingsStorage";
+import {
+  capitalLumberAddress,
+} from "./data/options";
 
 const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
@@ -307,6 +317,21 @@ type DeliverySettings = {
   [key: string]: unknown;
 };
 
+type VendorSetting = {
+  id: string;
+  name: string;
+  address?: string;
+  routeOrder?: number;
+  active?: boolean;
+};
+
+type VendorSettings = {
+  id?: string;
+  vendors?: VendorSetting[];
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
 function canDeleteRecord(label: string) {
   const enteredCode = window.prompt(
     `Enter the internal delete code to delete ${label}.`,
@@ -388,6 +413,7 @@ function getAllowedPageIdsForRole(role: string) {
       "user-admin",
       "email-list",
       "delivery-settings",
+      "vendor-settings",
       "bouncie",
     ];
   }
@@ -421,6 +447,7 @@ function getAllowedPageIdsForRole(role: string) {
       "admin",
       "email-list",
       "delivery-settings",
+      "vendor-settings",
     ];
   }
 
@@ -787,6 +814,8 @@ export default function App() {
   const [vehicleSettings, setVehicleSettings] = useState<VehicleSetting[]>([]);
   const [deliverySettings, setDeliverySettings] =
     useState<DeliverySettings>(defaultDeliveryScheduleSettings);
+  const [vendorSettings, setVendorSettings] =
+    useState<VendorSettings>(defaultVendorSettings);
   const [editingDeliveryId, setEditingDeliveryId] =
     useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -800,6 +829,81 @@ export default function App() {
   const allowedPageIds = useMemo(
     () => getAllowedPageIds(userRole, userProfile?.permissions),
     [userRole, userProfile?.permissions],
+  );
+  const activeVendors = useMemo(
+    () =>
+      (Array.isArray(vendorSettings.vendors)
+        ? vendorSettings.vendors
+        : []
+      )
+        .filter((vendor) => vendor.active !== false && vendor.name)
+        .sort((firstVendor, secondVendor) => {
+          const firstOrder = Number(firstVendor.routeOrder) || 999;
+          const secondOrder = Number(secondVendor.routeOrder) || 999;
+
+          if (firstOrder !== secondOrder) {
+            return firstOrder - secondOrder;
+          }
+
+          return firstVendor.name.localeCompare(secondVendor.name);
+        }),
+    [vendorSettings.vendors],
+  );
+  const vendorOptions = useMemo(
+    () => activeVendors.map((vendor) => vendor.name),
+    [activeVendors],
+  );
+  const supplierAddressMap = useMemo(
+    () =>
+      activeVendors.reduce<Record<string, string>>(
+        (addressMap, vendor) => ({
+          ...addressMap,
+          [vendor.name]: vendor.address || "",
+        }),
+        {},
+      ),
+    [activeVendors],
+  );
+  const vendorDisplayNameMap = useMemo(
+    () =>
+      activeVendors.reduce<Record<string, string>>((displayNameMap, vendor) => {
+        const keys = [
+          vendor.id,
+          vendor.name,
+          String(vendor.name || "").replace(/[^a-z0-9]/gi, ""),
+        ]
+          .map((value) =>
+            String(value || "")
+              .trim()
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, ""),
+          )
+          .filter(Boolean);
+
+        return keys.reduce(
+          (nextDisplayNameMap, key) => ({
+            ...nextDisplayNameMap,
+            [key]: vendor.name,
+          }),
+          displayNameMap,
+        );
+      }, {}),
+    [activeVendors],
+  );
+  const deliveryOriginOptions = useMemo(
+    () => [
+      {
+        name: "Capital Lumber",
+        address: capitalLumberAddress,
+      },
+      ...activeVendors
+        .filter((vendor) => vendor.address)
+        .map((vendor) => ({
+          name: vendor.name,
+          address: vendor.address || "",
+        })),
+    ],
+    [activeVendors],
   );
   const dashboardPreviewUsers = useMemo(() => {
     const savedUsers = Array.isArray(users) ? users : [];
@@ -898,7 +1002,13 @@ export default function App() {
     ].includes(pageId),
   );
   const canReadAdmin = effectiveAllowedPageIds.some((pageId) =>
-    ["admin", "user-admin", "email-list", "delivery-settings"].includes(pageId),
+    [
+      "admin",
+      "user-admin",
+      "email-list",
+      "delivery-settings",
+      "vendor-settings",
+    ].includes(pageId),
   );
   const canReadFleet = effectiveAllowedPageIds.some((pageId) =>
     ["fleet", "bouncie"].includes(pageId),
@@ -1249,6 +1359,24 @@ export default function App() {
       },
     );
   }, [canReadAdmin, canReadDeliveries, isApproved]);
+
+  useEffect(() => {
+    if (!isApproved) {
+      setVendorSettings(defaultVendorSettings);
+      return () => {};
+    }
+
+    return subscribeToVendorSettings(
+      (savedVendorSettings: VendorSettings) => {
+        setVendorSettings(savedVendorSettings);
+        setSyncError("");
+      },
+      (error: Error) => {
+        console.error("Unable to sync vendor settings:", error);
+        setSyncError(getFirebaseErrorMessage(error));
+      },
+    );
+  }, [isApproved]);
 
   useEffect(() => {
     if (
@@ -1691,6 +1819,15 @@ export default function App() {
     );
 
     setDeliverySettings(savedDeliverySettings);
+    setSyncError("");
+  }
+
+  async function handleSaveVendorSettings(
+    updatedVendorSettings: VendorSettings,
+  ) {
+    const savedVendorSettings = await saveVendorSettings(updatedVendorSettings);
+
+    setVendorSettings(savedVendorSettings);
     setSyncError("");
   }
 
@@ -2726,6 +2863,12 @@ export default function App() {
               value: emailList.length,
               note: "List entries",
             },
+            {
+              icon: Warehouse,
+              label: "Vendors",
+              value: activeVendors.length,
+              note: "Suppliers",
+            },
           ]}
           actions={[
             effectiveAllowedPageIds.includes("user-admin")
@@ -2762,6 +2905,18 @@ export default function App() {
                   metricLabel: "Defaults",
                   tone: "dispatch",
                   onClick: () => setCurrentPage("delivery-settings"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("vendor-settings")
+              ? {
+                  icon: Warehouse,
+                  label: "Suppliers",
+                  title: "Vendor Settings",
+                  description: "Edit supplier names, addresses, and South route order.",
+                  metric: activeVendors.length,
+                  metricLabel: "Active",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("vendor-settings"),
                 }
               : null,
           ].filter(Boolean)}
@@ -2851,6 +3006,15 @@ export default function App() {
           />
         );
 
+      case "vendor-settings":
+        return (
+          <VendorSettingsPage
+            vendorSettings={vendorSettings}
+            onSaveVendorSettings={handleSaveVendorSettings}
+            onPageChange={navigateToPage}
+          />
+        );
+
       case "bouncie":
         return <BounciePage onPageChange={setCurrentPage} />;
 
@@ -2886,6 +3050,10 @@ export default function App() {
             supplierRuns={supplierRuns}
             createdBy={currentUserCreator}
             vehicleOptions={southVehicleOptions}
+            vendorOptions={vendorOptions}
+            supplierAddressMap={supplierAddressMap}
+            vendorRouteOrder={vendorOptions}
+            vendorDisplayNameMap={vendorDisplayNameMap}
             canAssignRoute={false}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
@@ -2907,6 +3075,10 @@ export default function App() {
             mode="dispatch"
             supplierRuns={supplierRuns}
             vehicleOptions={southVehicleOptions}
+            vendorOptions={vendorOptions}
+            supplierAddressMap={supplierAddressMap}
+            vendorRouteOrder={vendorOptions}
+            vendorDisplayNameMap={vendorDisplayNameMap}
             canAssignRoute
             canReorderRoute={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
@@ -2931,6 +3103,10 @@ export default function App() {
             mode="check"
             supplierRuns={assignedVisibleSupplierRuns}
             vehicleOptions={southVehicleOptions}
+            vendorOptions={vendorOptions}
+            supplierAddressMap={supplierAddressMap}
+            vendorRouteOrder={vendorOptions}
+            vendorDisplayNameMap={vendorDisplayNameMap}
             canReorderRoute={canAssignSouthRoutes}
             canEditSupplierRuns={canAssignSouthRoutes}
             canReadAllRouteOrders={
@@ -2957,6 +3133,10 @@ export default function App() {
             mode="check"
             supplierRuns={assignedVisibleSupplierRuns}
             vehicleOptions={southVehicleOptions}
+            vendorOptions={vendorOptions}
+            supplierAddressMap={supplierAddressMap}
+            vendorRouteOrder={vendorOptions}
+            vendorDisplayNameMap={vendorDisplayNameMap}
             canReorderRoute={canAssignSouthRoutes}
             canEditSupplierRuns={canAssignSouthRoutes}
             canReadAllRouteOrders={
@@ -2986,6 +3166,10 @@ export default function App() {
             mode="history"
             supplierRuns={assignedVisibleSupplierRuns}
             vehicleOptions={southVehicleOptions}
+            vendorOptions={vendorOptions}
+            supplierAddressMap={supplierAddressMap}
+            vendorRouteOrder={vendorOptions}
+            vendorDisplayNameMap={vendorDisplayNameMap}
             canEditSupplierRuns={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
@@ -3009,6 +3193,7 @@ export default function App() {
             deliveries={deliveries}
             customers={customers}
             deliverySettings={deliverySettings}
+            deliveryOriginOptions={deliveryOriginOptions}
             canEditDeliveries={canEditDeliveryDetails}
             onAddDelivery={handleAddDelivery}
             onUpdateDelivery={handleUpdateDelivery}
@@ -3036,6 +3221,7 @@ export default function App() {
           <DeliveryDispatchPage
             deliveries={deliveries}
             vehicleOptions={southVehicleOptions}
+            deliveryOriginOptions={deliveryOriginOptions}
             canEditDeliveries={canEditDeliveryDetails}
             onUpdateDelivery={handleUpdateDelivery}
             onEditDelivery={handleEditDelivery}
@@ -3118,6 +3304,7 @@ export default function App() {
               setCurrentPage("today")
             }
             onPageChange={setCurrentPage}
+            vendorOptions={vendorOptions}
           />
         );
     }

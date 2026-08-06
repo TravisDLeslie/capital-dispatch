@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import AddressAutocompleteInput from "./AddressAutocompleteInput";
 import {
-  deliveryOriginOptions,
+  deliveryOriginOptions as fallbackDeliveryOriginOptions,
   deliveryUnloadTypes,
 } from "../data/options";
 import {
@@ -87,11 +87,11 @@ function getDirectionsUrl(originAddress, destinationAddress) {
   )}&destination=${encodeURIComponent(destinationAddress || "")}`;
 }
 
-function getOriginAddress(originName) {
+function getOriginAddress(originName, originOptions = fallbackDeliveryOriginOptions) {
   return (
-    deliveryOriginOptions.find(
+    originOptions.find(
       (originOption) => originOption.name === originName,
-    )?.address || deliveryOriginOptions[0].address
+    )?.address || originOptions[0]?.address || ""
   );
 }
 
@@ -135,7 +135,12 @@ export default function DeliveryOrderForm({
   onCancel,
   onDelete,
   customers = [],
+  deliveryOriginOptions,
 }) {
+  const safeDeliveryOriginOptions =
+    Array.isArray(deliveryOriginOptions) && deliveryOriginOptions.length > 0
+      ? deliveryOriginOptions
+      : fallbackDeliveryOriginOptions;
   const isEditing = Boolean(initialDelivery);
   const [orderNumber, setOrderNumber] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -149,7 +154,7 @@ export default function DeliveryOrderForm({
   const [deliveryOriginName, setDeliveryOriginName] =
     useState("Capital Lumber");
   const [deliveryOriginAddress, setDeliveryOriginAddress] = useState(
-    getOriginAddress("Capital Lumber"),
+    getOriginAddress("Capital Lumber", safeDeliveryOriginOptions),
   );
   const [oneWayDriveMinutes, setOneWayDriveMinutes] = useState("");
   const [deliveryScope, setDeliveryScope] = useState("shipOrderComplete");
@@ -183,7 +188,10 @@ export default function DeliveryOrderForm({
     );
     setDeliveryOriginAddress(
       initialDelivery.deliveryOriginAddress ||
-        getOriginAddress(initialDelivery.deliveryOriginName || "Capital Lumber"),
+        getOriginAddress(
+          initialDelivery.deliveryOriginName || "Capital Lumber",
+          safeDeliveryOriginOptions,
+        ),
     );
     setOneWayDriveMinutes(
       initialDelivery.oneWayDriveMinutes
@@ -201,7 +209,7 @@ export default function DeliveryOrderForm({
     setGeneralNotes(initialDelivery.generalNotes || "");
     setItems(createItemsFromDelivery(initialDelivery));
     setError("");
-  }, [initialDelivery]);
+  }, [initialDelivery, safeDeliveryOriginOptions]);
 
   function clearError() {
     setError("");
@@ -335,7 +343,9 @@ export default function DeliveryOrderForm({
     setDeliveryDate("");
     setDeliveryTimeSlot("");
     setDeliveryOriginName("Capital Lumber");
-    setDeliveryOriginAddress(getOriginAddress("Capital Lumber"));
+    setDeliveryOriginAddress(
+      getOriginAddress("Capital Lumber", safeDeliveryOriginOptions),
+    );
     setOneWayDriveMinutes("");
     setDeliveryScope("shipOrderComplete");
     setDeliveryScopeNotes("");
@@ -699,13 +709,15 @@ export default function DeliveryOrderForm({
                   const originName = event.target.value;
 
                   setDeliveryOriginName(originName);
-                  setDeliveryOriginAddress(getOriginAddress(originName));
+                  setDeliveryOriginAddress(
+                    getOriginAddress(originName, safeDeliveryOriginOptions),
+                  );
                   clearError();
                 }}
                 disabled={isSubmitting}
                 className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
               >
-                {deliveryOriginOptions.map((originOption) => (
+                {safeDeliveryOriginOptions.map((originOption) => (
                   <option key={originOption.name} value={originOption.name}>
                     {originOption.name}
                   </option>

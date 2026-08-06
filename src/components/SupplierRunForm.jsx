@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import {
   favoriteSouthDrivers,
   southDrivers,
-  supplierAddresses,
-  vendors,
+  supplierAddresses as fallbackSupplierAddresses,
+  vendors as fallbackVendors,
 } from "../data/options";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { getDateInputValue } from "../utils/dateHelpers";
@@ -57,16 +57,16 @@ function formatOrderNumber(value) {
   return formatPoNumber(value);
 }
 
-function findMatchingVendor(value) {
-  return vendors.find(
+function findMatchingVendor(value, vendorOptions) {
+  return vendorOptions.find(
     (vendor) => vendor.toLowerCase() === value.trim().toLowerCase(),
   );
 }
 
-function findSupplierAddress(value) {
-  const matchedVendor = findMatchingVendor(value);
+function findSupplierAddress(value, vendorOptions, supplierAddressMap) {
+  const matchedVendor = findMatchingVendor(value, vendorOptions);
 
-  return matchedVendor ? supplierAddresses[matchedVendor] || "" : "";
+  return matchedVendor ? supplierAddressMap[matchedVendor] || "" : "";
 }
 
 const orderedByOptions = [
@@ -85,6 +85,8 @@ export default function SupplierRunForm({
   onSubmit,
   createdBy,
   vehicleOptions,
+  vendorOptions,
+  supplierAddressMap,
   canAssignRoute = false,
   initialSupplierRun = null,
   onCancel,
@@ -92,6 +94,14 @@ export default function SupplierRunForm({
   const safeVehicleOptions = Array.isArray(vehicleOptions)
     ? vehicleOptions
     : [];
+  const safeVendorOptions =
+    Array.isArray(vendorOptions) && vendorOptions.length > 0
+      ? vendorOptions
+      : fallbackVendors;
+  const safeSupplierAddressMap = {
+    ...fallbackSupplierAddresses,
+    ...(supplierAddressMap || {}),
+  };
   const [poNumber, setPoNumber] = useState("");
   const [scheduledDate, setScheduledDate] = useState(
     getDateInputValue(),
@@ -166,7 +176,11 @@ export default function SupplierRunForm({
   function updateVendor(value) {
     setVendor(value);
 
-    const address = findSupplierAddress(value);
+    const address = findSupplierAddress(
+      value,
+      safeVendorOptions,
+      safeSupplierAddressMap,
+    );
 
     if (address) {
       setSupplierAddress(address);
@@ -712,7 +726,7 @@ export default function SupplierRunForm({
                 >
                   <option value="">Select a vendor...</option>
 
-                  {vendors.map((vendorOption) => (
+                  {safeVendorOptions.map((vendorOption) => (
                     <option
                       key={vendorOption}
                       value={vendorOption}
@@ -736,7 +750,7 @@ export default function SupplierRunForm({
                 />
 
                 <datalist id="supplier-run-vendor-options">
-                  {vendors.map((vendorOption) => (
+                  {safeVendorOptions.map((vendorOption) => (
                     <option
                       key={vendorOption}
                       value={vendorOption}

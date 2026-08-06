@@ -71,6 +71,7 @@ const permissionGroups = [
       { id: "user-admin", label: "User Access" },
       { id: "email-list", label: "Email List" },
       { id: "delivery-settings", label: "Delivery Settings" },
+      { id: "vendor-settings", label: "Vendor Settings" },
     ],
   },
 ];

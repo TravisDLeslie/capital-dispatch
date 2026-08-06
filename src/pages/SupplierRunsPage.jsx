@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   GripVertical,
+  Home,
   RefreshCw,
   Search,
   X,
@@ -55,9 +56,19 @@ function normalizeVendorName(vendor) {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function getVendorRouteIndex(vendor) {
+function getDisplayVendorName(vendor, vendorDisplayNameMap = {}) {
   const normalizedVendor = normalizeVendorName(vendor);
-  const routeIndex = southVendorRouteOrder.findIndex(
+
+  return (
+    vendorDisplayNameMap[normalizedVendor] ||
+    vendor ||
+    "Unknown Supplier"
+  );
+}
+
+function getVendorRouteIndex(vendor, vendorRouteOrder = southVendorRouteOrder) {
+  const normalizedVendor = normalizeVendorName(vendor);
+  const routeIndex = vendorRouteOrder.findIndex(
     (routeVendor) =>
       normalizeVendorName(routeVendor) === normalizedVendor,
   );
@@ -67,7 +78,11 @@ function getVendorRouteIndex(vendor) {
     : routeIndex;
 }
 
-function sortVendorGroups(vendorGroups, manualVendorOrder = []) {
+function sortVendorGroups(
+  vendorGroups,
+  manualVendorOrder = [],
+  vendorRouteOrder = southVendorRouteOrder,
+) {
   const normalizedManualOrder = manualVendorOrder.map(normalizeVendorName);
 
   return [...vendorGroups].sort((firstGroup, secondGroup) => {
@@ -90,8 +105,11 @@ function sortVendorGroups(vendorGroups, manualVendorOrder = []) {
       return firstManualIndex - secondManualIndex;
     }
 
-    const firstIndex = getVendorRouteIndex(firstGroup.vendor);
-    const secondIndex = getVendorRouteIndex(secondGroup.vendor);
+    const firstIndex = getVendorRouteIndex(firstGroup.vendor, vendorRouteOrder);
+    const secondIndex = getVendorRouteIndex(
+      secondGroup.vendor,
+      vendorRouteOrder,
+    );
 
     if (firstIndex !== secondIndex) {
       return firstIndex - secondIndex;
@@ -114,9 +132,17 @@ function getDriverAvatar(driver) {
   };
 }
 
-function groupRunsByVendor(supplierRuns, manualVendorOrder = []) {
+function groupRunsByVendor(
+  supplierRuns,
+  manualVendorOrder = [],
+  vendorRouteOrder = southVendorRouteOrder,
+  vendorDisplayNameMap = {},
+) {
   const vendorGroups = supplierRuns.reduce((groups, supplierRun) => {
-    const vendor = supplierRun.vendor || "Unknown Supplier";
+    const vendor = getDisplayVendorName(
+      supplierRun.vendor,
+      vendorDisplayNameMap,
+    );
     const existingGroup = groups.find(
       (group) => group.vendor === vendor,
     );
@@ -135,12 +161,14 @@ function groupRunsByVendor(supplierRuns, manualVendorOrder = []) {
     ];
   }, []);
 
-  return sortVendorGroups(vendorGroups, manualVendorOrder);
+  return sortVendorGroups(vendorGroups, manualVendorOrder, vendorRouteOrder);
 }
 
 function groupRunsByDriverAndVendor(
   supplierRuns,
   routeOrdersByDriver = {},
+  vendorRouteOrder = southVendorRouteOrder,
+  vendorDisplayNameMap = {},
 ) {
   const runsByDriver = supplierRuns.reduce((groups, supplierRun) => {
     const driver = supplierRun.driver || UNASSIGNED_DRIVER;
@@ -156,6 +184,8 @@ function groupRunsByDriverAndVendor(
     vendorGroups: groupRunsByVendor(
       runs,
       routeOrdersByDriver[driver]?.vendorOrder || [],
+      vendorRouteOrder,
+      vendorDisplayNameMap,
     ),
   }));
 }
@@ -425,7 +455,11 @@ function sortSupplierRunsByClosestPickupDate(supplierRuns) {
   });
 }
 
-function groupHistoryRunsByPickupDate(supplierRuns) {
+function groupHistoryRunsByPickupDate(
+  supplierRuns,
+  vendorRouteOrder = southVendorRouteOrder,
+  vendorDisplayNameMap = {},
+) {
   const groupsByDate = supplierRuns.reduce((groups, supplierRun) => {
     const dateKey = getSupplierRunDateKey(supplierRun) || "no-date";
 
@@ -446,7 +480,12 @@ function groupHistoryRunsByPickupDate(supplierRuns) {
           ? "No pickup date"
           : formatDateInput(dateKey),
       runs,
-      driverGroups: groupRunsByDriverAndVendor(runs),
+      driverGroups: groupRunsByDriverAndVendor(
+        runs,
+        {},
+        vendorRouteOrder,
+        vendorDisplayNameMap,
+      ),
     }));
 }
 
@@ -460,6 +499,10 @@ export default function SupplierRunsPage({
   onDeleteSupplierRun,
   createdBy = {},
   vehicleOptions,
+  vendorOptions,
+  supplierAddressMap,
+  vendorRouteOrder,
+  vendorDisplayNameMap,
   canAssignRoute = false,
   canReorderRoute = false,
   canEditSupplierRuns = canAssignRoute || canReorderRoute,
@@ -472,6 +515,11 @@ export default function SupplierRunsPage({
   const safeVehicleOptions = Array.isArray(vehicleOptions)
     ? vehicleOptions
     : [];
+  const safeVendorRouteOrder =
+    Array.isArray(vendorRouteOrder) && vendorRouteOrder.length > 0
+      ? vendorRouteOrder
+      : southVendorRouteOrder;
+  const safeVendorDisplayNameMap = vendorDisplayNameMap || {};
   const todayKey = getDateInputValue();
   const [successMessage, setSuccessMessage] = useState("");
   const [openStopKeys, setOpenStopKeys] = useState({});
@@ -700,6 +748,13 @@ export default function SupplierRunsPage({
   }
 
   function getVendorGroupAddress(vendorGroup) {
+    const settingsAddress =
+      supplierAddressMap?.[vendorGroup.vendor]?.trim?.() || "";
+
+    if (settingsAddress) {
+      return settingsAddress;
+    }
+
     const runWithAddress = vendorGroup.runs.find(
       (supplierRun) =>
         typeof supplierRun.supplierAddress === "string" &&
@@ -707,6 +762,20 @@ export default function SupplierRunsPage({
     );
 
     return runWithAddress?.supplierAddress?.trim() || "";
+  }
+
+  function getDisplaySupplierRun(supplierRun) {
+    const displayVendor = getDisplayVendorName(
+      supplierRun.vendor,
+      safeVendorDisplayNameMap,
+    );
+
+    return displayVendor === supplierRun.vendor
+      ? supplierRun
+      : {
+          ...supplierRun,
+          vendor: displayVendor,
+        };
   }
 
   function getDriverGroupStats(driverGroup) {
@@ -876,9 +945,11 @@ export default function SupplierRunsPage({
     );
   });
   const selectedSupplierRunDetails = viewingSupplierRun
-    ? supplierRuns.find(
-        (supplierRun) => supplierRun.id === viewingSupplierRun.id,
-      ) || viewingSupplierRun
+    ? getDisplaySupplierRun(
+        supplierRuns.find(
+          (supplierRun) => supplierRun.id === viewingSupplierRun.id,
+        ) || viewingSupplierRun,
+      )
     : null;
 
   useEffect(() => {
@@ -1002,11 +1073,15 @@ export default function SupplierRunsPage({
   const openRunGroups = groupRunsByDriverAndVendor(
     openRuns,
     mode === "check" ? routeOrdersByDriver : {},
+    safeVendorRouteOrder,
+    safeVendorDisplayNameMap,
   );
   const completeRunGroups =
     groupRunsByDriverAndVendor(
       completeRuns,
       mode === "check" ? routeOrdersByDriver : {},
+      safeVendorRouteOrder,
+      safeVendorDisplayNameMap,
     );
   const openStopsCount = openRunGroups.reduce(
     (count, driverGroup) =>
@@ -1022,7 +1097,11 @@ export default function SupplierRunsPage({
     0,
   );
   const historyDateGroups =
-    groupHistoryRunsByPickupDate(filteredHistoryRuns);
+    groupHistoryRunsByPickupDate(
+      filteredHistoryRuns,
+      safeVendorRouteOrder,
+      safeVendorDisplayNameMap,
+    );
   const dispatchRuns = supplierRuns.filter(
     (supplierRun) =>
       supplierRun.status !== "complete" &&
@@ -1140,6 +1219,8 @@ export default function SupplierRunsPage({
           onSubmit={handleSubmit}
           createdBy={createdBy}
           vehicleOptions={safeVehicleOptions}
+          vendorOptions={vendorOptions}
+          supplierAddressMap={supplierAddressMap}
           canAssignRoute={canAssignRoute}
         />
       ) : mode === "dispatch" ? (
@@ -1584,7 +1665,9 @@ export default function SupplierRunsPage({
                                           (supplierRun) => (
                                             <SupplierRunCard
                                               key={supplierRun.id}
-                                              supplierRun={supplierRun}
+                                              supplierRun={getDisplaySupplierRun(
+                                                supplierRun,
+                                              )}
                                               onToggleItem={
                                                 onToggleSupplierRunItem
                                               }
@@ -1963,11 +2046,11 @@ export default function SupplierRunsPage({
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">
+                              <p className="hidden text-xs font-black uppercase tracking-[0.2em] text-blue-700 sm:block">
                                 Driver Route
                               </p>
 
-                              <div className="mt-1 flex min-w-0 items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2 sm:mt-1">
                                 <h4 className="min-w-0 flex-1 truncate text-2xl font-black tracking-tight text-slate-900">
                                   {driverGroup.driver}
                                 </h4>
@@ -2051,7 +2134,19 @@ export default function SupplierRunsPage({
                       ) : null}
 
                     {driverIsOpen ? (
-                    <div className="space-y-3 border-l-4 border-blue-200 pl-3">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3 px-1">
+                        <h5 className="text-sm font-black uppercase tracking-[0.16em] text-slate-600">
+                          Stops
+                        </h5>
+                        <span className="text-xs font-bold text-slate-400">
+                          {driverGroup.vendorGroups.length}{" "}
+                          {driverGroup.vendorGroups.length === 1
+                            ? "stop"
+                            : "stops"}
+                        </span>
+                      </div>
+
                       {driverGroup.vendorGroups.map((vendorGroup, vendorIndex) => {
                         const stats = getVendorGroupStats(vendorGroup);
                         const supplierAddress =
@@ -2166,22 +2261,33 @@ export default function SupplierRunsPage({
                                     vendorGroup.vendor,
                                   )
                                 }
-                                className="flex min-w-0 flex-1 flex-col gap-3 px-4 py-3 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
+                                className="flex min-w-0 flex-1 flex-col gap-3 px-4 py-3 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between"
                                 aria-expanded={stopIsOpen}
                               >
-                                <div className="min-w-0">
-                                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                                    Supplier Stop
-                                  </p>
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38]">
+                                    <Home
+                                      aria-hidden="true"
+                                      className="h-7 w-7"
+                                      strokeWidth={2.5}
+                                    />
+                                  </span>
 
-                                  <h5 className="truncate text-xl font-black text-slate-900">
-                                    {vendorGroup.vendor}
-                                  </h5>
+                                  <div className="min-w-0">
+                                    <h5 className="truncate text-xl font-black text-slate-900">
+                                      {vendorGroup.vendor}
+                                    </h5>
 
-                                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                                    {stats.remainingItems} left of{" "}
-                                    {stats.itemCount} items
-                                  </p>
+                                    <p className="mt-1 text-sm font-bold text-slate-500">
+                                      {stats.poCount}{" "}
+                                      {stats.poCount === 1 ? "PO" : "POs"} •{" "}
+                                      {stats.remainingItems}{" "}
+                                      {stats.remainingItems === 1
+                                        ? "item"
+                                        : "items"}{" "}
+                                      left
+                                    </p>
+                                  </div>
                                 </div>
                               </button>
 
@@ -2206,7 +2312,7 @@ export default function SupplierRunsPage({
                                 ) : null}
 
                                 <div className="flex items-center gap-1.5 sm:gap-2">
-                                  <span className="rounded-lg bg-white px-2 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:px-3">
+                                  <span className="inline-flex rounded-lg bg-white px-3 py-1.5 text-xs font-black text-blue-800 shadow-sm">
                                     {stats.poCount}{" "}
                                     {stats.poCount === 1
                                       ? "PO"
@@ -2246,7 +2352,9 @@ export default function SupplierRunsPage({
                                 {vendorGroup.runs.map((supplierRun) => (
                                   <SupplierRunCard
                                     key={supplierRun.id}
-                                    supplierRun={supplierRun}
+                                    supplierRun={getDisplaySupplierRun(
+                                      supplierRun,
+                                    )}
                                     onToggleItem={
                                       onToggleSupplierRunItem
                                     }
@@ -2368,6 +2476,18 @@ export default function SupplierRunsPage({
 
                     {driverIsOpen ? (
                     <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-3 px-1">
+                        <h5 className="text-sm font-black uppercase tracking-[0.16em] text-slate-600">
+                          Stops
+                        </h5>
+                        <span className="text-xs font-bold text-slate-400">
+                          {driverGroup.vendorGroups.length}{" "}
+                          {driverGroup.vendorGroups.length === 1
+                            ? "stop"
+                            : "stops"}
+                        </span>
+                      </div>
+
                       {driverGroup.vendorGroups.map((vendorGroup) => {
                         const stats = getVendorGroupStats(vendorGroup);
                         const supplierAddress =
@@ -2393,25 +2513,37 @@ export default function SupplierRunsPage({
                                     "complete",
                                   )
                                 }
-                                className="flex min-w-0 flex-1 flex-col gap-3 px-4 py-3 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
+                                className="flex min-w-0 flex-1 flex-col gap-3 px-4 py-3 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between"
                                 aria-expanded={stopIsOpen}
                               >
-                                <div className="min-w-0">
-                                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                                    Supplier Stop
-                                  </p>
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38]">
+                                    <Home
+                                      aria-hidden="true"
+                                      className="h-7 w-7"
+                                      strokeWidth={2.5}
+                                    />
+                                  </span>
 
-                                  <h5 className="truncate text-lg font-black text-slate-800">
-                                    {vendorGroup.vendor}
-                                  </h5>
+                                  <div className="min-w-0">
+                                    <h5 className="truncate text-lg font-black text-slate-800">
+                                      {vendorGroup.vendor}
+                                    </h5>
 
-                                  <p className="mt-1 text-sm font-semibold text-emerald-700">
-                                    Complete • {stats.itemCount} items
-                                  </p>
+                                    <p className="mt-1 text-sm font-bold text-emerald-700">
+                                      {stats.poCount}{" "}
+                                      {stats.poCount === 1 ? "PO" : "POs"} •{" "}
+                                      {stats.itemCount}{" "}
+                                      {stats.itemCount === 1
+                                        ? "item"
+                                        : "items"}{" "}
+                                      complete
+                                    </p>
+                                  </div>
                                 </div>
 
                                 <div className="flex shrink-0 items-center gap-2">
-                                  <span className="rounded-lg bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm">
+                                  <span className="inline-flex rounded-lg bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm">
                                     {stats.poCount}{" "}
                                     {stats.poCount === 1
                                       ? "PO"
@@ -2452,7 +2584,9 @@ export default function SupplierRunsPage({
                                 {vendorGroup.runs.map((supplierRun) => (
                                   <SupplierRunCard
                                     key={supplierRun.id}
-                                    supplierRun={supplierRun}
+                                    supplierRun={getDisplaySupplierRun(
+                                      supplierRun,
+                                    )}
                                     onToggleItem={onToggleSupplierRunItem}
                                     onUpdateItemDescription={
                                       onUpdateSupplierRunItemDescription
@@ -2528,8 +2662,10 @@ export default function SupplierRunsPage({
                 onSubmit={handleEditSubmit}
                 createdBy={createdBy}
                 vehicleOptions={safeVehicleOptions}
+                vendorOptions={vendorOptions}
+                supplierAddressMap={supplierAddressMap}
                 canAssignRoute
-                initialSupplierRun={editingSupplierRun}
+                initialSupplierRun={getDisplaySupplierRun(editingSupplierRun)}
                 onCancel={() => setEditingSupplierRun(null)}
               />
             </div>

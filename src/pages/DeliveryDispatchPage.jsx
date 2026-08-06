@@ -15,7 +15,7 @@ import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import {
   deliveryDrivers,
-  deliveryOriginOptions,
+  deliveryOriginOptions as fallbackDeliveryOriginOptions,
   favoriteDeliveryDrivers,
 } from "../data/options";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
@@ -99,15 +99,21 @@ function getVehicleLabel(vehicleOption) {
     : vehicleOption.title;
 }
 
-function getOriginAddress(originName) {
+function getOriginAddress(
+  originName,
+  originOptions = fallbackDeliveryOriginOptions,
+) {
   return (
-    deliveryOriginOptions.find(
+    originOptions.find(
       (originOption) => originOption.name === originName,
-    )?.address || deliveryOriginOptions[0].address
+    )?.address || originOptions[0]?.address || ""
   );
 }
 
-function getInitialSchedule(delivery) {
+function getInitialSchedule(
+  delivery,
+  originOptions = fallbackDeliveryOriginOptions,
+) {
   const originName = delivery.deliveryOriginName || "Capital Lumber";
 
   return {
@@ -115,7 +121,7 @@ function getInitialSchedule(delivery) {
     deliveryTimeSlot: delivery.deliveryTimeSlot || "",
     deliveryOriginName: originName,
     deliveryOriginAddress:
-      delivery.deliveryOriginAddress || getOriginAddress(originName),
+      delivery.deliveryOriginAddress || getOriginAddress(originName, originOptions),
     oneWayDriveMinutes: delivery.oneWayDriveMinutes
       ? String(delivery.oneWayDriveMinutes)
       : "",
@@ -183,6 +189,7 @@ function assignmentsReady(assignments, vehicleOptions) {
  * @param {{
  *   deliveries: Array<Record<string, any>>;
  *   vehicleOptions?: Array<{ id: string; title: string; badge?: string }>;
+ *   deliveryOriginOptions?: Array<{ name: string; address: string }>;
  *   canEditDeliveries?: boolean;
  *   onUpdateDelivery: (deliveryId: string, updates: Record<string, any>) => Promise<void>;
  *   onEditDelivery: (deliveryId: string) => void;
@@ -192,11 +199,16 @@ function assignmentsReady(assignments, vehicleOptions) {
 export default function DeliveryDispatchPage({
   deliveries,
   vehicleOptions = [],
+  deliveryOriginOptions,
   canEditDeliveries = false,
   onUpdateDelivery,
   onEditDelivery,
   onPageChange,
 }) {
+  const safeDeliveryOriginOptions =
+    Array.isArray(deliveryOriginOptions) && deliveryOriginOptions.length > 0
+      ? deliveryOriginOptions
+      : fallbackDeliveryOriginOptions;
   const [searchQuery, setSearchQuery] = useState("");
   const [draftAssignments, setDraftAssignments] = useState({});
   const [draftSchedules, setDraftSchedules] = useState({});
@@ -248,7 +260,10 @@ export default function DeliveryDispatchPage({
   }
 
   function getSchedule(delivery) {
-    return draftSchedules[delivery.id] || getInitialSchedule(delivery);
+    return (
+      draftSchedules[delivery.id] ||
+      getInitialSchedule(delivery, safeDeliveryOriginOptions)
+    );
   }
 
   function getDeliveryWithDraftSchedule(delivery) {
@@ -269,7 +284,10 @@ export default function DeliveryDispatchPage({
     };
 
     if (field === "deliveryOriginName") {
-      nextSchedule.deliveryOriginAddress = getOriginAddress(value);
+      nextSchedule.deliveryOriginAddress = getOriginAddress(
+        value,
+        safeDeliveryOriginOptions,
+      );
     }
 
     setDraftSchedules((currentDraftSchedules) => ({
@@ -895,7 +913,7 @@ export default function DeliveryDispatchPage({
                             disabled={isSaving || !canScheduleDelivery}
                             className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                           >
-                            {deliveryOriginOptions.map((originOption) => (
+                            {safeDeliveryOriginOptions.map((originOption) => (
                               <option
                                 key={originOption.name}
                                 value={originOption.name}

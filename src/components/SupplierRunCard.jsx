@@ -1235,7 +1235,7 @@ export default function SupplierRunCard({
         </div>
       ) : null}
 
-      {!isCompactClosed && supplierRun.completedAt ? (
+      {isItemsOpen && supplierRun.completedAt ? (
         <p className="mt-3 text-xs font-bold text-emerald-700">
           {isCompletedSection ? "Finished" : "Completed"}{" "}
           {formatFullDate(supplierRun.completedAt)} at{" "}
@@ -1243,25 +1243,19 @@ export default function SupplierRunCard({
         </p>
       ) : null}
 
-      {!isCompactClosed && supplierRun.updatedAt ? (
+      {isItemsOpen && supplierRun.updatedAt ? (
         <p className="mt-3 text-xs font-semibold text-slate-400">
           Last updated {formatFullDate(supplierRun.updatedAt)} at{" "}
           {formatTime(supplierRun.updatedAt)}
         </p>
       ) : null}
 
-      {(!isCompactClosed || compactWhenClosed) &&
+      {isItemsOpen &&
       (supplierRun.createdByName ||
         supplierRun.createdByEmail ||
         supplierRun.orderedBy ||
         supplierRun.createdAt) ? (
-        <div
-          className={`flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-400 ${
-            isCompactClosed
-              ? "mt-3 border-t border-slate-100 pt-2 sm:hidden"
-              : "mt-2"
-          }`}
-        >
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-400">
           {supplierRun.createdAt ? (
             <span>
               Added {formatShortDate(supplierRun.createdAt)} at{" "}
@@ -1282,8 +1276,14 @@ export default function SupplierRunCard({
         </div>
       ) : null}
 
-      {!isCompactClosed ? (
-        <div className="mt-4 flex flex-wrap justify-end gap-3 border-t border-slate-100 pt-3">
+      {onEdit || onDelete ? (
+        <div
+          className={`flex flex-wrap justify-end gap-3 ${
+            !isItemsOpen
+              ? "mt-3"
+              : "mt-4 border-t border-slate-100 pt-3"
+          }`}
+        >
           {onEdit ? (
             <button
               type="button"
@@ -1294,13 +1294,15 @@ export default function SupplierRunCard({
             </button>
           ) : null}
 
-          <button
-            type="button"
-            onClick={() => onDelete(supplierRun.id)}
-            className="text-xs font-bold text-red-500 transition hover:text-red-700"
-          >
-            Delete PO
-          </button>
+          {onDelete ? (
+            <button
+              type="button"
+              onClick={() => onDelete(supplierRun.id)}
+              className="text-xs font-bold text-red-500 transition hover:text-red-700"
+            >
+              Delete PO
+            </button>
+          ) : null}
         </div>
       ) : null}
 

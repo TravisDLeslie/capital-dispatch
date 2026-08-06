@@ -3,10 +3,19 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import CheckInForm from "../components/CheckInForm";
 import PageContainer from "../components/PageContainer";
 
+/**
+ * @param {{
+ *   onAddCheckIn: (checkIn: any) => Promise<void>;
+ *   onViewToday: () => void;
+ *   onPageChange?: (pageId: string) => void;
+ *   vendorOptions?: string[];
+ * }} props
+ */
 export default function CheckInPage({
   onAddCheckIn,
   onViewToday,
   onPageChange,
+  vendorOptions = [],
 }) {
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -57,7 +66,7 @@ export default function CheckInPage({
         </div>
       ) : null}
 
-      <CheckInForm onSubmit={handleSubmit} />
+      <CheckInForm onSubmit={handleSubmit} vendorOptions={vendorOptions} />
     </PageContainer>
   );
 }

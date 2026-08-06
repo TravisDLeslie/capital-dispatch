@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   locations,
   receivingTeamMembers,
-  vendors,
+  vendors as fallbackVendors,
 } from "../data/options";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
@@ -86,7 +86,11 @@ async function createLocationPhoto(file) {
   };
 }
 
-export default function CheckInForm({ onSubmit }) {
+export default function CheckInForm({ onSubmit, vendorOptions }) {
+  const vendors =
+    Array.isArray(vendorOptions) && vendorOptions.length > 0
+      ? vendorOptions
+      : fallbackVendors;
   const [poNumber, setPoNumber] = useState("");
   const [vendor, setVendor] = useState("");
   const [checkedInBy, setCheckedInBy] = useState("");

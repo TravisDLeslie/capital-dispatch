@@ -94,7 +94,11 @@ function getCurrentPageLabel(currentPage) {
     return "Sales";
   }
 
-  if (["user-admin", "email-list", "delivery-settings"].includes(currentPage)) {
+  if (
+    ["user-admin", "email-list", "delivery-settings", "vendor-settings"].includes(
+      currentPage,
+    )
+  ) {
     return "Admin";
   }
 
@@ -141,7 +145,9 @@ function getCurrentPageGroup(currentPage) {
 
   if (
     currentPage === "admin" ||
-    ["user-admin", "email-list", "delivery-settings"].includes(currentPage)
+    ["user-admin", "email-list", "delivery-settings", "vendor-settings"].includes(
+      currentPage,
+    )
   ) {
     return "Admin";
   }
@@ -295,7 +301,12 @@ export default function AppHeader({
             )) ||
           (item.id === "admin" &&
             allowedPageIds.some((pageId) =>
-              ["user-admin", "email-list", "delivery-settings"].includes(pageId),
+              [
+                "user-admin",
+                "email-list",
+                "delivery-settings",
+                "vendor-settings",
+              ].includes(pageId),
             )) ||
           (item.id === "fleet" &&
             allowedPageIds.some((pageId) =>

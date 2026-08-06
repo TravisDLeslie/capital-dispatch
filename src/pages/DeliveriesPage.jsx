@@ -38,6 +38,7 @@ export default function DeliveriesPage({
   deliveries,
   customers,
   deliverySettings,
+  deliveryOriginOptions,
   canEditDeliveries = false,
   onAddDelivery,
   onUpdateDelivery,
@@ -88,6 +89,7 @@ export default function DeliveriesPage({
         initialDelivery={editingDelivery || null}
         customers={customers || []}
         deliverySettings={deliverySettings}
+        deliveryOriginOptions={deliveryOriginOptions}
         onSubmit={
           editingDelivery ? handleUpdateSubmit : handleSubmit
         }
