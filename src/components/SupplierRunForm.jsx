@@ -418,7 +418,7 @@ export default function SupplierRunForm({
       return;
     }
 
-    const matchedVendor = findMatchingVendor(vendor);
+    const matchedVendor = findMatchingVendor(vendor, safeVendorOptions);
 
     if (!matchedVendor) {
       setError("Select a vendor from the vendor list.");

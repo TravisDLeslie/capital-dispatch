@@ -508,6 +508,7 @@ export default function SupplierRunsPage({
   canEditSupplierRuns = canAssignRoute || canReorderRoute,
   canReadAllRouteOrders = canReorderRoute,
   routeOrderDriverName = "",
+  viewerRole = "",
   initialCheckViewMode = "list",
   onPageChange,
   onRefreshPage,
@@ -520,6 +521,7 @@ export default function SupplierRunsPage({
       ? vendorRouteOrder
       : southVendorRouteOrder;
   const safeVendorDisplayNameMap = vendorDisplayNameMap || {};
+  const shouldShowMobileStopIcon = viewerRole === "driver";
   const todayKey = getDateInputValue();
   const [successMessage, setSuccessMessage] = useState("");
   const [openStopKeys, setOpenStopKeys] = useState({});
@@ -2265,7 +2267,13 @@ export default function SupplierRunsPage({
                                 aria-expanded={stopIsOpen}
                               >
                                 <div className="flex min-w-0 items-center gap-3">
-                                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38]">
+                                  <span
+                                    className={`h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38] ${
+                                      shouldShowMobileStopIcon
+                                        ? "flex"
+                                        : "hidden sm:flex"
+                                    }`}
+                                  >
                                     <Home
                                       aria-hidden="true"
                                       className="h-7 w-7"
@@ -2517,7 +2525,13 @@ export default function SupplierRunsPage({
                                 aria-expanded={stopIsOpen}
                               >
                                 <div className="flex min-w-0 items-center gap-3">
-                                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38]">
+                                  <span
+                                    className={`h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38] ${
+                                      shouldShowMobileStopIcon
+                                        ? "flex"
+                                        : "hidden sm:flex"
+                                    }`}
+                                  >
                                     <Home
                                       aria-hidden="true"
                                       className="h-7 w-7"

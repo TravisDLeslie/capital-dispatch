@@ -3054,6 +3054,7 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            viewerRole={effectiveUserRole}
             canAssignRoute={false}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
@@ -3079,6 +3080,7 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            viewerRole={effectiveUserRole}
             canAssignRoute
             canReorderRoute={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
@@ -3107,6 +3109,7 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            viewerRole={effectiveUserRole}
             canReorderRoute={canAssignSouthRoutes}
             canEditSupplierRuns={canAssignSouthRoutes}
             canReadAllRouteOrders={
@@ -3137,6 +3140,7 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            viewerRole={effectiveUserRole}
             canReorderRoute={canAssignSouthRoutes}
             canEditSupplierRuns={canAssignSouthRoutes}
             canReadAllRouteOrders={
@@ -3170,6 +3174,7 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            viewerRole={effectiveUserRole}
             canEditSupplierRuns={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
