@@ -713,8 +713,10 @@ export default function SupplierRunCard({
       }`}
     >
       <div
-        className={`flex justify-between gap-3 ${
-          isCompactClosed ? "items-center" : "items-start"
+        className={`flex gap-3 ${
+          isItemsOpen
+            ? "items-start justify-between"
+            : "flex-col sm:flex-row sm:items-center sm:justify-between"
         }`}
       >
         <div className="min-w-0">
@@ -734,7 +736,7 @@ export default function SupplierRunCard({
               </button>
             ) : null}
 
-            <h2 className="text-lg font-black tracking-tight text-slate-900">
+            <h2 className="whitespace-nowrap text-lg font-black tracking-tight text-slate-900">
               {supplierRun.poNumber}
             </h2>
 
@@ -748,13 +750,19 @@ export default function SupplierRunCard({
               </span>
             )}
 
-            {showCustomerName && supplierRunCustomerName ? (
-              <CustomerNameBadge
-                name={supplierRunCustomerName}
-                truncate={customerNameTruncate}
-              />
-            ) : null}
           </div>
+
+          {showCustomerName && supplierRunCustomerName ? (
+            <CustomerNameBadge
+              name={supplierRunCustomerName}
+              truncate={customerNameTruncate}
+              className={
+                isItemsOpen
+                  ? "mt-2"
+                  : "mt-3 w-full justify-start rounded-xl px-3 py-2"
+              }
+            />
+          ) : null}
 
           {isItemsOpen ? (
             <>
@@ -775,7 +783,7 @@ export default function SupplierRunCard({
           className={`flex shrink-0 ${
             isItemsOpen
               ? "flex-col items-end gap-2"
-              : "items-center gap-2"
+              : "w-full items-center justify-between gap-2 sm:w-auto sm:justify-end"
           }`}
         >
           {isItemsOpen ? (
