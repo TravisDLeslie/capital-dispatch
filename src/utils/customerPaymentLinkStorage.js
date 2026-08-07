@@ -8,6 +8,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { formatCustomerName } from "./textFormatters";
 
 const STORAGE_KEY = "dispatch-cl-customer-payment-links";
 const PAYMENT_LINKS_COLLECTION = "customerPaymentLinks";
@@ -113,7 +114,9 @@ export async function ensureMonthlyPaymentLinks(customers, month, createdBy) {
         id,
         month,
         customerId: customer.id,
-        customerName: customer.companyName || customer.name || "Unnamed Customer",
+        customerName:
+          formatCustomerName(customer.companyName || customer.name) ||
+          "UNNAMED CUSTOMER",
         accountNumber: customer.accountNumber || "",
         contactId: selectedContact?.id || "",
         contactLabel: selectedContact?.label || "",

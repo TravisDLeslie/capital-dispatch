@@ -24,6 +24,7 @@ import {
   scheduleWindowsOverlap,
   timeToMinutes,
 } from "../utils/deliverySchedule";
+import { formatCustomerName } from "../utils/textFormatters";
 
 const timelineStartMinutes = 8 * 60;
 const timelineEndMinutes = 17 * 60;
@@ -246,7 +247,8 @@ function DeliveryTimelineBoard({
                         {getDeliveryTimeRange(delivery)}
                       </span>
                       <span className="mt-1 block truncate text-lg font-black text-slate-950">
-                        {delivery.customerName || "Unnamed customer"}
+                        {formatCustomerName(delivery.customerName) ||
+                          "Unnamed customer"}
                       </span>
                       <span className="mt-1 block truncate text-sm font-bold text-slate-500">
                         Order {delivery.orderNumber}
@@ -294,7 +296,7 @@ function CompactDeliveryCard({
             Order {delivery.orderNumber}
           </p>
           <h3 className="mt-1 truncate text-lg font-black text-slate-900">
-            {delivery.customerName}
+            {formatCustomerName(delivery.customerName)}
           </h3>
           <p className="mt-1 text-sm font-black text-slate-600">
             {getDeliveryTimeRange(delivery)}

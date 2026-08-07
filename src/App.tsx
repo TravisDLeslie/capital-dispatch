@@ -104,6 +104,7 @@ import {
 import {
   capitalLumberAddress,
 } from "./data/options";
+import { formatCustomerName } from "./utils/textFormatters";
 
 const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
@@ -2081,7 +2082,7 @@ export default function App() {
                 : item.orderNumber,
             customerName:
               typeof customerName === "string"
-                ? customerName
+                ? formatCustomerName(customerName)
                 : item.customerName,
             returnNotes:
               typeof returnNotes === "string"

@@ -15,6 +15,7 @@ import {
   formatShortDate,
   formatTime,
 } from "../utils/dateHelpers";
+import { formatCustomerName } from "../utils/textFormatters";
 
 function getSavedAssignment(checkIn) {
   if (checkIn.orderAssignment?.type) {
@@ -170,7 +171,7 @@ export default function CheckInCard({
         : {
             type: "customer",
             internalReference: internalReference.trim(),
-            businessName: businessName.trim(),
+            businessName: formatCustomerName(businessName),
             customerId:
               selectedCustomerId ||
               findMatchingCustomer(businessName)?.id ||
@@ -192,7 +193,7 @@ export default function CheckInCard({
     }
 
     if (savedAssignment?.type === "customer") {
-      return savedAssignment.businessName;
+      return formatCustomerName(savedAssignment.businessName);
     }
 
     return "Not assigned";
@@ -752,7 +753,7 @@ export default function CheckInCard({
                     autoComplete="off"
                     value={businessName}
                     onChange={(event) => {
-                      handleBusinessNameChange(event.target.value);
+                      handleBusinessNameChange(event.target.value.toUpperCase());
                     }}
                     placeholder="ABC Construction"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
@@ -760,8 +761,8 @@ export default function CheckInCard({
                   <datalist id={`customers-${checkIn.id}`}>
                     {customers.map((customer) => {
                       const label =
-                        customer.companyName ||
-                        customer.name ||
+                        formatCustomerName(customer.companyName) ||
+                        formatCustomerName(customer.name) ||
                         customer.accountNumber ||
                         "";
 

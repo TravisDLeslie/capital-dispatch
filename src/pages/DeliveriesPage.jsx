@@ -14,6 +14,7 @@ import DeliveryOrderForm from "../components/DeliveryOrderForm";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
+import { formatCustomerName } from "../utils/textFormatters";
 
 function formatCreatedAt(value) {
   if (!value) {
@@ -150,7 +151,7 @@ export default function DeliveriesPage({
                       </p>
 
                       <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
-                        {delivery.customerName}
+                        {formatCustomerName(delivery.customerName)}
                       </h3>
 
                       <div className="mt-3 flex flex-wrap gap-2">

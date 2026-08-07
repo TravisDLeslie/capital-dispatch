@@ -29,6 +29,7 @@ import {
   deliveryTimeSlotOptions,
   scheduleWindowsOverlap,
 } from "../utils/deliverySchedule";
+import { formatCustomerName } from "../utils/textFormatters";
 
 function normalizeSearch(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -531,7 +532,7 @@ export default function DeliveryDispatchPage({
                         </p>
 
                         <h2 className="mt-1 truncate text-2xl font-black tracking-tight text-slate-900 sm:mt-2">
-                          {delivery.customerName}
+                          {formatCustomerName(delivery.customerName)}
                         </h2>
                       </div>
 

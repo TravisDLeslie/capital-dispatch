@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FileText } from "lucide-react";
+import CustomerNameBadge from "./CustomerNameBadge";
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 import {
   formatDateInput,
@@ -7,6 +8,7 @@ import {
   formatShortDate,
   formatTime,
 } from "../utils/dateHelpers";
+import { formatCustomerName } from "../utils/textFormatters";
 
 const capitalLumberInfo = {
   name: "Capital Lumber Co, Inc",
@@ -141,7 +143,9 @@ function formatPickupItemsForPrint(items, showCustomerName = false) {
             <strong>${escapeHtml(item.description)}</strong>
             ${
               showCustomerName && item.customerName
-                ? `<span>Customer: ${escapeHtml(item.customerName)}</span>`
+                ? `<span>Customer: ${escapeHtml(
+                    formatCustomerName(item.customerName),
+                  )}</span>`
                 : ""
             }
             ${
@@ -544,6 +548,7 @@ export default function SupplierRunCard({
   defaultItemsOpen = false,
   compactWhenClosed = true,
   showCustomerName = false,
+  customerNameTruncate = true,
 }) {
   const items = Array.isArray(supplierRun.items)
     ? supplierRun.items
@@ -645,7 +650,7 @@ export default function SupplierRunCard({
       editingMaterialUse,
       usesOrderNumber(editingMaterialUse) ? editingOrderNumber.trim() : "",
       showCustomerName && usesOrderNumber(editingMaterialUse)
-        ? editingCustomerName.trim()
+        ? formatCustomerName(editingCustomerName)
         : undefined,
       usesReturnNotes(editingMaterialUse) ? editingReturnNotes.trim() : "",
     );
@@ -744,9 +749,10 @@ export default function SupplierRunCard({
             )}
 
             {showCustomerName && supplierRunCustomerName ? (
-              <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-black normal-case tracking-normal text-violet-700 ring-1 ring-violet-200">
-                Customer: {supplierRunCustomerName}
-              </span>
+              <CustomerNameBadge
+                name={supplierRunCustomerName}
+                truncate={customerNameTruncate}
+              />
             ) : null}
           </div>
 
@@ -928,9 +934,11 @@ export default function SupplierRunCard({
                       ) : null}
 
                       {showCustomerName && item.customerName ? (
-                        <span className="mt-1 block text-xs font-bold text-slate-500">
-                          Customer: {item.customerName}
-                        </span>
+                        <CustomerNameBadge
+                          name={item.customerName}
+                          className="mt-2"
+                          truncate={customerNameTruncate}
+                        />
                       ) : null}
 
                       {item.returnNotes ? (
@@ -1166,7 +1174,9 @@ export default function SupplierRunCard({
                           type="text"
                           value={editingCustomerName}
                           onChange={(event) => {
-                            setEditingCustomerName(event.target.value);
+                            setEditingCustomerName(
+                              event.target.value.toUpperCase(),
+                            );
                             setEditError("");
                           }}
                           disabled={!usesOrderNumber(editingMaterialUse)}

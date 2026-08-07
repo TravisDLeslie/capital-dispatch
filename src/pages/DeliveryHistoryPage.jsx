@@ -14,6 +14,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
+import { formatCustomerName } from "../utils/textFormatters";
 
 function normalizeText(value) {
   return String(value || "")
@@ -228,7 +229,7 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
                     </p>
 
                     <h2 className="mt-2 truncate text-2xl font-black tracking-tight text-slate-900">
-                      {delivery.customerName}
+                      {formatCustomerName(delivery.customerName)}
                     </h2>
 
                     <p className="mt-1 text-sm font-bold text-slate-500">

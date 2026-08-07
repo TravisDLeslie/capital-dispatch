@@ -25,6 +25,7 @@ import {
 } from "../utils/deliveryScope";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
+import { formatCustomerName } from "../utils/textFormatters";
 
 function createEmptyDeliveryItem() {
   return {
@@ -100,7 +101,7 @@ function normalizeLookup(value) {
 }
 
 function getCustomerDisplayName(customer) {
-  return customer?.companyName || customer?.name || "";
+  return formatCustomerName(customer?.companyName || customer?.name);
 }
 
 function getCustomerAddress(customer) {
@@ -413,7 +414,7 @@ export default function DeliveryOrderForm({
     const delivery = {
       id: initialDelivery?.id || createId(),
       orderNumber: orderNumber.trim(),
-      customerName: customerName.trim(),
+      customerName: formatCustomerName(customerName),
       address: address.trim(),
       contactName: contactName.trim(),
       contactPhone: contactPhone.trim(),
@@ -533,7 +534,7 @@ export default function DeliveryOrderForm({
               list="delivery-customers"
               value={customerName}
               onChange={(event) => {
-                const nextCustomerName = event.target.value;
+                const nextCustomerName = event.target.value.toUpperCase();
                 const matchedCustomer = findMatchingCustomer(nextCustomerName);
 
                 setCustomerName(nextCustomerName);
@@ -560,7 +561,11 @@ export default function DeliveryOrderForm({
                   <option
                     key={customer.id}
                     value={displayName}
-                    label={customer.accountNumber || customer.name || ""}
+                    label={
+                      customer.accountNumber ||
+                      formatCustomerName(customer.name) ||
+                      ""
+                    }
                   />
                 );
               })}

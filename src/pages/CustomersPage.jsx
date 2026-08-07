@@ -11,6 +11,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
+import { formatCustomerName } from "../utils/textFormatters";
 
 function createEmptyContact() {
   return {
@@ -311,8 +312,8 @@ export default function CustomersPage({
           contact.email,
       );
     const customerUpdates = {
-      name: name.trim(),
-      companyName: companyName.trim(),
+      name: formatCustomerName(name),
+      companyName: formatCustomerName(companyName),
       accountNumber: accountNumber.trim(),
       customerType,
       email: email.trim(),
@@ -344,9 +345,9 @@ export default function CustomersPage({
       if (editingCustomerId) {
         await onUpdateCustomer(editingCustomerId, customerUpdates);
         setMessage(
-          `${
-            customerUpdates.companyName || customerUpdates.name
-          } was updated.`,
+          `${formatCustomerName(
+            customerUpdates.companyName || customerUpdates.name,
+          )} was updated.`,
         );
       } else {
         const now = new Date().toISOString();
@@ -359,7 +360,9 @@ export default function CustomersPage({
 
         await onAddCustomer(customer);
         setMessage(
-          `${customer.companyName || customer.name} was added to Customers.`,
+          `${formatCustomerName(
+            customer.companyName || customer.name,
+          )} was added to Customers.`,
         );
       }
       resetForm();
@@ -449,7 +452,7 @@ export default function CustomersPage({
                 type="text"
                 value={name}
                 onChange={(event) => {
-                  setName(event.target.value);
+                  setName(event.target.value.toUpperCase());
                   clearFeedback();
                 }}
                 disabled={isSubmitting}
@@ -466,7 +469,7 @@ export default function CustomersPage({
                 type="text"
                 value={companyName}
                 onChange={(event) => {
-                  setCompanyName(event.target.value);
+                  setCompanyName(event.target.value.toUpperCase());
                   clearFeedback();
                 }}
                 disabled={isSubmitting}
@@ -1001,8 +1004,9 @@ export default function CustomersPage({
                       </p>
 
                       <h2 className="mt-1 truncate text-2xl font-black text-slate-900">
-                        {customer.companyName ||
-                          customer.name ||
+                        {formatCustomerName(
+                          customer.companyName || customer.name,
+                        ) ||
                           "Unnamed Customer"}
                       </h2>
 
@@ -1016,7 +1020,7 @@ export default function CustomersPage({
 
                       {customer.name && customer.companyName ? (
                         <p className="mt-1 text-sm font-bold text-slate-500">
-                          {customer.name}
+                          {formatCustomerName(customer.name)}
                         </p>
                       ) : null}
 

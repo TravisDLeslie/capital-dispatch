@@ -22,6 +22,7 @@ import {
   getDeliverySiteArrivalLabel,
   getDeliveryTimeRange,
 } from "../utils/deliverySchedule";
+import { formatCustomerName } from "../utils/textFormatters";
 
 function getDirectionsUrl(address) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
@@ -424,7 +425,7 @@ export default function DeliveryQueuePage({
                           </span>
 
                           <span className="mt-1 block text-2xl font-black tracking-tight text-slate-900">
-                            {delivery.customerName}
+                            {formatCustomerName(delivery.customerName)}
                           </span>
 
                           <span className="mt-3 flex flex-wrap gap-2">

@@ -9,6 +9,7 @@ import {
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
+import { formatCustomerName } from "../utils/textFormatters";
 
 function getCurrentMonth() {
   return new Date().toISOString().slice(0, 7);
@@ -372,7 +373,7 @@ export default function CustomerPaymentLinksPage({
                     </div>
 
                     <h2 className="mt-3 text-2xl font-black text-slate-950">
-                      {paymentLink.customerName}
+                      {formatCustomerName(paymentLink.customerName)}
                     </h2>
 
                     <p className="mt-1 text-sm font-bold text-slate-500">

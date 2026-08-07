@@ -8,6 +8,7 @@ import {
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { getDateInputValue } from "../utils/dateHelpers";
 import { createId } from "../utils/idHelpers";
+import { formatCustomerName } from "../utils/textFormatters";
 
 function createEmptyPickupItem() {
   return {
@@ -455,7 +456,7 @@ export default function SupplierRunForm({
           internalReference: item.internalReference?.trim() || "",
           materialUse: item.materialUse || "order",
           customerName:
-            itemUsesCustomer ? customerName.trim() || "" : "",
+            itemUsesCustomer ? formatCustomerName(customerName) : "",
           orderNumber:
             usesOrderNumber(item.materialUse)
               ? formatOrderNumber(item.orderNumber || "")
@@ -500,7 +501,7 @@ export default function SupplierRunForm({
     const supplierRunCustomerName = pickupItems.some((item) =>
       usesOrderNumber(item.materialUse),
     )
-      ? customerName.trim()
+      ? formatCustomerName(customerName)
       : "";
     const supplierRun = {
       ...(initialSupplierRun || {}),
@@ -683,7 +684,7 @@ export default function SupplierRunForm({
                   type="text"
                   value={customerName}
                   onChange={(event) => {
-                    setCustomerName(event.target.value);
+                    setCustomerName(event.target.value.toUpperCase());
                     clearError();
                   }}
                   disabled={isSubmitting}

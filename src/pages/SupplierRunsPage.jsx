@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
+import CustomerNameBadge from "../components/CustomerNameBadge";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
@@ -1320,9 +1321,7 @@ export default function SupplierRunsPage({
                           </h3>
 
                           {canViewSouthCustomerName && runCustomerName ? (
-                            <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-black text-violet-700 ring-1 ring-violet-200">
-                              Customer: {runCustomerName}
-                            </span>
+                            <CustomerNameBadge name={runCustomerName} />
                           ) : null}
                         </div>
 
@@ -1681,6 +1680,7 @@ export default function SupplierRunsPage({
                                               showCustomerName={
                                                 canViewSouthCustomerName
                                               }
+                                              customerNameTruncate={false}
                                             />
                                           ),
                                         )}
@@ -1863,9 +1863,11 @@ export default function SupplierRunsPage({
 
                                 {canViewSouthCustomerName &&
                                 runCustomerName ? (
-                                  <p className="mt-1 truncate text-xs font-black uppercase tracking-[0.1em] text-blue-700">
-                                    {runCustomerName}
-                                  </p>
+                                  <CustomerNameBadge
+                                    name={runCustomerName}
+                                    prefix=""
+                                    className="mt-1"
+                                  />
                                 ) : null}
                               </div>
 
@@ -2320,7 +2322,7 @@ export default function SupplierRunsPage({
                                 ) : null}
 
                                 <div className="flex items-center gap-1.5 sm:gap-2">
-                                  <span className="inline-flex rounded-lg bg-white px-3 py-1.5 text-xs font-black text-blue-800 shadow-sm">
+                                  <span className="inline-flex rounded-lg bg-white px-2.5 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:px-3">
                                     {stats.poCount}{" "}
                                     {stats.poCount === 1
                                       ? "PO"
@@ -2754,12 +2756,12 @@ export default function SupplierRunsPage({
                 {canViewSouthCustomerName &&
                 getSupplierRunCustomerName(selectedSupplierRunDetails) ? (
                   <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
-                      Customer
-                    </p>
-                    <p className="mt-1 text-lg font-black text-slate-900">
-                      {getSupplierRunCustomerName(selectedSupplierRunDetails)}
-                    </p>
+                    <CustomerNameBadge
+                      name={getSupplierRunCustomerName(
+                        selectedSupplierRunDetails,
+                      )}
+                      className="text-sm"
+                    />
                   </div>
                 ) : null}
 
