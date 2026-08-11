@@ -225,6 +225,7 @@ export async function saveStockingHandbookItem(item) {
     await setDoc(
       doc(db, STOCKING_HANDBOOK_COLLECTION, cleanItem.id),
       cleanItem,
+      { merge: true },
     );
   }
 

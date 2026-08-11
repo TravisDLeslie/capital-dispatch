@@ -979,6 +979,14 @@ export default function App() {
   const [syncError, setSyncError] = useState("");
   const [showDriverSouthAlert, setShowDriverSouthAlert] = useState(false);
 
+  function reportBackgroundSyncError(error: unknown) {
+    if ((error as { code?: string })?.code === "permission-denied") {
+      return;
+    }
+
+    setSyncError(getFirebaseErrorMessage(error));
+  }
+
   const userRole = getUserRole(userProfile, currentUser?.email);
   const isSuperAdmin = userRole === "superAdmin";
   const isApproved =
@@ -1506,7 +1514,7 @@ export default function App() {
       },
       (error: Error) => {
         console.error("Unable to sync users:", error);
-        setSyncError(getFirebaseErrorMessage(error));
+        reportBackgroundSyncError(error);
       },
     );
   }, [isSuperAdmin]);
@@ -1524,7 +1532,7 @@ export default function App() {
       },
       (error: Error) => {
         console.error("Unable to sync vehicle settings:", error);
-        setSyncError(getFirebaseErrorMessage(error));
+        reportBackgroundSyncError(error);
       },
     );
   }, [canAssignSouthRoutes, isApproved]);
@@ -1542,7 +1550,7 @@ export default function App() {
       },
       (error: Error) => {
         console.error("Unable to sync delivery settings:", error);
-        setSyncError(getFirebaseErrorMessage(error));
+        reportBackgroundSyncError(error);
       },
     );
   }, [canReadAdmin, canReadDeliveries, isApproved]);
@@ -1560,7 +1568,7 @@ export default function App() {
       },
       (error: Error) => {
         console.error("Unable to sync vendor settings:", error);
-        setSyncError(getFirebaseErrorMessage(error));
+        reportBackgroundSyncError(error);
       },
     );
   }, [isApproved]);
@@ -1645,7 +1653,7 @@ export default function App() {
         console.error("Unable to load check-ins:", error);
 
         if (isMounted) {
-          setSyncError(getFirebaseErrorMessage(error));
+          reportBackgroundSyncError(error);
         }
       } finally {
         if (isMounted) {
@@ -1668,7 +1676,7 @@ export default function App() {
             console.error("Unable to sync check-ins:", error);
 
             if (isMounted) {
-              setSyncError(getFirebaseErrorMessage(error));
+              reportBackgroundSyncError(error);
               setIsLoading(false);
             }
           },
@@ -1690,7 +1698,7 @@ export default function App() {
             console.error("Unable to sync supplier runs:", error);
 
             if (isMounted) {
-              setSyncError(getFirebaseErrorMessage(error));
+              reportBackgroundSyncError(error);
               setIsLoading(false);
             }
           },
@@ -1713,7 +1721,7 @@ export default function App() {
             console.error("Unable to sync Their Truck POs:", error);
 
             if (isMounted) {
-              setSyncError(getFirebaseErrorMessage(error));
+              reportBackgroundSyncError(error);
               setIsLoading(false);
             }
           },
@@ -1757,7 +1765,7 @@ export default function App() {
             console.error("Unable to sync deliveries:", error);
 
             if (isMounted) {
-              setSyncError(getFirebaseErrorMessage(error));
+              reportBackgroundSyncError(error);
               setIsLoading(false);
             }
           },
@@ -1780,7 +1788,7 @@ export default function App() {
             console.error("Unable to sync customers:", error);
 
             if (isMounted) {
-              setSyncError(getFirebaseErrorMessage(error));
+              reportBackgroundSyncError(error);
               setIsLoading(false);
             }
           },
@@ -1802,7 +1810,7 @@ export default function App() {
             console.error("Unable to sync customer payment links:", error);
 
             if (isMounted) {
-              setSyncError(getFirebaseErrorMessage(error));
+              reportBackgroundSyncError(error);
               setIsLoading(false);
             }
           },
@@ -1824,7 +1832,7 @@ export default function App() {
             console.error("Unable to sync customer statements:", error);
 
             if (isMounted) {
-              setSyncError(getFirebaseErrorMessage(error));
+              reportBackgroundSyncError(error);
               setIsLoading(false);
             }
           },
@@ -1846,7 +1854,7 @@ export default function App() {
             console.error("Unable to sync sales orders:", error);
 
             if (isMounted) {
-              setSyncError(getFirebaseErrorMessage(error));
+              reportBackgroundSyncError(error);
               setIsLoading(false);
             }
           },
@@ -1869,7 +1877,7 @@ export default function App() {
               console.error("Unable to sync stocking handbook items:", error);
 
               if (isMounted) {
-                setSyncError(getFirebaseErrorMessage(error));
+                reportBackgroundSyncError(error);
                 setIsLoading(false);
               }
             },
@@ -1891,7 +1899,7 @@ export default function App() {
             console.error("Unable to sync email list:", error);
 
             if (isMounted) {
-              setSyncError(getFirebaseErrorMessage(error));
+              reportBackgroundSyncError(error);
               setIsLoading(false);
             }
           },
@@ -1913,7 +1921,7 @@ export default function App() {
             console.error("Unable to sync sales reports:", error);
 
             if (isMounted) {
-              setSyncError(getFirebaseErrorMessage(error));
+              reportBackgroundSyncError(error);
               setIsLoading(false);
             }
           },
