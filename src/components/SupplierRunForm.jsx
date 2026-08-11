@@ -109,6 +109,8 @@ export default function SupplierRunForm({
   );
   const [orderedBy, setOrderedBy] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [notesEnabled, setNotesEnabled] = useState(false);
+  const [notes, setNotes] = useState("");
   const [vendor, setVendor] = useState("");
   const [supplierAddress, setSupplierAddress] = useState("");
   const [driver, setDriver] = useState("");
@@ -162,6 +164,8 @@ export default function SupplierRunForm({
         )?.customerName ||
         "",
     );
+    setNotes(initialSupplierRun.notes || "");
+    setNotesEnabled(Boolean(initialSupplierRun.notes));
     setVendor(initialSupplierRun.vendor || "");
     setSupplierAddress(initialSupplierRun.supplierAddress || "");
     setDriver(initialSupplierRun.driver || "");
@@ -393,6 +397,8 @@ export default function SupplierRunForm({
     setScheduledDate(getDateInputValue());
     setOrderedBy("");
     setCustomerName("");
+    setNotesEnabled(false);
+    setNotes("");
     setVendor("");
     setSupplierAddress("");
     setDriver("");
@@ -514,6 +520,7 @@ export default function SupplierRunForm({
       scheduledDate,
       orderedBy,
       customerName: supplierRunCustomerName,
+      notes: notesEnabled ? notes.trim() : "",
       vendor: matchedVendor,
       supplierAddress: supplierAddress.trim(),
       driver: shouldAssignRouteFromForm
@@ -702,6 +709,7 @@ export default function SupplierRunForm({
                   Not used for stock-only pickup items.
                 </p>
               </div>
+
             </div>
           </section>
 
@@ -898,6 +906,54 @@ export default function SupplierRunForm({
             </div>
           </section>
         </div>
+
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm sm:p-5">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={notesEnabled}
+              onChange={(event) => {
+                setNotesEnabled(event.target.checked);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              className="mt-1 h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+            />
+
+            <span>
+              <span className="block text-sm font-black text-slate-900">
+                Add driver notes for this PO
+              </span>
+              <span className="mt-1 block text-sm font-semibold text-amber-800">
+                Notes show as a yellow icon on the driver pickup card.
+              </span>
+            </span>
+          </label>
+
+          {notesEnabled ? (
+            <div className="mt-4">
+              <label
+                htmlFor="supplier-run-notes"
+                className="mb-2 block text-sm font-bold text-slate-700"
+              >
+                Driver Notes
+              </label>
+
+              <textarea
+                id="supplier-run-notes"
+                value={notes}
+                onChange={(event) => {
+                  setNotes(event.target.value);
+                  clearError();
+                }}
+                disabled={isSubmitting}
+                rows={3}
+                placeholder="Anything the driver should know about this PO, pickup, paperwork, return, or supplier instructions."
+                className="w-full resize-y rounded-xl border border-amber-200 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-amber-700/70 focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+              />
+            </div>
+          ) : null}
+        </section>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-5 flex flex-col gap-1 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">

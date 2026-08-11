@@ -219,9 +219,15 @@ export default function CheckInCard({
   }
 
   function getAssignmentReferenceText() {
-    return savedAssignment?.internalReference
-      ? `SKU / Item # / SO#: ${savedAssignment.internalReference}`
-      : "";
+    if (!savedAssignment?.internalReference) {
+      return "";
+    }
+
+    if (savedAssignment.type === "customer") {
+      return `Order #: ${savedAssignment.internalReference}`;
+    }
+
+    return `SKU / Item # / SO#: ${savedAssignment.internalReference}`;
   }
 
   const visibleMaterials = materials.slice(0, 3);
@@ -845,7 +851,7 @@ export default function CheckInCard({
                     htmlFor={`assignment-reference-${checkIn.id}`}
                     className="mb-1 block text-xs font-bold text-slate-600"
                   >
-                    SKU / Item # / SO#
+                    Order #
                   </label>
 
                   <input
@@ -856,7 +862,7 @@ export default function CheckInCard({
                     onChange={(event) =>
                       setInternalReference(event.target.value)
                     }
-                    placeholder="Internal reference"
+                    placeholder="123-456"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100"
                   />
                 </div>

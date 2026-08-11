@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, MessageSquareText, X } from "lucide-react";
 import CustomerNameBadge from "./CustomerNameBadge";
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 import {
@@ -594,9 +594,11 @@ export default function SupplierRunCard({
   const [processingPhotoItemId, setProcessingPhotoItemId] =
     useState("");
   const [viewingPhoto, setViewingPhoto] = useState(null);
+  const [isViewingNotes, setIsViewingNotes] = useState(false);
   const [isItemsOpen, setIsItemsOpen] =
     useState(defaultItemsOpen);
   const isCompactClosed = compactWhenClosed && !isItemsOpen;
+  const hasNotes = Boolean(String(supplierRun.notes || "").trim());
 
   function startEditingItem(item) {
     setEditingItemId(item.id);
@@ -721,6 +723,21 @@ export default function SupplierRunCard({
       >
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            {hasNotes ? (
+              <button
+                type="button"
+                onClick={() => setIsViewingNotes(true)}
+                aria-label={`View notes for PO ${supplierRun.poNumber}`}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-amber-100"
+              >
+                <MessageSquareText
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  strokeWidth={2.6}
+                />
+              </button>
+            ) : null}
+
             {isItemsOpen ? (
               <button
                 type="button"
@@ -1321,6 +1338,57 @@ export default function SupplierRunCard({
               Delete PO
             </button>
           ) : null}
+        </div>
+      ) : null}
+
+      {isViewingNotes ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-slate-950/45 px-3 py-4 sm:items-center sm:justify-center sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`south-notes-title-${supplierRun.id}`}
+        >
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-amber-100 bg-amber-50 px-5 py-4">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">
+                  Driver Notes
+                </p>
+
+                <h3
+                  id={`south-notes-title-${supplierRun.id}`}
+                  className="mt-1 text-xl font-black text-slate-900"
+                >
+                  PO {supplierRun.poNumber}
+                </h3>
+
+                {supplierRun.vendor ? (
+                  <p className="mt-1 text-sm font-bold text-slate-500">
+                    {supplierRun.vendor}
+                  </p>
+                ) : null}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsViewingNotes(false)}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-slate-600 transition hover:border-amber-300 hover:text-slate-900"
+                aria-label="Close notes"
+              >
+                <X
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                  strokeWidth={2.4}
+                />
+              </button>
+            </div>
+
+            <div className="px-5 py-5">
+              <p className="whitespace-pre-wrap text-base font-semibold leading-7 text-slate-800">
+                {supplierRun.notes}
+              </p>
+            </div>
+          </div>
         </div>
       ) : null}
 

@@ -10,6 +10,7 @@ import PageContainer from "../components/PageContainer";
  *   onPageChange?: (pageId: string) => void;
  *   vendorOptions?: string[];
  *   supplierRuns?: any[];
+ *   checkedInByDefault?: string;
  * }} props
  */
 export default function CheckInPage({
@@ -18,6 +19,7 @@ export default function CheckInPage({
   onPageChange,
   vendorOptions = [],
   supplierRuns = [],
+  checkedInByDefault = "",
 }) {
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -72,6 +74,7 @@ export default function CheckInPage({
         onSubmit={handleSubmit}
         vendorOptions={vendorOptions}
         supplierRuns={supplierRuns}
+        checkedInByDefault={checkedInByDefault}
       />
     </PageContainer>
   );

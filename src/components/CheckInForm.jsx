@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   locations,
   receivingTeamMembers,
@@ -38,6 +38,26 @@ function normalizePoNumber(value) {
 function findMatchingOption(value, options) {
   return options.find(
     (option) => option.toLowerCase() === value.trim().toLowerCase(),
+  );
+}
+
+function findMatchingTeamMember(value) {
+  const normalizedValue = String(value || "").trim().toLowerCase();
+  const firstName = normalizedValue.split(/\s+/)[0] || "";
+
+  if (!normalizedValue) {
+    return "";
+  }
+
+  return (
+    receivingTeamMembers.find((teamMember) => {
+      const normalizedTeamMember = teamMember.toLowerCase();
+
+      return (
+        normalizedTeamMember === normalizedValue ||
+        normalizedTeamMember === firstName
+      );
+    }) || ""
   );
 }
 
@@ -198,6 +218,7 @@ export default function CheckInForm({
   onSubmit,
   vendorOptions,
   supplierRuns = [],
+  checkedInByDefault = "",
 }) {
   const vendors =
     Array.isArray(vendorOptions) && vendorOptions.length > 0
@@ -205,7 +226,9 @@ export default function CheckInForm({
       : fallbackVendors;
   const [poNumber, setPoNumber] = useState("");
   const [vendor, setVendor] = useState("");
-  const [checkedInBy, setCheckedInBy] = useState("");
+  const [checkedInBy, setCheckedInBy] = useState(() =>
+    findMatchingTeamMember(checkedInByDefault),
+  );
   const [linkedSouthRunId, setLinkedSouthRunId] = useState("");
   const [processingPhotoMaterialId, setProcessingPhotoMaterialId] =
     useState("");
@@ -217,6 +240,18 @@ export default function CheckInForm({
 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (checkedInBy) {
+      return;
+    }
+
+    const defaultTeamMember = findMatchingTeamMember(checkedInByDefault);
+
+    if (defaultTeamMember) {
+      setCheckedInBy(defaultTeamMember);
+    }
+  }, [checkedInBy, checkedInByDefault]);
 
   function clearError() {
     setError("");
@@ -433,7 +468,7 @@ export default function CheckInForm({
 
     setPoNumber("");
     setVendor("");
-    setCheckedInBy("");
+    setCheckedInBy(findMatchingTeamMember(checkedInByDefault));
     setLinkedSouthRunId("");
     setProcessingPhotoMaterialId("");
     setMaterials([newMaterial]);

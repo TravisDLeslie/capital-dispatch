@@ -3500,6 +3500,7 @@ export default function App() {
             supplierRuns={
               canReadSouth ? supplierRuns : receivingSouthLookupRuns
             }
+            checkedInByDefault={currentUserDisplayName}
           />
         );
     }
