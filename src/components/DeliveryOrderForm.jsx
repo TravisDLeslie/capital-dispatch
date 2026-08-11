@@ -129,6 +129,32 @@ function getPrimaryCustomerContact(customer) {
   );
 }
 
+function FormSection({ eyebrow, title, description, children }) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="mb-5 flex flex-col gap-1 border-b border-slate-100 pb-4">
+        {eyebrow ? (
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+            {eyebrow}
+          </p>
+        ) : null}
+
+        <h3 className="text-xl font-black tracking-tight text-slate-900">
+          {title}
+        </h3>
+
+        {description ? (
+          <p className="text-sm font-semibold leading-6 text-slate-500">
+            {description}
+          </p>
+        ) : null}
+      </div>
+
+      {children}
+    </section>
+  );
+}
+
 export default function DeliveryOrderForm({
   initialDelivery = null,
   deliverySettings = defaultDeliveryScheduleSettings,
@@ -470,10 +496,7 @@ export default function DeliveryOrderForm({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg sm:p-8"
-    >
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div className="mb-7">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
           Delivery's for Drivers
@@ -490,7 +513,12 @@ export default function DeliveryOrderForm({
         </p>
       </div>
 
-      <div className="space-y-7">
+      <div className="space-y-5">
+        <FormSection
+          eyebrow="Step 1"
+          title="Order & Customer"
+          description="Start with the order number, customer, delivery address, and site contact."
+        >
         <div className="grid gap-5 lg:grid-cols-2">
           <div>
             <label
@@ -644,11 +672,16 @@ export default function DeliveryOrderForm({
             />
           </div>
         </div>
+        </FormSection>
 
-        <section>
-          <h3 className="mb-3 text-sm font-bold text-slate-700">
+        <FormSection
+          eyebrow="Step 2"
+          title="Unload & Timing"
+          description="Pick the delivery method, origin, and rough route time. Dispatch can schedule the driver later."
+        >
+          <h4 className="mb-3 text-sm font-bold text-slate-700">
             Unload Type
-          </h3>
+          </h4>
 
           <div className="grid gap-3 sm:grid-cols-3">
             {deliveryUnloadTypes.map((unloadOption) => {
@@ -683,13 +716,11 @@ export default function DeliveryOrderForm({
               );
             })}
           </div>
-        </section>
 
-        <section>
-          <div className="mb-3">
-            <h3 className="text-sm font-bold text-slate-700">
+          <div className="mb-3 mt-6">
+            <h4 className="text-sm font-bold text-slate-700">
               Where is the delivery leaving from?
-            </h3>
+            </h4>
 
             <p className="mt-1 text-sm text-slate-500">
               Capital Lumber is the default. Pick a supplier if the truck is
@@ -749,9 +780,12 @@ export default function DeliveryOrderForm({
             <div>
               <label
                 htmlFor="one-way-drive-minutes"
-                className="mb-2 block text-sm font-bold text-slate-700"
+                className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
               >
                 One-way route ETA
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                  Not required
+                </span>
               </label>
 
               <div className="flex items-center gap-3">
@@ -781,18 +815,13 @@ export default function DeliveryOrderForm({
               </p>
             </div>
           </div>
-        </section>
+        </FormSection>
 
-        <section>
-          <div className="mb-3">
-            <h3 className="text-sm font-bold text-slate-700">
-              Delivery Scope
-            </h3>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Use this instead of writing every item for large deliveries.
-            </p>
-          </div>
+        <FormSection
+          eyebrow="Step 3"
+          title="Delivery Scope"
+          description="Use this instead of writing every item for large deliveries."
+        >
 
           <div className="grid gap-3 lg:grid-cols-4">
             {deliveryScopeOptions.map((scopeOption) => {
@@ -858,8 +887,13 @@ export default function DeliveryOrderForm({
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
           </div>
-        </section>
+        </FormSection>
 
+        <FormSection
+          eyebrow="Step 4"
+          title="Notes & Reminders"
+          description="Add instructions the driver should not miss."
+        >
         <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-red-100 bg-red-50 p-4 transition hover:border-red-200">
           <input
             type="checkbox"
@@ -888,7 +922,7 @@ export default function DeliveryOrderForm({
           </span>
         </label>
 
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <div>
           <label
             htmlFor="delivery-location-notes"
@@ -933,18 +967,14 @@ export default function DeliveryOrderForm({
             />
           </div>
         </div>
+        </FormSection>
 
         {getDeliveryScopeOption(deliveryScope).usesItems ? (
-        <section>
-          <div className="mb-4">
-            <h3 className="text-sm font-bold text-slate-700">
-              Delivery Items
-            </h3>
-
-            <p className="mt-1 text-sm text-slate-500">
-              These become the driver's delivery checklist.
-            </p>
-          </div>
+        <FormSection
+          eyebrow="Step 5"
+          title="Delivery Items"
+          description="These become the driver's delivery checklist."
+        >
 
           <div className="space-y-4">
             {items.map((item, index) => (
@@ -1074,7 +1104,7 @@ export default function DeliveryOrderForm({
             <Plus className="h-4 w-4" aria-hidden="true" />
             Add Item
           </button>
-        </section>
+        </FormSection>
         ) : null}
 
         {error ? (
