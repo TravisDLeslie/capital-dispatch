@@ -263,7 +263,10 @@ export function subscribeToStockingHandbookItems(onItems, onError) {
       saveLocalItems(mergedItems);
       onItems(mergedItems);
     },
-    onError,
+    (error) => {
+      onItems(getLocalItems());
+      onError(error);
+    },
   );
 }
 
