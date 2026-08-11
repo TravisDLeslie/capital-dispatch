@@ -226,6 +226,8 @@ export default function CheckInForm({
       : fallbackVendors;
   const [poNumber, setPoNumber] = useState("");
   const [vendor, setVendor] = useState("");
+  const [receivingTruckType, setReceivingTruckType] =
+    useState("theirTruck");
   const [checkedInBy, setCheckedInBy] = useState(() =>
     findMatchingTeamMember(checkedInByDefault),
   );
@@ -291,6 +293,8 @@ export default function CheckInForm({
       if (nextSouthRun.vendor) {
         setVendor(nextSouthRun.vendor);
       }
+
+      setReceivingTruckType("ourTruck");
     } else {
       setLinkedSouthRunId("");
     }
@@ -300,6 +304,7 @@ export default function CheckInForm({
 
   function linkSouthRun(supplierRun) {
     setLinkedSouthRunId(supplierRun.id);
+    setReceivingTruckType("ourTruck");
 
     if (supplierRun.vendor) {
       setVendor(supplierRun.vendor);
@@ -468,6 +473,7 @@ export default function CheckInForm({
 
     setPoNumber("");
     setVendor("");
+    setReceivingTruckType("theirTruck");
     setCheckedInBy(findMatchingTeamMember(checkedInByDefault));
     setLinkedSouthRunId("");
     setProcessingPhotoMaterialId("");
@@ -618,6 +624,11 @@ export default function CheckInForm({
       poNumber,
       vendor: matchedVendor,
       poLocation,
+      receivingTruckType,
+      receivingTruckLabel:
+        receivingTruckType === "ourTruck"
+          ? "Our Truck"
+          : "Their Truck",
       checkedInBy,
       notes: "",
 
@@ -677,6 +688,58 @@ export default function CheckInForm({
       </div>
 
       <div className="space-y-7">
+        <section>
+          <p className="mb-2 text-sm font-bold text-slate-700">
+            How did this PO arrive?
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              {
+                value: "theirTruck",
+                label: "Their Truck",
+                detail: "Vendor delivery or outside carrier",
+              },
+              {
+                value: "ourTruck",
+                label: "Our Truck",
+                detail: "South run or Capital driver",
+              },
+            ].map((option) => {
+              const isSelected = receivingTruckType === option.value;
+
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setReceivingTruckType(option.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                    isSelected
+                      ? "border-emerald-500 bg-emerald-50 shadow-sm"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  <span
+                    className={`block text-lg font-black ${
+                      isSelected ? "text-emerald-800" : "text-slate-900"
+                    }`}
+                  >
+                    {option.label}
+                  </span>
+
+                  <span className="mt-1 block text-sm font-semibold text-slate-500">
+                    {option.detail}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
         <div className="grid gap-5 md:grid-cols-2">
           <div>
             <label

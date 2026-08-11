@@ -9,11 +9,21 @@ const STORAGE_KEY = "dispatch-cl-vendor-settings";
 const SETTINGS_COLLECTION = "appSettings";
 const VENDOR_SETTINGS_DOC = "vendorSettings";
 
+const defaultDeliveryCadences = {
+  "Boise Cascade": "M-W-F",
+  Weyerhaeuser: "T-Th",
+  Weyerhauser: "T-Th",
+  Orepac: "M-W-F",
+  OrePac: "M-W-F",
+  Disdero: "M-T, Th-F",
+};
+
 function createDefaultVendors() {
   return defaultVendors.map((name, index) => ({
     id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || `vendor-${index}`,
     name,
     address: defaultSupplierAddresses[name] || "",
+    deliveryCadence: defaultDeliveryCadences[name] || "",
     routeOrder: index + 1,
     active: true,
   }));
@@ -34,6 +44,10 @@ function normalizeVendor(vendor, index) {
       `vendor-${index}`,
     name,
     address: String(vendor?.address || "").trim(),
+    deliveryCadence:
+      String(vendor?.deliveryCadence || "").trim() ||
+      defaultDeliveryCadences[name] ||
+      "",
     routeOrder: Number(vendor?.routeOrder) || index + 1,
     active: vendor?.active !== false,
   };

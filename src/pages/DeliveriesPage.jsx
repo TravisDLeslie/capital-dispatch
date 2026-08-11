@@ -71,19 +71,7 @@ export default function DeliveriesPage({
         ]}
       />
 
-      <div className="mb-6">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
-          Deliveries
-        </p>
-
-        <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
-          Add Orders
-        </h1>
-
-        <p className="mt-2 text-lg text-slate-500">
-          Build delivery orders, then hold them for dispatch or assign a driver.
-        </p>
-      </div>
+     
 
       <DeliveryOrderForm
         key={editingDelivery?.id || "new-delivery"}

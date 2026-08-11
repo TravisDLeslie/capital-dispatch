@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import {
   Calculator,
   CalendarDays,
+  ClipboardList,
   ClipboardCheck,
   DollarSign,
   History,
@@ -33,12 +34,16 @@ import DeliverySettingsPage from "./pages/DeliverySettingsPage";
 import DeliveriesPage from "./pages/DeliveriesPage";
 import EmailListPage from "./pages/EmailListPage";
 import LoginPage from "./components/LoginPage";
+import POCalendarPage from "./pages/POCalendarPage";
 import SearchPage from "./pages/SearchPage";
 import SalesConverterPage from "./pages/SalesConverterPage";
+import SalesOrdersPage from "./pages/SalesOrdersPage";
 import SalesReportPage from "./pages/SalesReportPage";
 import SouthHubPage from "./pages/SouthHubPage";
 import SupplierRunsPage from "./pages/SupplierRunsPage";
 import TodayPage from "./pages/TodayPage";
+import TheirTruckHistoryPage from "./pages/TheirTruckHistoryPage";
+import TheirTruckPOPage from "./pages/TheirTruckPOPage";
 import TracePage from "./pages/TracePage";
 import UserAdminPage from "./pages/UserAdminPage";
 import VendorSettingsPage from "./pages/VendorSettingsPage";
@@ -78,6 +83,15 @@ import {
   saveCustomerStatement,
   subscribeToCustomerStatements,
 } from "./utils/customerStatementStorage";
+import {
+  saveSalesOrder,
+  subscribeToSalesOrders,
+} from "./utils/salesOrderStorage";
+import {
+  deleteTheirTruckPO,
+  saveTheirTruckPO,
+  subscribeToTheirTruckPOs,
+} from "./utils/theirTruckPoStorage";
 import {
   ensureUserProfile,
   subscribeToUserProfile,
@@ -134,6 +148,8 @@ type UserProfile = {
 
 type CheckIn = {
   id: string;
+  receivingTruckType?: string;
+  receivingTruckLabel?: string;
   [key: string]: unknown;
 };
 
@@ -180,6 +196,20 @@ type SupplierRun = {
   dispatchStatus?: string;
   items?: SupplierRunItem[];
   status?: string;
+  [key: string]: unknown;
+};
+
+type TheirTruckPO = {
+  id: string;
+  poNumber?: string;
+  deliveryDate?: string;
+  vendor?: string;
+  customerName?: string;
+  isStock?: boolean;
+  items?: Array<Record<string, unknown>>;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
   [key: string]: unknown;
 };
 
@@ -245,6 +275,20 @@ type SalesReport = {
     name?: string;
     amount?: number;
   }>;
+  [key: string]: unknown;
+};
+
+type SalesOrder = {
+  id: string;
+  orderNumber: string;
+  customerId?: string;
+  customerName?: string;
+  phone?: string;
+  poNumbers?: string[];
+  status?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
   [key: string]: unknown;
 };
 
@@ -343,6 +387,7 @@ type VendorSetting = {
   id: string;
   name: string;
   address?: string;
+  deliveryCadence?: string;
   routeOrder?: number;
   active?: boolean;
 };
@@ -415,9 +460,14 @@ function getAllowedPageIdsForRole(role: string) {
       "trace",
       "south",
       "supplier-runs-add",
+      "their-truck-pos",
       "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-calendar",
+      "south-calendar",
+      "their-truck-calendar",
+      "po-calendar",
+      "their-truck-history",
       "supplier-runs-history",
       "deliveries",
       "deliveries-add",
@@ -426,6 +476,7 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-queue",
       "deliveries-history",
       "sales",
+      "sales-orders",
       "customers-add",
       "customers-view",
       "customer-payment-links",
@@ -452,9 +503,14 @@ function getAllowedPageIdsForRole(role: string) {
       "trace",
       "south",
       "supplier-runs-add",
+      "their-truck-pos",
       "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-calendar",
+      "south-calendar",
+      "their-truck-calendar",
+      "po-calendar",
+      "their-truck-history",
       "supplier-runs-history",
       "deliveries",
       "deliveries-add",
@@ -463,6 +519,7 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-queue",
       "deliveries-history",
       "sales",
+      "sales-orders",
       "customers-add",
       "customers-view",
       "customer-payment-links",
@@ -484,9 +541,14 @@ function getAllowedPageIdsForRole(role: string) {
       "dashboard",
       "south",
       "supplier-runs-add",
+      "their-truck-pos",
       "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-calendar",
+      "south-calendar",
+      "their-truck-calendar",
+      "po-calendar",
+      "their-truck-history",
       "supplier-runs-history",
     ];
   }
@@ -508,7 +570,13 @@ function getAllowedPageIdsForRole(role: string) {
       "dashboard",
       "south",
       "supplier-runs-add",
+      "their-truck-pos",
+      "south-calendar",
+      "their-truck-calendar",
+      "po-calendar",
+      "their-truck-history",
       "sales",
+      "sales-orders",
       "customers-add",
       "customers-view",
       "customer-payment-links",
@@ -827,6 +895,7 @@ export default function App() {
   const [supplierRuns, setSupplierRuns] = useState<
     SupplierRun[]
   >([]);
+  const [theirTruckPOs, setTheirTruckPOs] = useState<TheirTruckPO[]>([]);
   const [receivingSouthLookupRuns, setReceivingSouthLookupRuns] =
     useState<SupplierRun[]>([]);
   const [deliveries, setDeliveries] = useState<
@@ -839,6 +908,7 @@ export default function App() {
   const [customerStatements, setCustomerStatements] = useState<
     CustomerStatement[]
   >([]);
+  const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
   const [emailList, setEmailList] = useState<EmailListEntry[]>([]);
   const [salesReports, setSalesReports] = useState<SalesReport[]>([]);
   const [vehicleSettings, setVehicleSettings] = useState<VehicleSetting[]>([]);
@@ -889,6 +959,17 @@ export default function App() {
         (addressMap, vendor) => ({
           ...addressMap,
           [vendor.name]: vendor.address || "",
+        }),
+        {},
+      ),
+    [activeVendors],
+  );
+  const vendorDeliveryCadenceMap = useMemo(
+    () =>
+      activeVendors.reduce<Record<string, string>>(
+        (cadenceMap, vendor) => ({
+          ...cadenceMap,
+          [vendor.name]: String(vendor.deliveryCadence || ""),
         }),
         {},
       ),
@@ -1024,6 +1105,7 @@ export default function App() {
   const canReadSales = effectiveAllowedPageIds.some((pageId) =>
     [
       "sales",
+      "sales-orders",
       "customers-add",
       "customers-view",
       "customer-payment-links",
@@ -1045,6 +1127,7 @@ export default function App() {
   );
   const canReadEmailList = effectiveAllowedPageIds.includes("email-list");
   const canReadSalesReport = effectiveAllowedPageIds.includes("sales-report");
+  const canReadSalesOrders = effectiveAllowedPageIds.includes("sales-orders");
   const canReadCustomerPaymentLinks = effectiveAllowedPageIds.includes(
     "customer-payment-links",
   );
@@ -1449,11 +1532,13 @@ export default function App() {
     if (!currentUser || !isApproved) {
       setCheckIns([]);
       setSupplierRuns([]);
+      setTheirTruckPOs([]);
       setReceivingSouthLookupRuns([]);
       setDeliveries([]);
       setCustomers([]);
       setCustomerPaymentLinks([]);
       setCustomerStatements([]);
+      setSalesOrders([]);
       setEmailList([]);
       setSalesReports([]);
       setIsLoading(false);
@@ -1465,11 +1550,13 @@ export default function App() {
     let isMounted = true;
     let unsubscribeFromCheckIns = () => {};
     let unsubscribeFromSupplierRuns = () => {};
+    let unsubscribeFromTheirTruckPOs = () => {};
     let unsubscribeFromReceivingSouthLookup = () => {};
     let unsubscribeFromDeliveries = () => {};
     let unsubscribeFromCustomers = () => {};
     let unsubscribeFromCustomerPaymentLinks = () => {};
     let unsubscribeFromCustomerStatements = () => {};
+    let unsubscribeFromSalesOrders = () => {};
     let unsubscribeFromEmailList = () => {};
     let unsubscribeFromSalesReports = () => {};
 
@@ -1538,6 +1625,28 @@ export default function App() {
         );
       } else {
         setSupplierRuns([]);
+      }
+
+      if (canReadSouth) {
+        unsubscribeFromTheirTruckPOs = subscribeToTheirTruckPOs(
+          (savedTheirTruckPOs: TheirTruckPO[]) => {
+            if (isMounted) {
+              setTheirTruckPOs(savedTheirTruckPOs);
+              setSyncError("");
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to sync Their Truck POs:", error);
+
+            if (isMounted) {
+              setSyncError(getFirebaseErrorMessage(error));
+              setIsLoading(false);
+            }
+          },
+        );
+      } else {
+        setTheirTruckPOs([]);
       }
 
       if (canReadReceiving && !canReadSouth) {
@@ -1651,6 +1760,28 @@ export default function App() {
         setCustomerStatements([]);
       }
 
+      if (canReadSalesOrders) {
+        unsubscribeFromSalesOrders = subscribeToSalesOrders(
+          (savedSalesOrders: SalesOrder[]) => {
+            if (isMounted) {
+              setSalesOrders(savedSalesOrders);
+              setSyncError("");
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to sync sales orders:", error);
+
+            if (isMounted) {
+              setSyncError(getFirebaseErrorMessage(error));
+              setIsLoading(false);
+            }
+          },
+        );
+      } else {
+        setSalesOrders([]);
+      }
+
       if (canReadEmailList) {
         unsubscribeFromEmailList = subscribeToEmailList(
           (savedEmailList: EmailListEntry[]) => {
@@ -1702,6 +1833,7 @@ export default function App() {
         !canReadCustomers &&
         !canReadCustomerPaymentLinks &&
         !canReadSales &&
+        !canReadSalesOrders &&
         !canReadEmailList &&
         !canReadSalesReport
       ) {
@@ -1715,7 +1847,7 @@ export default function App() {
       }
 
       if (canReadSouth) {
-        subscribeToSupplierRuns(
+        unsubscribeFromSupplierRuns = subscribeToSupplierRuns(
           (savedSupplierRuns: SupplierRun[]) => {
             if (isMounted) {
               setSupplierRuns(savedSupplierRuns);
@@ -1728,6 +1860,22 @@ export default function App() {
         );
       } else {
         setSupplierRuns([]);
+      }
+
+      if (canReadSouth) {
+        unsubscribeFromTheirTruckPOs = subscribeToTheirTruckPOs(
+          (savedTheirTruckPOs: TheirTruckPO[]) => {
+            if (isMounted) {
+              setTheirTruckPOs(savedTheirTruckPOs);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load Their Truck POs:", error);
+          },
+        );
+      } else {
+        setTheirTruckPOs([]);
       }
 
       if (canReadReceiving && !canReadSouth) {
@@ -1816,6 +1964,22 @@ export default function App() {
         setCustomerStatements([]);
       }
 
+      if (canReadSalesOrders) {
+        subscribeToSalesOrders(
+          (savedSalesOrders: SalesOrder[]) => {
+            if (isMounted) {
+              setSalesOrders(savedSalesOrders);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load sales orders:", error);
+          },
+        );
+      } else {
+        setSalesOrders([]);
+      }
+
       if (canReadEmailList) {
         subscribeToEmailList(
           (savedEmailList: EmailListEntry[]) => {
@@ -1853,11 +2017,13 @@ export default function App() {
       isMounted = false;
       unsubscribeFromCheckIns();
       unsubscribeFromSupplierRuns();
+      unsubscribeFromTheirTruckPOs();
       unsubscribeFromReceivingSouthLookup();
       unsubscribeFromDeliveries();
       unsubscribeFromCustomers();
       unsubscribeFromCustomerPaymentLinks();
       unsubscribeFromCustomerStatements();
+      unsubscribeFromSalesOrders();
       unsubscribeFromEmailList();
       unsubscribeFromSalesReports();
     };
@@ -1866,6 +2032,7 @@ export default function App() {
     canReadCustomers,
     canReadCustomerPaymentLinks,
     canReadSales,
+    canReadSalesOrders,
     canReadSalesReport,
     currentUser,
     canReadDeliveries,
@@ -1931,6 +2098,37 @@ export default function App() {
   async function handleSaveSalesReport(salesReport: SalesReport) {
     const updatedSalesReports = await saveSalesReport(salesReport);
     setSalesReports(updatedSalesReports);
+    setSyncError("");
+  }
+
+  async function handleSaveSalesOrder(salesOrder: SalesOrder) {
+    const updatedSalesOrders = await saveSalesOrder(salesOrder);
+    setSalesOrders(updatedSalesOrders);
+    setSyncError("");
+  }
+
+  async function handleSaveTheirTruckPO(theirTruckPO: TheirTruckPO) {
+    const updatedTheirTruckPOs = await saveTheirTruckPO(theirTruckPO);
+    setTheirTruckPOs(updatedTheirTruckPOs);
+    setSyncError("");
+  }
+
+  async function handleDeleteTheirTruckPO(theirTruckPOId: string) {
+    const theirTruckPO = theirTruckPOs.find(
+      (currentTheirTruckPO) => currentTheirTruckPO.id === theirTruckPOId,
+    );
+    const poNumber =
+      typeof theirTruckPO?.poNumber === "string"
+        ? `PO ${theirTruckPO.poNumber}`
+        : "this Their Truck PO";
+
+    if (!canDeleteRecord(poNumber)) {
+      return;
+    }
+
+    const updatedTheirTruckPOs =
+      await deleteTheirTruckPO(theirTruckPOId);
+    setTheirTruckPOs(updatedTheirTruckPOs);
     setSyncError("");
   }
 
@@ -2139,6 +2337,16 @@ export default function App() {
   function handleTraceSearch(searchValue: string) {
     setTraceInitialSearch(searchValue);
     setCurrentPage("trace");
+  }
+
+  function handleEditSouthPOFromCalendar(supplierRunId: string) {
+    setCurrentPage("supplier-runs-calendar");
+
+    try {
+      sessionStorage.setItem("dispatch-cl-edit-south-po", supplierRunId);
+    } catch {
+      // Ignore storage failures; calendar navigation still works.
+    }
   }
 
   async function handleToggleSupplierRunItem(
@@ -2761,7 +2969,9 @@ export default function App() {
       return (
         <SouthHubPage
           supplierRuns={visibleSupplierRuns}
+          theirTruckPOs={theirTruckPOs}
           allowedPageIds={effectiveAllowedPageIds}
+          isDriverView={effectiveUserRole === "driver"}
           onPageChange={navigateToPage}
         />
       );
@@ -2901,15 +3111,21 @@ export default function App() {
           description="Manage customers, build email lists, and use quick pricing tools."
           icon={UsersRound}
           primaryAction={
-            effectiveAllowedPageIds.includes("customers-add")
+            effectiveAllowedPageIds.includes("sales-orders")
               ? {
-                  label: "Add Customer",
+                  label: "Add Order",
                   icon: Plus,
-                  onClick: () => setCurrentPage("customers-add"),
+                  onClick: () => setCurrentPage("sales-orders"),
                 }
               : null
           }
           stats={[
+            {
+              icon: ClipboardList,
+              label: "Orders",
+              value: salesOrders.length,
+              note: "Linked sales orders",
+            },
             {
               icon: UsersRound,
               label: "Customers",
@@ -2962,6 +3178,18 @@ export default function App() {
                   metric: customers.length,
                   metricLabel: "Customers",
                   onClick: () => setCurrentPage("customers-view"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("sales-orders")
+              ? {
+                  icon: ClipboardList,
+                  label: "Orders",
+                  title: "Add Orders",
+                  description: "Create sales orders, attach customers, and link related PO numbers.",
+                  metric: salesOrders.length,
+                  metricLabel: "Orders",
+                  tone: "marketing",
+                  onClick: () => setCurrentPage("sales-orders"),
                 }
               : null,
             effectiveAllowedPageIds.includes("sales-converter")
@@ -3379,6 +3607,65 @@ export default function App() {
           />
         );
 
+      case "their-truck-pos":
+        return canReadSouth ? (
+          <TheirTruckPOPage
+            theirTruckPOs={theirTruckPOs}
+            vendorOptions={vendorOptions}
+            supplierAddressMap={supplierAddressMap}
+            vendorDeliveryCadenceMap={vendorDeliveryCadenceMap}
+            createdBy={currentUserCreator}
+            onSaveTheirTruckPO={handleSaveTheirTruckPO}
+            onDeleteTheirTruckPO={handleDeleteTheirTruckPO}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
+
+      case "their-truck-calendar":
+        return canReadSouth ? (
+          <POCalendarPage
+            supplierRuns={[]}
+            theirTruckPOs={theirTruckPOs}
+            mode="theirTruck"
+            onSaveTheirTruckPO={handleSaveTheirTruckPO}
+            onDeleteTheirTruckPO={handleDeleteTheirTruckPO}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
+
+      case "their-truck-history":
+        return canReadSouth ? (
+          <TheirTruckHistoryPage
+            theirTruckPOs={theirTruckPOs}
+            onDeleteTheirTruckPO={handleDeleteTheirTruckPO}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
+
+      case "south-calendar":
+        return canReadSouth ? (
+          <POCalendarPage
+            supplierRuns={supplierRuns}
+            theirTruckPOs={[]}
+            mode="south"
+            onEditSouthPO={handleEditSouthPOFromCalendar}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
+
+      case "po-calendar":
+        return canReadSouth ? (
+          <POCalendarPage
+            supplierRuns={supplierRuns}
+            theirTruckPOs={theirTruckPOs}
+            mode="all"
+            onEditSouthPO={handleEditSouthPOFromCalendar}
+            onSaveTheirTruckPO={handleSaveTheirTruckPO}
+            onDeleteTheirTruckPO={handleDeleteTheirTruckPO}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
+
       case "deliveries-add":
         return (
           <DeliveriesPage
@@ -3480,6 +3767,19 @@ export default function App() {
           />
         ) : null;
 
+      case "sales-orders":
+        return canReadSalesOrders ? (
+          <SalesOrdersPage
+            orders={salesOrders}
+            customers={customers}
+            currentUser={currentUserCreator}
+            onSaveOrder={handleSaveSalesOrder}
+            onAddCustomer={handleAddCustomer}
+            onUpdateCustomer={handleUpdateCustomer}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
+
       case "sales-converter":
         return <SalesConverterPage onPageChange={setCurrentPage} />;
 
@@ -3538,6 +3838,7 @@ export default function App() {
             onPageChange={navigateToPage}
             currentUser={currentUser}
             currentUserProfile={userProfile}
+            effectiveUserRole={effectiveUserRole}
             allowedPageIds={effectiveAllowedPageIds}
             isSuperAdmin={isSuperAdmin}
             previewUsers={dashboardPreviewUsers}

@@ -592,7 +592,7 @@ export default function SupplierRunForm({
       className="rounded-3xl border border-slate-200 bg-white p-5 shadow-lg sm:p-8"
     >
       <div className="mb-7">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
           {isEditing ? "Edit Pickup" : "Driver Pickup"}
         </p>
 
@@ -612,7 +612,7 @@ export default function SupplierRunForm({
           <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
             <div className="mb-5 flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                   PO Details
                 </p>
                 <h3 className="mt-1 text-xl font-black text-slate-900">
@@ -647,7 +647,7 @@ export default function SupplierRunForm({
                     clearError();
                   }}
                   disabled={isSubmitting}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                 >
                   <option value="">Select...</option>
                   {orderedByOptions.map((orderedByOption) => (
@@ -675,7 +675,7 @@ export default function SupplierRunForm({
                     clearError();
                   }}
                   disabled={isSubmitting}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                 />
               </div>
 
@@ -700,7 +700,7 @@ export default function SupplierRunForm({
                   }}
                   disabled={isSubmitting}
                   placeholder="123-456"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-3xl font-black tracking-[0.12em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-3xl font-black tracking-[0.12em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                 />
               </div>
 
@@ -722,7 +722,7 @@ export default function SupplierRunForm({
                   }}
                   disabled={isSubmitting}
                   placeholder="For order, return, or swap items"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                 />
 
                 <p className="mt-1 text-xs font-bold text-slate-500">
@@ -735,7 +735,7 @@ export default function SupplierRunForm({
 
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-5 border-b border-slate-200 pb-4">
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                 Route Assignment
               </p>
               <h3 className="mt-1 text-xl font-black text-slate-900">
@@ -757,7 +757,7 @@ export default function SupplierRunForm({
                   value={vendor}
                   onChange={(event) => updateVendor(event.target.value)}
                   disabled={isSubmitting}
-                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 md:hidden"
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 md:hidden"
                 >
                   <option value="">Select a vendor...</option>
 
@@ -781,7 +781,7 @@ export default function SupplierRunForm({
                   disabled={isSubmitting}
                   placeholder="Start typing a vendor..."
                   aria-label="Vendor"
-                  className="hidden w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 md:block"
+                  className="hidden w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 md:block"
                 />
 
                 <datalist id="supplier-run-vendor-options">
@@ -812,7 +812,7 @@ export default function SupplierRunForm({
                         clearError();
                       }}
                       disabled={isSubmitting}
-                      className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                      className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                     >
                       <option value="">Select a driver...</option>
 
@@ -857,7 +857,7 @@ export default function SupplierRunForm({
                       disabled={
                         isSubmitting || safeVehicleOptions.length === 0
                       }
-                      className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+                      className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
                     >
                       <option value="">
                         {safeVehicleOptions.length > 0
@@ -915,7 +915,7 @@ export default function SupplierRunForm({
                   }}
                   disabled={isSubmitting}
                   placeholder="Optional: address for driver directions"
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                 />
 
                 <p className="mt-2 text-sm font-semibold text-slate-500">
@@ -978,7 +978,7 @@ export default function SupplierRunForm({
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-5 flex flex-col gap-1 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                 Checklist
               </p>
               <h3 className="mt-1 text-xl font-black text-slate-900">
@@ -1036,7 +1036,7 @@ export default function SupplierRunForm({
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       {item.quantity ? (
-                        <p className="mb-1 text-sm font-black text-blue-700">
+                        <p className="mb-1 text-sm font-black text-[#FC2C38]">
                           QTY: {item.quantity}
                         </p>
                       ) : null}
@@ -1075,7 +1075,7 @@ export default function SupplierRunForm({
                         type="button"
                         onClick={() => editItem(item.id)}
                         disabled={isSubmitting}
-                        className="rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                        className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-bold text-[#FC2C38] transition hover:bg-red-50"
                       >
                         Edit
                       </button>
@@ -1104,7 +1104,7 @@ export default function SupplierRunForm({
                           }
                           disabled={isSubmitting}
                           placeholder="QTY"
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                         />
                       </div>
 
@@ -1125,7 +1125,7 @@ export default function SupplierRunForm({
                           }
                           disabled={isSubmitting}
                           placeholder="Example: 2 units LVL, hangers, trim pack"
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                         />
                       </div>
 
@@ -1149,7 +1149,7 @@ export default function SupplierRunForm({
                           }
                           disabled={isSubmitting}
                           placeholder="SKU / Item # / SO#"
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                         />
                       </div>
                     </div>
@@ -1173,7 +1173,7 @@ export default function SupplierRunForm({
                             )
                           }
                           disabled={isSubmitting}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                         >
                           <option value="order">Order</option>
                           <option value="stock">Stock</option>
@@ -1207,7 +1207,7 @@ export default function SupplierRunForm({
                             !usesOrderNumber(item.materialUse)
                           }
                           placeholder="Order #"
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
                         />
                       </div>
 
@@ -1284,7 +1284,7 @@ export default function SupplierRunForm({
               type="button"
               onClick={addItem}
               disabled={isSubmitting}
-              className="w-full rounded-xl border-2 border-dashed border-slate-300 px-4 py-3.5 font-bold text-slate-600 transition hover:border-blue-500 hover:bg-blue-50 hover:text-blue-800"
+              className="w-full rounded-xl border-2 border-dashed border-slate-300 px-4 py-3.5 font-bold text-slate-600 transition hover:border-[#FC2C38] hover:bg-red-50 hover:text-red-700"
             >
               + Add Another Item
             </button>
@@ -1315,7 +1315,7 @@ export default function SupplierRunForm({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-xl bg-blue-700 px-6 py-4 text-lg font-black text-white shadow-md transition hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:cursor-not-allowed disabled:bg-slate-400"
+            className="w-full rounded-xl bg-[#FC2C38] px-6 py-4 text-lg font-black text-white shadow-md transition hover:bg-[#dc1f2b] focus:outline-none focus:ring-4 focus:ring-red-200 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
             {isSubmitting
               ? "Saving South PO..."

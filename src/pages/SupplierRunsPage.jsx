@@ -570,6 +570,34 @@ export default function SupplierRunsPage({
     }
   }, [initialCheckViewMode, mode]);
 
+  useEffect(() => {
+    if (mode !== "check" || !canEditSupplierRuns) {
+      return;
+    }
+
+    let pendingSupplierRunId = "";
+
+    try {
+      pendingSupplierRunId =
+        sessionStorage.getItem("dispatch-cl-edit-south-po") || "";
+      sessionStorage.removeItem("dispatch-cl-edit-south-po");
+    } catch {
+      pendingSupplierRunId = "";
+    }
+
+    if (!pendingSupplierRunId) {
+      return;
+    }
+
+    const pendingSupplierRun = supplierRuns.find(
+      (supplierRun) => supplierRun.id === pendingSupplierRunId,
+    );
+
+    if (pendingSupplierRun) {
+      setEditingSupplierRun(pendingSupplierRun);
+    }
+  }, [canEditSupplierRuns, mode, supplierRuns]);
+
   useEffect(
     () =>
       subscribeToSouthRouteOrders(
@@ -1143,7 +1171,7 @@ export default function SupplierRunsPage({
       <div className="mb-6">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
               Driver / South
             </p>
 
@@ -1210,8 +1238,8 @@ export default function SupplierRunsPage({
       </div>
 
       {successMessage ? (
-        <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4">
-          <p className="font-bold text-blue-800">
+        <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
+          <p className="font-bold text-red-700">
             ✓ {successMessage}
           </p>
         </div>

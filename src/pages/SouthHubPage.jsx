@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -7,6 +8,7 @@ import {
   PackageCheck,
   Plus,
   Truck,
+  Warehouse,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
@@ -18,6 +20,15 @@ function getOpenItemCount(supplierRuns) {
       (Array.isArray(supplierRun.items)
         ? supplierRun.items.filter((item) => !item.pickedUp).length
         : 0),
+    0,
+  );
+}
+
+function getTheirTruckItemCount(theirTruckPOs) {
+  return theirTruckPOs.reduce(
+    (count, theirTruckPO) =>
+      count +
+      (Array.isArray(theirTruckPO.items) ? theirTruckPO.items.length : 0),
     0,
   );
 }
@@ -194,12 +205,27 @@ function ActionCard({
   );
 }
 
+/**
+ * @param {{
+ *   supplierRuns: Array<Record<string, any>>;
+ *   theirTruckPOs?: Array<Record<string, any>>;
+ *   allowedPageIds: string[];
+ *   onPageChange: (pageId: string) => void;
+ *   isDriverView?: boolean;
+ * }} props
+ */
 export default function SouthHubPage({
   supplierRuns,
+  theirTruckPOs = [],
   allowedPageIds,
   onPageChange,
+  isDriverView = false,
 }) {
+  const [activeActionTab, setActiveActionTab] = useState("south");
   const canOpen = (pageId) => allowedPageIds.includes(pageId);
+  const safeTheirTruckPOs = Array.isArray(theirTruckPOs)
+    ? theirTruckPOs
+    : [];
   const needsDispatchRuns = supplierRuns.filter(
     (supplierRun) =>
       supplierRun.status !== "complete" &&
@@ -215,7 +241,10 @@ export default function SouthHubPage({
   const completedRuns = supplierRuns.filter(
     (supplierRun) => supplierRun.status === "complete",
   );
-  const actionCards = [
+  const scheduledTheirTruckPOs = safeTheirTruckPOs.filter(
+    (theirTruckPO) => theirTruckPO.status !== "complete",
+  );
+  const southActionCards = [
     canOpen("supplier-runs-dispatch")
       ? {
           icon: AlertTriangle,
@@ -244,7 +273,7 @@ export default function SouthHubPage({
           pageId: "supplier-runs-check",
         }
       : null,
-    canOpen("supplier-runs-calendar")
+    canOpen("south-calendar") || canOpen("supplier-runs-calendar")
       ? {
           icon: CalendarDays,
           label: "Schedule",
@@ -255,7 +284,9 @@ export default function SouthHubPage({
           metricLabel: "Scheduled",
           tone: "dispatch",
           variant: "default",
-          pageId: "supplier-runs-calendar",
+          pageId: canOpen("south-calendar")
+            ? "south-calendar"
+            : "supplier-runs-calendar",
         }
       : null,
     canOpen("supplier-runs-history")
@@ -273,30 +304,94 @@ export default function SouthHubPage({
         }
       : null,
   ].filter(Boolean);
+  const theirTruckActionCards = [
+    canOpen("their-truck-pos")
+      ? {
+          icon: Truck,
+          label: "Vendor Truck",
+          title: "Their Truck POs",
+          description:
+            "POs coming in on a vendor truck, tied to vendor cadence and receiving.",
+          metric: scheduledTheirTruckPOs.length,
+          metricLabel: "Scheduled",
+          tone: "dispatch",
+          variant: "default",
+          pageId: "their-truck-pos",
+        }
+      : null,
+    canOpen("their-truck-calendar")
+      ? {
+          icon: Warehouse,
+          label: "Inbound",
+          title: "Their Truck Calendar",
+          description:
+            "View vendor-delivered POs by delivery date and cadence.",
+          metric: scheduledTheirTruckPOs.length,
+          metricLabel: "Inbound",
+          tone: "dispatch",
+          variant: "default",
+          pageId: "their-truck-calendar",
+        }
+      : null,
+    canOpen("their-truck-history")
+      ? {
+          icon: History,
+          label: "Archive",
+          title: "Their Truck History",
+          description:
+            "Search and review vendor-delivered PO records.",
+          metric: safeTheirTruckPOs.length,
+          metricLabel: "Records",
+          tone: "archive",
+          variant: "quiet",
+          pageId: "their-truck-history",
+        }
+      : null,
+  ].filter(Boolean);
+  const actionCards =
+    activeActionTab === "theirTruck" ? theirTruckActionCards : southActionCards;
+  const pageTitle = isDriverView ? "South" : "PO's";
+  const pageEyebrow = isDriverView ? "South" : "PO Routing";
+  const southLandingPage =
+    (canOpen("supplier-runs-add") && "supplier-runs-add") ||
+    (canOpen("supplier-runs-dispatch") && "supplier-runs-dispatch") ||
+    (canOpen("supplier-runs-check") && "supplier-runs-check") ||
+    (canOpen("supplier-runs-calendar") && "supplier-runs-calendar") ||
+    "south";
+  const titleCalendarPage =
+    !isDriverView && canOpen("po-calendar")
+      ? "po-calendar"
+      : canOpen("supplier-runs-calendar")
+        ? "supplier-runs-calendar"
+        : "";
+  const titleCalendarLabel =
+    titleCalendarPage === "po-calendar"
+      ? "Open PO Calendar"
+      : "Open South Calendar";
 
   return (
     <PageContainer>
-      <Breadcrumbs items={[{ label: "South" }]} />
+      <Breadcrumbs items={[{ label: pageTitle }]} />
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
             <Truck aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
-            South
+            {pageEyebrow}
           </p>
 
           <div className="mt-2 flex items-center gap-3">
             <h1 className="text-4xl font-black tracking-tight text-slate-900">
-              South
+              {pageTitle}
             </h1>
 
-            {canOpen("supplier-runs-calendar") ? (
+            {titleCalendarPage ? (
               <button
                 type="button"
-                onClick={() => onPageChange("supplier-runs-calendar")}
+                onClick={() => onPageChange(titleCalendarPage)}
                 className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-[#FC2C38]"
-                aria-label="Open South Calendar"
-                title="Open South Calendar"
+                aria-label={titleCalendarLabel}
+                title={titleCalendarLabel}
               >
                 <CalendarDays
                   aria-hidden="true"
@@ -307,15 +402,38 @@ export default function SouthHubPage({
             ) : null}
           </div>
           <p className="mt-2 max-w-3xl text-lg font-semibold text-slate-500">
-            Start requests, assign pickups, and track progress from one clean
-            place.
+            {isDriverView
+              ? "Work assigned South pickups and keep dispatch updated."
+              : "Choose how a PO is coming in, then route it through the right workflow."}
           </p>
         </div>
 
-        {canOpen("supplier-runs-add") ? (
+        {!isDriverView ? (
+          <div className="grid gap-2 sm:mt-1 sm:grid-cols-2">
+            {canOpen("supplier-runs-add") ? (
+              <button
+                type="button"
+                onClick={() => onPageChange("supplier-runs-add")}
+                className="inline-flex min-h-[48px] min-w-[160px] items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-[#FC2C38] px-4 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:px-5"
+              >
+                <Plus aria-hidden="true" className="h-5 w-5" strokeWidth={2.7} />
+                Add South PO
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => onPageChange("their-truck-pos")}
+              className="inline-flex min-h-[48px] min-w-[100px] items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:px-5"
+            >
+              <Plus aria-hidden="true" className="h-5 w-5" strokeWidth={2.7} />
+              PO
+            </button>
+          </div>
+        ) : canOpen("supplier-runs-add") ? (
           <button
             type="button"
-            onClick={() => onPageChange("supplier-runs-add")}
+            onClick={() => onPageChange(southLandingPage)}
             className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:mt-1"
           >
             <Plus aria-hidden="true" className="h-5 w-5" strokeWidth={2.7} />
@@ -324,7 +442,78 @@ export default function SouthHubPage({
         ) : null}
       </div>
 
-      <section className="mb-5 grid grid-cols-3 gap-2 sm:gap-4">
+      {!isDriverView ? (
+        <section className="mb-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                Create PO
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-slate-950">
+                Choose how it is arriving
+              </h2>
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            {canOpen("supplier-runs-add") ? (
+              <button
+                type="button"
+                onClick={() => onPageChange("supplier-runs-add")}
+                className="group flex items-center gap-4 rounded-2xl border border-red-200 bg-red-50/60 p-4 text-left transition hover:border-red-300 hover:bg-red-50"
+              >
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FC2C38] text-white">
+                  <Truck aria-hidden="true" className="h-6 w-6" strokeWidth={2.5} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-lg font-black text-slate-950">
+                    South PO
+                  </span>
+                  <span className="mt-1 block text-sm font-semibold text-slate-600">
+                    Our driver is picking it up from a supplier.
+                  </span>
+                </span>
+                <ArrowRight
+                  aria-hidden="true"
+                  className="h-5 w-5 shrink-0 text-[#FC2C38] transition group-hover:translate-x-1"
+                  strokeWidth={2.6}
+                />
+              </button>
+            ) : null}
+
+            {canOpen("their-truck-pos") ? (
+              <button
+                type="button"
+                onClick={() => onPageChange("their-truck-pos")}
+                className="group flex items-center gap-4 rounded-2xl border border-blue-200 bg-blue-50/60 p-4 text-left transition hover:border-blue-300 hover:bg-blue-50"
+              >
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white">
+                  <PackageCheck
+                    aria-hidden="true"
+                    className="h-6 w-6"
+                    strokeWidth={2.5}
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-lg font-black text-slate-950">
+                    Their Truck PO
+                  </span>
+                  <span className="mt-1 block text-sm font-semibold text-slate-600">
+                    Vendor truck or carrier is delivering to us.
+                  </span>
+                </span>
+                <ArrowRight
+                  aria-hidden="true"
+                  className="h-5 w-5 shrink-0 text-blue-700 transition group-hover:translate-x-1"
+                  strokeWidth={2.6}
+                />
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
           <p className="flex flex-col gap-1 text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 sm:flex-row sm:items-center sm:gap-2 sm:text-xs sm:tracking-[0.14em]">
             <ClipboardList
@@ -375,16 +564,84 @@ export default function SouthHubPage({
             South history records
           </p>
         </div>
+
+        {!isDriverView ? (
+          <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-3 shadow-sm sm:p-4">
+            <p className="flex flex-col gap-1 text-[10px] font-black uppercase tracking-[0.1em] text-blue-700 sm:flex-row sm:items-center sm:gap-2 sm:text-xs sm:tracking-[0.14em]">
+              <Truck
+                aria-hidden="true"
+                className="h-4 w-4"
+                strokeWidth={2.4}
+              />
+              Their Truck
+            </p>
+            <p className="mt-2 text-2xl font-black text-slate-950 sm:mt-3 sm:text-3xl">
+              {scheduledTheirTruckPOs.length}
+            </p>
+            <p className="mt-1 text-xs font-bold leading-tight text-slate-500 sm:text-sm">
+              {getTheirTruckItemCount(scheduledTheirTruckPOs)} items scheduled
+            </p>
+          </div>
+        ) : null}
       </section>
 
+      {!isDriverView ? (
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+              Action Items
+            </p>
+            <h2 className="mt-1 text-2xl font-black text-slate-950">
+              Work by PO type
+            </h2>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setActiveActionTab("south")}
+                className={`min-h-[38px] rounded-lg px-4 text-xs font-black uppercase tracking-[0.1em] transition ${
+                  activeActionTab === "south"
+                    ? "bg-[#FC2C38] text-white"
+                    : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                South
+              </button>
+
+              {theirTruckActionCards.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveActionTab("theirTruck")}
+                  className={`min-h-[38px] rounded-lg px-4 text-xs font-black uppercase tracking-[0.1em] transition ${
+                    activeActionTab === "theirTruck"
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Their Truck
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <section className="grid gap-3">
-        {actionCards.map((actionCard) => (
-          <ActionCard
-            key={actionCard.pageId}
-            {...actionCard}
-            onClick={() => onPageChange(actionCard.pageId)}
-          />
-        ))}
+        {actionCards.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-6 text-sm font-bold text-slate-500">
+            No actions available for this PO type.
+          </div>
+        ) : (
+          actionCards.map((actionCard) => (
+            <ActionCard
+              key={actionCard.pageId}
+              {...actionCard}
+              onClick={() => onPageChange(actionCard.pageId)}
+            />
+          ))
+        )}
       </section>
     </PageContainer>
   );

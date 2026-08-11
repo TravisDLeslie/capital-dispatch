@@ -8,6 +8,7 @@ import {
   Package,
   Pencil,
   Trash2,
+  Truck,
   X,
 } from "lucide-react";
 import {
@@ -261,6 +262,13 @@ export default function CheckInCard({
       }
     : null;
   const isFromSouth = checkIn.sourceType === "south";
+  const receivingTruckLabel =
+    checkIn.receivingTruckLabel ||
+    (checkIn.receivingTruckType === "ourTruck"
+      ? "Our Truck"
+      : checkIn.receivingTruckType === "theirTruck"
+        ? "Their Truck"
+        : "");
   const southSourceText = [
     "From South",
     checkIn.sourceSupplierRunVendor || "",
@@ -323,6 +331,17 @@ export default function CheckInCard({
                 {southSourceText}
               </p>
             ) : null}
+
+            {receivingTruckLabel ? (
+              <p className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-slate-600">
+                <Truck
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5"
+                  strokeWidth={2.4}
+                />
+                {receivingTruckLabel}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -352,6 +371,17 @@ export default function CheckInCard({
               {isFromSouth ? (
                 <p className="mt-2 inline-block max-w-full rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-blue-700">
                   {southSourceText}
+                </p>
+              ) : null}
+
+              {receivingTruckLabel ? (
+                <p className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-slate-600">
+                  <Truck
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5"
+                    strokeWidth={2.4}
+                  />
+                  {receivingTruckLabel}
                 </p>
               ) : null}
             </div>

@@ -10,6 +10,7 @@ function createEmptyVendor(routeOrder = 1) {
     id: createId(),
     name: "",
     address: "",
+    deliveryCadence: "",
     routeOrder,
     active: true,
   };
@@ -32,6 +33,7 @@ export default function VendorSettingsPage({
             ...vendor,
             id: vendor.id || createId(),
             routeOrder: Number(vendor.routeOrder) || index + 1,
+            deliveryCadence: vendor.deliveryCadence || "",
             active: vendor.active !== false,
           }))
         : [],
@@ -81,6 +83,7 @@ export default function VendorSettingsPage({
         ...vendor,
         name: String(vendor.name || "").trim(),
         address: String(vendor.address || "").trim(),
+        deliveryCadence: String(vendor.deliveryCadence || "").trim(),
         routeOrder: Number(vendor.routeOrder) || index + 1,
         active: vendor.active !== false,
       }))
@@ -128,7 +131,7 @@ export default function VendorSettingsPage({
         </h1>
 
         <p className="mt-2 max-w-3xl text-base font-semibold text-slate-500 sm:text-lg">
-          Manage supplier names, addresses, and default South route order.
+          Manage supplier names, addresses, delivery cadence, and default South route order.
         </p>
       </div>
 
@@ -168,7 +171,7 @@ export default function VendorSettingsPage({
               key={vendor.id}
               className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
             >
-              <div className="grid gap-3 lg:grid-cols-[90px_minmax(180px,0.8fr)_minmax(260px,1.2fr)_auto] lg:items-end">
+              <div className="grid gap-3 lg:grid-cols-[90px_minmax(180px,0.8fr)_minmax(260px,1.2fr)_minmax(160px,0.7fr)_auto] lg:items-end">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
                     Order
@@ -214,6 +217,26 @@ export default function VendorSettingsPage({
                     }
                     disabled={isSaving}
                     placeholder="4300 S Enterprise St, Boise, ID 83705"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    Delivery Cadence
+                  </span>
+                  <input
+                    type="text"
+                    value={vendor.deliveryCadence || ""}
+                    onChange={(event) =>
+                      updateVendor(
+                        vendor.id,
+                        "deliveryCadence",
+                        event.target.value,
+                      )
+                    }
+                    disabled={isSaving}
+                    placeholder="M-W-F"
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                   />
                 </label>

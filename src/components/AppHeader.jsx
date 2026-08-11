@@ -73,7 +73,14 @@ function getActionNavButtonClass(isActive, isMobile = false) {
 }
 
 function getCurrentPageLabel(currentPage) {
-  if (String(currentPage || "").startsWith("supplier-runs")) {
+  if (
+    String(currentPage || "").startsWith("supplier-runs") ||
+    currentPage === "their-truck-pos" ||
+    currentPage === "south-calendar" ||
+    currentPage === "their-truck-calendar" ||
+    currentPage === "their-truck-history" ||
+    currentPage === "po-calendar"
+  ) {
     return "South";
   }
 
@@ -88,6 +95,7 @@ function getCurrentPageLabel(currentPage) {
   if (
     String(currentPage || "").startsWith("customers-") ||
     currentPage === "customer-payment-links" ||
+    currentPage === "sales-orders" ||
     currentPage === "sales-converter" ||
     currentPage === "sales-report"
   ) {
@@ -118,7 +126,14 @@ function getCurrentPageLabel(currentPage) {
 }
 
 function getCurrentPageGroup(currentPage) {
-  if (String(currentPage || "").startsWith("supplier-runs")) {
+  if (
+    String(currentPage || "").startsWith("supplier-runs") ||
+    currentPage === "their-truck-pos" ||
+    currentPage === "south-calendar" ||
+    currentPage === "their-truck-calendar" ||
+    currentPage === "their-truck-history" ||
+    currentPage === "po-calendar"
+  ) {
     return "South";
   }
 
@@ -137,6 +152,7 @@ function getCurrentPageGroup(currentPage) {
     currentPage === "sales" ||
     String(currentPage || "").startsWith("customers-") ||
     currentPage === "customer-payment-links" ||
+    currentPage === "sales-orders" ||
     currentPage === "sales-converter" ||
     currentPage === "sales-report"
   ) {
@@ -193,6 +209,7 @@ function getNavGroupIcon(group) {
  *   onPageChange: (pageId: string) => void;
  *   currentUser: Record<string, any> | null;
  *   currentUserProfile: Record<string, any> | null;
+ *   effectiveUserRole?: string;
  *   allowedPageIds?: string[];
  *   isSuperAdmin?: boolean;
  *   previewUsers?: Array<Record<string, any>>;
@@ -206,6 +223,7 @@ export default function AppHeader({
   onPageChange,
   currentUser,
   currentUserProfile,
+  effectiveUserRole = "",
   allowedPageIds,
   isSuperAdmin = false,
   previewUsers = [],
@@ -231,6 +249,9 @@ export default function AppHeader({
     .trim()
     .charAt(0)
     .toUpperCase();
+  const isDriverView =
+    effectiveUserRole === "driver" || currentUserProfile?.role === "driver";
+  const southGroupLabel = isDriverView ? "South" : "PO's";
 
   useEffect(() => {
     const currentGroup = getCurrentPageGroup(currentPage);
@@ -281,7 +302,12 @@ export default function AppHeader({
           allowedPageIds.includes(item.id) ||
           (item.id === "south" &&
             allowedPageIds.some((pageId) =>
-              String(pageId).startsWith("supplier-runs"),
+              String(pageId).startsWith("supplier-runs") ||
+              pageId === "their-truck-pos" ||
+              pageId === "south-calendar" ||
+              pageId === "their-truck-calendar" ||
+              pageId === "their-truck-history" ||
+              pageId === "po-calendar",
             )) ||
           (item.id === "receiving" &&
             allowedPageIds.some((pageId) =>
@@ -296,6 +322,7 @@ export default function AppHeader({
               (pageId) =>
                 String(pageId).startsWith("customers-") ||
                 pageId === "customer-payment-links" ||
+                pageId === "sales-orders" ||
                 pageId === "sales-converter" ||
                 pageId === "sales-report",
             )) ||
@@ -356,7 +383,7 @@ export default function AppHeader({
                 className="h-6 w-6"
                 strokeWidth={2.5}
               />
-              {group}
+              {group === "South" ? southGroupLabel : group}
             </span>
             {hasGroupItems && !isSinglePageGroup ? (
               <span className="text-slate-400">
