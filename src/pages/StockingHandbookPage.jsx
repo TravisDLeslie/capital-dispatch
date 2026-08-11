@@ -396,7 +396,7 @@ export default function StockingHandbookPage({
 
   return (
     <PageContainer>
-      <div className="mb-8">
+      <div className="mb-5 sm:mb-8">
         <Breadcrumbs
           items={[
             { label: "Sales", onClick: () => onPageChange?.("sales") },
@@ -404,15 +404,15 @@ export default function StockingHandbookPage({
           ]}
         />
 
-        <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="mt-4 flex flex-col gap-3 lg:mt-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-[#FC2C38]">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-[#FC2C38] sm:text-xs">
               Stock Reference
             </p>
-            <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950 sm:mt-2 sm:text-5xl">
               Stocking Handbook
             </h1>
-            <p className="mt-3 max-w-3xl text-lg font-semibold text-slate-500">
+            <p className="mt-2 hidden max-w-3xl text-lg font-semibold text-slate-500 sm:block">
               Search stocked items, lengths, unit sizes, grades, and notes from
               the Capital Lumber stocking handbook.
             </p>
@@ -422,7 +422,7 @@ export default function StockingHandbookPage({
             <button
               type="button"
               onClick={startAdding}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-5 py-3 text-base font-black text-white shadow-sm transition hover:bg-red-600"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:px-5 sm:py-3 sm:text-base"
             >
               <Plus aria-hidden="true" className="h-5 w-5" strokeWidth={3} />
               Add Item
@@ -638,23 +638,26 @@ export default function StockingHandbookPage({
         </form>
       ) : null}
 
-      <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:rounded-[28px] sm:p-6">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <label>
-            <span className="mb-2 block text-sm font-black text-slate-700">
-              Search Handbook
+            <span className="mb-2 flex items-center justify-between gap-3 text-sm font-black text-slate-700">
+              <span>Search Handbook</span>
+              <span className="rounded-full bg-slate-950 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white lg:hidden">
+                {filteredItems.length} items
+              </span>
             </span>
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 focus-within:border-[#FC2C38] focus-within:ring-4 focus-within:ring-red-100">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2.5 focus-within:border-[#FC2C38] focus-within:ring-4 focus-within:ring-red-100 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-3">
               <Search
                 aria-hidden="true"
-                className="h-5 w-5 shrink-0 text-slate-400"
+                className="h-4 w-4 shrink-0 text-slate-400 sm:h-5 sm:w-5"
                 strokeWidth={2.4}
               />
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search 2x6, OSB, cedar, unit size, length..."
-                className="min-w-0 flex-1 bg-transparent text-base font-semibold text-slate-900 outline-none placeholder:text-slate-300"
+                placeholder="Search item, length, or #..."
+                className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-300 sm:text-base"
               />
               {search ? (
                 <button
@@ -663,13 +666,13 @@ export default function StockingHandbookPage({
                   className="text-slate-400 hover:text-slate-700"
                   aria-label="Clear handbook search"
                 >
-                  <X aria-hidden="true" className="h-5 w-5" />
+                  <X aria-hidden="true" className="h-4 w-4 sm:h-5 sm:w-5" />
                 </button>
               ) : null}
             </div>
           </label>
 
-          <div className="rounded-2xl bg-slate-950 px-5 py-3 text-center text-white">
+          <div className="hidden rounded-2xl bg-slate-950 px-5 py-3 text-center text-white lg:block">
             <p className="text-2xl font-black">{filteredItems.length}</p>
             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-300">
               Items
@@ -677,7 +680,7 @@ export default function StockingHandbookPage({
           </div>
         </div>
 
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 sm:mt-5">
           {categories.map((category) => {
             const isSelected = selectedCategory === category;
 
@@ -686,7 +689,7 @@ export default function StockingHandbookPage({
                 key={category}
                 type="button"
                 onClick={() => setSelectedCategory(category)}
-                className={`whitespace-nowrap rounded-full border px-4 py-2 text-sm font-black transition ${
+                className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-black transition sm:px-4 sm:py-2 sm:text-sm ${
                   isSelected
                     ? "border-slate-950 bg-slate-950 text-white"
                     : "border-slate-200 bg-white text-slate-600 hover:border-[#FC2C38] hover:text-[#FC2C38]"
@@ -777,19 +780,25 @@ export default function StockingHandbookPage({
                     </div>
 
                     {hasLengthItems ? (
-                      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                      <div className="mt-4 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/40">
                         <button
                           type="button"
                           onClick={() => toggleLengthItems(item.id)}
-                          className="flex w-full items-center justify-between gap-3 bg-slate-50 px-4 py-3 text-left transition hover:bg-slate-100"
+                          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-blue-50"
                         >
                           <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
-                              Length Item Numbers
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">
+                              View Item Numbers
                             </p>
-                            <p className="mt-1 text-sm font-black text-slate-900">
-                              {lengthItems.length}{" "}
-                              {lengthItems.length === 1 ? "length" : "lengths"}
+                            <p className="mt-1 text-sm font-black text-slate-950">
+                              {lengthItems[0]?.length} = #
+                              {lengthItems[0]?.itemNumber}
+                              {lengthItems.length > 1 ? (
+                                <>
+                                  {" "}
+                                  • {lengthItems.length} lengths total
+                                </>
+                              ) : null}
                             </p>
                           </div>
                           <ChevronDown
