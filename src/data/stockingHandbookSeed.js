@@ -8,6 +8,11 @@ export const defaultStockingHandbookItems = [
     actualDimension: "1-1/2 in x 3-1/2 in",
     unitSize: "294 pc units",
     stockingLengths: "8 ft / 10 ft / 12 ft / 14 ft / 16 ft",
+    lengthItems: [
+      { length: "8 ft", itemNumber: "01" },
+      { length: "10 ft", itemNumber: "02" },
+      { length: "12 ft", itemNumber: "03" },
+    ],
     notes: "",
   },
   {

@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   Boxes,
+  ChevronDown,
   Pencil,
   Plus,
   Save,
@@ -26,10 +27,53 @@ const emptyForm = {
   stockingLengths: "",
   notes: "",
   keywords: "",
+  lengthItems: [],
 };
 
+function createEmptyLengthItem() {
+  return {
+    id: createId(),
+    length: "",
+    itemNumber: "",
+    notes: "",
+  };
+}
+
 function normalizeSearch(value) {
-  return String(value || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return String(value || "")
+    .replace(/[×✕]/g, "x")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+}
+
+function getDefaultLengthItems(item) {
+  const normalizedName = normalizeSearch(item.name);
+  const normalizedDimension = normalizeSearch(item.nominalDimension);
+
+  if (
+    item.id === "stock-dim-2x4-dfl" ||
+    (normalizedName.includes("2x4dougfir") &&
+      normalizedName.includes("framing")) ||
+    (normalizedDimension === "2x4" &&
+      normalizedName.includes("dougfir") &&
+      normalizedName.includes("framing"))
+  ) {
+    return [
+      { id: "2x4-dfl-8", length: "8 ft", itemNumber: "01", notes: "" },
+      { id: "2x4-dfl-10", length: "10 ft", itemNumber: "02", notes: "" },
+      { id: "2x4-dfl-12", length: "12 ft", itemNumber: "03", notes: "" },
+    ];
+  }
+
+  return [];
+}
+
+function getDisplayLengthItems(item) {
+  if (Array.isArray(item.lengthItems) && item.lengthItems.length > 0) {
+    return item.lengthItems;
+  }
+
+  return getDefaultLengthItems(item);
 }
 
 function getSearchText(item) {
@@ -42,6 +86,11 @@ function getSearchText(item) {
     item.actualDimension,
     item.unitSize,
     item.stockingLengths,
+    ...getDisplayLengthItems(item).flatMap((lengthItem) => [
+      lengthItem.length,
+      lengthItem.itemNumber,
+      lengthItem.notes,
+    ]),
     item.notes,
     item.keywords,
   ]
@@ -134,10 +183,13 @@ export default function StockingHandbookPage({
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [editingItemId, setEditingItemId] = useState("");
+  const [detailsItemId, setDetailsItemId] = useState("");
+  const [expandedLengthItemIds, setExpandedLengthItemIds] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const editorRef = useRef(null);
 
   const filteredItems = useMemo(() => {
     const normalizedSearch = normalizeSearch(search);
@@ -163,6 +215,8 @@ export default function StockingHandbookPage({
       };
     }, {});
   }, [filteredItems]);
+  const detailsItem = safeItems.find((item) => item.id === detailsItemId);
+  const detailsLengthItems = detailsItem ? getDisplayLengthItems(detailsItem) : [];
 
   function updateForm(field, value) {
     setForm((currentForm) => ({
@@ -195,11 +249,79 @@ export default function StockingHandbookPage({
       actualDimension: item.actualDimension || "",
       unitSize: item.unitSize || "",
       stockingLengths: item.stockingLengths || "",
+      lengthItems:
+        getDisplayLengthItems(item).length > 0
+          ? getDisplayLengthItems(item).map((lengthItem) => ({
+              id: lengthItem.id || createId(),
+              length: lengthItem.length || "",
+              itemNumber: lengthItem.itemNumber || "",
+              notes: lengthItem.notes || "",
+            }))
+          : [],
       notes: item.notes || "",
       keywords: item.keywords || "",
     });
     setError("");
     setMessage("");
+    window.requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+
+  function addLengthItem() {
+    setForm((currentForm) => ({
+      ...currentForm,
+      lengthItems: [
+        ...(Array.isArray(currentForm.lengthItems)
+          ? currentForm.lengthItems
+          : []),
+        createEmptyLengthItem(),
+      ],
+    }));
+    setError("");
+    setMessage("");
+  }
+
+  function updateLengthItem(lengthItemId, field, value) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      lengthItems: (Array.isArray(currentForm.lengthItems)
+        ? currentForm.lengthItems
+        : []
+      ).map((lengthItem) =>
+        lengthItem.id === lengthItemId
+          ? {
+              ...lengthItem,
+              [field]: value,
+            }
+          : lengthItem,
+      ),
+    }));
+    setError("");
+    setMessage("");
+  }
+
+  function removeLengthItem(lengthItemId) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      lengthItems: (Array.isArray(currentForm.lengthItems)
+        ? currentForm.lengthItems
+        : []
+      ).filter((lengthItem) => lengthItem.id !== lengthItemId),
+    }));
+    setError("");
+    setMessage("");
+  }
+
+  function toggleLengthItems(itemId) {
+    setExpandedLengthItemIds((currentIds) =>
+      currentIds.includes(itemId)
+        ? currentIds.filter((currentId) => currentId !== itemId)
+        : [...currentIds, itemId],
+    );
   }
 
   function cancelEditing() {
@@ -323,6 +445,7 @@ export default function StockingHandbookPage({
 
       {editingItemId ? (
         <form
+          ref={editorRef}
           onSubmit={handleSave}
           className="mb-8 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-7"
         >
@@ -395,6 +518,90 @@ export default function StockingHandbookPage({
               onChange={(value) => updateForm("stockingLengths", value)}
               placeholder="8 ft / 10 ft / 12 ft"
             />
+            <div className="md:col-span-2">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-black text-slate-700">
+                    Length Item Numbers
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    Add the item number for each stocked length, like 8' = 01.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addLengthItem}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition hover:border-[#FC2C38] hover:bg-red-50 hover:text-[#FC2C38]"
+                >
+                  <Plus aria-hidden="true" className="h-4 w-4" />
+                  Add Length
+                </button>
+              </div>
+
+              {Array.isArray(form.lengthItems) &&
+              form.lengthItems.length > 0 ? (
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  {form.lengthItems.map((lengthItem) => (
+                    <div
+                      key={lengthItem.id}
+                      className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 md:grid-cols-[1fr_1fr_1.4fr_auto]"
+                    >
+                      <input
+                        value={lengthItem.length}
+                        onChange={(event) =>
+                          updateLengthItem(
+                            lengthItem.id,
+                            "length",
+                            event.target.value,
+                          )
+                        }
+                        placeholder="8 ft"
+                        className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                      />
+                      <input
+                        value={lengthItem.itemNumber}
+                        onChange={(event) =>
+                          updateLengthItem(
+                            lengthItem.id,
+                            "itemNumber",
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Item # 01"
+                        className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                      />
+                      <input
+                        value={lengthItem.notes}
+                        onChange={(event) =>
+                          updateLengthItem(
+                            lengthItem.id,
+                            "notes",
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Optional note"
+                        className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeLengthItem(lengthItem.id)}
+                        className="rounded-xl border border-red-200 bg-white px-3 py-2.5 text-sm font-black text-red-600 transition hover:bg-red-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={addLengthItem}
+                  className="w-full rounded-2xl border-2 border-dashed border-slate-300 px-4 py-4 text-sm font-black text-slate-500 transition hover:border-[#FC2C38] hover:bg-red-50 hover:text-[#FC2C38]"
+                >
+                  + Add length/item # rows
+                </button>
+              )}
+            </div>
             <Field
               label="Notes"
               value={form.notes}
@@ -521,11 +728,18 @@ export default function StockingHandbookPage({
               </div>
 
               <div className="grid gap-4 xl:grid-cols-2">
-                {categoryItems.map((item) => (
-                  <article
-                    key={item.id}
-                    className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm"
-                  >
+                {categoryItems.map((item) => {
+                  const lengthItems = getDisplayLengthItems(item);
+                  const hasLengthItems = lengthItems.length > 0;
+                  const isLengthExpanded = expandedLengthItemIds.includes(
+                    item.id,
+                  );
+
+                  return (
+                    <article
+                      key={item.id}
+                      className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm"
+                    >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
                         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#FC2C38]">
@@ -562,6 +776,53 @@ export default function StockingHandbookPage({
                       />
                     </div>
 
+                    {hasLengthItems ? (
+                      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => toggleLengthItems(item.id)}
+                          className="flex w-full items-center justify-between gap-3 bg-slate-50 px-4 py-3 text-left transition hover:bg-slate-100"
+                        >
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                              Length Item Numbers
+                            </p>
+                            <p className="mt-1 text-sm font-black text-slate-900">
+                              {lengthItems.length}{" "}
+                              {lengthItems.length === 1 ? "length" : "lengths"}
+                            </p>
+                          </div>
+                          <ChevronDown
+                            aria-hidden="true"
+                            className={`h-5 w-5 shrink-0 text-slate-500 transition ${
+                              isLengthExpanded ? "rotate-180" : ""
+                            }`}
+                            strokeWidth={2.5}
+                          />
+                        </button>
+
+                        {isLengthExpanded ? (
+                          <div>
+                            <div className="grid grid-cols-[1fr_1fr] border-t border-slate-200 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                              <span>Length</span>
+                              <span>Item #</span>
+                            </div>
+                            {lengthItems.map((lengthItem) => (
+                              <div
+                                key={lengthItem.id}
+                                className="grid grid-cols-[1fr_1fr] border-t border-slate-100 px-4 py-2 text-sm font-black text-slate-900"
+                              >
+                                <span>{lengthItem.length || "-"}</span>
+                                <span className="text-blue-700">
+                                  {lengthItem.itemNumber || "-"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     {item.notes ? (
                       <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
                         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
@@ -575,6 +836,18 @@ export default function StockingHandbookPage({
 
                     {canManage ? (
                       <div className="mt-5 flex flex-col gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setDetailsItemId(item.id)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+                        >
+                          <BookOpen
+                            aria-hidden="true"
+                            className="h-4 w-4"
+                            strokeWidth={2.5}
+                          />
+                          Details
+                        </button>
                         <button
                           type="button"
                           onClick={() => startEditing(item)}
@@ -600,14 +873,137 @@ export default function StockingHandbookPage({
                           Delete
                         </button>
                       </div>
-                    ) : null}
-                  </article>
-                ))}
+                    ) : (
+                      <div className="mt-5 border-t border-slate-200 pt-4">
+                        <button
+                          type="button"
+                          onClick={() => setDetailsItemId(item.id)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-800 transition hover:border-slate-400 hover:bg-slate-50"
+                        >
+                          <BookOpen
+                            aria-hidden="true"
+                            className="h-4 w-4"
+                            strokeWidth={2.5}
+                          />
+                          Details
+                        </button>
+                      </div>
+                    )}
+                    </article>
+                  );
+                })}
               </div>
             </section>
           ))
         )}
       </div>
+
+      {detailsItem ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-6">
+          <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-t-[28px] border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-[28px] sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
+                  Stock Details
+                </p>
+                <h2 className="mt-1 text-3xl font-black text-slate-950">
+                  {detailsItem.name}
+                </h2>
+                <p className="mt-2 text-sm font-bold text-slate-500">
+                  {[detailsItem.grade, detailsItem.nominalDimension]
+                    .filter(Boolean)
+                    .join(" • ")}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailsItemId("")}
+                className="rounded-xl border border-slate-200 bg-white p-3 text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                aria-label="Close stock details"
+              >
+                <X aria-hidden="true" className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <Detail label="Category" value={detailsItem.category} />
+              <Detail label="SKU / Item #" value={detailsItem.sku} />
+              <Detail label="Actual" value={detailsItem.actualDimension} />
+              <Detail label="Unit Size" value={detailsItem.unitSize} />
+              <Detail
+                label="Stocking Lengths"
+                value={detailsItem.stockingLengths}
+              />
+            </div>
+
+            {detailsLengthItems.length > 0 ? (
+              <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+                <div className="grid grid-cols-[1fr_1fr_1.4fr] bg-slate-950 px-4 py-3 text-[10px] font-black uppercase tracking-[0.16em] text-white">
+                  <span>Length</span>
+                  <span>Item #</span>
+                  <span>Notes</span>
+                </div>
+                {detailsLengthItems.map((lengthItem) => (
+                  <div
+                    key={lengthItem.id}
+                    className="grid grid-cols-[1fr_1fr_1.4fr] border-t border-slate-100 px-4 py-3 text-sm font-black text-slate-900"
+                  >
+                    <span>{lengthItem.length || "-"}</span>
+                    <span className="text-blue-700">
+                      {lengthItem.itemNumber || "-"}
+                    </span>
+                    <span className="text-slate-500">
+                      {lengthItem.notes || "-"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-5 rounded-2xl border border-dashed border-slate-300 px-4 py-5 text-center text-sm font-bold text-slate-500">
+                No length-specific item numbers entered yet.
+              </div>
+            )}
+
+            {detailsItem.notes ? (
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">
+                  Notes
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-sm font-bold text-amber-950">
+                  {detailsItem.notes}
+                </p>
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex justify-end gap-2">
+              {canManage ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailsItemId("");
+                    startEditing(detailsItem);
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-800 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                >
+                  <Pencil
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                    strokeWidth={2.5}
+                  />
+                  Edit
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setDetailsItemId("")}
+                className="rounded-xl bg-slate-950 px-5 py-2.5 text-sm font-black text-white transition hover:bg-slate-800"
+              >
+                Done
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }

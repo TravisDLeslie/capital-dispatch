@@ -18,8 +18,55 @@ function cleanText(value) {
   return String(value || "").trim();
 }
 
+function normalizeLengthItems(lengthItems) {
+  if (!Array.isArray(lengthItems)) {
+    return [];
+  }
+
+  return lengthItems
+    .map((lengthItem) => ({
+      id: lengthItem.id || createId(),
+      length: cleanText(lengthItem.length),
+      itemNumber: cleanText(lengthItem.itemNumber),
+      notes: cleanText(lengthItem.notes),
+    }))
+    .filter(
+      (lengthItem) =>
+        lengthItem.length || lengthItem.itemNumber || lengthItem.notes,
+    );
+}
+
+function getDefaultLengthItems(item) {
+  const normalizedName = cleanText(item.name)
+    .toLowerCase()
+    .replace(/[×✕]/g, "x")
+    .replace(/[^a-z0-9]/g, "");
+  const normalizedDimension = cleanText(item.nominalDimension)
+    .toLowerCase()
+    .replace(/[×✕]/g, "x")
+    .replace(/[^a-z0-9]/g, "");
+
+  if (
+    item.id === "stock-dim-2x4-dfl" ||
+    (normalizedName.includes("2x4dougfir") &&
+      normalizedName.includes("framing")) ||
+    (normalizedDimension === "2x4" &&
+      normalizedName.includes("dougfir") &&
+      normalizedName.includes("framing"))
+  ) {
+    return [
+      { id: "2x4-dfl-8", length: "8 ft", itemNumber: "01", notes: "" },
+      { id: "2x4-dfl-10", length: "10 ft", itemNumber: "02", notes: "" },
+      { id: "2x4-dfl-12", length: "12 ft", itemNumber: "03", notes: "" },
+    ];
+  }
+
+  return [];
+}
+
 function normalizeItem(item) {
   const now = new Date().toISOString();
+  const lengthItems = normalizeLengthItems(item.lengthItems);
 
   return {
     id: item.id || createId(),
@@ -31,6 +78,8 @@ function normalizeItem(item) {
     actualDimension: cleanText(item.actualDimension),
     unitSize: cleanText(item.unitSize),
     stockingLengths: cleanText(item.stockingLengths),
+    lengthItems:
+      lengthItems.length > 0 ? lengthItems : getDefaultLengthItems(item),
     notes: cleanText(item.notes),
     keywords: cleanText(item.keywords),
     source: item.source || "app",
@@ -79,7 +128,24 @@ function mergeWithSeed(savedItems) {
     ]),
   );
   const mergedItems = getSeedItems()
-    .map((seedItem) => savedItemMap.get(seedItem.id) || seedItem)
+    .map((seedItem) => {
+      const savedItem = savedItemMap.get(seedItem.id);
+
+      if (!savedItem) {
+        return seedItem;
+      }
+
+      return {
+        ...seedItem,
+        ...savedItem,
+        lengthItems:
+          Array.isArray(savedItem.lengthItems) &&
+          savedItem.lengthItems.length > 0
+            ? savedItem.lengthItems
+            : seedItem.lengthItems,
+        keywords: savedItem.keywords || seedItem.keywords,
+      };
+    })
     .filter((item) => !item.archived);
   const customItems = [...savedItemMap.values()].filter(
     (item) =>
