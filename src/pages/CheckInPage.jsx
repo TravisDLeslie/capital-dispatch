@@ -9,6 +9,7 @@ import PageContainer from "../components/PageContainer";
  *   onViewToday: () => void;
  *   onPageChange?: (pageId: string) => void;
  *   vendorOptions?: string[];
+ *   supplierRuns?: any[];
  * }} props
  */
 export default function CheckInPage({
@@ -16,6 +17,7 @@ export default function CheckInPage({
   onViewToday,
   onPageChange,
   vendorOptions = [],
+  supplierRuns = [],
 }) {
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -66,7 +68,11 @@ export default function CheckInPage({
         </div>
       ) : null}
 
-      <CheckInForm onSubmit={handleSubmit} vendorOptions={vendorOptions} />
+      <CheckInForm
+        onSubmit={handleSubmit}
+        vendorOptions={vendorOptions}
+        supplierRuns={supplierRuns}
+      />
     </PageContainer>
   );
 }

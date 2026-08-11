@@ -6,6 +6,7 @@ import {
 } from "../data/options";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
+import { formatCustomerName } from "../utils/textFormatters";
 
 function createEmptyMaterial() {
   return {
@@ -30,10 +31,117 @@ function formatPoNumber(value) {
   return numbersOnly;
 }
 
+function normalizePoNumber(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 function findMatchingOption(value, options) {
   return options.find(
     (option) => option.toLowerCase() === value.trim().toLowerCase(),
   );
+}
+
+function formatSouthRunDate(value) {
+  if (!value) {
+    return "";
+  }
+
+  const dateOnlyMatch = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch;
+
+    return new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+    ).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function getSouthItemText(item) {
+  return [item.quantity, item.description].filter(Boolean).join(" ");
+}
+
+function getLinkedSouthOrderAssignment(supplierRun, items) {
+  if (!supplierRun) {
+    return null;
+  }
+
+  const orderItem = items.find(
+    (item) => item.customerName || item.orderNumber,
+  );
+  const customerName =
+    supplierRun.customerName || orderItem?.customerName || "";
+  const orderNumber =
+    orderItem?.orderNumber ||
+    items.find((item) => item.orderNumber)?.orderNumber ||
+    "";
+
+  if (!customerName && !orderNumber) {
+    return null;
+  }
+
+  return {
+    type: "customer",
+    internalReference: orderNumber,
+    businessName: customerName ? formatCustomerName(customerName) : "",
+    customerId: "",
+    customerAccountNumber: "",
+    orderedBy: supplierRun.orderedBy || "",
+    jobName: "",
+  };
+}
+
+function sortSouthRunsByRecent(firstRun, secondRun) {
+  return (
+    new Date(
+      secondRun.completedAt ||
+        secondRun.updatedAt ||
+        secondRun.createdAt ||
+        secondRun.scheduledDate ||
+        0,
+    ) -
+    new Date(
+      firstRun.completedAt ||
+        firstRun.updatedAt ||
+        firstRun.createdAt ||
+        firstRun.scheduledDate ||
+        0,
+    )
+  );
+}
+
+function getMatchingSouthRunsForPo(poNumber, supplierRuns) {
+  const normalizedPoNumber = normalizePoNumber(poNumber);
+
+  if (!normalizedPoNumber || !Array.isArray(supplierRuns)) {
+    return [];
+  }
+
+  return supplierRuns
+    .filter(
+      (supplierRun) =>
+        normalizePoNumber(supplierRun?.poNumber) ===
+        normalizedPoNumber,
+    )
+    .sort(sortSouthRunsByRecent);
 }
 
 function readFileAsDataUrl(file) {
@@ -86,7 +194,11 @@ async function createLocationPhoto(file) {
   };
 }
 
-export default function CheckInForm({ onSubmit, vendorOptions }) {
+export default function CheckInForm({
+  onSubmit,
+  vendorOptions,
+  supplierRuns = [],
+}) {
   const vendors =
     Array.isArray(vendorOptions) && vendorOptions.length > 0
       ? vendorOptions
@@ -94,6 +206,7 @@ export default function CheckInForm({ onSubmit, vendorOptions }) {
   const [poNumber, setPoNumber] = useState("");
   const [vendor, setVendor] = useState("");
   const [checkedInBy, setCheckedInBy] = useState("");
+  const [linkedSouthRunId, setLinkedSouthRunId] = useState("");
   const [processingPhotoMaterialId, setProcessingPhotoMaterialId] =
     useState("");
 
@@ -109,8 +222,59 @@ export default function CheckInForm({ onSubmit, vendorOptions }) {
     setError("");
   }
 
+  const matchingSouthRuns = getMatchingSouthRunsForPo(
+    poNumber,
+    supplierRuns,
+  );
+  const linkedSouthRun =
+    matchingSouthRuns.find(
+      (supplierRun) => supplierRun.id === linkedSouthRunId,
+    ) || null;
+  const visibleSouthRun = linkedSouthRun || matchingSouthRuns[0] || null;
+  const visibleSouthItems = Array.isArray(visibleSouthRun?.items)
+    ? visibleSouthRun.items
+    : [];
+  const visibleSouthDate =
+    formatSouthRunDate(visibleSouthRun?.scheduledDate) ||
+    formatSouthRunDate(visibleSouthRun?.completedAt) ||
+    formatSouthRunDate(visibleSouthRun?.updatedAt);
+
   function handlePoChange(event) {
-    setPoNumber(formatPoNumber(event.target.value));
+    const nextPoNumber = formatPoNumber(event.target.value);
+    const nextMatchingRuns = getMatchingSouthRunsForPo(
+      nextPoNumber,
+      supplierRuns,
+    );
+    const nextSouthRun =
+      nextPoNumber.length === 7 ? nextMatchingRuns[0] : null;
+
+    setPoNumber(nextPoNumber);
+
+    if (nextSouthRun) {
+      setLinkedSouthRunId(nextSouthRun.id);
+
+      if (nextSouthRun.vendor) {
+        setVendor(nextSouthRun.vendor);
+      }
+    } else {
+      setLinkedSouthRunId("");
+    }
+
+    clearError();
+  }
+
+  function linkSouthRun(supplierRun) {
+    setLinkedSouthRunId(supplierRun.id);
+
+    if (supplierRun.vendor) {
+      setVendor(supplierRun.vendor);
+    }
+
+    clearError();
+  }
+
+  function unlinkSouthRun() {
+    setLinkedSouthRunId("");
     clearError();
   }
 
@@ -270,6 +434,7 @@ export default function CheckInForm({ onSubmit, vendorOptions }) {
     setPoNumber("");
     setVendor("");
     setCheckedInBy("");
+    setLinkedSouthRunId("");
     setProcessingPhotoMaterialId("");
     setMaterials([newMaterial]);
     setOpenMaterialId("");
@@ -408,6 +573,10 @@ export default function CheckInForm({ onSubmit, vendorOptions }) {
         : materialLocations.length > 1
           ? "Multiple material locations"
           : "";
+    const linkedSouthOrderAssignment = getLinkedSouthOrderAssignment(
+      linkedSouthRun,
+      visibleSouthItems,
+    );
 
     const newCheckIn = {
       id: createId(),
@@ -417,11 +586,24 @@ export default function CheckInForm({ onSubmit, vendorOptions }) {
       checkedInBy,
       notes: "",
 
-      orderAssignment: null,
+      orderAssignment: linkedSouthOrderAssignment,
       assignedAt: null,
 
       materials: cleanedMaterials,
       materialsSkipped: false,
+
+      sourceType: linkedSouthRun ? "south" : "",
+      sourceSupplierRunId: linkedSouthRun?.id || "",
+      sourceSupplierRunPoNumber: linkedSouthRun?.poNumber || "",
+      sourceSupplierRunVendor: linkedSouthRun?.vendor || "",
+      sourceSupplierRunDriver: linkedSouthRun?.driver || "",
+      sourceSupplierRunScheduledDate:
+        linkedSouthRun?.scheduledDate || "",
+      sourceSupplierRunCompletedAt:
+        linkedSouthRun?.completedAt || "",
+      sourceSupplierRunItemIds: linkedSouthRun
+        ? visibleSouthItems.map((item) => item.id).filter(Boolean)
+        : [],
 
       checkedInAt: new Date().toISOString(),
     };
@@ -569,6 +751,123 @@ export default function CheckInForm({ onSubmit, vendorOptions }) {
             </select>
           </div>
         </div>
+
+        {visibleSouthRun ? (
+          <section
+            className={`rounded-2xl border px-4 py-4 ${
+              linkedSouthRun
+                ? "border-blue-200 bg-blue-50"
+                : "border-amber-200 bg-amber-50"
+            }`}
+          >
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <p
+                  className={`text-xs font-black uppercase tracking-[0.18em] ${
+                    linkedSouthRun
+                      ? "text-blue-700"
+                      : "text-amber-700"
+                  }`}
+                >
+                  {linkedSouthRun
+                    ? "South PO Linked"
+                    : "South PO Found"}
+                </p>
+
+                <h3 className="mt-1 text-xl font-black text-slate-900">
+                  PO {visibleSouthRun.poNumber} from{" "}
+                  {visibleSouthRun.vendor || "South"}
+                </h3>
+
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  {[
+                    visibleSouthRun.driver
+                      ? `Driver: ${visibleSouthRun.driver}`
+                      : "No driver assigned",
+                    visibleSouthDate
+                      ? `Pickup: ${visibleSouthDate}`
+                      : "",
+                    visibleSouthRun.status === "complete"
+                      ? "Completed"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" • ")}
+                </p>
+
+                {visibleSouthItems.length > 0 ? (
+                  <ul className="mt-3 space-y-1 text-sm font-semibold text-slate-700">
+                    {visibleSouthItems.slice(0, 3).map((item, index) => (
+                      <li key={item.id || `${visibleSouthRun.id}-${index}`}>
+                        {getSouthItemText(item) ||
+                          `Item ${index + 1}`}
+                        {item.pickedUp ? (
+                          <span className="ml-2 text-emerald-700">
+                            Picked up
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                    {visibleSouthItems.length > 3 ? (
+                      <li className="text-slate-500">
+                        + {visibleSouthItems.length - 3} more items
+                      </li>
+                    ) : null}
+                  </ul>
+                ) : null}
+              </div>
+
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {matchingSouthRuns.length > 1 ? (
+                  <select
+                    value={visibleSouthRun.id}
+                    onChange={(event) => {
+                      const selectedRun = matchingSouthRuns.find(
+                        (supplierRun) =>
+                          supplierRun.id === event.target.value,
+                      );
+
+                      if (selectedRun) {
+                        linkSouthRun(selectedRun);
+                      }
+                    }}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700"
+                  >
+                    {matchingSouthRuns.map((supplierRun) => (
+                      <option
+                        key={supplierRun.id}
+                        value={supplierRun.id}
+                      >
+                        {supplierRun.vendor || "South"}{" "}
+                        {formatSouthRunDate(
+                          supplierRun.scheduledDate,
+                        )}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+
+                {linkedSouthRun ? (
+                  <button
+                    type="button"
+                    onClick={unlinkSouthRun}
+                    className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                  >
+                    Unlink
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => linkSouthRun(visibleSouthRun)}
+                    className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800"
+                  >
+                    Link South PO
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <datalist id="location-options">
           {locations.map((location) => (

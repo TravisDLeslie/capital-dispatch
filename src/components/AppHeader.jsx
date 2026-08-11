@@ -77,7 +77,7 @@ function getCurrentPageLabel(currentPage) {
     return "South";
   }
 
-  if (["check-in", "today", "search"].includes(currentPage)) {
+  if (["check-in", "today", "search", "trace"].includes(currentPage)) {
     return "Receiving";
   }
 
@@ -122,7 +122,7 @@ function getCurrentPageGroup(currentPage) {
     return "South";
   }
 
-  if (["receiving", "check-in", "today", "search"].includes(currentPage)) {
+  if (["receiving", "check-in", "today", "search", "trace"].includes(currentPage)) {
     return "Receiving";
   }
 
@@ -285,7 +285,7 @@ export default function AppHeader({
             )) ||
           (item.id === "receiving" &&
             allowedPageIds.some((pageId) =>
-              ["check-in", "today", "search"].includes(pageId),
+              ["check-in", "today", "search", "trace"].includes(pageId),
             )) ||
           (item.id === "deliveries" &&
             allowedPageIds.some((pageId) =>

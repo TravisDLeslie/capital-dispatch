@@ -29,6 +29,7 @@ const permissionGroups = [
       { id: "check-in", label: "Check In" },
       { id: "today", label: "Today's Check-Ins" },
       { id: "search", label: "Search PO" },
+      { id: "trace", label: "Trace PO / Order" },
     ],
   },
   {
@@ -90,7 +91,7 @@ const rolePermissionPresets = {
     "deliveries",
     "deliveries-queue",
   ],
-  receiving: ["dashboard", "receiving", "check-in", "today", "search"],
+  receiving: ["dashboard", "receiving", "check-in", "today", "search", "trace"],
   south: [
     "dashboard",
     "south",

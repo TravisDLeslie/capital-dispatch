@@ -252,8 +252,18 @@ export default function CheckInCard({
           title: "Location Photo",
           subtitle:
             "Wide photo of where the material was placed",
-        }
-      : null;
+      }
+    : null;
+  const isFromSouth = checkIn.sourceType === "south";
+  const southSourceText = [
+    "From South",
+    checkIn.sourceSupplierRunVendor || "",
+    checkIn.sourceSupplierRunDriver
+      ? `Driver: ${checkIn.sourceSupplierRunDriver}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" • ");
   const hasMaterialDetails = materials.some(
     (material) =>
       material.location ||
@@ -264,20 +274,20 @@ export default function CheckInCard({
   );
 
   return (
-    <article className="rounded-[22px] border border-[#DCE4EF] bg-white p-4 shadow-[0_12px_28px_rgba(15,23,42,0.08)] transition hover:border-slate-300 sm:p-6 lg:rounded-[24px] lg:px-8 lg:py-7">
+    <article className="rounded-2xl border border-[#DCE4EF] bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md lg:p-5">
       <div className="lg:hidden">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-          <h2 className="min-w-0 whitespace-nowrap text-[26px] font-black leading-none tracking-tight text-[#0F172A]">
+          <h2 className="min-w-0 whitespace-nowrap text-[23px] font-black leading-none tracking-tight text-[#0F172A]">
             {checkIn.poNumber}
           </h2>
 
           <div className="flex shrink-0 items-start text-right">
             <div>
-              <p className="text-lg font-black leading-tight text-[#0F172A]">
+              <p className="text-base font-black leading-tight text-[#0F172A]">
                 {formatTime(checkIn.checkedInAt)}
               </p>
 
-              <p className="mt-1 text-base font-medium leading-tight text-[#64748B]">
+              <p className="mt-1 text-sm font-semibold leading-tight text-[#64748B]">
                 {showFullDate
                   ? formatFullDate(checkIn.checkedInAt)
                   : formatShortDate(checkIn.checkedInAt)}
@@ -286,46 +296,58 @@ export default function CheckInCard({
           </div>
         </div>
 
-        <div className="mt-5 flex min-w-0 items-start gap-3">
+        <div className="mt-3 flex min-w-0 items-start gap-3">
           <Building2
             aria-hidden="true"
-            className="h-10 w-10 shrink-0 text-[#1D64C8]"
+            className="h-8 w-8 shrink-0 text-[#1D64C8]"
             strokeWidth={2.1}
           />
 
           <div className="min-w-0">
-            <p className="truncate text-xl font-black leading-tight text-[#0F172A]">
+            <p className="truncate text-lg font-black leading-tight text-[#0F172A]">
               {checkIn.vendor}
             </p>
 
-            <p className="mt-1 text-lg font-medium leading-tight text-[#64748B]">
+            <p className="mt-0.5 text-sm font-semibold leading-tight text-[#64748B]">
               Vendor
             </p>
+
+            {isFromSouth ? (
+              <p className="mt-2 inline-block max-w-full rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-blue-700">
+                {southSourceText}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
 
       <div className="hidden gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:gap-7 lg:gap-8">
-          <h2 className="text-2xl font-extrabold leading-none tracking-tight text-[#0F172A] sm:text-3xl lg:text-[40px] lg:font-black lg:leading-none">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
+          <h2 className="text-[30px] font-black leading-none tracking-tight text-[#0F172A]">
             {checkIn.poNumber}
           </h2>
 
           <div className="flex min-w-0 items-start gap-3">
             <Building2
               aria-hidden="true"
-              className="mt-0.5 h-10 w-10 shrink-0 text-[#1D64C8] lg:h-11 lg:w-11"
+              className="mt-0.5 h-8 w-8 shrink-0 text-[#1D64C8]"
               strokeWidth={2.1}
             />
 
             <div className="min-w-0">
-              <p className="truncate text-xl font-bold text-[#0F172A] lg:text-[22px] lg:leading-tight">
+              <p className="truncate text-lg font-black leading-tight text-[#0F172A]">
                 {checkIn.vendor}
               </p>
 
-              <p className="mt-1 text-lg font-medium text-[#64748B] lg:text-[20px] lg:leading-tight">
+              <p className="mt-0.5 text-sm font-semibold leading-tight text-[#64748B]">
                 Vendor
               </p>
+
+              {isFromSouth ? (
+                <p className="mt-2 inline-block max-w-full rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-blue-700">
+                  {southSourceText}
+                </p>
+              ) : null}
             </div>
           </div>
         </div>
@@ -333,16 +355,16 @@ export default function CheckInCard({
         <div className="flex shrink-0 items-start gap-3 text-left lg:text-right">
           <Clock3
             aria-hidden="true"
-            className="mt-1 h-8 w-8 shrink-0 text-slate-700"
+            className="mt-0.5 h-6 w-6 shrink-0 text-slate-600"
             strokeWidth={2.2}
           />
 
           <div>
-            <p className="text-xl font-medium text-[#0F172A] lg:text-[22px] lg:font-black lg:leading-tight">
+            <p className="text-lg font-black leading-tight text-[#0F172A]">
               {formatTime(checkIn.checkedInAt)}
             </p>
 
-            <p className="mt-1 text-lg font-medium text-[#64748B] lg:text-[20px] lg:leading-tight">
+            <p className="mt-0.5 text-sm font-semibold leading-tight text-[#64748B]">
               {showFullDate
                 ? formatFullDate(checkIn.checkedInAt)
                 : formatShortDate(checkIn.checkedInAt)}
@@ -353,24 +375,24 @@ export default function CheckInCard({
 
       {!isEditing ? (
         <>
-          <div className="mt-6 border-t border-[#DCE4EF] pt-5 lg:mt-7 lg:border-t-0 lg:pt-0">
-            <h3 className="text-2xl font-bold tracking-tight text-[#0F172A] sm:text-3xl lg:text-[24px] lg:font-black lg:leading-tight">
+          <div className="mt-4 border-t border-[#DCE4EF] pt-4 lg:border-t-0 lg:pt-0">
+            <h3 className="text-xl font-black tracking-tight text-[#0F172A] lg:text-[21px] lg:leading-tight">
               {getAssignmentHeading()}
             </h3>
 
-            <p className="mt-2 text-lg font-medium text-[#64748B] lg:text-[20px] lg:leading-tight">
+            <p className="mt-1 text-sm font-semibold text-[#64748B] lg:text-base lg:leading-tight">
               {getAssignmentSubheading()}
             </p>
 
             {getAssignmentReferenceText() ? (
-              <p className="mt-2 text-sm font-black text-[#1D64C8] lg:text-base">
+              <p className="mt-1.5 text-sm font-black text-[#1D64C8]">
                 {getAssignmentReferenceText()}
               </p>
             ) : null}
           </div>
 
-          <div className="mt-5 rounded-[18px] border border-[#DCE4EF] px-4 py-4 lg:mt-6 lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-0 lg:py-0 lg:pt-5">
-            <div className="grid gap-4 md:grid-cols-2 lg:gap-6">
+          <div className="mt-4 rounded-2xl border border-[#DCE4EF] px-3 py-3 lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-0 lg:py-0 lg:pt-4">
+            <div className="grid gap-3 md:grid-cols-2 lg:gap-4">
               <button
                 type="button"
                 onClick={() =>
@@ -379,25 +401,25 @@ export default function CheckInCard({
                 disabled={!locationPhoto}
                 className="flex items-center gap-4 text-left disabled:cursor-default"
               >
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#E98413]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#E98413]">
                   <MapPin
                     aria-hidden="true"
-                    className="h-9 w-9"
+                    className="h-6 w-6"
                     fill="currentColor"
                     strokeWidth={1.8}
                   />
                 </div>
 
                 <div className="min-w-0">
-                  <p className="text-base font-medium text-[#64748B] lg:hidden">
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#64748B] lg:hidden">
                     Location
                   </p>
 
-                  <p className="mt-1 text-lg font-black text-[#0F172A] lg:mt-0 lg:text-[20px] lg:leading-tight">
+                  <p className="mt-0.5 text-base font-black text-[#0F172A] lg:mt-0 lg:text-[17px] lg:leading-tight">
                     {checkIn.poLocation || "No location recorded"}
                   </p>
 
-                  <p className="mt-1 hidden text-[18px] font-medium leading-tight text-[#64748B] lg:block">
+                  <p className="mt-0.5 hidden text-sm font-semibold leading-tight text-[#64748B] lg:block">
                     Location
                   </p>
                 </div>
@@ -413,33 +435,33 @@ export default function CheckInCard({
                 />
               </button>
 
-              <div className="flex items-center gap-4 border-t border-[#DCE4EF] pt-4 md:border-l md:border-t-0 md:pl-7 md:pt-0">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-[#079455]">
+              <div className="flex items-center gap-3 border-t border-[#DCE4EF] pt-3 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-[#079455]">
                   <CircleCheckBig
                     aria-hidden="true"
-                    className="h-9 w-9"
+                    className="h-6 w-6"
                     strokeWidth={2.3}
                   />
                 </div>
 
                 <div className="min-w-0">
-                  <p className="text-base font-medium text-[#64748B] lg:hidden">
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#64748B] lg:hidden">
                     Checked In By
                   </p>
 
-                  <p className="mt-1 text-lg font-black text-[#0F172A] lg:hidden">
+                  <p className="mt-0.5 text-base font-black text-[#0F172A] lg:hidden">
                     {checkIn.checkedInBy
                       ? checkIn.checkedInBy
                       : "Checked in"}
                   </p>
 
-                  <p className="hidden text-[20px] font-black leading-tight text-[#0F172A] lg:block">
+                  <p className="hidden text-[17px] font-black leading-tight text-[#0F172A] lg:block">
                     {checkIn.checkedInBy
                       ? `Checked in by ${checkIn.checkedInBy}`
                       : "Checked in"}
                   </p>
 
-                  <p className="mt-1 text-base font-medium text-[#64748B] lg:text-[18px] lg:leading-tight">
+                  <p className="mt-0.5 text-sm font-semibold text-[#64748B] lg:leading-tight">
                     {formatTime(checkIn.checkedInAt)}
                   </p>
                 </div>
@@ -453,15 +475,15 @@ export default function CheckInCard({
             </div>
           </div>
 
-          <div className="mt-4 rounded-[18px] border border-[#DCE4EF] px-4 py-4 lg:mt-6 lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-0 lg:py-0 lg:pt-5">
+          <div className="mt-3 rounded-2xl border border-[#DCE4EF] px-3 py-3 lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-0 lg:py-0 lg:pt-4">
             <div className="flex items-center gap-3">
               <Package
                 aria-hidden="true"
-                className="h-6 w-6 text-slate-700"
+                className="h-5 w-5 text-slate-700"
                 strokeWidth={2.1}
               />
 
-              <h3 className="text-xl font-black text-[#0F172A] lg:text-[22px] lg:leading-tight">
+              <h3 className="text-lg font-black text-[#0F172A] lg:text-[19px] lg:leading-tight">
                 Items
               </h3>
             </div>
@@ -471,11 +493,11 @@ export default function CheckInCard({
                 Materials skipped
               </p>
             ) : materials.length > 0 ? (
-              <div className="mt-3 space-y-1.5">
+              <div className="mt-2 space-y-1.5">
                 {mobileVisibleMaterials.map((material) => (
                   <div
                     key={material.id}
-                    className="flex gap-3 text-base font-medium text-[#0F172A] lg:hidden"
+                    className="flex gap-2 text-sm font-semibold text-[#0F172A] lg:hidden"
                   >
                     <span className="text-[#64748B]">•</span>
                     <span className="min-w-0">
@@ -496,7 +518,7 @@ export default function CheckInCard({
                 {visibleMaterials.map((material) => (
                   <div
                     key={`desktop-${material.id}`}
-                    className="hidden gap-3 text-base font-medium text-[#0F172A] lg:flex lg:text-[17px] lg:leading-tight"
+                    className="hidden gap-2 text-sm font-semibold text-[#0F172A] lg:flex lg:text-[15px] lg:leading-tight"
                   >
                     <span className="text-[#64748B]">•</span>
                     <span className="min-w-0">
@@ -641,11 +663,11 @@ export default function CheckInCard({
             </div>
           ) : null}
 
-          <div className="mt-4 flex gap-3 border-t border-[#DCE4EF] pt-4 sm:justify-end lg:mt-6 lg:border-t-0 lg:pt-0">
+          <div className="mt-4 flex gap-2 border-t border-[#DCE4EF] pt-4 sm:justify-end lg:border-t-0 lg:pt-0">
             <button
               type="button"
               onClick={openEditor}
-              className="inline-flex flex-1 items-center justify-center gap-2.5 rounded-xl border border-[#DCE4EF] bg-white px-5 py-3 text-base font-black text-[#0F172A] transition hover:border-[#1D64C8] hover:bg-blue-50 hover:text-[#1D64C8] sm:flex-none sm:px-6 sm:py-2.5"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#DCE4EF] bg-white px-4 py-2.5 text-sm font-black text-[#0F172A] transition hover:border-[#1D64C8] hover:bg-blue-50 hover:text-[#1D64C8] sm:flex-none"
             >
               <Pencil
                 aria-hidden="true"
@@ -659,7 +681,7 @@ export default function CheckInCard({
               <button
                 type="button"
                 onClick={() => onDelete(checkIn.id)}
-                className="inline-flex flex-1 items-center justify-center gap-2.5 rounded-xl border border-[#EF2B2D] bg-white px-5 py-3 text-base font-black text-[#EF2B2D] transition hover:bg-red-50 sm:flex-none sm:px-6 sm:py-2.5"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#EF2B2D] bg-white px-4 py-2.5 text-sm font-black text-[#EF2B2D] transition hover:bg-red-50 sm:flex-none"
               >
                 <Trash2
                   aria-hidden="true"

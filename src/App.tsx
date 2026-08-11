@@ -39,6 +39,7 @@ import SalesReportPage from "./pages/SalesReportPage";
 import SouthHubPage from "./pages/SouthHubPage";
 import SupplierRunsPage from "./pages/SupplierRunsPage";
 import TodayPage from "./pages/TodayPage";
+import TracePage from "./pages/TracePage";
 import UserAdminPage from "./pages/UserAdminPage";
 import VendorSettingsPage from "./pages/VendorSettingsPage";
 import {
@@ -410,6 +411,7 @@ function getAllowedPageIdsForRole(role: string) {
       "check-in",
       "today",
       "search",
+      "trace",
       "south",
       "supplier-runs-add",
       "supplier-runs-dispatch",
@@ -446,6 +448,7 @@ function getAllowedPageIdsForRole(role: string) {
       "check-in",
       "today",
       "search",
+      "trace",
       "south",
       "supplier-runs-add",
       "supplier-runs-dispatch",
@@ -472,7 +475,7 @@ function getAllowedPageIdsForRole(role: string) {
   }
 
   if (role === "receiving") {
-    return ["dashboard", "receiving", "check-in", "today", "search"];
+    return ["dashboard", "receiving", "check-in", "today", "search", "trace"];
   }
 
   if (role === "south") {
@@ -812,6 +815,7 @@ export default function App() {
     });
   const [previewUserId, setPreviewUserId] =
     useState("");
+  const [traceInitialSearch, setTraceInitialSearch] = useState("");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] =
     useState<UserProfile | null>(null);
@@ -822,6 +826,8 @@ export default function App() {
   const [supplierRuns, setSupplierRuns] = useState<
     SupplierRun[]
   >([]);
+  const [receivingSouthLookupRuns, setReceivingSouthLookupRuns] =
+    useState<SupplierRun[]>([]);
   const [deliveries, setDeliveries] = useState<
     Delivery[]
   >([]);
@@ -986,7 +992,7 @@ export default function App() {
     ? selectedPreviewProfile?.driverName || ""
     : userProfile?.driverName || "";
   const canReadReceiving = effectiveAllowedPageIds.some((pageId) =>
-    ["receiving", "check-in", "today", "search"].includes(pageId),
+    ["receiving", "check-in", "today", "search", "trace"].includes(pageId),
   );
   const canReadSouth = effectiveAllowedPageIds.some((pageId) =>
     [
@@ -1442,6 +1448,7 @@ export default function App() {
     if (!currentUser || !isApproved) {
       setCheckIns([]);
       setSupplierRuns([]);
+      setReceivingSouthLookupRuns([]);
       setDeliveries([]);
       setCustomers([]);
       setCustomerPaymentLinks([]);
@@ -1457,6 +1464,7 @@ export default function App() {
     let isMounted = true;
     let unsubscribeFromCheckIns = () => {};
     let unsubscribeFromSupplierRuns = () => {};
+    let unsubscribeFromReceivingSouthLookup = () => {};
     let unsubscribeFromDeliveries = () => {};
     let unsubscribeFromCustomers = () => {};
     let unsubscribeFromCustomerPaymentLinks = () => {};
@@ -1529,6 +1537,28 @@ export default function App() {
         );
       } else {
         setSupplierRuns([]);
+      }
+
+      if (canReadReceiving && !canReadSouth) {
+        unsubscribeFromReceivingSouthLookup = subscribeToSupplierRuns(
+          (savedSupplierRuns: SupplierRun[]) => {
+            if (isMounted) {
+              setReceivingSouthLookupRuns(savedSupplierRuns);
+            }
+          },
+          (error: Error) => {
+            console.error(
+              "Unable to sync South PO lookup for receiving:",
+              error,
+            );
+
+            if (isMounted) {
+              setReceivingSouthLookupRuns([]);
+            }
+          },
+        );
+      } else {
+        setReceivingSouthLookupRuns([]);
       }
 
       if (canReadDeliveries) {
@@ -1699,6 +1729,28 @@ export default function App() {
         setSupplierRuns([]);
       }
 
+      if (canReadReceiving && !canReadSouth) {
+        unsubscribeFromReceivingSouthLookup = subscribeToSupplierRuns(
+          (savedSupplierRuns: SupplierRun[]) => {
+            if (isMounted) {
+              setReceivingSouthLookupRuns(savedSupplierRuns);
+            }
+          },
+          (error: Error) => {
+            console.error(
+              "Unable to load South PO lookup for receiving:",
+              error,
+            );
+
+            if (isMounted) {
+              setReceivingSouthLookupRuns([]);
+            }
+          },
+        );
+      } else {
+        setReceivingSouthLookupRuns([]);
+      }
+
       if (canReadDeliveries) {
         subscribeToDeliveries(
           (savedDeliveries: Delivery[]) => {
@@ -1800,6 +1852,7 @@ export default function App() {
       isMounted = false;
       unsubscribeFromCheckIns();
       unsubscribeFromSupplierRuns();
+      unsubscribeFromReceivingSouthLookup();
       unsubscribeFromDeliveries();
       unsubscribeFromCustomers();
       unsubscribeFromCustomerPaymentLinks();
@@ -2082,6 +2135,11 @@ export default function App() {
     setCurrentPage(pageId);
   }
 
+  function handleTraceSearch(searchValue: string) {
+    setTraceInitialSearch(searchValue);
+    setCurrentPage("trace");
+  }
+
   async function handleToggleSupplierRunItem(
     supplierRunId: string,
     itemId: string,
@@ -2224,6 +2282,10 @@ export default function App() {
           operations={adminDashboardOperations}
           onPageChange={navigateToPage}
           allowedPageIds={dashboardAllowedPageIds}
+          checkIns={checkIns}
+          supplierRuns={supplierRuns}
+          deliveries={deliveries}
+          onTraceSearch={handleTraceSearch}
         />
       );
     }
@@ -2588,6 +2650,11 @@ export default function App() {
       <DashboardPage
         operations={adminDashboardOperations}
         onPageChange={navigateToPage}
+        allowedPageIds={effectiveAllowedPageIds}
+        checkIns={checkIns}
+        supplierRuns={canReadSouth ? supplierRuns : receivingSouthLookupRuns}
+        deliveries={canReadDeliveries ? deliveries : []}
+        onTraceSearch={handleTraceSearch}
       />
     );
   }
@@ -2664,6 +2731,19 @@ export default function App() {
                   metricLabel: "Records",
                   tone: "archive",
                   onClick: () => setCurrentPage("search"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("trace")
+              ? {
+                  icon: CalendarDays,
+                  label: "Timeline",
+                  title: "Trace PO / Order",
+                  description:
+                    "See the chain across South pickups, receiving, and deliveries.",
+                  metric: "+",
+                  metricLabel: "Events",
+                  tone: "info",
+                  onClick: () => setCurrentPage("trace"),
                 }
               : null,
           ].filter(Boolean)}
@@ -3131,6 +3211,19 @@ export default function App() {
           />
         );
 
+      case "trace":
+        return (
+          <TracePage
+            checkIns={checkIns}
+            supplierRuns={
+              canReadSouth ? supplierRuns : receivingSouthLookupRuns
+            }
+            deliveries={canReadDeliveries ? deliveries : []}
+            initialSearch={traceInitialSearch}
+            onPageChange={navigateToPage}
+          />
+        );
+
       case "supplier-runs-add":
         return (
           <SupplierRunsPage
@@ -3404,6 +3497,9 @@ export default function App() {
             }
             onPageChange={setCurrentPage}
             vendorOptions={vendorOptions}
+            supplierRuns={
+              canReadSouth ? supplierRuns : receivingSouthLookupRuns
+            }
           />
         );
     }
