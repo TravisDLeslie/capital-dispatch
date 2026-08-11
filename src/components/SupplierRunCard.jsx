@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileText, MessageSquareText, X } from "lucide-react";
 import CustomerNameBadge from "./CustomerNameBadge";
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
@@ -16,6 +16,12 @@ const capitalLumberInfo = {
   addressLineTwo: "Boise, ID 83703",
   phone: "208-343-5481",
 };
+
+function getNotesReadStorageKey(supplierRun) {
+  return `dispatch-cl-south-notes-read:${
+    supplierRun.id || supplierRun.poNumber || "unknown"
+  }`;
+}
 
 function escapeHtml(value) {
   return String(value || "")
@@ -599,6 +605,45 @@ export default function SupplierRunCard({
     useState(defaultItemsOpen);
   const isCompactClosed = compactWhenClosed && !isItemsOpen;
   const hasNotes = Boolean(String(supplierRun.notes || "").trim());
+  const notesSignature = String(supplierRun.notes || "").trim();
+  const notesReadStorageKey = getNotesReadStorageKey(supplierRun);
+  const [notesUnread, setNotesUnread] = useState(() => {
+    if (!notesSignature) {
+      return false;
+    }
+
+    try {
+      return localStorage.getItem(notesReadStorageKey) !== notesSignature;
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    if (!notesSignature) {
+      setNotesUnread(false);
+      return;
+    }
+
+    try {
+      setNotesUnread(
+        localStorage.getItem(notesReadStorageKey) !== notesSignature,
+      );
+    } catch {
+      setNotesUnread(true);
+    }
+  }, [notesReadStorageKey, notesSignature]);
+
+  function openNotes() {
+    setIsViewingNotes(true);
+    setNotesUnread(false);
+
+    try {
+      localStorage.setItem(notesReadStorageKey, notesSignature);
+    } catch {
+      // If storage is unavailable, the visual dot still clears for this view.
+    }
+  }
 
   function startEditingItem(item) {
     setEditingItemId(item.id);
@@ -726,10 +771,17 @@ export default function SupplierRunCard({
             {hasNotes ? (
               <button
                 type="button"
-                onClick={() => setIsViewingNotes(true)}
+                onClick={openNotes}
                 aria-label={`View notes for PO ${supplierRun.poNumber}`}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-amber-100"
+                className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-50 text-amber-700 shadow-sm transition hover:border-amber-300 hover:bg-amber-100"
               >
+                {notesUnread ? (
+                  <span
+                    className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full border-2 border-white bg-[#FC2C38]"
+                    aria-hidden="true"
+                  />
+                ) : null}
+
                 <MessageSquareText
                   aria-hidden="true"
                   className="h-4 w-4"
