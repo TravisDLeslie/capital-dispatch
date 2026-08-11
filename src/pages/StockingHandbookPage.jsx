@@ -62,6 +62,8 @@ function getDefaultLengthItems(item) {
       { id: "2x4-dfl-8", length: "8 ft", itemNumber: "01", notes: "" },
       { id: "2x4-dfl-10", length: "10 ft", itemNumber: "02", notes: "" },
       { id: "2x4-dfl-12", length: "12 ft", itemNumber: "03", notes: "" },
+      { id: "2x4-dfl-14", length: "14 ft", itemNumber: "04", notes: "" },
+      { id: "2x4-dfl-16", length: "16 ft", itemNumber: "05", notes: "" },
     ];
   }
 

@@ -12,6 +12,8 @@ export const defaultStockingHandbookItems = [
       { length: "8 ft", itemNumber: "01" },
       { length: "10 ft", itemNumber: "02" },
       { length: "12 ft", itemNumber: "03" },
+      { length: "14 ft", itemNumber: "04" },
+      { length: "16 ft", itemNumber: "05" },
     ],
     notes: "",
   },
