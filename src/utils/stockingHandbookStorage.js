@@ -240,8 +240,9 @@ function saveLocalItems(items) {
 }
 
 export function subscribeToStockingHandbookItems(onItems, onError) {
+  onItems(mergeWithSeed([]));
+
   if (!db) {
-    onItems(getLocalItems());
     return () => {};
   }
 
