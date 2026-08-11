@@ -89,13 +89,7 @@ service cloud.firestore {
     }
 
     function isStockingHandbookViewer() {
-      return isAdmin() || (
-        isApproved() &&
-        (
-          role() == "sales" ||
-          hasAnyPermission(["sales", "stocking-handbook"])
-        )
-      );
+      return isApproved();
     }
 
     function isDriverFor(driverName) {
