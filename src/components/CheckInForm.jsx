@@ -934,11 +934,15 @@ export default function CheckInForm({
                 value: "theirTruck",
                 label: "Their Truck",
                 detail: "Vendor delivery or outside carrier",
+                selectedClass: "border-blue-500 bg-blue-50 shadow-sm",
+                selectedTextClass: "text-blue-800",
               },
               {
                 value: "ourTruck",
                 label: "Our Truck",
                 detail: "South run or Capital driver",
+                selectedClass: "border-red-500 bg-red-50 shadow-sm",
+                selectedTextClass: "text-red-800",
               },
             ].map((option) => {
               const isSelected = receivingTruckType === option.value;
@@ -954,13 +958,15 @@ export default function CheckInForm({
                   disabled={isSubmitting}
                   className={`rounded-2xl border px-4 py-4 text-left transition ${
                     isSelected
-                      ? "border-emerald-500 bg-emerald-50 shadow-sm"
+                      ? option.selectedClass
                       : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
                   }`}
                 >
                   <span
                     className={`block text-lg font-black ${
-                      isSelected ? "text-emerald-800" : "text-slate-900"
+                      isSelected
+                        ? option.selectedTextClass
+                        : "text-slate-900"
                     }`}
                   >
                     {option.label}

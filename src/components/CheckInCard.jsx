@@ -344,6 +344,15 @@ export default function CheckInCard({
   ]
     .filter(Boolean)
     .join(" • ");
+  const sourceBadgeClass = isFromSouth
+    ? "bg-red-50 text-[#FC2C38]"
+    : "bg-blue-50 text-blue-700";
+  const receivingTruckBadgeClass =
+    checkIn.receivingTruckType === "ourTruck"
+      ? "bg-red-50 text-[#FC2C38]"
+      : checkIn.receivingTruckType === "theirTruck"
+        ? "bg-blue-50 text-blue-700"
+        : "bg-slate-100 text-slate-600";
   const hasMaterialDetails = materials.some(
     (material) =>
       material.location ||
@@ -508,13 +517,17 @@ export default function CheckInCard({
             </p>
 
             {isFromSouth || isFromTheirTruck ? (
-              <p className="mt-2 inline-block max-w-full rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-blue-700">
+              <p
+                className={`mt-2 inline-block max-w-full rounded-full px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] ${sourceBadgeClass}`}
+              >
                 {southSourceText}
               </p>
             ) : null}
 
             {receivingTruckLabel ? (
-              <p className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-slate-600">
+              <p
+                className={`mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] ${receivingTruckBadgeClass}`}
+              >
                 <Truck
                   aria-hidden="true"
                   className="h-3.5 w-3.5"
@@ -552,13 +565,17 @@ export default function CheckInCard({
               </p>
 
               {isFromSouth || isFromTheirTruck ? (
-                <p className="mt-2 inline-block max-w-full rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-blue-700">
+                <p
+                  className={`mt-2 inline-block max-w-full rounded-full px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] ${sourceBadgeClass}`}
+                >
                   {southSourceText}
                 </p>
               ) : null}
 
               {receivingTruckLabel ? (
-                <p className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-slate-600">
+                <p
+                  className={`mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] ${receivingTruckBadgeClass}`}
+                >
                   <Truck
                     aria-hidden="true"
                     className="h-3.5 w-3.5"
@@ -899,7 +916,7 @@ export default function CheckInCard({
                 <img
                   src={checkIn.locationPhoto.dataUrl}
                   alt={`Material location for PO ${checkIn.poNumber}`}
-                  className="h-36 w-full object-cover sm:h-44"
+                  className="h-36 w-full object-cover sm:h-52 lg:h-64"
                 />
               </button>
             </div>
@@ -1254,7 +1271,7 @@ export default function CheckInCard({
                         <img
                           src={material.locationPhoto.dataUrl}
                           alt={`Location for item ${index + 1}`}
-                          className="h-32 w-full object-cover"
+                          className="h-32 w-full object-cover sm:h-44 lg:h-56"
                         />
 
                         <span className="block px-3 py-2 text-sm font-black text-[#1D64C8]">
@@ -1278,7 +1295,7 @@ export default function CheckInCard({
                         <img
                           src={material.damagePhoto.dataUrl}
                           alt={`Damage for item ${index + 1}`}
-                          className="h-32 w-full object-cover"
+                          className="h-32 w-full object-cover sm:h-44 lg:h-56"
                         />
 
                         <span className="block px-3 py-2 text-sm font-black text-red-700">
