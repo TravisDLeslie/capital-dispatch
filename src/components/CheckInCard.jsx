@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Building2,
+  Camera,
   ChevronRight,
   CircleCheckBig,
   Clock3,
@@ -39,18 +40,77 @@ function getSavedAssignment(checkIn) {
   return null;
 }
 
+function normalizePoNumber(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function getSourceItemDescription(item, index) {
+  return (
+    [item?.quantity, item?.description].filter(Boolean).join(" ") ||
+    item?.description ||
+    `Item ${index + 1}`
+  );
+}
+
 export default function CheckInCard({
   checkIn,
   customers = [],
+  supplierRuns = /** @type {any[]} */ ([]),
+  theirTruckPOs = /** @type {any[]} */ ([]),
   showFullDate = false,
   onDelete,
   onUpdateAssignment,
 }) {
   const savedAssignment = getSavedAssignment(checkIn);
 
-  const materials = Array.isArray(checkIn.materials)
+  const savedMaterials = Array.isArray(checkIn.materials)
     ? checkIn.materials
     : [];
+  const sourcePO =
+    checkIn.sourceType === "south"
+      ? supplierRuns.find(
+          (supplierRun) =>
+            supplierRun.id === checkIn.sourceSupplierRunId ||
+            normalizePoNumber(supplierRun.poNumber) ===
+              normalizePoNumber(checkIn.poNumber),
+        )
+      : checkIn.sourceType === "theirTruck"
+        ? theirTruckPOs.find(
+            (theirTruckPO) =>
+              theirTruckPO.id === checkIn.sourceTheirTruckPOId ||
+              normalizePoNumber(theirTruckPO.poNumber) ===
+                normalizePoNumber(checkIn.poNumber),
+          )
+        : null;
+  const sourceMaterials = Array.isArray(sourcePO?.items)
+    ? sourcePO.items.map((item, index) => ({
+        id: `source-${item.id || index}`,
+        description: getSourceItemDescription(item, index),
+        location: "",
+        locationPhoto: null,
+        damagePhoto: null,
+        notes: "",
+        conditionGood: true,
+      }))
+    : [];
+  const materials =
+    sourceMaterials.length > 0
+      ? [
+          ...savedMaterials.map((material, index) => {
+            const sourceMaterial = sourceMaterials[index];
+
+            if (material.description?.trim() || !sourceMaterial) {
+              return material;
+            }
+
+            return {
+              ...material,
+              description: sourceMaterial.description,
+            };
+          }),
+          ...sourceMaterials.slice(savedMaterials.length),
+        ]
+      : savedMaterials;
 
   const [isEditing, setIsEditing] = useState(false);
   const [assignmentType, setAssignmentType] = useState(
@@ -292,13 +352,41 @@ export default function CheckInCard({
       material.locationPhoto?.dataUrl ||
       material.damagePhoto?.dataUrl,
   );
+  const materialPhotoCount = materials.reduce(
+    (count, material) =>
+      count +
+      (material.locationPhoto?.dataUrl ? 1 : 0) +
+      (material.damagePhoto?.dataUrl ? 1 : 0),
+    checkIn.locationPhoto?.dataUrl ? 1 : 0,
+  );
+  const hasAnyPhoto = materialPhotoCount > 0;
 
   function renderMaterialSummary(material, index, isCompact = false) {
     const badges = [
-      material.location || "",
-      material.locationPhoto?.dataUrl ? "Photo" : "",
-      material.damagePhoto?.dataUrl ? "Damage" : "",
-      material.notes ? "Note" : "",
+      material.location
+        ? {
+            label: material.location,
+            tone: "neutral",
+          }
+        : null,
+      material.locationPhoto?.dataUrl
+        ? {
+            label: "Location photo",
+            tone: "photo",
+          }
+        : null,
+      material.damagePhoto?.dataUrl
+        ? {
+            label: "Damage photo",
+            tone: "damage",
+          }
+        : null,
+      material.notes
+        ? {
+            label: "Note",
+            tone: "note",
+          }
+        : null,
     ].filter(Boolean);
 
     return (
@@ -326,16 +414,26 @@ export default function CheckInCard({
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {badges.map((badge) => (
                   <span
-                    key={`${material.id || index}-${badge}`}
-                    className={`rounded-full px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em] ${
-                      badge === "Damage"
+                    key={`${material.id || index}-${badge.label}`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em] ${
+                      badge.tone === "damage"
                         ? "bg-red-50 text-red-700"
-                        : badge === "Note"
+                        : badge.tone === "note"
                           ? "bg-amber-50 text-amber-700"
-                          : "bg-white text-[#64748B]"
+                          : badge.tone === "photo"
+                            ? "bg-blue-50 text-[#1D64C8]"
+                            : "bg-white text-[#64748B]"
                     }`}
                   >
-                    {badge}
+                    {badge.tone === "photo" ||
+                    badge.tone === "damage" ? (
+                      <Camera
+                        aria-hidden="true"
+                        className="h-3 w-3"
+                        strokeWidth={2.5}
+                      />
+                    ) : null}
+                    {badge.label}
                   </span>
                 ))}
               </div>
@@ -350,9 +448,31 @@ export default function CheckInCard({
     <article className="rounded-2xl border border-[#DCE4EF] bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md lg:p-5">
       <div className="lg:hidden">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-          <h2 className="min-w-0 whitespace-nowrap text-[23px] font-black leading-none tracking-tight text-[#0F172A]">
-            {checkIn.poNumber}
-          </h2>
+          <div className="min-w-0">
+            <h2 className="min-w-0 whitespace-nowrap text-[23px] font-black leading-none tracking-tight text-[#0F172A]">
+              {checkIn.poNumber}
+            </h2>
+
+            {hasAnyPhoto ? (
+              <button
+                type="button"
+                onClick={() =>
+                  locationPhoto
+                    ? setViewingPhoto(locationPhoto)
+                    : setIsViewingMaterials(true)
+                }
+                className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-[#1D64C8]"
+              >
+                <Camera
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5"
+                  strokeWidth={2.5}
+                />
+                {materialPhotoCount}{" "}
+                {materialPhotoCount === 1 ? "photo" : "photos"}
+              </button>
+            ) : null}
+          </div>
 
           <div className="flex shrink-0 items-start text-right">
             <div>
@@ -406,8 +526,8 @@ export default function CheckInCard({
       </div>
 
       <div className="hidden gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:gap-5">
-          <h2 className="text-[30px] font-black leading-none tracking-tight text-[#0F172A]">
+        <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(150px,auto)_minmax(0,1fr)] xl:items-start xl:gap-5">
+          <h2 className="whitespace-nowrap text-[30px] font-black leading-none tracking-tight text-[#0F172A]">
             {checkIn.poNumber}
           </h2>
 
@@ -464,6 +584,26 @@ export default function CheckInCard({
                 ? formatFullDate(checkIn.checkedInAt)
                 : formatShortDate(checkIn.checkedInAt)}
             </p>
+
+            {hasAnyPhoto ? (
+              <button
+                type="button"
+                onClick={() =>
+                  locationPhoto
+                    ? setViewingPhoto(locationPhoto)
+                    : setIsViewingMaterials(true)
+                }
+                className="mt-2 inline-flex items-center justify-end gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-[#1D64C8]"
+              >
+                <Camera
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5"
+                  strokeWidth={2.5}
+                />
+                {materialPhotoCount}{" "}
+                {materialPhotoCount === 1 ? "photo" : "photos"}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -494,15 +634,33 @@ export default function CheckInCard({
                   locationPhoto ? setViewingPhoto(locationPhoto) : null
                 }
                 disabled={!locationPhoto}
-                className="flex items-center gap-4 text-left disabled:cursor-default"
+                className={`flex items-center gap-4 rounded-xl text-left transition disabled:cursor-default ${
+                  locationPhoto
+                    ? "bg-blue-50/70 px-3 py-2 hover:bg-blue-50"
+                    : ""
+                }`}
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-[#E98413]">
-                  <MapPin
-                    aria-hidden="true"
-                    className="h-6 w-6"
-                    fill="currentColor"
-                    strokeWidth={1.8}
-                  />
+                <div
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                    locationPhoto
+                      ? "bg-white text-[#1D64C8]"
+                      : "bg-orange-50 text-[#E98413]"
+                  }`}
+                >
+                  {locationPhoto ? (
+                    <Camera
+                      aria-hidden="true"
+                      className="h-6 w-6"
+                      strokeWidth={2.2}
+                    />
+                  ) : (
+                    <MapPin
+                      aria-hidden="true"
+                      className="h-6 w-6"
+                      fill="currentColor"
+                      strokeWidth={1.8}
+                    />
+                  )}
                 </div>
 
                 <div className="min-w-0">
@@ -515,7 +673,7 @@ export default function CheckInCard({
                   </p>
 
                   <p className="mt-0.5 hidden text-sm font-semibold leading-tight text-[#64748B] lg:block">
-                    Location
+                    {locationPhoto ? "Location photo saved" : "Location"}
                   </p>
                 </div>
 

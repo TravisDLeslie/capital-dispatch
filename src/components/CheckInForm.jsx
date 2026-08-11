@@ -324,6 +324,64 @@ export default function CheckInForm({
     }
   }, [checkedInBy, checkedInByDefault]);
 
+  useEffect(() => {
+    if (poNumber.length !== 7 || linkedSouthRunId || linkedTheirTruckPOId) {
+      return;
+    }
+
+    const matchingSouthRun = getMatchingSouthRunsForPo(
+      poNumber,
+      supplierRuns,
+    )[0];
+
+    if (matchingSouthRun) {
+      const matchingSouthItems = Array.isArray(matchingSouthRun.items)
+        ? matchingSouthRun.items
+        : [];
+
+      setLinkedSouthRunId(matchingSouthRun.id);
+      setLinkedTheirTruckPOId("");
+      populateMaterialsFromPoItems(matchingSouthItems, "south");
+
+      if (matchingSouthRun.vendor) {
+        setVendor(matchingSouthRun.vendor);
+      }
+
+      setReceivingTruckType("ourTruck");
+      return;
+    }
+
+    const matchingTheirTruckPO = getMatchingTheirTruckPOsForPo(
+      poNumber,
+      theirTruckPOs,
+    )[0];
+
+    if (matchingTheirTruckPO) {
+      const matchingTheirTruckItems = Array.isArray(matchingTheirTruckPO.items)
+        ? matchingTheirTruckPO.items
+        : [];
+
+      setLinkedSouthRunId("");
+      setLinkedTheirTruckPOId(matchingTheirTruckPO.id);
+      populateMaterialsFromPoItems(
+        matchingTheirTruckItems,
+        "theirTruck",
+      );
+
+      if (matchingTheirTruckPO.vendor) {
+        setVendor(matchingTheirTruckPO.vendor);
+      }
+
+      setReceivingTruckType("theirTruck");
+    }
+  }, [
+    linkedSouthRunId,
+    linkedTheirTruckPOId,
+    poNumber,
+    supplierRuns,
+    theirTruckPOs,
+  ]);
+
   function clearError() {
     setError("");
   }

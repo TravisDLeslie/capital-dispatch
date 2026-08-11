@@ -10,6 +10,8 @@ import {
 export default function TodayPage({
   checkIns,
   customers,
+  supplierRuns = /** @type {any[]} */ ([]),
+  theirTruckPOs = /** @type {any[]} */ ([]),
   onDeleteCheckIn,
   onUpdateAssignment,
   onPageChange,
@@ -79,6 +81,8 @@ export default function TodayPage({
               key={checkIn.id}
               checkIn={checkIn}
               customers={customers}
+              supplierRuns={supplierRuns}
+              theirTruckPOs={theirTruckPOs}
               onDelete={onDeleteCheckIn}
               onUpdateAssignment={onUpdateAssignment}
             />

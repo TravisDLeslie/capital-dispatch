@@ -3460,6 +3460,10 @@ export default function App() {
           <TodayPage
             checkIns={checkIns}
             customers={customers}
+            supplierRuns={
+              canReadSouth ? supplierRuns : receivingSouthLookupRuns
+            }
+            theirTruckPOs={theirTruckPOs}
             onDeleteCheckIn={handleDeleteCheckIn}
             onUpdateAssignment={
               handleUpdateAssignment
@@ -3472,6 +3476,10 @@ export default function App() {
         return (
           <SearchPage
             checkIns={checkIns}
+            supplierRuns={
+              canReadSouth ? supplierRuns : receivingSouthLookupRuns
+            }
+            theirTruckPOs={theirTruckPOs}
             onDeleteCheckIn={handleDeleteCheckIn}
             onUpdateAssignment={
               handleUpdateAssignment

@@ -109,6 +109,8 @@ function getAssignment(checkIn) {
 
 export default function SearchPage({
   checkIns,
+  supplierRuns = /** @type {any[]} */ ([]),
+  theirTruckPOs = /** @type {any[]} */ ([]),
   onDeleteCheckIn,
   onUpdateAssignment,
   onPageChange,
@@ -241,7 +243,7 @@ export default function SearchPage({
   }
 
   return (
-    <PageContainer>
+    <PageContainer className="max-w-7xl">
       <Breadcrumbs
         items={[
           { label: "Receiving", onClick: () => onPageChange?.("receiving") },
@@ -434,6 +436,8 @@ export default function SearchPage({
                                 <CheckInCard
                                   key={checkIn.id}
                                   checkIn={checkIn}
+                                  supplierRuns={supplierRuns}
+                                  theirTruckPOs={theirTruckPOs}
                                   showFullDate
                                   onDelete={onDeleteCheckIn}
                                   onUpdateAssignment={onUpdateAssignment}
