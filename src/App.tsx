@@ -74,6 +74,10 @@ import {
   updateCustomerPaymentLink,
 } from "./utils/customerPaymentLinkStorage";
 import {
+  saveCustomerStatement,
+  subscribeToCustomerStatements,
+} from "./utils/customerStatementStorage";
+import {
   ensureUserProfile,
   subscribeToUserProfile,
   subscribeToUsers,
@@ -284,6 +288,21 @@ type CustomerPaymentLink = {
   notes?: string;
   sentAt?: string;
   paidAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
+type CustomerStatement = {
+  id: string;
+  customerId: string;
+  customerName?: string;
+  accountNumber?: string;
+  statementMonth: string;
+  balanceDueCents?: number;
+  dueDate?: string;
+  status?: string;
+  notes?: string;
   createdAt?: string;
   updatedAt?: string;
   [key: string]: unknown;
@@ -810,6 +829,9 @@ export default function App() {
   const [customerPaymentLinks, setCustomerPaymentLinks] = useState<
     CustomerPaymentLink[]
   >([]);
+  const [customerStatements, setCustomerStatements] = useState<
+    CustomerStatement[]
+  >([]);
   const [emailList, setEmailList] = useState<EmailListEntry[]>([]);
   const [salesReports, setSalesReports] = useState<SalesReport[]>([]);
   const [vehicleSettings, setVehicleSettings] = useState<VehicleSetting[]>([]);
@@ -1020,6 +1042,9 @@ export default function App() {
     "customer-payment-links",
   );
   const canReadCustomers = canReadSales || canReadReceiving || canReadEmailList;
+  const canManageCustomerStatements = ["superAdmin", "admin"].includes(
+    effectiveUserRole,
+  );
   const visibleSupplierRuns =
     effectiveUserRole === "driver"
       ? supplierRuns.filter(
@@ -1420,6 +1445,7 @@ export default function App() {
       setDeliveries([]);
       setCustomers([]);
       setCustomerPaymentLinks([]);
+      setCustomerStatements([]);
       setEmailList([]);
       setSalesReports([]);
       setIsLoading(false);
@@ -1434,6 +1460,7 @@ export default function App() {
     let unsubscribeFromDeliveries = () => {};
     let unsubscribeFromCustomers = () => {};
     let unsubscribeFromCustomerPaymentLinks = () => {};
+    let unsubscribeFromCustomerStatements = () => {};
     let unsubscribeFromEmailList = () => {};
     let unsubscribeFromSalesReports = () => {};
 
@@ -1571,6 +1598,28 @@ export default function App() {
         setCustomerPaymentLinks([]);
       }
 
+      if (canReadSales) {
+        unsubscribeFromCustomerStatements = subscribeToCustomerStatements(
+          (savedCustomerStatements: CustomerStatement[]) => {
+            if (isMounted) {
+              setCustomerStatements(savedCustomerStatements);
+              setSyncError("");
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to sync customer statements:", error);
+
+            if (isMounted) {
+              setSyncError(getFirebaseErrorMessage(error));
+              setIsLoading(false);
+            }
+          },
+        );
+      } else {
+        setCustomerStatements([]);
+      }
+
       if (canReadEmailList) {
         unsubscribeFromEmailList = subscribeToEmailList(
           (savedEmailList: EmailListEntry[]) => {
@@ -1621,6 +1670,7 @@ export default function App() {
         !canReadDeliveries &&
         !canReadCustomers &&
         !canReadCustomerPaymentLinks &&
+        !canReadSales &&
         !canReadEmailList &&
         !canReadSalesReport
       ) {
@@ -1697,6 +1747,22 @@ export default function App() {
         setCustomerPaymentLinks([]);
       }
 
+      if (canReadSales) {
+        subscribeToCustomerStatements(
+          (savedCustomerStatements: CustomerStatement[]) => {
+            if (isMounted) {
+              setCustomerStatements(savedCustomerStatements);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load customer statements:", error);
+          },
+        );
+      } else {
+        setCustomerStatements([]);
+      }
+
       if (canReadEmailList) {
         subscribeToEmailList(
           (savedEmailList: EmailListEntry[]) => {
@@ -1737,6 +1803,7 @@ export default function App() {
       unsubscribeFromDeliveries();
       unsubscribeFromCustomers();
       unsubscribeFromCustomerPaymentLinks();
+      unsubscribeFromCustomerStatements();
       unsubscribeFromEmailList();
       unsubscribeFromSalesReports();
     };
@@ -1744,6 +1811,7 @@ export default function App() {
     canReadEmailList,
     canReadCustomers,
     canReadCustomerPaymentLinks,
+    canReadSales,
     canReadSalesReport,
     currentUser,
     canReadDeliveries,
@@ -1947,6 +2015,16 @@ export default function App() {
     );
 
     setCustomers(updatedCustomers);
+    setSyncError("");
+  }
+
+  async function handleSaveCustomerStatement(
+    customerStatement: CustomerStatement,
+  ) {
+    const updatedCustomerStatements =
+      await saveCustomerStatement(customerStatement);
+
+    setCustomerStatements(updatedCustomerStatements);
     setSyncError("");
   }
 
@@ -3259,8 +3337,11 @@ export default function App() {
           <CustomersPage
             mode="add"
             customers={customers}
+            customerStatements={customerStatements}
+            canManageCustomerStatements={canManageCustomerStatements}
             onAddCustomer={handleAddCustomer}
             onUpdateCustomer={handleUpdateCustomer}
+            onSaveCustomerStatement={handleSaveCustomerStatement}
             onPageChange={setCurrentPage}
           />
         );
@@ -3270,8 +3351,11 @@ export default function App() {
           <CustomersPage
             mode="view"
             customers={customers}
+            customerStatements={customerStatements}
+            canManageCustomerStatements={canManageCustomerStatements}
             onAddCustomer={handleAddCustomer}
             onUpdateCustomer={handleUpdateCustomer}
+            onSaveCustomerStatement={handleSaveCustomerStatement}
             onPageChange={setCurrentPage}
           />
         );
