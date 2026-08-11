@@ -38,6 +38,12 @@ service cloud.firestore {
       return isApproved() && role() == "superAdmin";
     }
 
+    function hasAnyPermission(permissionIds) {
+      return isApproved() &&
+        userProfile().permissions is list &&
+        userProfile().permissions.hasAny(permissionIds);
+    }
+
     function isReceiving() {
       return isApproved() && (
         isAdmin() ||
@@ -48,7 +54,15 @@ service cloud.firestore {
     function isSouth() {
       return isApproved() && (
         isAdmin() ||
-        role() == "south"
+        role() == "south" ||
+        hasAnyPermission([
+          "south",
+          "supplier-runs-add",
+          "supplier-runs-dispatch",
+          "supplier-runs-check",
+          "supplier-runs-calendar",
+          "supplier-runs-history"
+        ])
       );
     }
 
