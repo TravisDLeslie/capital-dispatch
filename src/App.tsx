@@ -1642,7 +1642,7 @@ export default function App() {
         setSupplierRuns([]);
       }
 
-      if (canReadSouth) {
+      if (canReadSouth || canReadReceiving) {
         unsubscribeFromTheirTruckPOs = subscribeToTheirTruckPOs(
           (savedTheirTruckPOs: TheirTruckPO[]) => {
             if (isMounted) {
@@ -1877,7 +1877,7 @@ export default function App() {
         setSupplierRuns([]);
       }
 
-      if (canReadSouth) {
+      if (canReadSouth || canReadReceiving) {
         unsubscribeFromTheirTruckPOs = subscribeToTheirTruckPOs(
           (savedTheirTruckPOs: TheirTruckPO[]) => {
             if (isMounted) {
@@ -3841,6 +3841,7 @@ export default function App() {
             supplierRuns={
               canReadSouth ? supplierRuns : receivingSouthLookupRuns
             }
+            theirTruckPOs={theirTruckPOs}
             checkedInByDefault={currentUserDisplayName}
           />
         );

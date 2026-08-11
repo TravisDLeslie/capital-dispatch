@@ -129,6 +129,28 @@ function getLinkedSouthOrderAssignment(supplierRun, items) {
   };
 }
 
+function getLinkedTheirTruckOrderAssignment(theirTruckPO) {
+  if (!theirTruckPO || theirTruckPO.isStock) {
+    return null;
+  }
+
+  if (!theirTruckPO.customerName && !theirTruckPO.orderNumber) {
+    return null;
+  }
+
+  return {
+    type: "customer",
+    internalReference: theirTruckPO.orderNumber || "",
+    businessName: theirTruckPO.customerName
+      ? formatCustomerName(theirTruckPO.customerName)
+      : "",
+    customerId: "",
+    customerAccountNumber: "",
+    orderedBy: theirTruckPO.orderedBy || "",
+    jobName: "",
+  };
+}
+
 function sortSouthRunsByRecent(firstRun, secondRun) {
   return (
     new Date(
@@ -162,6 +184,38 @@ function getMatchingSouthRunsForPo(poNumber, supplierRuns) {
         normalizedPoNumber,
     )
     .sort(sortSouthRunsByRecent);
+}
+
+function sortTheirTruckPOsByRecent(firstPO, secondPO) {
+  return (
+    new Date(
+      secondPO.updatedAt ||
+        secondPO.createdAt ||
+        secondPO.deliveryDate ||
+        0,
+    ) -
+    new Date(
+      firstPO.updatedAt ||
+        firstPO.createdAt ||
+        firstPO.deliveryDate ||
+        0,
+    )
+  );
+}
+
+function getMatchingTheirTruckPOsForPo(poNumber, theirTruckPOs) {
+  const normalizedPoNumber = normalizePoNumber(poNumber);
+
+  if (!normalizedPoNumber || !Array.isArray(theirTruckPOs)) {
+    return [];
+  }
+
+  return theirTruckPOs
+    .filter(
+      (theirTruckPO) =>
+        normalizePoNumber(theirTruckPO?.poNumber) === normalizedPoNumber,
+    )
+    .sort(sortTheirTruckPOsByRecent);
 }
 
 function readFileAsDataUrl(file) {
@@ -218,6 +272,7 @@ export default function CheckInForm({
   onSubmit,
   vendorOptions,
   supplierRuns = [],
+  theirTruckPOs = [],
   checkedInByDefault = "",
 }) {
   const vendors =
@@ -232,6 +287,7 @@ export default function CheckInForm({
     findMatchingTeamMember(checkedInByDefault),
   );
   const [linkedSouthRunId, setLinkedSouthRunId] = useState("");
+  const [linkedTheirTruckPOId, setLinkedTheirTruckPOId] = useState("");
   const [processingPhotoMaterialId, setProcessingPhotoMaterialId] =
     useState("");
 
@@ -275,6 +331,22 @@ export default function CheckInForm({
     formatSouthRunDate(visibleSouthRun?.scheduledDate) ||
     formatSouthRunDate(visibleSouthRun?.completedAt) ||
     formatSouthRunDate(visibleSouthRun?.updatedAt);
+  const matchingTheirTruckPOs = getMatchingTheirTruckPOsForPo(
+    poNumber,
+    theirTruckPOs,
+  );
+  const linkedTheirTruckPO =
+    matchingTheirTruckPOs.find(
+      (theirTruckPO) => theirTruckPO.id === linkedTheirTruckPOId,
+    ) || null;
+  const visibleTheirTruckPO =
+    linkedTheirTruckPO || matchingTheirTruckPOs[0] || null;
+  const visibleTheirTruckItems = Array.isArray(visibleTheirTruckPO?.items)
+    ? visibleTheirTruckPO.items
+    : [];
+  const visibleTheirTruckDate =
+    formatSouthRunDate(visibleTheirTruckPO?.deliveryDate) ||
+    formatSouthRunDate(visibleTheirTruckPO?.updatedAt);
 
   function handlePoChange(event) {
     const nextPoNumber = formatPoNumber(event.target.value);
@@ -282,21 +354,38 @@ export default function CheckInForm({
       nextPoNumber,
       supplierRuns,
     );
+    const nextMatchingTheirTruckPOs = getMatchingTheirTruckPOsForPo(
+      nextPoNumber,
+      theirTruckPOs,
+    );
     const nextSouthRun =
       nextPoNumber.length === 7 ? nextMatchingRuns[0] : null;
+    const nextTheirTruckPO =
+      nextPoNumber.length === 7 ? nextMatchingTheirTruckPOs[0] : null;
 
     setPoNumber(nextPoNumber);
 
     if (nextSouthRun) {
       setLinkedSouthRunId(nextSouthRun.id);
+      setLinkedTheirTruckPOId("");
 
       if (nextSouthRun.vendor) {
         setVendor(nextSouthRun.vendor);
       }
 
       setReceivingTruckType("ourTruck");
+    } else if (nextTheirTruckPO) {
+      setLinkedSouthRunId("");
+      setLinkedTheirTruckPOId(nextTheirTruckPO.id);
+
+      if (nextTheirTruckPO.vendor) {
+        setVendor(nextTheirTruckPO.vendor);
+      }
+
+      setReceivingTruckType("theirTruck");
     } else {
       setLinkedSouthRunId("");
+      setLinkedTheirTruckPOId("");
     }
 
     clearError();
@@ -310,6 +399,23 @@ export default function CheckInForm({
       setVendor(supplierRun.vendor);
     }
 
+    clearError();
+  }
+
+  function linkTheirTruckPO(theirTruckPO) {
+    setLinkedTheirTruckPOId(theirTruckPO.id);
+    setLinkedSouthRunId("");
+    setReceivingTruckType("theirTruck");
+
+    if (theirTruckPO.vendor) {
+      setVendor(theirTruckPO.vendor);
+    }
+
+    clearError();
+  }
+
+  function unlinkTheirTruckPO() {
+    setLinkedTheirTruckPOId("");
     clearError();
   }
 
@@ -476,6 +582,7 @@ export default function CheckInForm({
     setReceivingTruckType("theirTruck");
     setCheckedInBy(findMatchingTeamMember(checkedInByDefault));
     setLinkedSouthRunId("");
+    setLinkedTheirTruckPOId("");
     setProcessingPhotoMaterialId("");
     setMaterials([newMaterial]);
     setOpenMaterialId("");
@@ -618,6 +725,10 @@ export default function CheckInForm({
       linkedSouthRun,
       visibleSouthItems,
     );
+    const linkedTheirTruckOrderAssignment =
+      getLinkedTheirTruckOrderAssignment(linkedTheirTruckPO);
+    const linkedOrderAssignment =
+      linkedSouthOrderAssignment || linkedTheirTruckOrderAssignment;
 
     const newCheckIn = {
       id: createId(),
@@ -632,13 +743,17 @@ export default function CheckInForm({
       checkedInBy,
       notes: "",
 
-      orderAssignment: linkedSouthOrderAssignment,
+      orderAssignment: linkedOrderAssignment,
       assignedAt: null,
 
       materials: cleanedMaterials,
       materialsSkipped: false,
 
-      sourceType: linkedSouthRun ? "south" : "",
+      sourceType: linkedSouthRun
+        ? "south"
+        : linkedTheirTruckPO
+          ? "theirTruck"
+          : "",
       sourceSupplierRunId: linkedSouthRun?.id || "",
       sourceSupplierRunPoNumber: linkedSouthRun?.poNumber || "",
       sourceSupplierRunVendor: linkedSouthRun?.vendor || "",
@@ -649,6 +764,18 @@ export default function CheckInForm({
         linkedSouthRun?.completedAt || "",
       sourceSupplierRunItemIds: linkedSouthRun
         ? visibleSouthItems.map((item) => item.id).filter(Boolean)
+        : [],
+      sourceTheirTruckPOId: linkedTheirTruckPO?.id || "",
+      sourceTheirTruckPONumber: linkedTheirTruckPO?.poNumber || "",
+      sourceTheirTruckVendor: linkedTheirTruckPO?.vendor || "",
+      sourceTheirTruckDeliveryDate:
+        linkedTheirTruckPO?.deliveryDate || "",
+      sourceTheirTruckOrderNumber:
+        linkedTheirTruckPO?.orderNumber || "",
+      sourceTheirTruckCustomerName:
+        linkedTheirTruckPO?.customerName || "",
+      sourceTheirTruckItemIds: linkedTheirTruckPO
+        ? visibleTheirTruckItems.map((item) => item.id).filter(Boolean)
         : [],
 
       checkedInAt: new Date().toISOString(),
@@ -960,6 +1087,123 @@ export default function CheckInForm({
                     className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800"
                   >
                     Link South PO
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {visibleTheirTruckPO ? (
+          <section
+            className={`rounded-2xl border px-4 py-4 ${
+              linkedTheirTruckPO
+                ? "border-blue-200 bg-blue-50"
+                : "border-amber-200 bg-amber-50"
+            }`}
+          >
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <p
+                  className={`text-xs font-black uppercase tracking-[0.18em] ${
+                    linkedTheirTruckPO
+                      ? "text-blue-700"
+                      : "text-amber-700"
+                  }`}
+                >
+                  {linkedTheirTruckPO
+                    ? "Their Truck PO Linked"
+                    : "Their Truck PO Found"}
+                </p>
+
+                <h3 className="mt-1 text-xl font-black text-slate-900">
+                  PO {visibleTheirTruckPO.poNumber} from{" "}
+                  {visibleTheirTruckPO.vendor || "Their Truck"}
+                </h3>
+
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  {[
+                    visibleTheirTruckPO.isStock
+                      ? "Stock"
+                      : visibleTheirTruckPO.customerName
+                        ? `Customer: ${formatCustomerName(visibleTheirTruckPO.customerName)}`
+                        : "",
+                    visibleTheirTruckPO.orderNumber
+                      ? `Order: ${visibleTheirTruckPO.orderNumber}`
+                      : "",
+                    visibleTheirTruckDate
+                      ? `Delivery: ${visibleTheirTruckDate}`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" • ")}
+                </p>
+
+                {visibleTheirTruckItems.length > 0 ? (
+                  <ul className="mt-3 space-y-1 text-sm font-semibold text-slate-700">
+                    {visibleTheirTruckItems.slice(0, 3).map((item, index) => (
+                      <li
+                        key={
+                          item.id || `${visibleTheirTruckPO.id}-${index}`
+                        }
+                      >
+                        {[item.quantity, item.description]
+                          .filter(Boolean)
+                          .join(" ") || `Item ${index + 1}`}
+                      </li>
+                    ))}
+                    {visibleTheirTruckItems.length > 3 ? (
+                      <li className="text-slate-500">
+                        + {visibleTheirTruckItems.length - 3} more items
+                      </li>
+                    ) : null}
+                  </ul>
+                ) : null}
+              </div>
+
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {matchingTheirTruckPOs.length > 1 ? (
+                  <select
+                    value={visibleTheirTruckPO.id}
+                    onChange={(event) => {
+                      const selectedPO = matchingTheirTruckPOs.find(
+                        (theirTruckPO) =>
+                          theirTruckPO.id === event.target.value,
+                      );
+
+                      if (selectedPO) {
+                        linkTheirTruckPO(selectedPO);
+                      }
+                    }}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700"
+                  >
+                    {matchingTheirTruckPOs.map((theirTruckPO) => (
+                      <option
+                        key={theirTruckPO.id}
+                        value={theirTruckPO.id}
+                      >
+                        {theirTruckPO.vendor || "Their Truck"}{" "}
+                        {formatSouthRunDate(theirTruckPO.deliveryDate)}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+
+                {linkedTheirTruckPO ? (
+                  <button
+                    type="button"
+                    onClick={unlinkTheirTruckPO}
+                    className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                  >
+                    Unlink
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => linkTheirTruckPO(visibleTheirTruckPO)}
+                    className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800"
+                  >
+                    Link Their Truck PO
                   </button>
                 )}
               </div>

@@ -262,6 +262,7 @@ export default function CheckInCard({
       }
     : null;
   const isFromSouth = checkIn.sourceType === "south";
+  const isFromTheirTruck = checkIn.sourceType === "theirTruck";
   const receivingTruckLabel =
     checkIn.receivingTruckLabel ||
     (checkIn.receivingTruckType === "ourTruck"
@@ -270,10 +271,15 @@ export default function CheckInCard({
         ? "Their Truck"
         : "");
   const southSourceText = [
-    "From South",
-    checkIn.sourceSupplierRunVendor || "",
-    checkIn.sourceSupplierRunDriver
+    isFromSouth ? "From South" : isFromTheirTruck ? "Their Truck PO" : "",
+    isFromSouth
+      ? checkIn.sourceSupplierRunVendor || ""
+      : checkIn.sourceTheirTruckVendor || "",
+    isFromSouth && checkIn.sourceSupplierRunDriver
       ? `Driver: ${checkIn.sourceSupplierRunDriver}`
+      : "",
+    isFromTheirTruck && checkIn.sourceTheirTruckOrderNumber
+      ? `Order: ${checkIn.sourceTheirTruckOrderNumber}`
       : "",
   ]
     .filter(Boolean)
@@ -326,7 +332,7 @@ export default function CheckInCard({
               Vendor
             </p>
 
-            {isFromSouth ? (
+            {isFromSouth || isFromTheirTruck ? (
               <p className="mt-2 inline-block max-w-full rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-blue-700">
                 {southSourceText}
               </p>
@@ -368,7 +374,7 @@ export default function CheckInCard({
                 Vendor
               </p>
 
-              {isFromSouth ? (
+              {isFromSouth || isFromTheirTruck ? (
                 <p className="mt-2 inline-block max-w-full rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase leading-snug tracking-[0.12em] text-blue-700">
                   {southSourceText}
                 </p>
