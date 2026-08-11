@@ -285,9 +285,27 @@ export default function SouthHubPage({
             South
           </p>
 
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
-            South
-          </h1>
+          <div className="mt-2 flex items-center gap-3">
+            <h1 className="text-4xl font-black tracking-tight text-slate-900">
+              South
+            </h1>
+
+            {canOpen("supplier-runs-calendar") ? (
+              <button
+                type="button"
+                onClick={() => onPageChange("supplier-runs-calendar")}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-[#FC2C38]"
+                aria-label="Open South Calendar"
+                title="Open South Calendar"
+              >
+                <CalendarDays
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                  strokeWidth={2.5}
+                />
+              </button>
+            ) : null}
+          </div>
           <p className="mt-2 max-w-3xl text-lg font-semibold text-slate-500">
             Start requests, assign pickups, and track progress from one clean
             place.

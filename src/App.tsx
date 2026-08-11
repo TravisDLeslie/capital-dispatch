@@ -2706,6 +2706,15 @@ export default function App() {
           title="Deliveries"
           description="Create delivery orders, track driver work, and review completed deliveries."
           icon={Truck}
+          titleAction={
+            effectiveAllowedPageIds.includes("deliveries-calendar")
+              ? {
+                  label: "Open Delivery Calendar",
+                  icon: CalendarDays,
+                  onClick: () => setCurrentPage("deliveries-calendar"),
+                }
+              : null
+          }
           primaryAction={
             effectiveAllowedPageIds.includes("deliveries-add")
               ? {

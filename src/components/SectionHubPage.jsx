@@ -232,6 +232,11 @@ function ActionRow({
  *     icon: import("lucide-react").LucideIcon;
  *     onClick: () => void;
  *   } | null;
+ *   titleAction?: {
+ *     label: string;
+ *     icon: import("lucide-react").LucideIcon;
+ *     onClick: () => void;
+ *   } | null;
  *   stats: Array<{
  *     icon: import("lucide-react").LucideIcon;
  *     label: string;
@@ -249,12 +254,14 @@ export default function SectionHubPage({
   description,
   icon: Icon,
   primaryAction = null,
+  titleAction = null,
   stats,
   actions,
   headerAccessory = null,
   children = null,
 }) {
   const PrimaryActionIcon = primaryAction?.icon;
+  const TitleActionIcon = titleAction?.icon;
 
   return (
     <PageContainer>
@@ -267,9 +274,29 @@ export default function SectionHubPage({
             {eyebrow || title}
           </p>
 
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
-            {title}
-          </h1>
+          <div className="mt-2 flex items-center gap-3">
+            <h1 className="text-4xl font-black tracking-tight text-slate-900">
+              {title}
+            </h1>
+
+            {titleAction ? (
+              <button
+                type="button"
+                onClick={titleAction.onClick}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-[#FC2C38]"
+                aria-label={titleAction.label}
+                title={titleAction.label}
+              >
+                {TitleActionIcon ? (
+                  <TitleActionIcon
+                    aria-hidden="true"
+                    className="h-5 w-5"
+                    strokeWidth={2.5}
+                  />
+                ) : null}
+              </button>
+            ) : null}
+          </div>
           <p className="mt-2 max-w-3xl text-lg font-semibold text-slate-500">
             {description}
           </p>
