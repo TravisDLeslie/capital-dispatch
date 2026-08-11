@@ -490,11 +490,13 @@ export default function CheckInCard({
         </div>
 
         <div className="mt-3 flex min-w-0 items-start gap-3">
-          <Building2
-            aria-hidden="true"
-            className="h-8 w-8 shrink-0 text-[#1D64C8]"
-            strokeWidth={2.1}
-          />
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38]">
+            <Building2
+              aria-hidden="true"
+              className="h-7 w-7"
+              strokeWidth={2.1}
+            />
+          </span>
 
           <div className="min-w-0">
             <p className="truncate text-lg font-black leading-tight text-[#0F172A]">
@@ -532,11 +534,13 @@ export default function CheckInCard({
           </h2>
 
           <div className="flex min-w-0 items-start gap-3">
-            <Building2
-              aria-hidden="true"
-              className="mt-0.5 h-8 w-8 shrink-0 text-[#1D64C8]"
-              strokeWidth={2.1}
-            />
+            <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38]">
+              <Building2
+                aria-hidden="true"
+                className="h-7 w-7"
+                strokeWidth={2.1}
+              />
+            </span>
 
             <div className="min-w-0">
               <p className="truncate text-lg font-black leading-tight text-[#0F172A]">
@@ -620,7 +624,13 @@ export default function CheckInCard({
             </p>
 
             {getAssignmentReferenceText() ? (
-              <p className="mt-1.5 text-sm font-black text-[#1D64C8]">
+              <p
+                className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.1em] ${
+                  savedAssignment?.type === "customer"
+                    ? "bg-orange-50 text-[#B45309]"
+                    : "bg-blue-50 text-[#1D64C8]"
+                }`}
+              >
                 {getAssignmentReferenceText()}
               </p>
             ) : null}
