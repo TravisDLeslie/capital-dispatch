@@ -75,7 +75,9 @@ function getActionNavButtonClass(isActive, isMobile = false) {
 function getCurrentPageLabel(currentPage) {
   if (
     String(currentPage || "").startsWith("supplier-runs") ||
+    currentPage === "south-overview" ||
     currentPage === "their-truck-pos" ||
+    currentPage === "their-truck-overview" ||
     currentPage === "south-calendar" ||
     currentPage === "their-truck-calendar" ||
     currentPage === "their-truck-history" ||
@@ -128,7 +130,9 @@ function getCurrentPageLabel(currentPage) {
 function getCurrentPageGroup(currentPage) {
   if (
     String(currentPage || "").startsWith("supplier-runs") ||
+    currentPage === "south-overview" ||
     currentPage === "their-truck-pos" ||
+    currentPage === "their-truck-overview" ||
     currentPage === "south-calendar" ||
     currentPage === "their-truck-calendar" ||
     currentPage === "their-truck-history" ||
@@ -294,6 +298,64 @@ export default function AppHeader({
     });
   }
 
+  function getSouthDropdownLinks() {
+    if (isDriverView) {
+      return [];
+    }
+
+    const pageAllowed = (pageId) =>
+      !allowedPageIds || allowedPageIds.includes(pageId);
+    const hasAllowedPage = (pageIds) =>
+      !allowedPageIds ||
+      pageIds.some((pageId) => allowedPageIds.includes(pageId));
+    const southPageId = pageAllowed("south-overview")
+      ? "south-overview"
+      : "south";
+    const theirTruckPageId =
+      (pageAllowed("their-truck-overview") && "their-truck-overview") ||
+      (pageAllowed("their-truck-pos") && "their-truck-pos") ||
+      (pageAllowed("their-truck-calendar") &&
+        "their-truck-calendar") ||
+      (pageAllowed("their-truck-history") &&
+        "their-truck-history") ||
+      "";
+
+    return [
+      hasAllowedPage([
+        "south",
+        "south-overview",
+        "supplier-runs-add",
+        "supplier-runs-dispatch",
+        "supplier-runs-check",
+        "supplier-runs-calendar",
+        "south-calendar",
+        "supplier-runs-history",
+      ])
+        ? {
+            id: "po-south",
+            label: "South",
+            pageId: southPageId,
+            isActive:
+              currentPage === "south-overview" ||
+              String(currentPage || "").startsWith("supplier-runs") ||
+              currentPage === "south-calendar",
+          }
+        : null,
+      theirTruckPageId
+        ? {
+            id: "po-their-truck",
+            label: "Their Truck",
+            pageId: theirTruckPageId,
+            isActive:
+              currentPage === "their-truck-pos" ||
+              currentPage === "their-truck-overview" ||
+              currentPage === "their-truck-calendar" ||
+              currentPage === "their-truck-history",
+          }
+        : null,
+    ].filter(Boolean);
+  }
+
   function renderNavigation(isMobile = false) {
     return ["Dashboard", "Receiving", "South", "Deliveries", "Sales", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
@@ -303,7 +365,9 @@ export default function AppHeader({
           (item.id === "south" &&
             allowedPageIds.some((pageId) =>
               String(pageId).startsWith("supplier-runs") ||
+              pageId === "south-overview" ||
               pageId === "their-truck-pos" ||
+              pageId === "their-truck-overview" ||
               pageId === "south-calendar" ||
               pageId === "their-truck-calendar" ||
               pageId === "their-truck-history" ||
@@ -346,6 +410,10 @@ export default function AppHeader({
       const NavGroupIcon = getNavGroupIcon(group);
       const hasGroupItems = groupItems.length > 0;
       const groupIsActive = getCurrentPageGroup(currentPage) === group;
+      const southDropdownLinks =
+        group === "South" ? getSouthDropdownLinks() : [];
+      const shouldShowSouthDropdown =
+        group === "South" && isGroupOpen && southDropdownLinks.length > 0;
       const isSinglePageGroup = [
         "Dashboard",
         "Receiving",
@@ -361,32 +429,57 @@ export default function AppHeader({
           key={group}
           className="border-b border-slate-200 py-4 first:pt-0 last:border-b-0"
         >
-          <button
-            type="button"
-            onClick={() => {
-              if (isSinglePageGroup) {
-                handlePageChange(groupItems[0].id);
-              } else if (hasGroupItems) {
-                toggleNavGroup(group);
-              }
-            }}
-            className={`flex w-full items-center justify-between rounded-xl px-4 py-4 text-left text-lg font-black transition ${
+          <div
+            className={`flex w-full items-center rounded-xl transition ${
               groupIsActive
                 ? "bg-red-50 text-[#FC2C38]"
                 : "text-slate-900 hover:bg-slate-50"
             }`}
-            aria-expanded={isSinglePageGroup ? undefined : isGroupOpen}
           >
-            <span className="flex items-center gap-4 leading-none">
+            <button
+              type="button"
+              onClick={() => {
+                if (isSinglePageGroup) {
+                  handlePageChange(groupItems[0].id);
+                } else if (hasGroupItems) {
+                  toggleNavGroup(group);
+                }
+              }}
+              className="flex min-w-0 flex-1 items-center gap-4 rounded-l-xl px-4 py-4 text-left text-lg font-black"
+              aria-expanded={
+                shouldShowSouthDropdown || !isSinglePageGroup
+                  ? isGroupOpen
+                  : undefined
+              }
+            >
               <NavGroupIcon
                 aria-hidden="true"
-                className="h-6 w-6"
+                className="h-6 w-6 shrink-0"
                 strokeWidth={2.5}
               />
-              {group === "South" ? southGroupLabel : group}
-            </span>
-            {hasGroupItems && !isSinglePageGroup ? (
-              <span className="text-slate-400">
+              <span className="min-w-0 truncate">
+                {group === "South" ? southGroupLabel : group}
+              </span>
+            </button>
+
+            {group === "South" && southDropdownLinks.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => toggleNavGroup(group)}
+                className="flex h-full min-h-[56px] w-12 shrink-0 items-center justify-center rounded-r-xl text-slate-400 transition hover:text-[#FC2C38]"
+                aria-label={`${isGroupOpen ? "Collapse" : "Open"} ${southGroupLabel} menu`}
+                aria-expanded={isGroupOpen}
+              >
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`h-5 w-5 transition-transform ${
+                    isGroupOpen ? "rotate-180" : ""
+                  }`}
+                  strokeWidth={2.6}
+                />
+              </button>
+            ) : hasGroupItems && !isSinglePageGroup ? (
+              <span className="pr-4 text-slate-400">
                 <ChevronDown
                   aria-hidden="true"
                   className={`h-5 w-5 transition-transform ${
@@ -396,7 +489,34 @@ export default function AppHeader({
                 />
               </span>
             ) : null}
-          </button>
+          </div>
+
+          {shouldShowSouthDropdown ? (
+            <div className="mt-3 space-y-2 pl-5">
+              {southDropdownLinks.map((link) => (
+                <button
+                  key={link.id}
+                  type="button"
+                  onClick={() => handlePageChange(link.pageId)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
+                    link.isActive
+                      ? "bg-slate-950 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      link.isActive ? "bg-white" : "bg-slate-300"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1 truncate">
+                    {link.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {hasGroupItems && isGroupOpen && !isSinglePageGroup ? (
             <div className="mt-3 space-y-2">

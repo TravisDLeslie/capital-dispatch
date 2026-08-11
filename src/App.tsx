@@ -40,9 +40,11 @@ import SalesConverterPage from "./pages/SalesConverterPage";
 import SalesOrdersPage from "./pages/SalesOrdersPage";
 import SalesReportPage from "./pages/SalesReportPage";
 import SouthHubPage from "./pages/SouthHubPage";
+import SouthOverviewPage from "./pages/SouthOverviewPage";
 import SupplierRunsPage from "./pages/SupplierRunsPage";
 import TodayPage from "./pages/TodayPage";
 import TheirTruckHistoryPage from "./pages/TheirTruckHistoryPage";
+import TheirTruckOverviewPage from "./pages/TheirTruckOverviewPage";
 import TheirTruckPOPage from "./pages/TheirTruckPOPage";
 import TracePage from "./pages/TracePage";
 import UserAdminPage from "./pages/UserAdminPage";
@@ -459,8 +461,10 @@ function getAllowedPageIdsForRole(role: string) {
       "search",
       "trace",
       "south",
+      "south-overview",
       "supplier-runs-add",
       "their-truck-pos",
+      "their-truck-overview",
       "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-calendar",
@@ -502,8 +506,10 @@ function getAllowedPageIdsForRole(role: string) {
       "search",
       "trace",
       "south",
+      "south-overview",
       "supplier-runs-add",
       "their-truck-pos",
+      "their-truck-overview",
       "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-calendar",
@@ -540,8 +546,10 @@ function getAllowedPageIdsForRole(role: string) {
     return [
       "dashboard",
       "south",
+      "south-overview",
       "supplier-runs-add",
       "their-truck-pos",
+      "their-truck-overview",
       "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-calendar",
@@ -569,8 +577,10 @@ function getAllowedPageIdsForRole(role: string) {
     return [
       "dashboard",
       "south",
+      "south-overview",
       "supplier-runs-add",
       "their-truck-pos",
+      "their-truck-overview",
       "south-calendar",
       "their-truck-calendar",
       "po-calendar",
@@ -1079,11 +1089,16 @@ export default function App() {
   const canReadSouth = effectiveAllowedPageIds.some((pageId) =>
     [
       "south",
+      "south-overview",
       "supplier-runs-add",
       "supplier-runs-dispatch",
       "supplier-runs-check",
       "supplier-runs-calendar",
       "supplier-runs-history",
+      "their-truck-overview",
+      "their-truck-pos",
+      "their-truck-calendar",
+      "their-truck-history",
     ].includes(pageId),
   );
   const canAssignSouthRoutes = effectiveAllowedPageIds.includes(
@@ -2972,6 +2987,26 @@ export default function App() {
           theirTruckPOs={theirTruckPOs}
           allowedPageIds={effectiveAllowedPageIds}
           isDriverView={effectiveUserRole === "driver"}
+          onPageChange={navigateToPage}
+        />
+      );
+    }
+
+    if (currentPage === "south-overview" && canReadSouth) {
+      return (
+        <SouthOverviewPage
+          supplierRuns={visibleSupplierRuns}
+          allowedPageIds={effectiveAllowedPageIds}
+          onPageChange={navigateToPage}
+        />
+      );
+    }
+
+    if (currentPage === "their-truck-overview" && canReadSouth) {
+      return (
+        <TheirTruckOverviewPage
+          theirTruckPOs={theirTruckPOs}
+          allowedPageIds={effectiveAllowedPageIds}
           onPageChange={navigateToPage}
         />
       );

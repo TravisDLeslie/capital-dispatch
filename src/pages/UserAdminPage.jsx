@@ -36,7 +36,9 @@ const permissionGroups = [
     title: "PO's",
     permissions: [
       { id: "south", label: "PO's" },
+      { id: "south-overview", label: "South Overview" },
       { id: "supplier-runs-add", label: "Add POs" },
+      { id: "their-truck-overview", label: "Their Truck Overview" },
       { id: "their-truck-pos", label: "Add Their Truck PO" },
       { id: "supplier-runs-dispatch", label: "Needs Dispatch" },
       { id: "supplier-runs-check", label: "View POs to Pick Up" },
@@ -102,7 +104,9 @@ const rolePermissionPresets = {
   south: [
     "dashboard",
     "south",
+    "south-overview",
     "supplier-runs-add",
+    "their-truck-overview",
     "their-truck-pos",
     "south-calendar",
     "supplier-runs-dispatch",
@@ -124,7 +128,9 @@ const rolePermissionPresets = {
   sales: [
     "dashboard",
     "south",
+    "south-overview",
     "supplier-runs-add",
+    "their-truck-overview",
     "their-truck-pos",
     "their-truck-calendar",
     "their-truck-history",
