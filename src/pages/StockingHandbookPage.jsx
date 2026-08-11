@@ -94,18 +94,37 @@ function getLengthItemsFromStockingLengths(item) {
     }));
 }
 
+function getLengthItemKey(lengthItem) {
+  return normalizeSearch(lengthItem.length);
+}
+
+function mergeLengthItems(baseLengthItems, overrideLengthItems) {
+  const lengthItemMap = new Map();
+
+  [...baseLengthItems, ...overrideLengthItems].forEach((lengthItem) => {
+    const key = getLengthItemKey(lengthItem);
+
+    if (!key) {
+      return;
+    }
+
+    lengthItemMap.set(key, {
+      ...(lengthItemMap.get(key) || {}),
+      ...lengthItem,
+    });
+  });
+
+  return [...lengthItemMap.values()];
+}
+
 function getDisplayLengthItems(item) {
-  if (Array.isArray(item.lengthItems) && item.lengthItems.length > 0) {
-    return item.lengthItems;
-  }
-
-  const defaultLengthItems = getDefaultLengthItems(item);
-
-  if (defaultLengthItems.length > 0) {
-    return defaultLengthItems;
-  }
-
-  return getLengthItemsFromStockingLengths(item);
+  return mergeLengthItems(
+    [
+      ...getDefaultLengthItems(item),
+      ...getLengthItemsFromStockingLengths(item),
+    ],
+    Array.isArray(item.lengthItems) ? item.lengthItems : [],
+  );
 }
 
 function getSearchText(item) {

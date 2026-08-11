@@ -66,9 +66,62 @@ function getDefaultLengthItems(item) {
   return [];
 }
 
+function getLengthItemsFromStockingLengths(item) {
+  const stockingLengths = cleanText(item.stockingLengths);
+  const matches = [...stockingLengths.matchAll(/(\d+(?:\.\d+)?)\s*(?:ft|')/gi)];
+  const seenLengths = new Set();
+
+  return matches
+    .map((match) => `${match[1]} ft`)
+    .filter((length) => {
+      if (seenLengths.has(length)) {
+        return false;
+      }
+
+      seenLengths.add(length);
+
+      return true;
+    })
+    .map((length) => ({
+      id: `${item.id || "stock"}-${length.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
+      length,
+      itemNumber: "",
+      notes: "",
+    }));
+}
+
+function mergeLengthItems(baseLengthItems, overrideLengthItems) {
+  const lengthItemMap = new Map();
+
+  [...baseLengthItems, ...overrideLengthItems].forEach((lengthItem) => {
+    const key = cleanText(lengthItem.length)
+      .toLowerCase()
+      .replace(/[×✕]/g, "x")
+      .replace(/[^a-z0-9]/g, "");
+
+    if (!key) {
+      return;
+    }
+
+    lengthItemMap.set(key, {
+      ...(lengthItemMap.get(key) || {}),
+      ...lengthItem,
+    });
+  });
+
+  return [...lengthItemMap.values()];
+}
+
 function normalizeItem(item) {
   const now = new Date().toISOString();
-  const lengthItems = normalizeLengthItems(item.lengthItems);
+  const fallbackLengthItems = [
+    ...getDefaultLengthItems(item),
+    ...getLengthItemsFromStockingLengths(item),
+  ];
+  const lengthItems = mergeLengthItems(
+    fallbackLengthItems,
+    normalizeLengthItems(item.lengthItems),
+  );
 
   return {
     id: item.id || createId(),
@@ -80,8 +133,7 @@ function normalizeItem(item) {
     actualDimension: cleanText(item.actualDimension),
     unitSize: cleanText(item.unitSize),
     stockingLengths: cleanText(item.stockingLengths),
-    lengthItems:
-      lengthItems.length > 0 ? lengthItems : getDefaultLengthItems(item),
+    lengthItems,
     notes: cleanText(item.notes),
     keywords: cleanText(item.keywords),
     source: item.source || "app",

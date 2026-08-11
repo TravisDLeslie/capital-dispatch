@@ -17,8 +17,22 @@ createRoot(rootElement).render(
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
+    let isRefreshing = false;
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (isRefreshing) {
+        return;
+      }
+
+      isRefreshing = true;
+      window.location.reload();
+    });
+
     navigator.serviceWorker
       .register("/service-worker.js")
+      .then((registration) => {
+        registration.update();
+      })
       .catch((error) => {
         console.error("Unable to register service worker:", error);
       });
