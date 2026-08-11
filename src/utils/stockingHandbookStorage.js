@@ -240,9 +240,8 @@ function saveLocalItems(items) {
 }
 
 export function subscribeToStockingHandbookItems(onItems, onError) {
-  onItems(getLocalItems());
-
   if (!db) {
+    onItems(getLocalItems());
     return () => {};
   }
 

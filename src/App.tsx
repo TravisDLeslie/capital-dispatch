@@ -1877,7 +1877,11 @@ export default function App() {
               console.error("Unable to sync stocking handbook items:", error);
 
               if (isMounted) {
-                reportBackgroundSyncError(error);
+                if (currentPage === "stocking-handbook") {
+                  setSyncError(getFirebaseErrorMessage(error));
+                } else {
+                  reportBackgroundSyncError(error);
+                }
                 setIsLoading(false);
               }
             },
@@ -2164,6 +2168,7 @@ export default function App() {
     isApproved,
     isAuthLoading,
     isProfileLoading,
+    currentPage,
     effectiveUserRole,
   ]);
 
