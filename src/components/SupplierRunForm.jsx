@@ -20,6 +20,7 @@ function createEmptyPickupItem() {
     orderNumber: "",
     customerName: "",
     returnNotes: "",
+    easilyDamaged: false,
     saved: false,
     pickedUp: false,
   };
@@ -142,6 +143,7 @@ export default function SupplierRunForm({
       orderNumber: item.orderNumber || "",
       customerName: item.customerName || "",
       returnNotes: item.returnNotes || "",
+      easilyDamaged: Boolean(item.easilyDamaged),
       saved: true,
       pickedUp: Boolean(item.pickedUp),
     }));
@@ -296,6 +298,22 @@ export default function SupplierRunForm({
     clearError();
   }
 
+  function updateItemEasilyDamaged(itemId, easilyDamaged) {
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              easilyDamaged,
+              saved: false,
+            }
+          : item,
+      ),
+    );
+
+    clearError();
+  }
+
   function addItem() {
     setItems((currentItems) => [
       ...currentItems,
@@ -364,6 +382,7 @@ export default function SupplierRunForm({
                 usesReturnNotes(pickupItem.materialUse)
                   ? pickupItem.returnNotes.trim()
                   : "",
+              easilyDamaged: Boolean(pickupItem.easilyDamaged),
               saved: true,
             }
           : pickupItem,
@@ -471,6 +490,7 @@ export default function SupplierRunForm({
             usesReturnNotes(item.materialUse)
               ? item.returnNotes?.trim() || ""
               : "",
+          easilyDamaged: Boolean(item.easilyDamaged),
           pickedUp: Boolean(item.pickedUp),
         };
       });
@@ -1025,6 +1045,12 @@ export default function SupplierRunForm({
                         {item.description}
                       </p>
 
+                      {item.easilyDamaged ? (
+                        <p className="mt-2 inline-flex rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-amber-800">
+                          Needs corners/protection
+                        </p>
+                      ) : null}
+
                       {item.internalReference ? (
                         <p className="mt-1 text-sm font-semibold text-slate-500">
                           SKU / Item # / SO#:{" "}
@@ -1128,7 +1154,7 @@ export default function SupplierRunForm({
                       </div>
                     </div>
 
-                    <div className="grid gap-3 lg:grid-cols-[180px_minmax(180px,0.55fr)_160px]">
+                    <div className="grid gap-3 lg:grid-cols-[180px_minmax(180px,0.55fr)]">
                       <div>
                         <label
                           htmlFor={`supplier-item-use-${item.id}`}
@@ -1185,15 +1211,35 @@ export default function SupplierRunForm({
                         />
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => saveItem(item.id)}
-                        disabled={isSubmitting}
-                        className="rounded-xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                      >
-                        Save Item
-                      </button>
                     </div>
+
+                    <label
+                      htmlFor={`supplier-item-easily-damaged-${item.id}`}
+                      className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3"
+                    >
+                      <span>
+                        <span className="block text-sm font-black text-slate-900">
+                          Easily damaged?
+                        </span>
+                        <span className="mt-0.5 block text-xs font-semibold text-amber-800">
+                          Driver will see needs corners/protection.
+                        </span>
+                      </span>
+
+                      <input
+                        id={`supplier-item-easily-damaged-${item.id}`}
+                        type="checkbox"
+                        checked={Boolean(item.easilyDamaged)}
+                        onChange={(event) =>
+                          updateItemEasilyDamaged(
+                            item.id,
+                            event.target.checked,
+                          )
+                        }
+                        disabled={isSubmitting}
+                        className="h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      />
+                    </label>
 
                     {usesReturnNotes(item.materialUse) ? (
                       <div>
@@ -1220,6 +1266,15 @@ export default function SupplierRunForm({
                         />
                       </div>
                     ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => saveItem(item.id)}
+                      disabled={isSubmitting}
+                      className="w-full rounded-xl bg-slate-900 px-5 py-3 font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    >
+                      Save Item
+                    </button>
                   </div>
                 )}
               </div>

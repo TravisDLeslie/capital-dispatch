@@ -595,6 +595,8 @@ export default function SupplierRunCard({
   const [editingOrderNumber, setEditingOrderNumber] = useState("");
   const [editingCustomerName, setEditingCustomerName] = useState("");
   const [editingReturnNotes, setEditingReturnNotes] = useState("");
+  const [editingEasilyDamaged, setEditingEasilyDamaged] =
+    useState(false);
   const [editError, setEditError] = useState("");
   const [photoError, setPhotoError] = useState("");
   const [processingPhotoItemId, setProcessingPhotoItemId] =
@@ -654,6 +656,7 @@ export default function SupplierRunCard({
     setEditingOrderNumber(item.orderNumber || "");
     setEditingCustomerName(item.customerName || "");
     setEditingReturnNotes(item.returnNotes || "");
+    setEditingEasilyDamaged(Boolean(item.easilyDamaged));
     setEditError("");
     setIsItemsOpen(true);
   }
@@ -667,6 +670,7 @@ export default function SupplierRunCard({
     setEditingOrderNumber("");
     setEditingCustomerName("");
     setEditingReturnNotes("");
+    setEditingEasilyDamaged(false);
     setEditError("");
   }
 
@@ -700,6 +704,7 @@ export default function SupplierRunCard({
         ? formatCustomerName(editingCustomerName)
         : undefined,
       usesReturnNotes(editingMaterialUse) ? editingReturnNotes.trim() : "",
+      editingEasilyDamaged,
     );
 
     cancelEditingItem();
@@ -991,6 +996,12 @@ export default function SupplierRunCard({
                         {item.description}
                       </span>
 
+                      {item.easilyDamaged ? (
+                        <span className="mt-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-amber-800">
+                          Needs corners/protection
+                        </span>
+                      ) : null}
+
                       {item.pickedUp && item.pickedUpAt ? (
                         <span className="mt-1 block text-xs font-bold text-emerald-700">
                           Picked up {formatTime(item.pickedUpAt)}
@@ -1268,6 +1279,31 @@ export default function SupplierRunCard({
                     ) : null}
                   </div>
 
+                  <label
+                    htmlFor={`supplier-item-easily-damaged-${supplierRun.id}-${item.id}`}
+                    className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5"
+                  >
+                    <span>
+                      <span className="block text-sm font-black text-slate-900">
+                        Easily damaged?
+                      </span>
+                      <span className="mt-0.5 block text-xs font-semibold text-amber-800">
+                        Driver will see needs corners/protection.
+                      </span>
+                    </span>
+
+                    <input
+                      id={`supplier-item-easily-damaged-${supplierRun.id}-${item.id}`}
+                      type="checkbox"
+                      checked={editingEasilyDamaged}
+                      onChange={(event) => {
+                        setEditingEasilyDamaged(event.target.checked);
+                        setEditError("");
+                      }}
+                      className="h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                    />
+                  </label>
+
                   {usesReturnNotes(editingMaterialUse) ? (
                     <div className="mt-3">
                       <label
@@ -1399,8 +1435,12 @@ export default function SupplierRunCard({
           role="dialog"
           aria-modal="true"
           aria-labelledby={`south-notes-title-${supplierRun.id}`}
+          onClick={() => setIsViewingNotes(false)}
         >
-          <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div
+            className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-4 border-b border-amber-100 bg-amber-50 px-5 py-4">
               <div className="min-w-0">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">
@@ -1439,6 +1479,14 @@ export default function SupplierRunCard({
               <p className="whitespace-pre-wrap text-base font-semibold leading-7 text-slate-800">
                 {supplierRun.notes}
               </p>
+
+              <button
+                type="button"
+                onClick={() => setIsViewingNotes(false)}
+                className="mt-5 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+              >
+                Got it
+              </button>
             </div>
           </div>
         </div>
