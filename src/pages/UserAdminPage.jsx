@@ -11,6 +11,7 @@ const roles = [
   { value: "south", label: "Dispatch" },
   { value: "delivery", label: "Delivery" },
   { value: "sales", label: "Sales" },
+  { value: "accounting", label: "Accounting" },
   { value: "admin", label: "Admin" },
   { value: "superAdmin", label: "Super Admin" },
 ];
@@ -68,9 +69,17 @@ const permissionGroups = [
       { id: "sales-orders", label: "Sales Orders" },
       { id: "customers-add", label: "Add Customer" },
       { id: "customers-view", label: "View Customers" },
-      { id: "customer-payment-links", label: "Payment Links" },
+      { id: "sales-tools", label: "Tools" },
       { id: "sales-converter", label: "Converter" },
-      { id: "sales-report", label: "Sales Pulse" },
+      { id: "stocking-handbook", label: "Stocking Handbook" },
+    ],
+  },
+  {
+    title: "Accounting",
+    permissions: [
+      { id: "accounting", label: "Accounting" },
+      { id: "accounting-customers", label: "Customer Statements" },
+      { id: "customer-payment-links", label: "Payment Links" },
     ],
   },
   {
@@ -81,6 +90,7 @@ const permissionGroups = [
       { id: "email-list", label: "Email List" },
       { id: "delivery-settings", label: "Delivery Settings" },
       { id: "vendor-settings", label: "Vendor Settings" },
+      { id: "sales-report", label: "Sales Pulse" },
     ],
   },
 ];
@@ -139,7 +149,15 @@ const rolePermissionPresets = {
     "sales-orders",
     "customers-add",
     "customers-view",
+    "sales-tools",
     "sales-converter",
+    "stocking-handbook",
+  ],
+  accounting: [
+    "dashboard",
+    "accounting",
+    "accounting-customers",
+    "customer-payment-links",
   ],
   admin: allPermissionIds.filter(
     (permissionId) =>

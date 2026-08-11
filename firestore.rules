@@ -88,6 +88,16 @@ service cloud.firestore {
       );
     }
 
+    function isStockingHandbookViewer() {
+      return isAdmin() || (
+        isApproved() &&
+        (
+          role() == "sales" ||
+          hasAnyPermission(["sales", "stocking-handbook"])
+        )
+      );
+    }
+
     function isDriverFor(driverName) {
       return isApproved() &&
         role() == "driver" &&
@@ -168,6 +178,11 @@ service cloud.firestore {
     match /salesMonthlyReports/{salesReportId} {
       allow read: if isSalesReportViewer();
       allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /stockingHandbookItems/{stockingHandbookItemId} {
+      allow read: if isStockingHandbookViewer();
+      allow create, update, delete: if isAdmin();
     }
   }
 }

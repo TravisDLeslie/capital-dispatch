@@ -201,6 +201,8 @@ export default function CustomersPage({
   customers,
   customerStatements,
   canManageCustomerStatements = false,
+  parentLabel = "Sales",
+  parentPage = "sales",
   onAddCustomer,
   onUpdateCustomer,
   onSaveCustomerStatement,
@@ -629,7 +631,7 @@ export default function CustomersPage({
     <PageContainer className={mode === "view" ? "max-w-7xl" : ""}>
       <Breadcrumbs
         items={[
-          { label: "Sales", onClick: () => onPageChange?.("sales") },
+          { label: parentLabel, onClick: () => onPageChange?.(parentPage) },
           {
             label: editingCustomerId
               ? "Edit Customer"
@@ -644,7 +646,7 @@ export default function CustomersPage({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
-              Sales
+              {parentLabel}
             </p>
 
             <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
@@ -1269,19 +1271,21 @@ export default function CustomersPage({
                           <span className="truncate text-slate-400">
                             {customer.city || customer.email || "No city listed"}
                           </span>
-                          <span
-                            className={
-                              latestStatement
-                                ? "text-[#FC2C38]"
-                                : "text-slate-300"
-                            }
-                          >
-                            {latestStatement
-                              ? formatCurrencyFromCents(
-                                  latestStatement.balanceDueCents,
-                                )
-                              : "No balance"}
-                          </span>
+                          {canManageCustomerStatements ? (
+                            <span
+                              className={
+                                latestStatement
+                                  ? "text-[#FC2C38]"
+                                  : "text-slate-300"
+                              }
+                            >
+                              {latestStatement
+                                ? formatCurrencyFromCents(
+                                    latestStatement.balanceDueCents,
+                                  )
+                                : "No balance"}
+                            </span>
+                          ) : null}
                         </span>
                       </button>
                     );
@@ -1416,6 +1420,7 @@ export default function CustomersPage({
                     </div>
                   </div>
 
+                  {canManageCustomerStatements ? (
                   <div className="mt-6 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm sm:p-6">
                     <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex items-start gap-4">
@@ -1642,6 +1647,7 @@ export default function CustomersPage({
                       </div>
                     ) : null}
                   </div>
+                  ) : null}
 
                     <div className="mt-4">
                       <button

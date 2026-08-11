@@ -197,7 +197,7 @@ export default function CustomerPaymentLinksPage({
     <PageContainer>
       <Breadcrumbs
         items={[
-          { label: "Sales", onClick: () => onPageChange?.("sales") },
+          { label: "Accounting", onClick: () => onPageChange?.("accounting") },
           { label: "Payment Links" },
         ]}
       />

@@ -315,10 +315,20 @@ export default function SupplierRunForm({
   }
 
   function addItem() {
-    setItems((currentItems) => [
-      ...currentItems,
-      createEmptyPickupItem(),
-    ]);
+    setItems((currentItems) => {
+      const defaultOrderNumber =
+        currentItems.find(
+          (item) => usesOrderNumber(item.materialUse) && item.orderNumber,
+        )?.orderNumber || "";
+
+      return [
+        ...currentItems,
+        {
+          ...createEmptyPickupItem(),
+          orderNumber: defaultOrderNumber,
+        },
+      ];
+    });
 
     clearError();
   }

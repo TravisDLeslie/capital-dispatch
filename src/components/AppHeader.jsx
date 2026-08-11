@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ChevronDown,
+  DollarSign,
   LogOut,
   LayoutDashboard,
   Package,
@@ -39,6 +40,11 @@ const navigationItems = [
     group: "Sales",
     id: "sales",
     label: "Sales",
+  },
+  {
+    group: "Accounting",
+    id: "accounting",
+    label: "Accounting",
   },
   {
     group: "Admin",
@@ -96,18 +102,30 @@ function getCurrentPageLabel(currentPage) {
 
   if (
     String(currentPage || "").startsWith("customers-") ||
-    currentPage === "customer-payment-links" ||
     currentPage === "sales-orders" ||
+    currentPage === "sales-tools" ||
     currentPage === "sales-converter" ||
-    currentPage === "sales-report"
+    currentPage === "stocking-handbook"
   ) {
     return "Sales";
   }
 
   if (
-    ["user-admin", "email-list", "delivery-settings", "vendor-settings"].includes(
-      currentPage,
-    )
+    currentPage === "accounting" ||
+    currentPage === "accounting-customers" ||
+    currentPage === "customer-payment-links"
+  ) {
+    return "Accounting";
+  }
+
+  if (
+    [
+      "user-admin",
+      "email-list",
+      "delivery-settings",
+      "vendor-settings",
+      "sales-report",
+    ].includes(currentPage)
   ) {
     return "Admin";
   }
@@ -155,19 +173,31 @@ function getCurrentPageGroup(currentPage) {
   if (
     currentPage === "sales" ||
     String(currentPage || "").startsWith("customers-") ||
-    currentPage === "customer-payment-links" ||
     currentPage === "sales-orders" ||
+    currentPage === "sales-tools" ||
     currentPage === "sales-converter" ||
-    currentPage === "sales-report"
+    currentPage === "stocking-handbook"
   ) {
     return "Sales";
   }
 
   if (
+    currentPage === "accounting" ||
+    currentPage === "accounting-customers" ||
+    currentPage === "customer-payment-links"
+  ) {
+    return "Accounting";
+  }
+
+  if (
     currentPage === "admin" ||
-    ["user-admin", "email-list", "delivery-settings", "vendor-settings"].includes(
-      currentPage,
-    )
+    [
+      "user-admin",
+      "email-list",
+      "delivery-settings",
+      "vendor-settings",
+      "sales-report",
+    ].includes(currentPage)
   ) {
     return "Admin";
   }
@@ -194,6 +224,10 @@ function getNavGroupIcon(group) {
 
   if (group === "Sales") {
     return UsersRound;
+  }
+
+  if (group === "Accounting") {
+    return DollarSign;
   }
 
   if (group === "Admin") {
@@ -242,6 +276,7 @@ export default function AppHeader({
     South: false,
     Deliveries: false,
     Sales: false,
+    Accounting: false,
     Admin: false,
     Fleet: false,
   });
@@ -270,11 +305,12 @@ export default function AppHeader({
       South: false,
       Deliveries: false,
       Sales: false,
+      Accounting: false,
       Admin: false,
       Fleet: false,
       [currentGroup]: true,
     });
-  }, [currentPage]);
+  }, [allowedPageIds, currentPage]);
 
   function handlePageChange(pageId) {
     onPageChange(pageId);
@@ -291,6 +327,7 @@ export default function AppHeader({
         South: false,
         Deliveries: false,
         Sales: false,
+        Accounting: false,
         Admin: false,
         Fleet: false,
         [group]: nextIsOpen,
@@ -356,8 +393,80 @@ export default function AppHeader({
     ].filter(Boolean);
   }
 
+  function getSalesDropdownLinks() {
+    const pageAllowed = (pageId) =>
+      !allowedPageIds || allowedPageIds.includes(pageId);
+
+    return [
+      pageAllowed("sales-orders")
+        ? {
+            id: "sales-orders",
+            label: "Orders",
+            pageId: "sales-orders",
+          }
+        : null,
+      pageAllowed("customers-view")
+        ? {
+            id: "sales-customers",
+            label: "Customers",
+            pageId: "customers-view",
+          }
+        : null,
+      pageAllowed("sales-tools") ||
+      pageAllowed("stocking-handbook") ||
+      pageAllowed("sales-converter")
+        ? {
+            id: "sales-tools",
+            label: "Tools",
+            pageId: pageAllowed("sales-tools")
+              ? "sales-tools"
+              : pageAllowed("stocking-handbook")
+                ? "stocking-handbook"
+                : "sales-converter",
+          }
+        : null,
+    ]
+      .filter(Boolean)
+      .map((link) => ({
+        ...link,
+        isActive:
+          currentPage === link.pageId ||
+          (link.id === "sales-tools" &&
+            ["sales-tools", "stocking-handbook", "sales-converter"].includes(
+              currentPage,
+            )),
+      }));
+  }
+
+  function getAccountingDropdownLinks() {
+    const pageAllowed = (pageId) =>
+      !allowedPageIds || allowedPageIds.includes(pageId);
+
+    return [
+      pageAllowed("accounting-customers")
+        ? {
+            id: "accounting-customers",
+            label: "Customers",
+            pageId: "accounting-customers",
+          }
+        : null,
+      pageAllowed("customer-payment-links")
+        ? {
+            id: "accounting-payment-links",
+            label: "Payment Links",
+            pageId: "customer-payment-links",
+          }
+        : null,
+    ]
+      .filter(Boolean)
+      .map((link) => ({
+        ...link,
+        isActive: currentPage === link.pageId,
+      }));
+  }
+
   function renderNavigation(isMobile = false) {
-    return ["Dashboard", "Receiving", "South", "Deliveries", "Sales", "Admin", "Fleet"].map((group) => {
+    return ["Dashboard", "Receiving", "South", "Deliveries", "Sales", "Accounting", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||
@@ -382,13 +491,22 @@ export default function AppHeader({
               String(pageId).startsWith("deliveries-"),
             )) ||
           (item.id === "sales" &&
+            allowedPageIds.includes("sales") &&
             allowedPageIds.some(
               (pageId) =>
                 String(pageId).startsWith("customers-") ||
-                pageId === "customer-payment-links" ||
                 pageId === "sales-orders" ||
+                pageId === "sales-tools" ||
                 pageId === "sales-converter" ||
-                pageId === "sales-report",
+                pageId === "stocking-handbook",
+            )) ||
+          (item.id === "accounting" &&
+            allowedPageIds.some((pageId) =>
+              [
+                "accounting",
+                "accounting-customers",
+                "customer-payment-links",
+              ].includes(pageId),
             )) ||
           (item.id === "admin" &&
             allowedPageIds.some((pageId) =>
@@ -397,6 +515,7 @@ export default function AppHeader({
                 "email-list",
                 "delivery-settings",
                 "vendor-settings",
+                "sales-report",
               ].includes(pageId),
             )) ||
           (item.id === "fleet" &&
@@ -409,17 +528,29 @@ export default function AppHeader({
       const isGroupOpen = openNavGroups[group];
       const NavGroupIcon = getNavGroupIcon(group);
       const hasGroupItems = groupItems.length > 0;
-      const groupIsActive = getCurrentPageGroup(currentPage) === group;
+      const currentPageGroup = getCurrentPageGroup(currentPage);
+      const groupIsActive = currentPageGroup === group;
       const southDropdownLinks =
         group === "South" ? getSouthDropdownLinks() : [];
+      const salesDropdownLinks =
+        group === "Sales" ? getSalesDropdownLinks() : [];
+      const accountingDropdownLinks =
+        group === "Accounting" ? getAccountingDropdownLinks() : [];
       const shouldShowSouthDropdown =
         group === "South" && isGroupOpen && southDropdownLinks.length > 0;
+      const shouldShowSalesDropdown =
+        group === "Sales" && isGroupOpen && salesDropdownLinks.length > 0;
+      const shouldShowAccountingDropdown =
+        group === "Accounting" &&
+        isGroupOpen &&
+        accountingDropdownLinks.length > 0;
       const isSinglePageGroup = [
         "Dashboard",
         "Receiving",
         "South",
         "Deliveries",
         "Sales",
+        "Accounting",
         "Admin",
         "Fleet",
       ].includes(group);
@@ -447,7 +578,10 @@ export default function AppHeader({
               }}
               className="flex min-w-0 flex-1 items-center gap-4 rounded-l-xl px-4 py-4 text-left text-lg font-black"
               aria-expanded={
-                shouldShowSouthDropdown || !isSinglePageGroup
+                shouldShowSouthDropdown ||
+                shouldShowSalesDropdown ||
+                shouldShowAccountingDropdown ||
+                !isSinglePageGroup
                   ? isGroupOpen
                   : undefined
               }
@@ -462,12 +596,16 @@ export default function AppHeader({
               </span>
             </button>
 
-            {group === "South" && southDropdownLinks.length > 0 ? (
+            {(group === "South" && southDropdownLinks.length > 0) ||
+            (group === "Sales" && salesDropdownLinks.length > 0) ||
+            (group === "Accounting" && accountingDropdownLinks.length > 0) ? (
               <button
                 type="button"
                 onClick={() => toggleNavGroup(group)}
                 className="flex h-full min-h-[56px] w-12 shrink-0 items-center justify-center rounded-r-xl text-slate-400 transition hover:text-[#FC2C38]"
-                aria-label={`${isGroupOpen ? "Collapse" : "Open"} ${southGroupLabel} menu`}
+                aria-label={`${isGroupOpen ? "Collapse" : "Open"} ${
+                  group === "South" ? southGroupLabel : group
+                } menu`}
                 aria-expanded={isGroupOpen}
               >
                 <ChevronDown
@@ -494,6 +632,60 @@ export default function AppHeader({
           {shouldShowSouthDropdown ? (
             <div className="mt-3 space-y-2 pl-5">
               {southDropdownLinks.map((link) => (
+                <button
+                  key={link.id}
+                  type="button"
+                  onClick={() => handlePageChange(link.pageId)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
+                    link.isActive
+                      ? "bg-slate-950 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      link.isActive ? "bg-white" : "bg-slate-300"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1 truncate">
+                    {link.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {shouldShowSalesDropdown ? (
+            <div className="mt-3 space-y-2 pl-5">
+              {salesDropdownLinks.map((link) => (
+                <button
+                  key={link.id}
+                  type="button"
+                  onClick={() => handlePageChange(link.pageId)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
+                    link.isActive
+                      ? "bg-slate-950 text-white shadow-sm"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      link.isActive ? "bg-white" : "bg-slate-300"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1 truncate">
+                    {link.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {shouldShowAccountingDropdown ? (
+            <div className="mt-3 space-y-2 pl-5">
+              {accountingDropdownLinks.map((link) => (
                 <button
                   key={link.id}
                   type="button"

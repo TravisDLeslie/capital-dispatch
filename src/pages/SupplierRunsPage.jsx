@@ -67,6 +67,25 @@ function getDisplayVendorName(vendor, vendorDisplayNameMap = {}) {
   );
 }
 
+function formatCreatedAt(value) {
+  if (!value) {
+    return "";
+  }
+
+  const createdAtDate = new Date(value);
+
+  if (Number.isNaN(createdAtDate.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(createdAtDate);
+}
+
 function getVendorRouteIndex(vendor, vendorRouteOrder = southVendorRouteOrder) {
   const normalizedVendor = normalizeVendorName(vendor);
   const routeIndex = vendorRouteOrder.findIndex(
@@ -1332,6 +1351,7 @@ export default function SupplierRunsPage({
                   : 0;
                 const runCustomerName =
                   getSupplierRunCustomerName(supplierRun);
+                const createdAtLabel = formatCreatedAt(supplierRun.createdAt);
 
                 return (
                   <article
@@ -1362,6 +1382,11 @@ export default function SupplierRunsPage({
                         </p>
 
                         <div className="mt-3 flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.12em]">
+                          {createdAtLabel ? (
+                            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700 ring-1 ring-amber-100">
+                              Entered {createdAtLabel}
+                            </span>
+                          ) : null}
                           {supplierRun.orderedBy ? (
                             <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
                               Ordered by {supplierRun.orderedBy}

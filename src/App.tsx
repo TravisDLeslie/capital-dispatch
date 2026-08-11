@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   DollarSign,
   History,
+  BookOpen,
   Mail,
   MailCheck,
   Package,
@@ -39,6 +40,7 @@ import SearchPage from "./pages/SearchPage";
 import SalesConverterPage from "./pages/SalesConverterPage";
 import SalesOrdersPage from "./pages/SalesOrdersPage";
 import SalesReportPage from "./pages/SalesReportPage";
+import StockingHandbookPage from "./pages/StockingHandbookPage";
 import SouthHubPage from "./pages/SouthHubPage";
 import SouthOverviewPage from "./pages/SouthOverviewPage";
 import SupplierRunsPage from "./pages/SupplierRunsPage";
@@ -109,6 +111,11 @@ import {
   saveSalesReport,
   subscribeToSalesReports,
 } from "./utils/salesReportStorage";
+import {
+  deleteStockingHandbookItem,
+  saveStockingHandbookItem,
+  subscribeToStockingHandbookItems,
+} from "./utils/stockingHandbookStorage";
 import { subscribeToBouncieVehicleSettings } from "./utils/bouncieVehicleStorage";
 import {
   defaultDeliveryScheduleSettings,
@@ -289,6 +296,25 @@ type SalesOrder = {
   poNumbers?: string[];
   status?: string;
   notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
+type StockingHandbookItem = {
+  id: string;
+  category?: string;
+  name?: string;
+  sku?: string;
+  grade?: string;
+  nominalDimension?: string;
+  actualDimension?: string;
+  unitSize?: string;
+  stockingLengths?: string;
+  notes?: string;
+  keywords?: string;
+  source?: string;
+  archived?: boolean;
   createdAt?: string;
   updatedAt?: string;
   [key: string]: unknown;
@@ -483,15 +509,19 @@ function getAllowedPageIdsForRole(role: string) {
       "sales-orders",
       "customers-add",
       "customers-view",
-      "customer-payment-links",
+      "sales-tools",
       "sales-converter",
-      "sales-report",
+      "stocking-handbook",
+      "accounting",
+      "accounting-customers",
+      "customer-payment-links",
       "fleet",
       "admin",
       "user-admin",
       "email-list",
       "delivery-settings",
       "vendor-settings",
+      "sales-report",
       "bouncie",
     ];
   }
@@ -528,13 +558,17 @@ function getAllowedPageIdsForRole(role: string) {
       "sales-orders",
       "customers-add",
       "customers-view",
-      "customer-payment-links",
+      "sales-tools",
       "sales-converter",
-      "sales-report",
+      "stocking-handbook",
+      "accounting",
+      "accounting-customers",
+      "customer-payment-links",
       "admin",
       "email-list",
       "delivery-settings",
       "vendor-settings",
+      "sales-report",
     ];
   }
 
@@ -589,8 +623,18 @@ function getAllowedPageIdsForRole(role: string) {
       "sales-orders",
       "customers-add",
       "customers-view",
-      "customer-payment-links",
+      "sales-tools",
       "sales-converter",
+      "stocking-handbook",
+    ];
+  }
+
+  if (role === "accounting") {
+    return [
+      "dashboard",
+      "accounting",
+      "accounting-customers",
+      "customer-payment-links",
     ];
   }
 
@@ -919,6 +963,9 @@ export default function App() {
     CustomerStatement[]
   >([]);
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
+  const [stockingHandbookItems, setStockingHandbookItems] = useState<
+    StockingHandbookItem[]
+  >([]);
   const [emailList, setEmailList] = useState<EmailListEntry[]>([]);
   const [salesReports, setSalesReports] = useState<SalesReport[]>([]);
   const [vehicleSettings, setVehicleSettings] = useState<VehicleSetting[]>([]);
@@ -1123,10 +1170,15 @@ export default function App() {
       "sales-orders",
       "customers-add",
       "customers-view",
-      "customer-payment-links",
+      "sales-tools",
       "sales-converter",
-      "sales-report",
+      "stocking-handbook",
     ].includes(pageId),
+  );
+  const canReadAccounting = effectiveAllowedPageIds.some((pageId) =>
+    ["accounting", "accounting-customers", "customer-payment-links"].includes(
+      pageId,
+    ),
   );
   const canReadAdmin = effectiveAllowedPageIds.some((pageId) =>
     [
@@ -1135,6 +1187,7 @@ export default function App() {
       "email-list",
       "delivery-settings",
       "vendor-settings",
+      "sales-report",
     ].includes(pageId),
   );
   const canReadFleet = effectiveAllowedPageIds.some((pageId) =>
@@ -1143,11 +1196,14 @@ export default function App() {
   const canReadEmailList = effectiveAllowedPageIds.includes("email-list");
   const canReadSalesReport = effectiveAllowedPageIds.includes("sales-report");
   const canReadSalesOrders = effectiveAllowedPageIds.includes("sales-orders");
-  const canReadCustomerPaymentLinks = effectiveAllowedPageIds.includes(
-    "customer-payment-links",
-  );
-  const canReadCustomers = canReadSales || canReadReceiving || canReadEmailList;
-  const canManageCustomerStatements = ["superAdmin", "admin"].includes(
+  const canReadCustomerPaymentLinks =
+    canReadAccounting &&
+    effectiveAllowedPageIds.includes("customer-payment-links");
+  const canReadAccountingCustomers =
+    canReadAccounting && effectiveAllowedPageIds.includes("accounting-customers");
+  const canReadCustomers =
+    canReadSales || canReadReceiving || canReadEmailList || canReadAccounting;
+  const canManageCustomerStatements = ["superAdmin", "admin", "accounting"].includes(
     effectiveUserRole,
   );
   const visibleSupplierRuns =
@@ -1554,6 +1610,7 @@ export default function App() {
       setCustomerPaymentLinks([]);
       setCustomerStatements([]);
       setSalesOrders([]);
+      setStockingHandbookItems([]);
       setEmailList([]);
       setSalesReports([]);
       setIsLoading(false);
@@ -1572,6 +1629,7 @@ export default function App() {
     let unsubscribeFromCustomerPaymentLinks = () => {};
     let unsubscribeFromCustomerStatements = () => {};
     let unsubscribeFromSalesOrders = () => {};
+    let unsubscribeFromStockingHandbookItems = () => {};
     let unsubscribeFromEmailList = () => {};
     let unsubscribeFromSalesReports = () => {};
 
@@ -1753,7 +1811,7 @@ export default function App() {
         setCustomerPaymentLinks([]);
       }
 
-      if (canReadSales) {
+      if (canManageCustomerStatements) {
         unsubscribeFromCustomerStatements = subscribeToCustomerStatements(
           (savedCustomerStatements: CustomerStatement[]) => {
             if (isMounted) {
@@ -1795,6 +1853,29 @@ export default function App() {
         );
       } else {
         setSalesOrders([]);
+      }
+
+      if (canReadSales) {
+        unsubscribeFromStockingHandbookItems =
+          subscribeToStockingHandbookItems(
+            (savedStockingHandbookItems: StockingHandbookItem[]) => {
+              if (isMounted) {
+                setStockingHandbookItems(savedStockingHandbookItems);
+                setSyncError("");
+                setIsLoading(false);
+              }
+            },
+            (error: Error) => {
+              console.error("Unable to sync stocking handbook items:", error);
+
+              if (isMounted) {
+                setSyncError(getFirebaseErrorMessage(error));
+                setIsLoading(false);
+              }
+            },
+          );
+      } else {
+        setStockingHandbookItems([]);
       }
 
       if (canReadEmailList) {
@@ -1963,7 +2044,7 @@ export default function App() {
         setCustomerPaymentLinks([]);
       }
 
-      if (canReadSales) {
+      if (canManageCustomerStatements) {
         subscribeToCustomerStatements(
           (savedCustomerStatements: CustomerStatement[]) => {
             if (isMounted) {
@@ -1993,6 +2074,22 @@ export default function App() {
         );
       } else {
         setSalesOrders([]);
+      }
+
+      if (canReadSales) {
+        subscribeToStockingHandbookItems(
+          (savedStockingHandbookItems: StockingHandbookItem[]) => {
+            if (isMounted) {
+              setStockingHandbookItems(savedStockingHandbookItems);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load stocking handbook items:", error);
+          },
+        );
+      } else {
+        setStockingHandbookItems([]);
       }
 
       if (canReadEmailList) {
@@ -2039,6 +2136,7 @@ export default function App() {
       unsubscribeFromCustomerPaymentLinks();
       unsubscribeFromCustomerStatements();
       unsubscribeFromSalesOrders();
+      unsubscribeFromStockingHandbookItems();
       unsubscribeFromEmailList();
       unsubscribeFromSalesReports();
     };
@@ -2049,6 +2147,7 @@ export default function App() {
     canReadSales,
     canReadSalesOrders,
     canReadSalesReport,
+    canManageCustomerStatements,
     currentUser,
     canReadDeliveries,
     canReadReceiving,
@@ -2119,6 +2218,20 @@ export default function App() {
   async function handleSaveSalesOrder(salesOrder: SalesOrder) {
     const updatedSalesOrders = await saveSalesOrder(salesOrder);
     setSalesOrders(updatedSalesOrders);
+    setSyncError("");
+  }
+
+  async function handleSaveStockingHandbookItem(
+    stockingHandbookItem: StockingHandbookItem,
+  ) {
+    const updatedItems = await saveStockingHandbookItem(stockingHandbookItem);
+    setStockingHandbookItems(updatedItems);
+    setSyncError("");
+  }
+
+  async function handleDeleteStockingHandbookItem(itemId: string) {
+    const updatedItems = await deleteStockingHandbookItem(itemId);
+    setStockingHandbookItems(updatedItems);
     setSyncError("");
   }
 
@@ -2843,8 +2956,10 @@ export default function App() {
             {
               icon: Calculator,
               label: "Tools",
-              value: dashboardAllowedPageIds.includes("sales-converter") ? 1 : 0,
-              note: "Pricing converter",
+              value:
+                (dashboardAllowedPageIds.includes("sales-converter") ? 1 : 0) +
+                (dashboardAllowedPageIds.includes("stocking-handbook") ? 1 : 0),
+              note: "Pricing and stock",
             },
           ]}
           actions={[
@@ -2859,15 +2974,20 @@ export default function App() {
                   onClick: () => setCurrentPage("customers-view"),
                 }
               : null,
-            dashboardAllowedPageIds.includes("sales-converter")
+            dashboardAllowedPageIds.includes("sales-tools") ||
+            dashboardAllowedPageIds.includes("sales-converter") ||
+            dashboardAllowedPageIds.includes("stocking-handbook")
               ? {
                   icon: Calculator,
-                  label: "Pricing",
-                  title: "Converter",
-                  description: "Convert sheets, boards, and item pricing.",
-                  metric: "$",
-                  metricLabel: "Margin",
-                  onClick: () => setCurrentPage("sales-converter"),
+                  label: "Tools",
+                  title: "Sales Tools",
+                  description: "Open the stocking handbook and pricing converter.",
+                  metric:
+                    (dashboardAllowedPageIds.includes("stocking-handbook") ? 1 : 0) +
+                    (dashboardAllowedPageIds.includes("sales-converter") ? 1 : 0),
+                  metricLabel: "Tools",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("sales-tools"),
                 }
               : null,
           ]}
@@ -3143,7 +3263,7 @@ export default function App() {
       return (
         <SectionHubPage
           title="Sales"
-          description="Manage customers, build email lists, and use quick pricing tools."
+          description="Customer records, orders, and sales tools."
           icon={UsersRound}
           primaryAction={
             effectiveAllowedPageIds.includes("sales-orders")
@@ -3170,38 +3290,11 @@ export default function App() {
             {
               icon: Calculator,
               label: "Tools",
-              value: effectiveAllowedPageIds.includes("sales-converter") ? 1 : 0,
-              note: "Pricing converter",
+              value:
+                (effectiveAllowedPageIds.includes("sales-converter") ? 1 : 0) +
+                (effectiveAllowedPageIds.includes("stocking-handbook") ? 1 : 0),
+              note: "Converter and handbook",
             },
-            ...(canReadCustomerPaymentLinks
-              ? [
-                  {
-                    icon: MailCheck,
-                    label: "Payment Links",
-                    value: customers.filter(
-                      (customer) => customer.needsPaymentLink,
-                    ).length,
-                    note: "Monthly customers",
-                  },
-                ]
-              : []),
-            ...(canReadSalesReport
-              ? [
-                  {
-                    icon: DollarSign,
-                    label: "Sales Month",
-                    value:
-                      currentSalesTotal > 0
-                        ? `$${Math.round(currentSalesTotal).toLocaleString()}`
-                        : "$0",
-                    note: `Cash/Card $${Math.round(
-                      Number(currentSalesReport?.cashCardSales) || 0,
-                    ).toLocaleString()} · Charge $${Math.round(
-                      Number(currentSalesReport?.chargeSales) || 0,
-                    ).toLocaleString()}`,
-                  },
-                ]
-              : []),
           ]}
           actions={[
             effectiveAllowedPageIds.includes("customers-view")
@@ -3227,6 +3320,60 @@ export default function App() {
                   onClick: () => setCurrentPage("sales-orders"),
                 }
               : null,
+            effectiveAllowedPageIds.includes("sales-tools") ||
+            effectiveAllowedPageIds.includes("sales-converter") ||
+            effectiveAllowedPageIds.includes("stocking-handbook")
+              ? {
+                  icon: Calculator,
+                  label: "Tools",
+                  title: "Sales Tools",
+                  description: "Open the stocking handbook and pricing converter.",
+                  metric:
+                    (effectiveAllowedPageIds.includes("stocking-handbook") ? 1 : 0) +
+                    (effectiveAllowedPageIds.includes("sales-converter") ? 1 : 0),
+                  metricLabel: "Tools",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("sales-tools"),
+                }
+              : null,
+          ].filter(Boolean)}
+        />
+      );
+    }
+
+    if (currentPage === "sales-tools" && canReadSales) {
+      return (
+        <SectionHubPage
+          title="Sales Tools"
+          description="Fast product reference and pricing tools for the sales counter."
+          icon={Calculator}
+          stats={[
+            {
+              icon: BookOpen,
+              label: "Handbook",
+              value: stockingHandbookItems.length,
+              note: "Stock items",
+            },
+            {
+              icon: Calculator,
+              label: "Converter",
+              value: "$",
+              note: "Margin targets",
+            },
+          ]}
+          actions={[
+            effectiveAllowedPageIds.includes("stocking-handbook")
+              ? {
+                  icon: BookOpen,
+                  label: "Stock Items",
+                  title: "Stocking Handbook",
+                  description: "Search stocked items, lengths, grades, unit sizes, and notes.",
+                  metric: stockingHandbookItems.length,
+                  metricLabel: "Items",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("stocking-handbook"),
+                }
+              : null,
             effectiveAllowedPageIds.includes("sales-converter")
               ? {
                   icon: Calculator,
@@ -3235,7 +3382,49 @@ export default function App() {
                   description: "Convert panels, boards, and item pricing with margin targets.",
                   metric: "$",
                   metricLabel: "Margin",
+                  tone: "marketing",
                   onClick: () => setCurrentPage("sales-converter"),
+                }
+              : null,
+          ].filter(Boolean)}
+        />
+      );
+    }
+
+    if (currentPage === "accounting" && canReadAccounting) {
+      return (
+        <SectionHubPage
+          title="Accounting"
+          description="Payment link follow-up and account collection tools."
+          icon={DollarSign}
+          stats={[
+            {
+              icon: UsersRound,
+              label: "Customer Statements",
+              value: customerStatements.length,
+              note: "Saved balances",
+            },
+            {
+              icon: MailCheck,
+              label: "Payment Links",
+              value: customerPaymentLinks.filter(
+                (paymentLink) =>
+                  paymentLink.month === new Date().toISOString().slice(0, 7),
+              ).length,
+              note: "This month",
+            },
+          ]}
+          actions={[
+            canReadAccountingCustomers
+              ? {
+                  icon: UsersRound,
+                  label: "Statements",
+                  title: "Customer Statements",
+                  description: "View customers with statement balances and monthly history.",
+                  metric: customerStatements.length,
+                  metricLabel: "Balances",
+                  tone: "schedule",
+                  onClick: () => setCurrentPage("accounting-customers"),
                 }
               : null,
             canReadCustomerPaymentLinks
@@ -3251,21 +3440,6 @@ export default function App() {
                   metricLabel: "This Month",
                   tone: "dispatch",
                   onClick: () => setCurrentPage("customer-payment-links"),
-                }
-              : null,
-            canReadSalesReport
-              ? {
-                  icon: DollarSign,
-                  label: "Admin Pulse",
-                  title: "Sales Pulse",
-                  description: "Monthly cash/card sales, charge sales, and top spenders.",
-                  metric:
-                    currentSalesTotal > 0
-                      ? `$${Math.round(currentSalesTotal).toLocaleString()}`
-                      : "$0",
-                  metricLabel: "Month",
-                  tone: "marketing",
-                  onClick: () => setCurrentPage("sales-report"),
                 }
               : null,
           ].filter(Boolean)}
@@ -3306,6 +3480,19 @@ export default function App() {
               value: activeVendors.length,
               note: "Suppliers",
             },
+            ...(canReadSalesReport
+              ? [
+                  {
+                    icon: DollarSign,
+                    label: "Sales Pulse",
+                    value:
+                      currentSalesTotal > 0
+                        ? `$${Math.round(currentSalesTotal).toLocaleString()}`
+                        : "$0",
+                    note: "This month",
+                  },
+                ]
+              : []),
           ]}
           actions={[
             effectiveAllowedPageIds.includes("user-admin")
@@ -3356,6 +3543,21 @@ export default function App() {
                   onClick: () => setCurrentPage("vendor-settings"),
                 }
               : null,
+            canReadSalesReport
+              ? {
+                  icon: DollarSign,
+                  label: "Reports",
+                  title: "Sales Pulse",
+                  description: "Monthly cash/card sales, charge sales, and top spenders.",
+                  metric:
+                    currentSalesTotal > 0
+                      ? `$${Math.round(currentSalesTotal).toLocaleString()}`
+                      : "$0",
+                  metricLabel: "Month",
+                  tone: "marketing",
+                  onClick: () => setCurrentPage("sales-report"),
+                }
+              : null,
           ].filter(Boolean)}
         />
       );
@@ -3394,7 +3596,28 @@ export default function App() {
     }
 
     if (!effectiveAllowedPageIds.includes(currentPage)) {
-      return null;
+      return (
+        <SectionHubPage
+          title="Dashboard"
+          description="That page is not available for this login. Choose a section below."
+          icon={Package}
+          stats={[]}
+          actions={[
+            effectiveAllowedPageIds.includes("dashboard")
+              ? {
+                  icon: Package,
+                  label: "Home",
+                  title: "Open Dashboard",
+                  description: "Return to your main dashboard.",
+                  metric: "",
+                  metricLabel: "Open",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("dashboard"),
+                }
+              : null,
+          ].filter(Boolean)}
+        />
+      );
     }
 
     switch (currentPage) {
@@ -3775,8 +3998,10 @@ export default function App() {
           <CustomersPage
             mode="add"
             customers={customers}
-            customerStatements={customerStatements}
-            canManageCustomerStatements={canManageCustomerStatements}
+            customerStatements={[]}
+            canManageCustomerStatements={false}
+            parentLabel="Sales"
+            parentPage="sales"
             onAddCustomer={handleAddCustomer}
             onUpdateCustomer={handleUpdateCustomer}
             onSaveCustomerStatement={handleSaveCustomerStatement}
@@ -3789,8 +4014,28 @@ export default function App() {
           <CustomersPage
             mode="view"
             customers={customers}
-            customerStatements={customerStatements}
+            customerStatements={[]}
+            canManageCustomerStatements={false}
+            parentLabel="Sales"
+            parentPage="sales"
+            onAddCustomer={handleAddCustomer}
+            onUpdateCustomer={handleUpdateCustomer}
+            onSaveCustomerStatement={handleSaveCustomerStatement}
+            onPageChange={setCurrentPage}
+          />
+        );
+
+      case "accounting-customers":
+        return (
+          <CustomersPage
+            mode="view"
+            customers={customers}
+            customerStatements={
+              canManageCustomerStatements ? customerStatements : []
+            }
             canManageCustomerStatements={canManageCustomerStatements}
+            parentLabel="Accounting"
+            parentPage="accounting"
             onAddCustomer={handleAddCustomer}
             onUpdateCustomer={handleUpdateCustomer}
             onSaveCustomerStatement={handleSaveCustomerStatement}
@@ -3825,6 +4070,18 @@ export default function App() {
 
       case "sales-converter":
         return <SalesConverterPage onPageChange={setCurrentPage} />;
+
+      case "stocking-handbook":
+        return canReadSales ? (
+          <StockingHandbookPage
+            items={stockingHandbookItems}
+            canManage={["superAdmin", "admin"].includes(effectiveUserRole)}
+            currentUser={currentUserCreator}
+            onSaveItem={handleSaveStockingHandbookItem}
+            onDeleteItem={handleDeleteStockingHandbookItem}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
 
       case "sales-report":
         return canReadSalesReport ? (

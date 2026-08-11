@@ -8,19 +8,10 @@ import {
   Route,
   Search,
   Truck,
-  UsersRound,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import PageContainer from "../components/PageContainer";
 import { formatCustomerName } from "../utils/textFormatters";
-
-function formatDashboardCurrency(value) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(Number(value) || 0);
-}
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase();
@@ -444,7 +435,7 @@ export default function DashboardPage({
     {
       id: "sales",
       title: "Sales",
-      description: "Customers, pulse, and tools.",
+      description: "Customers, orders, and tools.",
       icon: DollarSign,
       tone: "bg-rose-50 text-rose-700 border-rose-100 hover:border-rose-200 hover:bg-rose-100/70",
     },
@@ -713,17 +704,6 @@ export default function DashboardPage({
           }
         />
 
-        <HeartbeatCard
-          icon={UsersRound}
-          title="Sales"
-          description="Current month cash/card and charge sales."
-          value={formatDashboardCurrency(operations.salesMonthTotal)}
-          note={`Cash/Card ${formatDashboardCurrency(
-            operations.cashCardSales,
-          )} · Charge ${formatDashboardCurrency(operations.chargeSales)}`}
-          tone="marketing"
-          onClick={() => onPageChange?.("sales")}
-        />
       </section>
 
     </PageContainer>
