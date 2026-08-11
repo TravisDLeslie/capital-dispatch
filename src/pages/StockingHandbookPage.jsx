@@ -68,12 +68,42 @@ function getDefaultLengthItems(item) {
   return [];
 }
 
+function getLengthItemsFromStockingLengths(item) {
+  const stockingLengths = String(item.stockingLengths || "");
+  const matches = [...stockingLengths.matchAll(/(\d+(?:\.\d+)?)\s*(?:ft|')/gi)];
+  const seenLengths = new Set();
+
+  return matches
+    .map((match) => `${match[1]} ft`)
+    .filter((length) => {
+      if (seenLengths.has(length)) {
+        return false;
+      }
+
+      seenLengths.add(length);
+
+      return true;
+    })
+    .map((length) => ({
+      id: `${item.id || "stock"}-${normalizeSearch(length)}`,
+      length,
+      itemNumber: "",
+      notes: "",
+    }));
+}
+
 function getDisplayLengthItems(item) {
   if (Array.isArray(item.lengthItems) && item.lengthItems.length > 0) {
     return item.lengthItems;
   }
 
-  return getDefaultLengthItems(item);
+  const defaultLengthItems = getDefaultLengthItems(item);
+
+  if (defaultLengthItems.length > 0) {
+    return defaultLengthItems;
+  }
+
+  return getLengthItemsFromStockingLengths(item);
 }
 
 function getSearchText(item) {
@@ -788,17 +818,13 @@ export default function StockingHandbookPage({
                         >
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">
-                              View Item Numbers
+                              View Lengths / Item Numbers
                             </p>
                             <p className="mt-1 text-sm font-black text-slate-950">
-                              {lengthItems[0]?.length} = #
-                              {lengthItems[0]?.itemNumber}
-                              {lengthItems.length > 1 ? (
-                                <>
-                                  {" "}
-                                  • {lengthItems.length} lengths total
-                                </>
-                              ) : null}
+                              {lengthItems.length}{" "}
+                              {lengthItems.length === 1
+                                ? "length total"
+                                : "lengths total"}
                             </p>
                           </div>
                           <ChevronDown
@@ -822,8 +848,14 @@ export default function StockingHandbookPage({
                                 className="grid grid-cols-[1fr_1fr] border-t border-slate-100 px-4 py-2 text-sm font-black text-slate-900"
                               >
                                 <span>{lengthItem.length || "-"}</span>
-                                <span className="text-blue-700">
-                                  {lengthItem.itemNumber || "-"}
+                                <span
+                                  className={
+                                    lengthItem.itemNumber
+                                      ? "text-blue-700"
+                                      : "text-slate-400"
+                                  }
+                                >
+                                  {lengthItem.itemNumber || "Item # needed"}
                                 </span>
                               </div>
                             ))}
@@ -958,8 +990,12 @@ export default function StockingHandbookPage({
                     className="grid grid-cols-[1fr_1fr_1.4fr] border-t border-slate-100 px-4 py-3 text-sm font-black text-slate-900"
                   >
                     <span>{lengthItem.length || "-"}</span>
-                    <span className="text-blue-700">
-                      {lengthItem.itemNumber || "-"}
+                    <span
+                      className={
+                        lengthItem.itemNumber ? "text-blue-700" : "text-slate-400"
+                      }
+                    >
+                      {lengthItem.itemNumber || "Item # needed"}
                     </span>
                     <span className="text-slate-500">
                       {lengthItem.notes || "-"}
