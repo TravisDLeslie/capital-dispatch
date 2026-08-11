@@ -2249,7 +2249,7 @@ export default function App() {
               ? {
                   label: "Check In PO",
                   icon: Plus,
-                  onClick: () => setCurrentPage("dashboard"),
+                  onClick: () => setCurrentPage("check-in"),
                 }
               : null
           }
@@ -2613,7 +2613,7 @@ export default function App() {
               ? {
                   label: "Check In PO",
                   icon: Plus,
-                  onClick: () => setCurrentPage("dashboard"),
+                  onClick: () => setCurrentPage("check-in"),
                 }
               : null
           }
