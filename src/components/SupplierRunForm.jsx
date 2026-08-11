@@ -503,6 +503,10 @@ export default function SupplierRunForm({
     )
       ? formatCustomerName(customerName)
       : "";
+    const shouldAssignRouteFromForm =
+      canAssignRoute &&
+      !isEditing &&
+      driver;
     const supplierRun = {
       ...(initialSupplierRun || {}),
       id: initialSupplierRun?.id || createId(),
@@ -512,18 +516,20 @@ export default function SupplierRunForm({
       customerName: supplierRunCustomerName,
       vendor: matchedVendor,
       supplierAddress: supplierAddress.trim(),
-      driver: canAssignRoute ? driver : initialSupplierRun?.driver || "",
-      vehicleId: canAssignRoute
+      driver: shouldAssignRouteFromForm
+        ? driver
+        : initialSupplierRun?.driver || "",
+      vehicleId: shouldAssignRouteFromForm
         ? selectedVehicle?.id || initialSupplierRun?.vehicleId || ""
         : initialSupplierRun?.vehicleId || "",
-      vehicleTitle: canAssignRoute
+      vehicleTitle: shouldAssignRouteFromForm
         ? selectedVehicle?.title || initialSupplierRun?.vehicleTitle || ""
         : initialSupplierRun?.vehicleTitle || "",
-      vehicleBadge: canAssignRoute
+      vehicleBadge: shouldAssignRouteFromForm
         ? selectedVehicle?.badge || initialSupplierRun?.vehicleBadge || ""
         : initialSupplierRun?.vehicleBadge || "",
       dispatchStatus:
-        canAssignRoute && driver
+        shouldAssignRouteFromForm
           ? "assigned"
           : initialSupplierRun?.dispatchStatus || "needsDispatch",
       items: pickupItems,

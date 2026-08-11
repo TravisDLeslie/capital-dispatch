@@ -2680,7 +2680,9 @@ export default function SupplierRunsPage({
                 vehicleOptions={safeVehicleOptions}
                 vendorOptions={vendorOptions}
                 supplierAddressMap={supplierAddressMap}
-                canAssignRoute
+                canAssignRoute={
+                  editingSupplierRun.dispatchStatus !== "needsDispatch"
+                }
                 initialSupplierRun={getDisplaySupplierRun(editingSupplierRun)}
                 onCancel={() => setEditingSupplierRun(null)}
               />
