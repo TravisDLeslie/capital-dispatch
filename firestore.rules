@@ -47,7 +47,14 @@ service cloud.firestore {
     function isReceiving() {
       return isApproved() && (
         isAdmin() ||
-        role() == "receiving"
+        role() == "receiving" ||
+        hasAnyPermission([
+          "receiving",
+          "check-in",
+          "today",
+          "search",
+          "trace"
+        ])
       );
     }
 
@@ -131,9 +138,14 @@ service cloud.firestore {
     }
 
     match /supplierRuns/{supplierRunId} {
-      allow read: if isSouth() || isDriverFor(resource.data.driver);
+      allow read: if isSouth() || isReceiving() || isDriverFor(resource.data.driver);
       allow create, delete: if isSouth();
       allow update: if isSouth() || isDriverFor(resource.data.driver);
+    }
+
+    match /theirTruckPOs/{theirTruckPOId} {
+      allow read: if isSouth() || isReceiving();
+      allow create, update, delete: if isSouth();
     }
 
     match /southRouteOrders/{routeOrderId} {

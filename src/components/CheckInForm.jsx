@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   locations,
   receivingTeamMembers,
@@ -97,6 +98,18 @@ function formatSouthRunDate(value) {
 
 function getSouthItemText(item) {
   return [item.quantity, item.description].filter(Boolean).join(" ");
+}
+
+function createMaterialFromPoItem(item, sourceType) {
+  return {
+    ...createEmptyMaterial(),
+    description:
+      [item.quantity, item.description].filter(Boolean).join(" ") ||
+      item.description ||
+      "",
+    sourceItemId: item.id || "",
+    sourceType,
+  };
 }
 
 function getLinkedSouthOrderAssignment(supplierRun, items) {
@@ -315,6 +328,19 @@ export default function CheckInForm({
     setError("");
   }
 
+  function populateMaterialsFromPoItems(items, sourceType) {
+    if (!Array.isArray(items) || items.length === 0) {
+      return;
+    }
+
+    const nextMaterials = items.map((item) =>
+      createMaterialFromPoItem(item, sourceType),
+    );
+
+    setMaterials(nextMaterials);
+    setOpenMaterialId("");
+  }
+
   const matchingSouthRuns = getMatchingSouthRunsForPo(
     poNumber,
     supplierRuns,
@@ -366,8 +392,13 @@ export default function CheckInForm({
     setPoNumber(nextPoNumber);
 
     if (nextSouthRun) {
+      const nextSouthItems = Array.isArray(nextSouthRun.items)
+        ? nextSouthRun.items
+        : [];
+
       setLinkedSouthRunId(nextSouthRun.id);
       setLinkedTheirTruckPOId("");
+      populateMaterialsFromPoItems(nextSouthItems, "south");
 
       if (nextSouthRun.vendor) {
         setVendor(nextSouthRun.vendor);
@@ -375,8 +406,16 @@ export default function CheckInForm({
 
       setReceivingTruckType("ourTruck");
     } else if (nextTheirTruckPO) {
+      const nextTheirTruckItems = Array.isArray(nextTheirTruckPO.items)
+        ? nextTheirTruckPO.items
+        : [];
+
       setLinkedSouthRunId("");
       setLinkedTheirTruckPOId(nextTheirTruckPO.id);
+      populateMaterialsFromPoItems(
+        nextTheirTruckItems,
+        "theirTruck",
+      );
 
       if (nextTheirTruckPO.vendor) {
         setVendor(nextTheirTruckPO.vendor);
@@ -392,8 +431,14 @@ export default function CheckInForm({
   }
 
   function linkSouthRun(supplierRun) {
+    const nextSouthItems = Array.isArray(supplierRun.items)
+      ? supplierRun.items
+      : [];
+
     setLinkedSouthRunId(supplierRun.id);
+    setLinkedTheirTruckPOId("");
     setReceivingTruckType("ourTruck");
+    populateMaterialsFromPoItems(nextSouthItems, "south");
 
     if (supplierRun.vendor) {
       setVendor(supplierRun.vendor);
@@ -403,9 +448,14 @@ export default function CheckInForm({
   }
 
   function linkTheirTruckPO(theirTruckPO) {
+    const nextTheirTruckItems = Array.isArray(theirTruckPO.items)
+      ? theirTruckPO.items
+      : [];
+
     setLinkedTheirTruckPOId(theirTruckPO.id);
     setLinkedSouthRunId("");
     setReceivingTruckType("theirTruck");
+    populateMaterialsFromPoItems(nextTheirTruckItems, "theirTruck");
 
     if (theirTruckPO.vendor) {
       setVendor(theirTruckPO.vendor);
@@ -1224,8 +1274,8 @@ export default function CheckInForm({
             </h3>
 
             <p className="mt-1 text-sm text-slate-500">
-              Add each material, then open a material only when you
-              need to edit its details.
+              Add each material, then expand it when you need to
+              edit its details.
             </p>
           </div>
 
@@ -1233,48 +1283,91 @@ export default function CheckInForm({
             {materials.map((material, index) => {
               const isMaterialOpen =
                 openMaterialId === material.id;
+              const materialTitle =
+                material.description.trim() || `Material ${index + 1}`;
+              const materialMeta = [
+                material.location || "Choose a material location",
+                material.locationPhoto ? "Location photo" : "",
+                material.damagePhoto ? "Damage photo" : "",
+                material.notes ? "Note" : "",
+              ]
+                .filter(Boolean)
+                .join(" • ");
 
               return (
-              <div
-                key={material.id}
-                className={`rounded-2xl border ${
-                  material.saved
-                    ? "border-emerald-200 bg-white"
-                    : "border-slate-200 bg-slate-50 p-4"
-                }`}
-              >
-                {material.saved ? (
+                <div
+                  key={material.id}
+                  className={`overflow-hidden rounded-2xl border ${
+                    material.saved
+                      ? "border-emerald-200 bg-white"
+                      : "border-slate-200 bg-slate-50"
+                  }`}
+                >
                   <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h4 className="font-bold text-slate-900">
-                          Material {index + 1}
+                          {materialTitle}
                         </h4>
 
-                        <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
-                          Saved
+                        {material.sourceType ? (
+                          <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+                            From PO
+                          </span>
+                        ) : null}
+
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] ${
+                            material.saved
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {material.saved ? "Saved" : "Needs Details"}
                         </span>
                       </div>
 
-                      <p className="mt-2 truncate font-bold text-slate-900">
-                        {material.description}
-                      </p>
-
                       <p className="mt-1 text-sm font-semibold text-slate-500">
-                        {material.location}
-                        {material.locationPhoto ? " • Location photo" : ""}
-                        {material.damagePhoto ? " • Damage photo" : ""}
-                        {material.notes ? " • Note" : ""}
+                        {materialMeta}
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex shrink-0 items-center gap-2">
+                      {material.saved ? (
+                        <button
+                          type="button"
+                          onClick={() => editMaterial(material.id)}
+                          className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+                        >
+                          Edit
+                        </button>
+                      ) : null}
+
                       <button
                         type="button"
-                        onClick={() => editMaterial(material.id)}
-                        className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100"
+                        onClick={() =>
+                          setOpenMaterialId((currentId) =>
+                            currentId === material.id ? "" : material.id,
+                          )
+                        }
+                        aria-label={
+                          isMaterialOpen
+                            ? `Collapse material ${index + 1}`
+                            : `Expand material ${index + 1}`
+                        }
+                        className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
                       >
-                        Open
+                        {isMaterialOpen ? (
+                          <ChevronUp
+                            className="h-5 w-5"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <ChevronDown
+                            className="h-5 w-5"
+                            aria-hidden="true"
+                          />
+                        )}
                       </button>
 
                       <button
@@ -1286,61 +1379,11 @@ export default function CheckInForm({
                       </button>
                     </div>
                   </div>
-                ) : (
+
+                {!material.saved ? (
                   <>
-                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h4 className="font-bold text-slate-900">
-                            {material.description.trim() ||
-                              `Material ${index + 1}`}
-                          </h4>
-
-                          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] text-amber-700">
-                            Open
-                          </span>
-                        </div>
-
-                        <p className="mt-1 text-sm font-semibold text-slate-500">
-                          {material.location ||
-                            "Choose a material location"}
-                          {material.locationPhoto
-                            ? " • Location photo"
-                            : ""}
-                          {material.damagePhoto
-                            ? " • Damage photo"
-                            : ""}
-                          {material.notes ? " • Note" : ""}
-                        </p>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setOpenMaterialId((currentId) =>
-                              currentId === material.id
-                                ? ""
-                                : material.id,
-                            )
-                          }
-                          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
-                        >
-                          {isMaterialOpen ? "Collapse" : "Open"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => removeMaterial(material.id)}
-                          className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-
                     <div
-                      className={`space-y-4 ${
+                      className={`space-y-4 border-t border-slate-200 p-4 ${
                         isMaterialOpen ? "block" : "hidden"
                       }`}
                     >
@@ -1656,8 +1699,14 @@ export default function CheckInForm({
                       </button>
                     </div>
                   </>
-                )}
-              </div>
+                ) : isMaterialOpen ? (
+                  <div className="border-t border-emerald-100 bg-emerald-50/40 p-4">
+                    <p className="text-sm font-semibold text-slate-600">
+                      {material.description}
+                    </p>
+                  </div>
+                ) : null}
+                </div>
               );
             })}
 

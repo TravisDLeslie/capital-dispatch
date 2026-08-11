@@ -293,6 +293,59 @@ export default function CheckInCard({
       material.damagePhoto?.dataUrl,
   );
 
+  function renderMaterialSummary(material, index, isCompact = false) {
+    const badges = [
+      material.location || "",
+      material.locationPhoto?.dataUrl ? "Photo" : "",
+      material.damagePhoto?.dataUrl ? "Damage" : "",
+      material.notes ? "Note" : "",
+    ].filter(Boolean);
+
+    return (
+      <div
+        key={`${isCompact ? "mobile" : "desktop"}-${material.id || index}`}
+        className={`rounded-xl border border-[#DCE4EF] bg-slate-50 ${
+          isCompact ? "px-3 py-2.5" : "px-3.5 py-3"
+        }`}
+      >
+        <div className="flex items-start gap-2.5">
+          <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white text-xs font-black text-[#1D64C8] shadow-sm">
+            {index + 1}
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <p
+              className={`font-black leading-snug text-[#0F172A] ${
+                isCompact ? "text-sm" : "text-[15px]"
+              }`}
+            >
+              {material.description || `Item ${index + 1}`}
+            </p>
+
+            {badges.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {badges.map((badge) => (
+                  <span
+                    key={`${material.id || index}-${badge}`}
+                    className={`rounded-full px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em] ${
+                      badge === "Damage"
+                        ? "bg-red-50 text-red-700"
+                        : badge === "Note"
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-white text-[#64748B]"
+                    }`}
+                  >
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <article className="rounded-2xl border border-[#DCE4EF] bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md lg:p-5">
       <div className="lg:hidden">
@@ -518,16 +571,25 @@ export default function CheckInCard({
           </div>
 
           <div className="mt-3 rounded-2xl border border-[#DCE4EF] px-3 py-3 lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-0 lg:py-0 lg:pt-4">
-            <div className="flex items-center gap-3">
-              <Package
-                aria-hidden="true"
-                className="h-5 w-5 text-slate-700"
-                strokeWidth={2.1}
-              />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <Package
+                  aria-hidden="true"
+                  className="h-5 w-5 text-slate-700"
+                  strokeWidth={2.1}
+                />
 
-              <h3 className="text-lg font-black text-[#0F172A] lg:text-[19px] lg:leading-tight">
-                Items
-              </h3>
+                <h3 className="text-lg font-black text-[#0F172A] lg:text-[19px] lg:leading-tight">
+                  Materials
+                </h3>
+              </div>
+
+              {materials.length > 0 ? (
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-[#64748B]">
+                  {materials.length}{" "}
+                  {materials.length === 1 ? "item" : "items"}
+                </span>
+              ) : null}
             </div>
 
             {checkIn.materialsSkipped ? (
@@ -535,48 +597,18 @@ export default function CheckInCard({
                 Materials skipped
               </p>
             ) : materials.length > 0 ? (
-              <div className="mt-2 space-y-1.5">
-                {mobileVisibleMaterials.map((material) => (
-                  <div
-                    key={material.id}
-                    className="flex gap-2 text-sm font-semibold text-[#0F172A] lg:hidden"
-                  >
-                    <span className="text-[#64748B]">•</span>
-                    <span className="min-w-0">
-                      <span>{material.description}</span>
+              <div className="mt-3 space-y-2">
+                <div className="space-y-2 lg:hidden">
+                  {mobileVisibleMaterials.map((material, index) =>
+                    renderMaterialSummary(material, index, true),
+                  )}
+                </div>
 
-                      {material.location ? (
-                        <span className="mt-0.5 block text-sm font-semibold text-[#64748B]">
-                          {material.location}
-                          {material.locationPhoto ? " • Photo" : ""}
-                          {material.damagePhoto ? " • Damage" : ""}
-                          {material.notes ? " • Note" : ""}
-                        </span>
-                      ) : null}
-                    </span>
-                  </div>
-                ))}
-
-                {visibleMaterials.map((material) => (
-                  <div
-                    key={`desktop-${material.id}`}
-                    className="hidden gap-2 text-sm font-semibold text-[#0F172A] lg:flex lg:text-[15px] lg:leading-tight"
-                  >
-                    <span className="text-[#64748B]">•</span>
-                    <span className="min-w-0">
-                      <span>{material.description}</span>
-
-                      {material.location ? (
-                        <span className="mt-0.5 block text-sm font-semibold text-[#64748B]">
-                          {material.location}
-                          {material.locationPhoto ? " • Photo" : ""}
-                          {material.damagePhoto ? " • Damage" : ""}
-                          {material.notes ? " • Note" : ""}
-                        </span>
-                      ) : null}
-                    </span>
-                  </div>
-                ))}
+                <div className="hidden space-y-2 lg:block">
+                  {visibleMaterials.map((material, index) =>
+                    renderMaterialSummary(material, index),
+                  )}
+                </div>
 
                 {mobileHiddenMaterialCount > 0 ? (
                   <button
