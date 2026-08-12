@@ -133,6 +133,7 @@ import {
 import {
   capitalLumberAddress,
 } from "./data/options";
+import { getDateInputValue } from "./utils/dateHelpers";
 import { formatCustomerName } from "./utils/textFormatters";
 
 const DELETE_PO_CODE = "3105";
@@ -1239,9 +1240,11 @@ export default function App() {
     .map((supplierRun) => supplierRun.id)
     .sort()
     .join("|");
+  const actualDriverSouthAlertDateKey = getDateInputValue();
   const actualDriverSouthAlertStorageKey = [
     DRIVER_SOUTH_ALERT_STORAGE_PREFIX,
     currentUser?.uid || userProfile?.uid || userProfile?.id || "driver",
+    actualDriverSouthAlertDateKey,
   ].join(":");
   const visibleDeliveries =
     effectiveUserRole === "driver"
@@ -1413,7 +1416,7 @@ export default function App() {
       );
 
       setShowDriverSouthAlert(
-        dismissedSignature !== actualDriverSouthAlertSignature,
+        dismissedSignature !== "dismissed",
       );
     } catch {
       setShowDriverSouthAlert(true);
@@ -2183,7 +2186,7 @@ export default function App() {
     try {
       localStorage.setItem(
         actualDriverSouthAlertStorageKey,
-        actualDriverSouthAlertSignature,
+        "dismissed",
       );
     } catch {
       // Ignore storage failures; closing the modal still helps immediately.
