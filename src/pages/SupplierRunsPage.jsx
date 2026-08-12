@@ -4,9 +4,11 @@ import {
   ArrowUp,
   ArrowUpRight,
   CalendarDays,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   GripVertical,
   Home,
   MapPin,
@@ -2395,7 +2397,71 @@ export default function SupplierRunsPage({
                       <button
                         type="button"
                         onClick={() => toggleDriver(driverGroup.driver)}
-                        className="mb-4 w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-left shadow-sm transition hover:bg-blue-50"
+                        className="mb-4 grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-2xl border border-slate-100 bg-white px-3 py-4 text-left shadow-sm sm:hidden"
+                        aria-expanded={driverIsOpen}
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <div
+                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-black ${driverAvatar.colorClass}`}
+                            aria-hidden="true"
+                          >
+                            {driverAvatar.initial}
+                          </div>
+
+                          <div className="min-w-0">
+                            <h4 className="truncate text-lg font-black leading-tight text-slate-900">
+                              {driverGroup.driver}
+                            </h4>
+
+                            {vehicleLabel ? (
+                              <p className="mt-1 truncate text-xs font-black text-slate-500">
+                                Truck {vehicleLabel}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="flex min-w-[72px] items-center justify-center gap-1.5 border-l border-slate-200 pl-2">
+                          <ClipboardList
+                            aria-hidden="true"
+                            className="h-6 w-6 text-blue-700"
+                            strokeWidth={2.4}
+                          />
+                          <div>
+                            <p className="text-sm font-black leading-tight text-slate-900">
+                              {driverPoCount}{" "}
+                              {driverPoCount === 1 ? "PO" : "POs"}
+                            </p>
+                            <p className="mt-1 text-xs font-semibold leading-tight text-slate-500">
+                              {driverPoCount} pickups
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex min-w-[72px] items-center justify-center gap-1.5 border-l border-slate-200 pl-2">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-4 border-emerald-100 text-emerald-600">
+                            <Check
+                              aria-hidden="true"
+                              className="h-5 w-5"
+                              strokeWidth={3}
+                            />
+                          </span>
+                          <div>
+                            <p className="text-sm font-black leading-tight text-slate-900">
+                              {driverStats.pickedUpItems} of{" "}
+                              {driverStats.itemCount}
+                            </p>
+                            <p className="mt-1 text-xs font-semibold leading-tight text-slate-500">
+                              complete
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleDriver(driverGroup.driver)}
+                        className="mb-4 hidden w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-left shadow-sm transition hover:bg-blue-50 sm:block"
                         aria-expanded={driverIsOpen}
                       >
                         <div className="flex items-start justify-between gap-3 sm:gap-4">
