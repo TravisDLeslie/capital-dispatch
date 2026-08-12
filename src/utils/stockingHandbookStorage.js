@@ -68,6 +68,11 @@ function getDefaultLengthItems(item) {
 
 function getLengthItemsFromStockingLengths(item) {
   const stockingLengths = cleanText(item.stockingLengths);
+
+  if (isSheetGood(item, stockingLengths)) {
+    return [];
+  }
+
   const matches = [...stockingLengths.matchAll(/(\d+(?:\.\d+)?)\s*(?:ft|')/gi)];
   const seenLengths = new Set();
 
@@ -88,6 +93,26 @@ function getLengthItemsFromStockingLengths(item) {
       itemNumber: "",
       notes: "",
     }));
+}
+
+function isSheetGood(item, stockingLengths) {
+  const searchableText = [
+    item.category,
+    item.name,
+    item.nominalDimension,
+    stockingLengths,
+  ]
+    .map((value) => cleanText(value).toLowerCase())
+    .join(" ");
+  const hasSheetCategory = /\b(osb|plywood|panel|panels|sheet|sheets)\b/.test(
+    searchableText,
+  );
+  const hasSheetDimension =
+    /\b\d+(?:\.\d+)?\s*(?:ft|')\s*[x×]\s*\d+(?:\.\d+)?\s*(?:ft|')\b/.test(
+      searchableText,
+    );
+
+  return hasSheetCategory && hasSheetDimension;
 }
 
 function mergeLengthItems(baseLengthItems, overrideLengthItems) {
