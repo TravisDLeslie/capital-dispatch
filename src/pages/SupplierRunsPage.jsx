@@ -2877,7 +2877,7 @@ export default function SupplierRunsPage({
 
                                   <div className="min-w-0">
                                     <p
-                                      className={`mb-1 text-[10px] font-black uppercase tracking-[0.2em] sm:hidden ${
+                                      className={`mb-1 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] sm:hidden ${
                                         isCurrentStop
                                           ? "text-[#FC2C38]"
                                           : isCompleteStop
@@ -2885,6 +2885,13 @@ export default function SupplierRunsPage({
                                             : "text-slate-500"
                                       }`}
                                     >
+                                      {isCompleteStop ? (
+                                        <Check
+                                          aria-hidden="true"
+                                          className="h-3.5 w-3.5 text-emerald-700"
+                                          strokeWidth={3}
+                                        />
+                                      ) : null}
                                       {stopStageLabel}
                                     </p>
 
