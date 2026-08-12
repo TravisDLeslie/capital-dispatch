@@ -2678,6 +2678,28 @@ export default function SupplierRunsPage({
                                       </span>
                                     </div>
 
+                                    {supplierAddress ? (
+                                      <a
+                                        href={getDirectionsUrl(
+                                          supplierAddress,
+                                        )}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={(event) =>
+                                          event.stopPropagation()
+                                        }
+                                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-black text-[#FC2C38] transition hover:bg-red-100 sm:hidden"
+                                        aria-label={`Directions to ${vendorGroup.vendor}`}
+                                      >
+                                        <Navigation
+                                          aria-hidden="true"
+                                          className="h-3.5 w-3.5 fill-current"
+                                          strokeWidth={2.4}
+                                        />
+                                        Get Directions
+                                      </a>
+                                    ) : null}
+
                                     <StopMobileTiming timing={timing} />
                                   </div>
                                 </div>
@@ -2717,25 +2739,15 @@ export default function SupplierRunsPage({
                                     )}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex flex-col items-center justify-center gap-1 text-[11px] font-black text-[#FC2C38] transition hover:text-[#dc1f2b] sm:h-9 sm:flex-row sm:gap-1 sm:rounded-full sm:bg-[#FC2C38] sm:px-4 sm:text-xs sm:text-white sm:shadow-sm sm:hover:bg-[#dc1f2b] sm:hover:text-white"
+                                    className="hidden h-9 items-center justify-center gap-1 rounded-full bg-[#FC2C38] px-4 text-xs font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:inline-flex"
                                     aria-label={`Directions to ${vendorGroup.vendor}`}
                                   >
-                                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#FC2C38] shadow-md shadow-slate-200 ring-1 ring-slate-100 sm:hidden">
-                                      <Navigation
-                                        aria-hidden="true"
-                                        className="h-6 w-6 fill-current"
-                                        strokeWidth={2.4}
-                                      />
-                                    </span>
-
                                     <ArrowUpRight
                                       aria-hidden="true"
-                                      className="hidden h-3.5 w-3.5 sm:block"
+                                      className="h-3.5 w-3.5"
                                       strokeWidth={2.6}
                                     />
-                                    <span className="hidden sm:inline">
-                                      Directions
-                                    </span>
+                                    <span>Directions</span>
                                   </a>
                                 ) : null}
 
