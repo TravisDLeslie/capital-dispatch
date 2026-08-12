@@ -440,6 +440,58 @@ function supplierRunMatchesPickupSearch(
   );
 }
 
+function StopTimingPills({ timing, compact = false }) {
+  const hasTiming =
+    timing?.arrivedAt || timing?.stopDuration || timing?.strapUpUntil;
+
+  if (!hasTiming) {
+    return null;
+  }
+
+  return (
+    <div
+      className={`grid gap-2 ${
+        compact
+          ? "grid-cols-1 sm:grid-cols-3"
+          : "grid-cols-1 min-[420px]:grid-cols-3"
+      }`}
+    >
+      {timing.arrivedAt ? (
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">
+            Arrived
+          </p>
+          <p className="mt-0.5 text-sm font-black text-blue-800">
+            {formatTime(timing.arrivedAt)}
+          </p>
+        </div>
+      ) : null}
+
+      {timing.stopDuration ? (
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
+            Time at stop
+          </p>
+          <p className="mt-0.5 text-sm font-black text-emerald-800">
+            {timing.stopDuration}
+          </p>
+        </div>
+      ) : null}
+
+      {timing.strapUpUntil ? (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
+          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-600">
+            Strap up
+          </p>
+          <p className="mt-0.5 text-sm font-black text-amber-800">
+            Until {formatTime(timing.strapUpUntil)}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function getDateSortValue(supplierRun) {
   const dateKey = getSupplierRunDateKey(supplierRun);
   const parsedDate = dateKey ? new Date(`${dateKey}T00:00:00`) : null;
@@ -1743,6 +1795,8 @@ export default function SupplierRunsPage({
                               {group.vendorGroups.map((vendorGroup) => {
                                 const stats =
                                   getVendorGroupStats(vendorGroup);
+                                const timing =
+                                  getVendorGroupTiming(vendorGroup);
                                 const stopKey = `${dateGroup.dateKey}::${group.driver}::${vendorGroup.vendor}`;
                                 const stopIsOpen = isStopOpen(
                                   group.driver,
@@ -1785,7 +1839,19 @@ export default function SupplierRunsPage({
                                         </p>
                                       </div>
 
-                                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
+                                      <div className="flex shrink-0 items-center gap-3">
+                                        {timing.stopDuration ? (
+                                          <div className="hidden rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-right sm:block">
+                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
+                                              Time at stop
+                                            </p>
+                                            <p className="text-sm font-black text-emerald-800">
+                                              {timing.stopDuration}
+                                            </p>
+                                          </div>
+                                        ) : null}
+
+                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
                                         <ChevronDown
                                           aria-hidden="true"
                                           className={`h-5 w-5 transition-transform ${
@@ -1793,8 +1859,16 @@ export default function SupplierRunsPage({
                                           }`}
                                           strokeWidth={2.6}
                                         />
-                                      </span>
+                                        </span>
+                                      </div>
                                     </button>
+
+                                    <div className="border-t border-slate-100 bg-white px-4 py-3">
+                                      <StopTimingPills
+                                        timing={timing}
+                                        compact
+                                      />
+                                    </div>
 
                                     {stopIsOpen ? (
                                       <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-3">
@@ -2496,29 +2570,14 @@ export default function SupplierRunsPage({
 
                             <div className="border-t border-slate-100 bg-white px-4 py-3">
                               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="flex flex-wrap gap-2">
-                                  {timing.arrivedAt ? (
-                                    <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
-                                      Arrived {formatTime(timing.arrivedAt)}
-                                    </span>
-                                  ) : (
+                                <div className="min-w-0 flex-1">
+                                  {!timing.arrivedAt ? (
                                     <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-500">
                                       Not arrived yet
                                     </span>
+                                  ) : (
+                                    <StopTimingPills timing={timing} />
                                   )}
-
-                                  {timing.stopDuration ? (
-                                    <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
-                                      Stop time {timing.stopDuration}
-                                    </span>
-                                  ) : null}
-
-                                  {timing.strapUpUntil ? (
-                                    <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700">
-                                      Strap up until{" "}
-                                      {formatTime(timing.strapUpUntil)}
-                                    </span>
-                                  ) : null}
                                 </div>
 
                                 {timing.canArrive ? (
