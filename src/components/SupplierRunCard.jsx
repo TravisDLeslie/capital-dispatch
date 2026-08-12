@@ -894,36 +894,17 @@ export default function SupplierRunCard({
               </p>
 
               {poTimeAtSupplier ? (
-                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-l-4 border-slate-200 pl-3 text-xs font-black text-slate-500">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                    PO time: {poTimeAtSupplier}
+                  </span>
+
                   {supplierRun.stopArrivedAt ? (
-                    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">
-                        Supplier arrival
-                      </p>
-                      <p className="mt-0.5 text-sm font-black text-blue-800">
-                        {formatTime(supplierRun.stopArrivedAt)}
-                      </p>
-                    </div>
+                    <span>Arrived {formatTime(supplierRun.stopArrivedAt)}</span>
                   ) : null}
 
-                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
-                      PO time
-                    </p>
-                    <p className="mt-0.5 text-sm font-black text-emerald-800">
-                      {poTimeAtSupplier}
-                    </p>
-                  </div>
-
                   {poCompletedAt ? (
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
-                        PO complete
-                      </p>
-                      <p className="mt-0.5 text-sm font-black text-slate-800">
-                        {formatTime(poCompletedAt)}
-                      </p>
-                    </div>
+                    <span>Complete {formatTime(poCompletedAt)}</span>
                   ) : null}
                 </div>
               ) : null}

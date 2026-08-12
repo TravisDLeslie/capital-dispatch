@@ -450,14 +450,14 @@ function StopTimingPills({ timing, compact = false }) {
 
   return (
     <div
-      className={`grid gap-2 ${
+      className={`rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm ${
         compact
-          ? "grid-cols-1 sm:grid-cols-3"
-          : "grid-cols-1 min-[420px]:grid-cols-3"
+          ? "grid gap-2 sm:grid-cols-3"
+          : "grid gap-2 min-[420px]:grid-cols-3"
       }`}
     >
       {timing.arrivedAt ? (
-        <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
+        <div>
           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">
             Arrived
           </p>
@@ -468,7 +468,7 @@ function StopTimingPills({ timing, compact = false }) {
       ) : null}
 
       {timing.stopDuration ? (
-        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+        <div>
           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
             Total stop time
           </p>
@@ -479,7 +479,7 @@ function StopTimingPills({ timing, compact = false }) {
       ) : null}
 
       {timing.strapUpUntil ? (
-        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
+        <div>
           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-600">
             Strap up
           </p>
@@ -488,6 +488,67 @@ function StopTimingPills({ timing, compact = false }) {
           </p>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function RouteTimingTimeline({ timing }) {
+  if (!timing?.routeDuration) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 shadow-sm">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+          Route timeline
+        </p>
+
+        <div className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-black text-emerald-800">
+          {timing.routeDuration} total
+        </div>
+      </div>
+
+      <div className="relative grid grid-cols-3 gap-2">
+        <div
+          className="absolute left-[16.6%] right-[16.6%] top-3 h-0.5 bg-slate-200"
+          aria-hidden="true"
+        />
+        <div
+          className="absolute left-[16.6%] right-[16.6%] top-3 h-0.5 bg-emerald-300"
+          aria-hidden="true"
+        />
+
+        <div className="relative text-left">
+          <span className="block h-6 w-6 rounded-full border-4 border-blue-50 bg-blue-600 shadow-sm" />
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-blue-500">
+            First stop
+          </p>
+          <p className="mt-0.5 text-sm font-black text-slate-900">
+            {formatTime(timing.firstArrival)}
+          </p>
+        </div>
+
+        <div className="relative text-center">
+          <span className="mx-auto block h-6 w-6 rounded-full border-4 border-emerald-50 bg-emerald-600 shadow-sm" />
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-600">
+            South time
+          </p>
+          <p className="mt-0.5 text-base font-black text-emerald-800">
+            {timing.routeDuration}
+          </p>
+        </div>
+
+        <div className="relative text-right">
+          <span className="ml-auto block h-6 w-6 rounded-full border-4 border-amber-50 bg-amber-500 shadow-sm" />
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-amber-600">
+            Strap-up
+          </p>
+          <p className="mt-0.5 text-sm font-black text-slate-900">
+            {formatTime(timing.lastStrapUp)}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1830,36 +1891,7 @@ export default function SupplierRunsPage({
 
                           {driverIsOpen ? (
                             <div className="mt-3 space-y-4">
-                              {driverTiming.routeDuration ? (
-                                <div className="grid gap-2 sm:grid-cols-3">
-                                  <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">
-                                      First arrival
-                                    </p>
-                                    <p className="mt-0.5 text-sm font-black text-blue-800">
-                                      {formatTime(driverTiming.firstArrival)}
-                                    </p>
-                                  </div>
-
-                                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
-                                      Total South time
-                                    </p>
-                                    <p className="mt-0.5 text-sm font-black text-emerald-800">
-                                      {driverTiming.routeDuration}
-                                    </p>
-                                  </div>
-
-                                  <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-600">
-                                      Last strap-up
-                                    </p>
-                                    <p className="mt-0.5 text-sm font-black text-amber-800">
-                                      {formatTime(driverTiming.lastStrapUp)}
-                                    </p>
-                                  </div>
-                                </div>
-                              ) : null}
+                              <RouteTimingTimeline timing={driverTiming} />
 
                               {group.vendorGroups.map((vendorGroup) => {
                                 const stats =
@@ -2410,36 +2442,9 @@ export default function SupplierRunsPage({
                               : " • complete"}
                           </p>
 
-                          {driverTiming.routeDuration ? (
-                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                              <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
-                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">
-                                  First arrival
-                                </p>
-                                <p className="mt-0.5 text-sm font-black text-blue-800">
-                                  {formatTime(driverTiming.firstArrival)}
-                                </p>
-                              </div>
-
-                              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2">
-                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
-                                  Total South time
-                                </p>
-                                <p className="mt-0.5 text-sm font-black text-emerald-800">
-                                  {driverTiming.routeDuration}
-                                </p>
-                              </div>
-
-                              <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
-                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-600">
-                                  Last strap-up
-                                </p>
-                                <p className="mt-0.5 text-sm font-black text-amber-800">
-                                  {formatTime(driverTiming.lastStrapUp)}
-                                </p>
-                              </div>
-                            </div>
-                          ) : null}
+                          <div className="mt-3">
+                            <RouteTimingTimeline timing={driverTiming} />
+                          </div>
                         </div>
                       </button>
 
