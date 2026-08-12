@@ -2634,7 +2634,7 @@ export default function SupplierRunsPage({
                                       vendorGroup.vendor,
                                     )
                                   }
-                                  className="flex w-full min-w-0 flex-col gap-3 px-4 py-4 pr-14 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between sm:py-3 sm:pr-4"
+                                  className="flex w-full min-w-0 flex-col gap-3 px-4 py-4 pr-12 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between sm:py-3 sm:pr-4"
                                   aria-expanded={stopIsOpen}
                                 >
                                 <div className="flex min-w-0 items-center gap-3">
@@ -2691,7 +2691,7 @@ export default function SupplierRunsPage({
                                       vendorGroup.vendor,
                                     )
                                   }
-                                  className="absolute right-3 top-[4.1rem] flex h-9 w-9 items-center justify-center rounded-full border border-slate-100 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 sm:hidden"
+                                  className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-slate-700 transition hover:bg-slate-100 sm:hidden"
                                   aria-label={
                                     stopIsOpen
                                       ? `Close ${vendorGroup.vendor}`
