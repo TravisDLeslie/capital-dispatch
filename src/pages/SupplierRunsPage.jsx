@@ -2145,7 +2145,11 @@ export default function SupplierRunsPage({
                                               onUpdateItemDescription={
                                                 onUpdateSupplierRunItemDescription
                                               }
-                                              onDelete={onDeleteSupplierRun}
+                                              onDelete={
+                                                canEditSupplierRuns
+                                                  ? onDeleteSupplierRun
+                                                  : undefined
+                                              }
                                               isCompletedSection
                                               showCustomerName={
                                                 canViewSouthCustomerName
@@ -3103,7 +3107,11 @@ export default function SupplierRunsPage({
                                         ? setEditingSupplierRun
                                         : undefined
                                     }
-                                    onDelete={onDeleteSupplierRun}
+                                    onDelete={
+                                      canEditSupplierRuns
+                                        ? onDeleteSupplierRun
+                                        : undefined
+                                    }
                                     showCustomerName={
                                       canViewSouthCustomerName
                                     }
@@ -3320,7 +3328,11 @@ export default function SupplierRunsPage({
                                     onUpdateItemDescription={
                                       onUpdateSupplierRunItemDescription
                                     }
-                                    onDelete={onDeleteSupplierRun}
+                                    onDelete={
+                                      canEditSupplierRuns
+                                        ? onDeleteSupplierRun
+                                        : undefined
+                                    }
                                     isCompletedSection
                                     showCustomerName={
                                       canViewSouthCustomerName
