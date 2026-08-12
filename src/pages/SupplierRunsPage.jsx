@@ -26,6 +26,7 @@ import {
 } from "../data/options";
 import {
   formatDateInput,
+  formatTime,
   getDateInputValue,
   getTodayHeading,
   isToday,
@@ -517,6 +518,7 @@ export default function SupplierRunsPage({
   onUpdateSupplierRunItemDescription,
   onUpdateSupplierRun,
   onDeleteSupplierRun,
+  onArriveSupplierStop,
   createdBy = {},
   vehicleOptions,
   vendorOptions,
@@ -780,6 +782,87 @@ export default function SupplierRunsPage({
     nextVendorOrder.splice(nextIndex, 0, movedVendor);
 
     await saveRouteOrder(driver, nextVendorOrder);
+  }
+
+  function getValidDate(value) {
+    const parsedDate = value ? new Date(value) : null;
+
+    return parsedDate && !Number.isNaN(parsedDate.getTime())
+      ? parsedDate
+      : null;
+  }
+
+  function formatDurationMinutes(startValue, endValue) {
+    const startDate = getValidDate(startValue);
+    const endDate = getValidDate(endValue);
+
+    if (!startDate || !endDate || endDate < startDate) {
+      return "";
+    }
+
+    const minutes = Math.max(
+      1,
+      Math.round((endDate.getTime() - startDate.getTime()) / 60000),
+    );
+
+    return `${minutes} min`;
+  }
+
+  function addMinutes(value, minutes) {
+    const date = getValidDate(value);
+
+    if (!date) {
+      return "";
+    }
+
+    return new Date(date.getTime() + minutes * 60000).toISOString();
+  }
+
+  function getVendorGroupTiming(vendorGroup) {
+    const items = vendorGroup.runs.flatMap((supplierRun) =>
+      Array.isArray(supplierRun.items) ? supplierRun.items : [],
+    );
+    const arrivedAt =
+      vendorGroup.runs
+        .map((supplierRun) => supplierRun.stopArrivedAt)
+        .filter(Boolean)
+        .sort()[0] || "";
+    const allItemsPickedUp =
+      items.length > 0 && items.every((item) => item.pickedUp);
+    const savedCompletedAt =
+      vendorGroup.runs
+        .map((supplierRun) => supplierRun.stopCompletedAt)
+        .filter(Boolean)
+        .sort()
+        .at(-1) || "";
+    const completedAt =
+      savedCompletedAt ||
+      (allItemsPickedUp
+        ? items
+            .map((item) => item.pickedUpAt)
+            .filter(Boolean)
+            .sort()
+            .at(-1) || ""
+        : "");
+    const strapUpUntil =
+      vendorGroup.runs
+        .map((supplierRun) => supplierRun.stopStrapUpUntil)
+        .filter(Boolean)
+        .sort()
+        .at(-1) || (completedAt ? addMinutes(completedAt, 5) : "");
+
+    return {
+      arrivedAt,
+      completedAt,
+      strapUpUntil,
+      stopDuration: formatDurationMinutes(arrivedAt, completedAt),
+      runIds: vendorGroup.runs.map((supplierRun) => supplierRun.id),
+      canArrive:
+        Boolean(onArriveSupplierStop) &&
+        !arrivedAt &&
+        vendorGroup.runs.length > 0 &&
+        items.some((item) => !item.pickedUp),
+    };
   }
 
   function getVendorGroupStats(vendorGroup) {
@@ -2208,6 +2291,7 @@ export default function SupplierRunsPage({
                         const stats = getVendorGroupStats(vendorGroup);
                         const supplierAddress =
                           getVendorGroupAddress(vendorGroup);
+                        const timing = getVendorGroupTiming(vendorGroup);
                         const stopIsOpen = isStopOpen(
                           driverGroup.driver,
                           vendorGroup.vendor,
@@ -2407,6 +2491,47 @@ export default function SupplierRunsPage({
                                     />
                                   </button>
                                 </div>
+                              </div>
+                            </div>
+
+                            <div className="border-t border-slate-100 bg-white px-4 py-3">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex flex-wrap gap-2">
+                                  {timing.arrivedAt ? (
+                                    <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
+                                      Arrived {formatTime(timing.arrivedAt)}
+                                    </span>
+                                  ) : (
+                                    <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-500">
+                                      Not arrived yet
+                                    </span>
+                                  )}
+
+                                  {timing.stopDuration ? (
+                                    <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
+                                      Stop time {timing.stopDuration}
+                                    </span>
+                                  ) : null}
+
+                                  {timing.strapUpUntil ? (
+                                    <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700">
+                                      Strap up until{" "}
+                                      {formatTime(timing.strapUpUntil)}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {timing.canArrive ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onArriveSupplierStop(timing.runIds)
+                                    }
+                                    className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+                                  >
+                                    Arrived at {vendorGroup.vendor}
+                                  </button>
+                                ) : null}
                               </div>
                             </div>
 

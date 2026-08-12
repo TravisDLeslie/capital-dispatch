@@ -118,6 +118,7 @@ export async function addSupplierRun(supplierRun) {
 export async function updateSupplierRunItems(
   supplierRunId,
   items,
+  supplierRunUpdates = {},
 ) {
   const currentSupplierRuns = getLocalSupplierRuns();
   const currentSupplierRun = currentSupplierRuns.find(
@@ -135,14 +136,15 @@ export async function updateSupplierRunItems(
   const updatedSupplierRuns = currentSupplierRuns.map(
     (supplierRun) =>
       supplierRun.id === supplierRunId
-        ? {
-            ...supplierRun,
-            items,
-            status,
-            updatedAt,
-            completedAt,
-          }
-        : supplierRun,
+          ? {
+              ...supplierRun,
+              items,
+              status,
+              updatedAt,
+              completedAt,
+              ...supplierRunUpdates,
+            }
+          : supplierRun,
   );
 
   if (db) {
@@ -153,6 +155,7 @@ export async function updateSupplierRunItems(
         status,
         updatedAt,
         completedAt,
+        ...supplierRunUpdates,
       },
     );
   }
@@ -185,6 +188,53 @@ export async function updateSupplierRun(
     await updateDoc(
       doc(db, SUPPLIER_RUNS_COLLECTION, supplierRunId),
       updates,
+    );
+  }
+
+  saveLocalSupplierRuns(updatedSupplierRuns);
+
+  return updatedSupplierRuns;
+}
+
+export async function updateSupplierRunsBulk(supplierRunUpdates) {
+  const currentSupplierRuns = getLocalSupplierRuns();
+  const updatedAt = new Date().toISOString();
+  const normalizedUpdates = (Array.isArray(supplierRunUpdates)
+    ? supplierRunUpdates
+    : []
+  )
+    .filter((supplierRunUpdate) => supplierRunUpdate?.id)
+    .map((supplierRunUpdate) => ({
+      ...supplierRunUpdate,
+      updatedAt,
+    }));
+  const updatesById = new Map(
+    normalizedUpdates.map((supplierRunUpdate) => [
+      supplierRunUpdate.id,
+      supplierRunUpdate,
+    ]),
+  );
+  const updatedSupplierRuns = currentSupplierRuns.map((supplierRun) => {
+    const updates = updatesById.get(supplierRun.id);
+
+    return updates
+      ? {
+          ...supplierRun,
+          ...updates,
+        }
+      : supplierRun;
+  });
+
+  if (db) {
+    await Promise.all(
+      normalizedUpdates.map((supplierRunUpdate) => {
+        const { id, ...updates } = supplierRunUpdate;
+
+        return updateDoc(
+          doc(db, SUPPLIER_RUNS_COLLECTION, id),
+          updates,
+        );
+      }),
     );
   }
 

@@ -66,6 +66,7 @@ import {
   subscribeToSupplierRuns,
   updateSupplierRun,
   updateSupplierRunItems,
+  updateSupplierRunsBulk,
 } from "./utils/supplierRunStorage";
 import {
   addDelivery,
@@ -2512,12 +2513,75 @@ export default function App() {
           }
         : item,
     );
-
     const updatedSupplierRuns =
       await updateSupplierRunItems(
         supplierRunId,
         updatedItems,
       );
+
+    setSupplierRuns(updatedSupplierRuns);
+    setSyncError("");
+
+    const sameStopRuns = updatedSupplierRuns.filter(
+      (currentSupplierRun) =>
+        currentSupplierRun.driver === supplierRun.driver &&
+        currentSupplierRun.vendor === supplierRun.vendor &&
+        currentSupplierRun.scheduledDate === supplierRun.scheduledDate,
+    );
+    const sameStopItems = sameStopRuns.flatMap((currentSupplierRun) =>
+      Array.isArray(currentSupplierRun.items)
+        ? currentSupplierRun.items
+        : [],
+    );
+    const stopIsComplete =
+      sameStopItems.length > 0 &&
+      sameStopItems.every((item) => item.pickedUp);
+    const stopNeedsCompletionStamp =
+      stopIsComplete &&
+      sameStopRuns.some(
+        (currentSupplierRun) => !currentSupplierRun.stopCompletedAt,
+      );
+
+    if (stopNeedsCompletionStamp) {
+      const stopCompletedAt = checkedAt;
+      const stopStrapUpUntil = new Date(
+        new Date(checkedAt).getTime() + 5 * 60000,
+      ).toISOString();
+      const completedStopRuns = await updateSupplierRunsBulk(
+        sameStopRuns.map((currentSupplierRun) => ({
+          id: currentSupplierRun.id,
+          stopCompletedAt,
+          stopStrapUpUntil,
+        })),
+      );
+
+      setSupplierRuns(completedStopRuns);
+      setSyncError("");
+    }
+  }
+
+  async function handleArriveSupplierStop(supplierRunIds: string[]) {
+    const arrivedAt = new Date().toISOString();
+    const updates = supplierRunIds
+      .map((supplierRunId) =>
+        supplierRuns.find(
+          (supplierRun) => supplierRun.id === supplierRunId,
+        ),
+      )
+      .filter(
+        (supplierRun): supplierRun is SupplierRun =>
+          Boolean(supplierRun) && !supplierRun?.stopArrivedAt,
+      )
+      .map((supplierRun) => ({
+        id: supplierRun.id,
+        stopArrivedAt: arrivedAt,
+      }));
+
+    if (updates.length === 0) {
+      return;
+    }
+
+    const updatedSupplierRuns = await updateSupplierRunsBulk(updates);
 
     setSupplierRuns(updatedSupplierRuns);
     setSyncError("");
@@ -3751,6 +3815,7 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -3778,6 +3843,7 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -3811,6 +3877,7 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -3843,6 +3910,7 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -3871,6 +3939,7 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
