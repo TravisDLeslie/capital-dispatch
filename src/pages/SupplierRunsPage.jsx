@@ -1963,24 +1963,34 @@ export default function SupplierRunsPage({
                                       className="relative flex w-full min-w-0 flex-col gap-3 px-4 py-3 pr-14 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between sm:pr-4"
                                       aria-expanded={stopIsOpen}
                                     >
-                                      <div className="min-w-0">
-                                        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
-                                          Stop
-                                        </p>
+                                      <div className="flex min-w-0 items-center gap-3">
+                                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#FC2C38] text-white shadow-sm sm:h-11 sm:w-11">
+                                          <Home
+                                            aria-hidden="true"
+                                            className="h-6 w-6"
+                                            strokeWidth={2.5}
+                                          />
+                                        </span>
 
-                                        <h6 className="truncate text-base font-black text-slate-800">
-                                          {vendorGroup.vendor}
-                                        </h6>
+                                        <div className="min-w-0">
+                                          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">
+                                            Stop
+                                          </p>
 
-                                        <p className="mt-1 text-sm font-semibold text-slate-500">
-                                          {stats.poCount}{" "}
-                                          {stats.poCount === 1
-                                            ? "PO"
-                                            : "POs"}{" "}
-                                          • {stats.itemCount} items
-                                        </p>
+                                          <h6 className="truncate text-base font-black text-slate-800">
+                                            {vendorGroup.vendor}
+                                          </h6>
 
-                                        <StopMobileTiming timing={timing} />
+                                          <p className="mt-1 text-sm font-semibold text-slate-500">
+                                            {stats.poCount}{" "}
+                                            {stats.poCount === 1
+                                              ? "PO"
+                                              : "POs"}{" "}
+                                            • {stats.itemCount} items
+                                          </p>
+
+                                          <StopMobileTiming timing={timing} />
+                                        </div>
                                       </div>
 
                                       <div className="absolute right-3 top-3 flex shrink-0 items-center gap-3 sm:static">
