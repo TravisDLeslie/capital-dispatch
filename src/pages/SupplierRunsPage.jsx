@@ -2915,7 +2915,7 @@ export default function SupplierRunsPage({
                                       </span>
                                     </div>
 
-                                    {supplierAddress ? (
+                                    {supplierAddress && !isCompleteStop ? (
                                       <a
                                         href={getDirectionsUrl(
                                           supplierAddress,
@@ -2969,7 +2969,7 @@ export default function SupplierRunsPage({
                               </div>
 
                               <div className="flex shrink-0 flex-col items-end justify-start gap-2.5 py-4 pr-4 sm:flex-row sm:items-center sm:justify-center sm:gap-2 sm:py-0 sm:pr-5">
-                                {supplierAddress ? (
+                                {supplierAddress && !isCompleteStop ? (
                                   <a
                                     href={getDirectionsUrl(
                                       supplierAddress,
@@ -3026,6 +3026,7 @@ export default function SupplierRunsPage({
                               </div>
                             </div>
 
+                            {!isCompleteStop ? (
                             <div className="border-t border-slate-100 bg-white px-4 py-3">
                               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="hidden min-w-0 flex-1 sm:block">
@@ -3056,6 +3057,7 @@ export default function SupplierRunsPage({
                                 ) : null}
                               </div>
                             </div>
+                            ) : null}
 
                             {stopIsOpen ? (
                               <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-3">
