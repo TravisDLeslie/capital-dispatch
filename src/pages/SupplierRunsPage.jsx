@@ -824,6 +824,7 @@ export default function SupplierRunsPage({
   const isDriverView = _viewerRole === "driver";
   const todayKey = getDateInputValue();
   const [successMessage, setSuccessMessage] = useState("");
+  const [inactiveArrivalStopKey, setInactiveArrivalStopKey] = useState("");
   const [openStopKeys, setOpenStopKeys] = useState({});
   const [openDriverKeys, setOpenDriverKeys] = useState({});
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -862,6 +863,20 @@ export default function SupplierRunsPage({
       window.clearTimeout(timer);
     };
   }, [successMessage]);
+
+  useEffect(() => {
+    if (!inactiveArrivalStopKey) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setInactiveArrivalStopKey("");
+    }, 3500);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [inactiveArrivalStopKey]);
 
   useEffect(() => {
     if (mode === "check") {
@@ -1181,6 +1196,10 @@ export default function SupplierRunsPage({
       lastStrapUp,
       routeDuration: formatDurationMinutes(firstArrival, lastStrapUp),
     };
+  }
+
+  function handleInactiveStopArrivalClick(stopKey) {
+    setInactiveArrivalStopKey(stopKey);
   }
 
   function getVendorGroupStats(vendorGroup) {
@@ -2760,6 +2779,9 @@ export default function SupplierRunsPage({
                           "open",
                           !isCompleteStop,
                         );
+                        const inactiveArrivalKey = `arrival::${driverGroup.driver}::${vendorGroup.vendor}`;
+                        const showInactiveArrivalNotice =
+                          inactiveArrivalStopKey === inactiveArrivalKey;
 
                         return (
                           <div
@@ -3069,20 +3091,37 @@ export default function SupplierRunsPage({
                                 </div>
 
                                 {timing.canArrive ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      onArriveSupplierStop(timing.runIds)
-                                    }
-                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
-                                  >
-                                    <MapPin
-                                      aria-hidden="true"
-                                      className="h-4 w-4"
-                                      strokeWidth={2.6}
-                                    />
-                                    I've arrived
-                                  </button>
+                                  <div className="flex flex-col items-stretch gap-2 sm:items-end">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        isCurrentStop
+                                          ? onArriveSupplierStop(timing.runIds)
+                                          : handleInactiveStopArrivalClick(
+                                              inactiveArrivalKey,
+                                            )
+                                      }
+                                      aria-disabled={!isCurrentStop}
+                                      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black shadow-sm transition ${
+                                        isCurrentStop
+                                          ? "bg-slate-950 text-white hover:bg-slate-800"
+                                          : "cursor-not-allowed bg-slate-200 text-slate-500"
+                                      }`}
+                                    >
+                                      <MapPin
+                                        aria-hidden="true"
+                                        className="h-4 w-4"
+                                        strokeWidth={2.6}
+                                      />
+                                      I've arrived
+                                    </button>
+
+                                    {showInactiveArrivalNotice ? (
+                                      <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
+                                        Not currently an active stop.
+                                      </p>
+                                    ) : null}
+                                  </div>
                                 ) : null}
                               </div>
                             </div>
