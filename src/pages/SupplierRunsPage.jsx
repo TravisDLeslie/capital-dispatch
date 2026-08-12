@@ -2542,14 +2542,14 @@ export default function SupplierRunsPage({
                               )
                             }
                             onDragEnd={() => setDraggingStop(null)}
-                            className={`overflow-hidden rounded-xl border bg-white transition ${
+                            className={`overflow-hidden rounded-2xl border bg-white transition ${
                               draggingStop?.driver === driverGroup.driver &&
                               draggingStop?.vendor === vendorGroup.vendor
                                 ? "border-blue-300 opacity-60"
                                 : "border-slate-200"
                             }`}
                           >
-                            <div className="flex items-stretch gap-2">
+                            <div className="flex items-stretch gap-2 sm:gap-3">
                               {canReorderRoute &&
                               driverGroup.vendorGroups.length > 1 ? (
                                 <div
@@ -2618,12 +2618,12 @@ export default function SupplierRunsPage({
                                       vendorGroup.vendor,
                                     )
                                   }
-                                  className="flex w-full min-w-0 flex-col gap-3 px-4 py-3 pr-14 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between sm:pr-4"
+                                  className="flex w-full min-w-0 flex-col gap-3 px-4 py-4 pr-14 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between sm:py-3 sm:pr-4"
                                   aria-expanded={stopIsOpen}
                                 >
                                 <div className="flex min-w-0 items-center gap-3">
                                   <span
-                                    className={`h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38] ${
+                                    className={`h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#FC2C38] text-white shadow-sm sm:h-14 sm:w-14 ${
                                       shouldShowMobileStopIcon
                                         ? "flex"
                                         : "hidden sm:flex"
@@ -2631,17 +2631,17 @@ export default function SupplierRunsPage({
                                   >
                                     <Home
                                       aria-hidden="true"
-                                      className="h-7 w-7"
+                                      className="h-8 w-8 sm:h-7 sm:w-7"
                                       strokeWidth={2.5}
                                     />
                                   </span>
 
                                   <div className="min-w-0">
-                                    <h5 className="truncate text-xl font-black text-slate-900">
+                                    <h5 className="truncate text-xl font-black leading-tight text-slate-900">
                                       {vendorGroup.vendor}
                                     </h5>
 
-                                    <p className="mt-1 text-sm font-bold text-slate-500">
+                                    <p className="mt-1 text-sm font-bold leading-tight text-slate-500">
                                       {stats.poCount}{" "}
                                       {stats.poCount === 1 ? "PO" : "POs"} •{" "}
                                       {stats.remainingItems}{" "}
@@ -2664,7 +2664,7 @@ export default function SupplierRunsPage({
                                       vendorGroup.vendor,
                                     )
                                   }
-                                  className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 sm:hidden"
+                                  className="absolute right-3 top-[4.1rem] flex h-9 w-9 items-center justify-center rounded-full border border-slate-100 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 sm:hidden"
                                   aria-label={
                                     stopIsOpen
                                       ? `Close ${vendorGroup.vendor}`
@@ -2682,7 +2682,7 @@ export default function SupplierRunsPage({
                                 </button>
                               </div>
 
-                              <div className="flex shrink-0 flex-col items-end justify-center gap-2.5 py-4 pr-4 sm:flex-row sm:items-center sm:gap-2 sm:py-0 sm:pr-5">
+                              <div className="flex shrink-0 flex-col items-end justify-start gap-2.5 py-4 pr-4 sm:flex-row sm:items-center sm:justify-center sm:gap-2 sm:py-0 sm:pr-5">
                                 {supplierAddress ? (
                                   <a
                                     href={getDirectionsUrl(
@@ -2690,12 +2690,12 @@ export default function SupplierRunsPage({
                                     )}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex h-9 items-center justify-center gap-1 rounded-full bg-[#FC2C38] px-3.5 text-[11px] font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:px-4 sm:text-xs"
+                                    className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#FC2C38] px-5 text-sm font-black text-white shadow-md shadow-red-200 transition hover:bg-[#dc1f2b] sm:h-9 sm:px-4 sm:text-xs sm:shadow-sm"
                                     aria-label={`Directions to ${vendorGroup.vendor}`}
                                   >
                                     <ArrowUpRight
                                       aria-hidden="true"
-                                      className="h-3.5 w-3.5"
+                                      className="h-4 w-4 sm:h-3.5 sm:w-3.5"
                                       strokeWidth={2.6}
                                     />
                                     <span>Directions</span>
