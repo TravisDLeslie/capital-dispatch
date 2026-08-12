@@ -133,14 +133,12 @@ import {
 import {
   capitalLumberAddress,
 } from "./data/options";
-import { getDateInputValue } from "./utils/dateHelpers";
 import { formatCustomerName } from "./utils/textFormatters";
 
 const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
 const SOUTH_PICKUP_AUTO_REFRESH_MS = 5 * 60 * 1000;
 const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
-const DRIVER_SOUTH_ALERT_STORAGE_PREFIX = "dispatch-cl-driver-south-alert";
 
 type UserProfile = {
   id: string;
@@ -872,63 +870,6 @@ function PullToRefresh() {
   );
 }
 
-function DriverSouthAssignedModal({
-  onDismiss,
-  onViewRoute,
-}: {
-  onDismiss: () => void;
-  onViewRoute: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/70 px-4 py-6">
-      <section
-        className="w-full max-w-md rounded-3xl border border-blue-200 bg-white p-6 text-center shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="driver-south-alert-title"
-      >
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
-          <Truck aria-hidden="true" className="h-8 w-8" strokeWidth={2.5} />
-        </div>
-
-        <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-          South Route Assigned
-        </p>
-
-        <h2
-          id="driver-south-alert-title"
-          className="mt-2 text-3xl font-black tracking-tight text-slate-950"
-        >
-          Please wait for the go-ahead before leaving.
-        </h2>
-
-        <p className="mt-3 text-base font-semibold leading-7 text-slate-500">
-          Your South route has been assigned. Check with dispatch before
-          heading out.
-        </p>
-
-        <div className="mt-6 grid gap-3">
-          <button
-            type="button"
-            onClick={onViewRoute}
-            className="min-h-[48px] rounded-xl bg-[#FC2C38] px-5 text-base font-black text-white shadow-sm transition hover:bg-red-600"
-          >
-            View Route
-          </button>
-
-          <button
-            type="button"
-            onClick={onDismiss}
-            className="min-h-[48px] rounded-xl border border-slate-300 bg-white px-5 text-base font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
-          >
-            I understand
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 export default function App() {
   const [currentPage, setCurrentPage] =
     useState(() => {
@@ -979,7 +920,6 @@ export default function App() {
     useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState("");
-  const [showDriverSouthAlert, setShowDriverSouthAlert] = useState(false);
 
   function reportBackgroundSyncError(error: unknown) {
     if ((error as { code?: string })?.code === "permission-denied") {
@@ -1227,25 +1167,6 @@ export default function App() {
       supplierRun.dispatchStatus !== "needsDispatch" &&
       Boolean(supplierRun.driver),
   );
-  const actualDriverActiveSouthRuns =
-    userRole === "driver"
-      ? supplierRuns.filter(
-          (supplierRun) =>
-            supplierRun.status !== "complete" &&
-            supplierRun.dispatchStatus !== "needsDispatch" &&
-            supplierRun.driver === driverName,
-        )
-      : [];
-  const actualDriverSouthAlertSignature = actualDriverActiveSouthRuns
-    .map((supplierRun) => supplierRun.id)
-    .sort()
-    .join("|");
-  const actualDriverSouthAlertDateKey = getDateInputValue();
-  const actualDriverSouthAlertStorageKey = [
-    DRIVER_SOUTH_ALERT_STORAGE_PREFIX,
-    currentUser?.uid || userProfile?.uid || userProfile?.id || "driver",
-    actualDriverSouthAlertDateKey,
-  ].join(":");
   const visibleDeliveries =
     effectiveUserRole === "driver"
       ? deliveries
@@ -1399,34 +1320,6 @@ export default function App() {
       window.clearInterval(refreshTimer);
     };
   }, [currentPage]);
-
-  useEffect(() => {
-    if (
-      userRole !== "driver" ||
-      !isApproved ||
-      !actualDriverSouthAlertSignature
-    ) {
-      setShowDriverSouthAlert(false);
-      return;
-    }
-
-    try {
-      const dismissedSignature = localStorage.getItem(
-        actualDriverSouthAlertStorageKey,
-      );
-
-      setShowDriverSouthAlert(
-        dismissedSignature !== "dismissed",
-      );
-    } catch {
-      setShowDriverSouthAlert(true);
-    }
-  }, [
-    actualDriverSouthAlertSignature,
-    actualDriverSouthAlertStorageKey,
-    isApproved,
-    userRole,
-  ]);
 
   useEffect(() => {
     if (!auth) {
@@ -2180,24 +2073,6 @@ export default function App() {
     await signOut(auth);
     setCurrentPage("dashboard");
     setEditingDeliveryId("");
-  }
-
-  function dismissDriverSouthAlert() {
-    try {
-      localStorage.setItem(
-        actualDriverSouthAlertStorageKey,
-        "dismissed",
-      );
-    } catch {
-      // Ignore storage failures; closing the modal still helps immediately.
-    }
-
-    setShowDriverSouthAlert(false);
-  }
-
-  function viewDriverSouthRouteFromAlert() {
-    dismissDriverSouthAlert();
-    setCurrentPage("supplier-runs-check");
   }
 
   async function handleUpdateUserProfile(
@@ -4236,13 +4111,6 @@ export default function App() {
             }}
             onSignOut={handleSignOut}
           />
-
-          {showDriverSouthAlert ? (
-            <DriverSouthAssignedModal
-              onDismiss={dismissDriverSouthAlert}
-              onViewRoute={viewDriverSouthRouteFromAlert}
-            />
-          ) : null}
 
           <main className="md:pl-72">
             <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6 lg:px-8">
