@@ -193,6 +193,34 @@ function Field({ label, value, onChange, placeholder, textarea = false }) {
   );
 }
 
+function CategoryField({ value, onChange, options }) {
+  const categoryOptions = options.filter((category) => category !== "All");
+
+  return (
+    <label>
+      <span className="mb-2 block text-sm font-black text-slate-700">
+        Category
+      </span>
+      <input
+        list="stocking-handbook-category-options"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Choose or type a new category"
+        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+      />
+      <datalist id="stocking-handbook-category-options">
+        {categoryOptions.map((category) => (
+          <option key={category} value={category} />
+        ))}
+      </datalist>
+      <p className="mt-2 text-xs font-bold text-slate-500">
+        Pick an existing category or type a new one. New categories appear after
+        saving.
+      </p>
+    </label>
+  );
+}
+
 /**
  * @param {{
  *   items?: Array<Record<string, any>>;
@@ -527,11 +555,10 @@ export default function StockingHandbookPage({
               onChange={(value) => updateForm("name", value)}
               placeholder="2x6 Doug Fir/Larch"
             />
-            <Field
-              label="Category"
+            <CategoryField
               value={form.category}
               onChange={(value) => updateForm("category", value)}
-              placeholder="Dimensional Lumber"
+              options={categories}
             />
             <Field
               label="SKU / Item #"
