@@ -246,13 +246,14 @@ function getVendorGroupStatsFromRuns(runs) {
 }
 
 function MobileRouteProgress({ vendorGroups }) {
-  const stops = vendorGroups.map((vendorGroup) => {
+  const stops = vendorGroups.map((vendorGroup, stopIndex) => {
     const stats = getVendorGroupStatsFromRuns(vendorGroup.runs);
     const isComplete =
       stats.itemCount > 0 && stats.remainingItems === 0;
 
     return {
       vendor: vendorGroup.vendor,
+      number: String(stopIndex + 1).padStart(2, "0"),
       isComplete,
     };
   });
@@ -267,15 +268,21 @@ function MobileRouteProgress({ vendorGroups }) {
 
   return (
     <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-5 shadow-sm sm:hidden">
-      <p className="mb-5 text-xs font-black uppercase tracking-[0.24em] text-slate-500">
-        Route Progress
-      </p>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-500">
+          Route Progress
+        </p>
+
+        <p className="text-xs font-black text-slate-400">
+          {stops.filter((stop) => stop.isComplete).length}/{stops.length} stops
+        </p>
+      </div>
 
       <div className="overflow-x-auto pb-1">
         <div
-          className="grid min-w-full items-start"
+          className="grid min-w-full items-start px-1"
           style={{
-            gridTemplateColumns: `repeat(${stops.length}, minmax(96px, 1fr))`,
+            gridTemplateColumns: `repeat(${stops.length}, minmax(82px, 1fr))`,
           }}
         >
           {stops.map((stop, stopIndex) => {
@@ -289,29 +296,49 @@ function MobileRouteProgress({ vendorGroups }) {
               >
                 {!isLastStop ? (
                   <div
-                    className={`absolute left-1/2 top-[11px] h-0.5 w-full border-t-2 border-dashed ${
+                    className={`absolute left-1/2 top-[18px] h-0.5 w-full border-t-2 ${
                       stop.isComplete
                         ? "border-emerald-700"
-                        : "border-slate-300"
+                        : "border-dashed border-slate-300"
                     }`}
                     aria-hidden="true"
                   />
                 ) : null}
 
                 <span
-                  className={`relative z-10 h-6 w-6 rounded-full border-[3px] bg-white ${
+                  className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full border-[3px] text-[11px] font-black shadow-sm ${
                     stop.isComplete
-                      ? "border-emerald-700"
+                      ? "border-emerald-700 bg-emerald-700 text-white"
                       : isActive
-                        ? "border-[#FC2C38]"
-                      : "border-slate-300"
+                        ? "border-[#FC2C38] bg-red-50 text-[#FC2C38]"
+                      : "border-slate-300 bg-white text-slate-400"
                   }`}
-                  aria-hidden="true"
-                />
+                  aria-label={`${stop.vendor} ${
+                    stop.isComplete
+                      ? "completed"
+                      : isActive
+                        ? "current stop"
+                        : "upcoming stop"
+                  }`}
+                >
+                  {stop.isComplete ? (
+                    <Check
+                      aria-hidden="true"
+                      className="h-4 w-4"
+                      strokeWidth={3}
+                    />
+                  ) : (
+                    stop.number
+                  )}
+                </span>
 
                 <p
                   className={`line-clamp-2 max-w-[104px] text-center text-xs font-bold leading-tight ${
-                    isActive ? "text-[#FC2C38]" : "text-slate-700"
+                    stop.isComplete
+                      ? "text-slate-400"
+                      : isActive
+                        ? "text-[#FC2C38]"
+                        : "text-slate-700"
                   }`}
                 >
                   {stop.vendor}
@@ -942,11 +969,13 @@ export default function SupplierRunsPage({
     return Boolean(openDriverKeys[driverKey]);
   }
 
-  function isStopOpen(driver, vendor, scope = "open") {
+  function isStopOpen(driver, vendor, scope = "open", defaultOpen = true) {
     const stopKey = `${scope}::${driver}::${vendor}`;
 
     if (scope === "open") {
-      return openStopKeys[stopKey] !== false;
+      return defaultOpen
+        ? openStopKeys[stopKey] !== false
+        : openStopKeys[stopKey] === true;
     }
 
     return Boolean(openStopKeys[stopKey]);
@@ -2687,6 +2716,18 @@ export default function SupplierRunsPage({
                         const isCurrentStop = vendorIndex === nextStopIndex;
                         const isCompleteStop =
                           stats.itemCount > 0 && stats.remainingItems === 0;
+                        const isNextStop =
+                          !isCurrentStop &&
+                          !isCompleteStop &&
+                          nextStopIndex !== -1 &&
+                          vendorIndex > nextStopIndex;
+                        const stopStageLabel = isCurrentStop
+                          ? "Current Stop"
+                          : isCompleteStop
+                            ? "Completed Stop"
+                            : isNextStop
+                              ? "Next Stop"
+                              : "Stop";
                         const stopNumber = String(vendorIndex + 1).padStart(
                           2,
                           "0",
@@ -2694,6 +2735,8 @@ export default function SupplierRunsPage({
                         const stopIsOpen = isStopOpen(
                           driverGroup.driver,
                           vendorGroup.vendor,
+                          "open",
+                          !isCompleteStop,
                         );
 
                         return (
@@ -2733,7 +2776,7 @@ export default function SupplierRunsPage({
                                 : isCurrentStop
                                   ? "border-red-100"
                                   : isCompleteStop
-                                    ? "border-emerald-100"
+                                    ? "border-slate-200 bg-slate-50/70"
                                     : "border-slate-200"
                             }`}
                           >
@@ -2833,12 +2876,22 @@ export default function SupplierRunsPage({
                                   </span>
 
                                   <div className="min-w-0">
-                                    <h5
-                                      className={`truncate text-xl font-black leading-tight ${
+                                    <p
+                                      className={`mb-1 text-[10px] font-black uppercase tracking-[0.2em] sm:hidden ${
                                         isCurrentStop
                                           ? "text-[#FC2C38]"
                                           : isCompleteStop
-                                            ? "text-emerald-800"
+                                            ? "text-slate-400"
+                                            : "text-slate-500"
+                                      }`}
+                                    >
+                                      {stopStageLabel}
+                                    </p>
+
+                                    <h5
+                                      className={`truncate text-xl font-black leading-tight ${
+                                        isCompleteStop
+                                          ? "text-slate-500"
                                             : "text-slate-900"
                                       }`}
                                     >
@@ -2852,11 +2905,13 @@ export default function SupplierRunsPage({
                                       </span>
 
                                       <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-black leading-tight text-slate-900">
-                                        {stats.remainingItems}{" "}
-                                        {stats.remainingItems === 1
-                                          ? "item"
-                                          : "items"}{" "}
-                                        left
+                                        {isCompleteStop
+                                          ? "complete"
+                                          : `${stats.remainingItems} ${
+                                              stats.remainingItems === 1
+                                                ? "item"
+                                                : "items"
+                                            } left`}
                                       </span>
                                     </div>
 
