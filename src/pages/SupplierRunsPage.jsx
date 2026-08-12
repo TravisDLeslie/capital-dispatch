@@ -920,6 +920,29 @@ export default function SupplierRunsPage({
     };
   }
 
+  function getDriverGroupTiming(driverGroup) {
+    const stopTimings = driverGroup.vendorGroups
+      .map((vendorGroup) => getVendorGroupTiming(vendorGroup))
+      .filter((timing) => timing.arrivedAt || timing.strapUpUntil);
+    const firstArrival =
+      stopTimings
+        .map((timing) => timing.arrivedAt)
+        .filter(Boolean)
+        .sort()[0] || "";
+    const lastStrapUp =
+      stopTimings
+        .map((timing) => timing.strapUpUntil || timing.completedAt)
+        .filter(Boolean)
+        .sort()
+        .at(-1) || "";
+
+    return {
+      firstArrival,
+      lastStrapUp,
+      routeDuration: formatDurationMinutes(firstArrival, lastStrapUp),
+    };
+  }
+
   function getVendorGroupStats(vendorGroup) {
     const items = vendorGroup.runs.flatMap((supplierRun) =>
       Array.isArray(supplierRun.items) ? supplierRun.items : [],
@@ -1738,6 +1761,7 @@ export default function SupplierRunsPage({
                         driverKey,
                         "history",
                       );
+                      const driverTiming = getDriverGroupTiming(group);
 
                       return (
                         <div
@@ -1772,6 +1796,17 @@ export default function SupplierRunsPage({
                             </div>
 
                             <div className="flex shrink-0 items-center gap-2">
+                              {driverTiming.routeDuration ? (
+                                <div className="hidden rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-right shadow-sm sm:block">
+                                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
+                                    Total South
+                                  </p>
+                                  <p className="text-sm font-black text-emerald-800">
+                                    {driverTiming.routeDuration}
+                                  </p>
+                                </div>
+                              ) : null}
+
                               <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-600 shadow-sm">
                                 {group.vendorGroups.reduce(
                                   (count, vendorGroup) =>
@@ -1795,6 +1830,37 @@ export default function SupplierRunsPage({
 
                           {driverIsOpen ? (
                             <div className="mt-3 space-y-4">
+                              {driverTiming.routeDuration ? (
+                                <div className="grid gap-2 sm:grid-cols-3">
+                                  <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">
+                                      First arrival
+                                    </p>
+                                    <p className="mt-0.5 text-sm font-black text-blue-800">
+                                      {formatTime(driverTiming.firstArrival)}
+                                    </p>
+                                  </div>
+
+                                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
+                                      Total South time
+                                    </p>
+                                    <p className="mt-0.5 text-sm font-black text-emerald-800">
+                                      {driverTiming.routeDuration}
+                                    </p>
+                                  </div>
+
+                                  <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-600">
+                                      Last strap-up
+                                    </p>
+                                    <p className="mt-0.5 text-sm font-black text-amber-800">
+                                      {formatTime(driverTiming.lastStrapUp)}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : null}
+
                               {group.vendorGroups.map((vendorGroup) => {
                                 const stats =
                                   getVendorGroupStats(vendorGroup);
@@ -2235,6 +2301,8 @@ export default function SupplierRunsPage({
                   );
                   const vehicleLabel =
                     getDriverGroupVehicleLabel(driverGroup);
+                  const driverTiming =
+                    getDriverGroupTiming(driverGroup);
                   const driverPoCount =
                     driverGroup.vendorGroups.reduce(
                       (count, vendorGroup) =>
@@ -2341,6 +2409,37 @@ export default function SupplierRunsPage({
                               ? ` • ${driverStats.remainingItems} left`
                               : " • complete"}
                           </p>
+
+                          {driverTiming.routeDuration ? (
+                            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                              <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">
+                                  First arrival
+                                </p>
+                                <p className="mt-0.5 text-sm font-black text-blue-800">
+                                  {formatTime(driverTiming.firstArrival)}
+                                </p>
+                              </div>
+
+                              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
+                                  Total South time
+                                </p>
+                                <p className="mt-0.5 text-sm font-black text-emerald-800">
+                                  {driverTiming.routeDuration}
+                                </p>
+                              </div>
+
+                              <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
+                                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-600">
+                                  Last strap-up
+                                </p>
+                                <p className="mt-0.5 text-sm font-black text-amber-800">
+                                  {formatTime(driverTiming.lastStrapUp)}
+                                </p>
+                              </div>
+                            </div>
+                          ) : null}
                         </div>
                       </button>
 
