@@ -256,13 +256,17 @@ function MobileRouteProgress({ vendorGroups }) {
       isComplete,
     };
   });
+  const activeStopIndex = Math.max(
+    stops.findIndex((stop) => !stop.isComplete),
+    0,
+  );
 
   if (stops.length <= 1) {
     return null;
   }
 
   return (
-    <div className="mb-4 border-y border-slate-100 bg-white px-1 py-5 sm:hidden">
+    <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-5 shadow-sm sm:hidden">
       <p className="mb-5 text-xs font-black uppercase tracking-[0.24em] text-slate-500">
         Route Progress
       </p>
@@ -276,6 +280,7 @@ function MobileRouteProgress({ vendorGroups }) {
         >
           {stops.map((stop, stopIndex) => {
             const isLastStop = stopIndex === stops.length - 1;
+            const isActive = stopIndex === activeStopIndex && !stop.isComplete;
 
             return (
               <div
@@ -286,7 +291,7 @@ function MobileRouteProgress({ vendorGroups }) {
                   <div
                     className={`absolute left-1/2 top-[11px] h-0.5 w-full border-t-2 border-dashed ${
                       stop.isComplete
-                        ? "border-emerald-600"
+                        ? "border-emerald-700"
                         : "border-slate-300"
                     }`}
                     aria-hidden="true"
@@ -297,12 +302,18 @@ function MobileRouteProgress({ vendorGroups }) {
                   className={`relative z-10 h-6 w-6 rounded-full border-[3px] bg-white ${
                     stop.isComplete
                       ? "border-emerald-700"
+                      : isActive
+                        ? "border-[#FC2C38]"
                       : "border-slate-300"
                   }`}
                   aria-hidden="true"
                 />
 
-                <p className="line-clamp-2 max-w-[104px] text-center text-xs font-bold leading-tight text-slate-700">
+                <p
+                  className={`line-clamp-2 max-w-[104px] text-center text-xs font-bold leading-tight ${
+                    isActive ? "text-[#FC2C38]" : "text-slate-700"
+                  }`}
+                >
                   {stop.vendor}
                 </p>
               </div>
@@ -1225,18 +1236,6 @@ export default function SupplierRunsPage({
     return `${vehicleLabels[0]} +${vehicleLabels.length - 1}`;
   }
 
-  function getDriverStatsForRuns(driver, runs) {
-    return getDriverGroupStats({
-      driver,
-      vendorGroups: groupRunsByVendor(
-        runs.filter(
-          (supplierRun) =>
-            (supplierRun.driver || UNASSIGNED_DRIVER) === driver,
-        ),
-      ),
-    });
-  }
-
   function getDispatchDraft(supplierRun) {
     return {
       driver: supplierRun.driver || "",
@@ -1471,7 +1470,7 @@ export default function SupplierRunsPage({
     );
 
   const openRunGroups = groupRunsByDriverAndVendor(
-    openRuns,
+    filteredVisibleRuns,
     mode === "check" ? routeOrdersByDriver : {},
     safeVendorRouteOrder,
     safeVendorDisplayNameMap,
@@ -2438,7 +2437,7 @@ export default function SupplierRunsPage({
             />
           ) : null}
 
-          {openRuns.length > 0 ? (
+          {filteredVisibleRuns.length > 0 ? (
             <div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -2454,10 +2453,7 @@ export default function SupplierRunsPage({
 
               <div className="space-y-5">
                 {openRunGroups.map((driverGroup) => {
-                  const driverStats = getDriverStatsForRuns(
-                    driverGroup.driver,
-                    filteredVisibleRuns,
-                  );
+                  const driverStats = getDriverGroupStats(driverGroup);
                   const driverAvatar = getDriverAvatar(
                     driverGroup.driver,
                   );
@@ -2684,7 +2680,13 @@ export default function SupplierRunsPage({
                         const supplierAddress =
                           getVendorGroupAddress(vendorGroup);
                         const timing = getVendorGroupTiming(vendorGroup);
-                        const isCurrentStop = vendorIndex === 0;
+                        const nextStopIndex = driverGroup.vendorGroups.findIndex(
+                          (group) =>
+                            getVendorGroupStats(group).remainingItems > 0,
+                        );
+                        const isCurrentStop = vendorIndex === nextStopIndex;
+                        const isCompleteStop =
+                          stats.itemCount > 0 && stats.remainingItems === 0;
                         const stopNumber = String(vendorIndex + 1).padStart(
                           2,
                           "0",
@@ -2728,7 +2730,11 @@ export default function SupplierRunsPage({
                               draggingStop?.driver === driverGroup.driver &&
                               draggingStop?.vendor === vendorGroup.vendor
                                 ? "border-blue-300 opacity-60"
-                                : "border-slate-200"
+                                : isCurrentStop
+                                  ? "border-red-100"
+                                  : isCompleteStop
+                                    ? "border-emerald-100"
+                                    : "border-slate-200"
                             }`}
                           >
                             <div className="flex items-stretch gap-2 sm:gap-3">
@@ -2808,6 +2814,8 @@ export default function SupplierRunsPage({
                                     className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-base font-black shadow-sm sm:hidden ${
                                       isCurrentStop
                                         ? "bg-red-50 text-[#FC2C38]"
+                                        : isCompleteStop
+                                          ? "bg-emerald-50 text-emerald-700"
                                         : "bg-slate-100 text-slate-600"
                                     }`}
                                   >
@@ -2825,7 +2833,15 @@ export default function SupplierRunsPage({
                                   </span>
 
                                   <div className="min-w-0">
-                                    <h5 className="truncate text-xl font-black leading-tight text-slate-900">
+                                    <h5
+                                      className={`truncate text-xl font-black leading-tight ${
+                                        isCurrentStop
+                                          ? "text-[#FC2C38]"
+                                          : isCompleteStop
+                                            ? "text-emerald-800"
+                                            : "text-slate-900"
+                                      }`}
+                                    >
                                       {vendorGroup.vendor}
                                     </h5>
 
@@ -3029,19 +3045,9 @@ export default function SupplierRunsPage({
                 })}
               </div>
             </div>
-          ) : visibleRuns.length > 0 ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-5">
-              <p className="text-lg font-black text-emerald-900">
-                All South POs are checked off.
-              </p>
-
-              <p className="mt-1 text-sm font-semibold text-emerald-700">
-                Completed stops are listed below for reference.
-              </p>
-            </div>
           ) : null}
 
-          {completeRuns.length > 0 ? (
+          {!isDriverView && completeRuns.length > 0 ? (
             <div className="mt-8 border-t border-slate-200 pt-6">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
