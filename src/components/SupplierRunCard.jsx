@@ -862,7 +862,7 @@ export default function SupplierRunCard({
             )}
 
             {poTimeAtSupplier ? (
-              <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-black uppercase tracking-wide text-blue-700">
+              <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-black uppercase tracking-wide text-violet-800">
                 PO time {poTimeAtSupplier}
               </span>
             ) : null}
@@ -894,8 +894,8 @@ export default function SupplierRunCard({
               </p>
 
               {poTimeAtSupplier ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2 border-l-4 border-slate-200 pl-3 text-xs font-black text-slate-500">
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-l-4 border-violet-200 pl-3 text-xs font-black text-slate-500">
+                  <span className="rounded-full bg-violet-50 px-3 py-1 text-violet-800">
                     PO time: {poTimeAtSupplier}
                   </span>
 

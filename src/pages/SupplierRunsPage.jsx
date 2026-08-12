@@ -450,15 +450,15 @@ function StopTimingPills({ timing, compact = false }) {
 
   return (
     <div
-      className={`rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 ${
+      className={`rounded-2xl border border-violet-100 bg-violet-50/50 px-3 py-2.5 ${
         compact ? "" : "sm:max-w-3xl"
       }`}
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         {timing.stopDuration ? (
-          <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-800">
+          <div className="flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1.5 text-sm font-black text-violet-800">
             <span
-              className="h-2 w-2 rounded-full bg-emerald-500"
+              className="h-2 w-2 rounded-full bg-violet-600"
               aria-hidden="true"
             />
             {timing.stopDuration} at stop
@@ -468,7 +468,7 @@ function StopTimingPills({ timing, compact = false }) {
         {timing.arrivedAt ? (
           <div className="flex items-center gap-1.5 text-xs font-black text-slate-500">
             <span
-              className="h-1.5 w-1.5 rounded-full bg-blue-500"
+              className="h-1.5 w-1.5 rounded-full bg-violet-400"
               aria-hidden="true"
             />
             Arrived {formatTime(timing.arrivedAt)}
@@ -478,7 +478,7 @@ function StopTimingPills({ timing, compact = false }) {
         {timing.strapUpUntil ? (
           <div className="flex items-center gap-1.5 text-xs font-black text-slate-500">
             <span
-              className="h-1.5 w-1.5 rounded-full bg-amber-500"
+              className="h-1.5 w-1.5 rounded-full bg-violet-400"
               aria-hidden="true"
             />
             Strap-up done {formatTime(timing.strapUpUntil)}
@@ -495,9 +495,9 @@ function StopDurationBadge({ timing }) {
   }
 
   return (
-    <div className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-800 sm:flex">
+    <div className="hidden items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-800 sm:flex">
       <span
-        className="h-2 w-2 rounded-full bg-emerald-500"
+        className="h-2 w-2 rounded-full bg-violet-600"
         aria-hidden="true"
       />
       {timing.stopDuration} at stop
@@ -513,9 +513,9 @@ function StopMobileTiming({ timing }) {
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-black text-slate-500 sm:hidden">
       {timing.stopDuration ? (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-emerald-800">
+        <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-violet-800">
           <span
-            className="h-1.5 w-1.5 rounded-full bg-emerald-500"
+            className="h-1.5 w-1.5 rounded-full bg-violet-600"
             aria-hidden="true"
           />
           {timing.stopDuration}
@@ -539,13 +539,13 @@ function RouteTimingTimeline({ timing }) {
   }
 
   return (
-    <div className="rounded-2xl border border-emerald-100 bg-white px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
           Route timeline
         </p>
 
-        <div className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-black text-emerald-800">
+        <div className="rounded-full bg-violet-50 px-3 py-1 text-sm font-black text-violet-800">
           {timing.routeDuration} total
         </div>
       </div>
@@ -556,13 +556,13 @@ function RouteTimingTimeline({ timing }) {
           aria-hidden="true"
         />
         <div
-          className="absolute left-[16.6%] right-[16.6%] top-3 h-0.5 bg-emerald-300"
+          className="absolute left-[16.6%] right-[16.6%] top-3 h-0.5 bg-violet-300"
           aria-hidden="true"
         />
 
         <div className="relative text-left">
-          <span className="block h-6 w-6 rounded-full border-4 border-blue-50 bg-blue-600 shadow-sm" />
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-blue-500">
+          <span className="block h-6 w-6 rounded-full border-4 border-violet-50 bg-violet-500 shadow-sm" />
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-500">
             First stop
           </p>
           <p className="mt-0.5 text-sm font-black text-slate-900">
@@ -571,18 +571,18 @@ function RouteTimingTimeline({ timing }) {
         </div>
 
         <div className="relative text-center">
-          <span className="mx-auto block h-6 w-6 rounded-full border-4 border-emerald-50 bg-emerald-600 shadow-sm" />
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-600">
+          <span className="mx-auto block h-6 w-6 rounded-full border-4 border-violet-50 bg-violet-700 shadow-sm" />
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-700">
             South time
           </p>
-          <p className="mt-0.5 text-base font-black text-emerald-800">
+          <p className="mt-0.5 text-base font-black text-violet-900">
             {timing.routeDuration}
           </p>
         </div>
 
         <div className="relative text-right">
-          <span className="ml-auto block h-6 w-6 rounded-full border-4 border-amber-50 bg-amber-500 shadow-sm" />
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-amber-600">
+          <span className="ml-auto block h-6 w-6 rounded-full border-4 border-violet-50 bg-violet-500 shadow-sm" />
+          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-500">
             Strap-up
           </p>
           <p className="mt-0.5 text-sm font-black text-slate-900">
@@ -1899,11 +1899,11 @@ export default function SupplierRunsPage({
 
                             <div className="flex shrink-0 items-center gap-2">
                               {driverTiming.routeDuration ? (
-                                <div className="hidden rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-right shadow-sm sm:block">
-                                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
+                                <div className="hidden rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-right shadow-sm sm:block">
+                                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-500">
                                     Total South
                                   </p>
-                                  <p className="text-sm font-black text-emerald-800">
+                                  <p className="text-sm font-black text-violet-900">
                                     {driverTiming.routeDuration}
                                   </p>
                                 </div>
