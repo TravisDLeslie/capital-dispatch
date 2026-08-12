@@ -470,7 +470,7 @@ function StopTimingPills({ timing, compact = false }) {
       {timing.stopDuration ? (
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2">
           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
-            Time at stop
+            Total stop time
           </p>
           <p className="mt-0.5 text-sm font-black text-emerald-800">
             {timing.stopDuration}
@@ -907,7 +907,10 @@ export default function SupplierRunsPage({
       arrivedAt,
       completedAt,
       strapUpUntil,
-      stopDuration: formatDurationMinutes(arrivedAt, completedAt),
+      stopDuration: formatDurationMinutes(
+        arrivedAt,
+        strapUpUntil || completedAt,
+      ),
       runIds: vendorGroup.runs.map((supplierRun) => supplierRun.id),
       canArrive:
         Boolean(onArriveSupplierStop) &&
@@ -1843,7 +1846,7 @@ export default function SupplierRunsPage({
                                         {timing.stopDuration ? (
                                           <div className="hidden rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-right sm:block">
                                             <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
-                                              Time at stop
+                                              Total stop time
                                             </p>
                                             <p className="text-sm font-black text-emerald-800">
                                               {timing.stopDuration}
