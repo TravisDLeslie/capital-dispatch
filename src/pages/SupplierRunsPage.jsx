@@ -839,11 +839,23 @@ export default function SupplierRunsPage({
   }
 
   function isDriverOpen(driver, scope = "open") {
-    return Boolean(openDriverKeys[`${scope}::${driver}`]);
+    const driverKey = `${scope}::${driver}`;
+
+    if (scope === "open") {
+      return openDriverKeys[driverKey] !== false;
+    }
+
+    return Boolean(openDriverKeys[driverKey]);
   }
 
   function isStopOpen(driver, vendor, scope = "open") {
-    return Boolean(openStopKeys[`${scope}::${driver}::${vendor}`]);
+    const stopKey = `${scope}::${driver}::${vendor}`;
+
+    if (scope === "open") {
+      return openStopKeys[stopKey] !== false;
+    }
+
+    return Boolean(openStopKeys[stopKey]);
   }
 
   async function saveRouteOrder(driver, vendorOrder) {
@@ -2302,7 +2314,7 @@ export default function SupplierRunsPage({
             </div>
           </div>
 
-          <div className="mb-5 grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="mb-5 hidden grid-cols-3 gap-2 sm:grid sm:gap-3">
             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-2 py-3 text-center sm:px-4 sm:text-left">
               <p className="text-[10px] font-black uppercase tracking-[0.08em] text-blue-700 sm:text-xs sm:tracking-[0.18em]">
                 Open Stops
