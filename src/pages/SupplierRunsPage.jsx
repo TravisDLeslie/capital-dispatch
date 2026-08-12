@@ -2518,6 +2518,11 @@ export default function SupplierRunsPage({
                         const supplierAddress =
                           getVendorGroupAddress(vendorGroup);
                         const timing = getVendorGroupTiming(vendorGroup);
+                        const isCurrentStop = vendorIndex === 0;
+                        const stopNumber = String(vendorIndex + 1).padStart(
+                          2,
+                          "0",
+                        );
                         const stopIsOpen = isStopOpen(
                           driverGroup.driver,
                           vendorGroup.vendor,
@@ -2633,6 +2638,16 @@ export default function SupplierRunsPage({
                                   aria-expanded={stopIsOpen}
                                 >
                                 <div className="flex min-w-0 items-center gap-3">
+                                  <span
+                                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-base font-black shadow-sm sm:hidden ${
+                                      isCurrentStop
+                                        ? "bg-red-50 text-[#FC2C38]"
+                                        : "bg-slate-100 text-slate-600"
+                                    }`}
+                                  >
+                                    {stopNumber}
+                                  </span>
+
                                   <span
                                     className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#FC2C38] text-white shadow-sm sm:flex"
                                   >
