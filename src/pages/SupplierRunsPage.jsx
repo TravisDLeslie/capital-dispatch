@@ -561,12 +561,7 @@ function RouteTimingTimeline({ timing }) {
         />
 
         <div className="relative text-left">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-violet-500 bg-white shadow-sm">
-            <span
-              className="h-2.5 w-2.5 rounded-full bg-violet-500"
-              aria-hidden="true"
-            />
-          </span>
+          <span className="block h-6 w-6 rounded-full border-4 border-violet-50 bg-violet-500 shadow-sm" />
           <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-500">
             First stop
           </p>
@@ -576,12 +571,7 @@ function RouteTimingTimeline({ timing }) {
         </div>
 
         <div className="relative text-center">
-          <span className="mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-violet-700 shadow-md shadow-violet-200">
-            <span
-              className="h-2 w-2 rounded-full bg-white"
-              aria-hidden="true"
-            />
-          </span>
+          <span className="mx-auto block h-6 w-6 rounded-full border-4 border-violet-50 bg-violet-700 shadow-sm" />
           <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-700">
             South time
           </p>
@@ -591,12 +581,7 @@ function RouteTimingTimeline({ timing }) {
         </div>
 
         <div className="relative text-right">
-          <span className="ml-auto flex h-6 w-6 items-center justify-center rounded-full border-2 border-violet-300 bg-violet-50 shadow-sm">
-            <span
-              className="h-3 w-3 rounded-full border-2 border-violet-600 bg-white"
-              aria-hidden="true"
-            />
-          </span>
+          <span className="ml-auto block h-6 w-6 rounded-full border-4 border-violet-50 bg-violet-500 shadow-sm" />
           <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-500">
             Strap-up
           </p>
