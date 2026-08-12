@@ -450,43 +450,84 @@ function StopTimingPills({ timing, compact = false }) {
 
   return (
     <div
-      className={`rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm ${
-        compact
-          ? "grid gap-2 sm:grid-cols-3"
-          : "grid gap-2 min-[420px]:grid-cols-3"
+      className={`rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 ${
+        compact ? "" : "sm:max-w-3xl"
       }`}
     >
-      {timing.arrivedAt ? (
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">
-            Arrived
-          </p>
-          <p className="mt-0.5 text-sm font-black text-blue-800">
-            {formatTime(timing.arrivedAt)}
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        {timing.stopDuration ? (
+          <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-800">
+            <span
+              className="h-2 w-2 rounded-full bg-emerald-500"
+              aria-hidden="true"
+            />
+            {timing.stopDuration} at stop
+          </div>
+        ) : null}
+
+        {timing.arrivedAt ? (
+          <div className="flex items-center gap-1.5 text-xs font-black text-slate-500">
+            <span
+              className="h-1.5 w-1.5 rounded-full bg-blue-500"
+              aria-hidden="true"
+            />
+            Arrived {formatTime(timing.arrivedAt)}
+          </div>
+        ) : null}
+
+        {timing.strapUpUntil ? (
+          <div className="flex items-center gap-1.5 text-xs font-black text-slate-500">
+            <span
+              className="h-1.5 w-1.5 rounded-full bg-amber-500"
+              aria-hidden="true"
+            />
+            Strap-up done {formatTime(timing.strapUpUntil)}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function StopDurationBadge({ timing }) {
+  if (!timing?.stopDuration) {
+    return null;
+  }
+
+  return (
+    <div className="hidden items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-800 sm:flex">
+      <span
+        className="h-2 w-2 rounded-full bg-emerald-500"
+        aria-hidden="true"
+      />
+      {timing.stopDuration} at stop
+    </div>
+  );
+}
+
+function StopMobileTiming({ timing }) {
+  if (!timing?.arrivedAt && !timing?.stopDuration && !timing?.strapUpUntil) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-black text-slate-500 sm:hidden">
+      {timing.stopDuration ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-emerald-800">
+          <span
+            className="h-1.5 w-1.5 rounded-full bg-emerald-500"
+            aria-hidden="true"
+          />
+          {timing.stopDuration}
+        </span>
       ) : null}
 
-      {timing.stopDuration ? (
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
-            Total stop time
-          </p>
-          <p className="mt-0.5 text-sm font-black text-emerald-800">
-            {timing.stopDuration}
-          </p>
-        </div>
+      {timing.arrivedAt ? (
+        <span>Arrived {formatTime(timing.arrivedAt)}</span>
       ) : null}
 
       {timing.strapUpUntil ? (
-        <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-600">
-            Strap up
-          </p>
-          <p className="mt-0.5 text-sm font-black text-amber-800">
-            Until {formatTime(timing.strapUpUntil)}
-          </p>
-        </div>
+        <span>Strap {formatTime(timing.strapUpUntil)}</span>
       ) : null}
     </div>
   );
@@ -1919,7 +1960,7 @@ export default function SupplierRunsPage({
                                           "history",
                                         )
                                       }
-                                      className="flex w-full min-w-0 flex-col gap-3 px-4 py-3 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
+                                      className="relative flex w-full min-w-0 flex-col gap-3 px-4 py-3 pr-14 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between sm:pr-4"
                                       aria-expanded={stopIsOpen}
                                     >
                                       <div className="min-w-0">
@@ -1938,19 +1979,12 @@ export default function SupplierRunsPage({
                                             : "POs"}{" "}
                                           • {stats.itemCount} items
                                         </p>
+
+                                        <StopMobileTiming timing={timing} />
                                       </div>
 
-                                      <div className="flex shrink-0 items-center gap-3">
-                                        {timing.stopDuration ? (
-                                          <div className="hidden rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-right sm:block">
-                                            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
-                                              Total stop time
-                                            </p>
-                                            <p className="text-sm font-black text-emerald-800">
-                                              {timing.stopDuration}
-                                            </p>
-                                          </div>
-                                        ) : null}
+                                      <div className="absolute right-3 top-3 flex shrink-0 items-center gap-3 sm:static">
+                                        <StopDurationBadge timing={timing} />
 
                                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
                                         <ChevronDown
@@ -1964,7 +1998,7 @@ export default function SupplierRunsPage({
                                       </div>
                                     </button>
 
-                                    <div className="border-t border-slate-100 bg-white px-4 py-3">
+                                    <div className="hidden border-t border-slate-100 bg-white px-4 py-3 sm:block">
                                       <StopTimingPills
                                         timing={timing}
                                         compact
@@ -2575,17 +2609,18 @@ export default function SupplierRunsPage({
                                 </div>
                               ) : null}
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  toggleStop(
-                                    driverGroup.driver,
-                                    vendorGroup.vendor,
-                                  )
-                                }
-                                className="flex min-w-0 flex-1 flex-col gap-3 px-4 py-3 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between"
-                                aria-expanded={stopIsOpen}
-                              >
+                              <div className="relative min-w-0 flex-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleStop(
+                                      driverGroup.driver,
+                                      vendorGroup.vendor,
+                                    )
+                                  }
+                                  className="flex w-full min-w-0 flex-col gap-3 px-4 py-3 pr-14 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between sm:pr-4"
+                                  aria-expanded={stopIsOpen}
+                                >
                                 <div className="flex min-w-0 items-center gap-3">
                                   <span
                                     className={`h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38] ${
@@ -2615,9 +2650,37 @@ export default function SupplierRunsPage({
                                         : "items"}{" "}
                                       left
                                     </p>
+
+                                    <StopMobileTiming timing={timing} />
                                   </div>
                                 </div>
-                              </button>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleStop(
+                                      driverGroup.driver,
+                                      vendorGroup.vendor,
+                                    )
+                                  }
+                                  className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 sm:hidden"
+                                  aria-label={
+                                    stopIsOpen
+                                      ? `Close ${vendorGroup.vendor}`
+                                      : `Open ${vendorGroup.vendor}`
+                                  }
+                                  aria-expanded={stopIsOpen}
+                                >
+                                  <ChevronDown
+                                    aria-hidden="true"
+                                    className={`h-5 w-5 transition-transform ${
+                                      stopIsOpen ? "rotate-180" : ""
+                                    }`}
+                                    strokeWidth={2.6}
+                                  />
+                                </button>
+                              </div>
 
                               <div className="flex shrink-0 flex-col items-end justify-center gap-2.5 py-4 pr-4 sm:flex-row sm:items-center sm:gap-2 sm:py-0 sm:pr-5">
                                 {supplierAddress ? (
@@ -2640,6 +2703,8 @@ export default function SupplierRunsPage({
                                 ) : null}
 
                                 <div className="flex items-center gap-1.5 sm:gap-2">
+                                  <StopDurationBadge timing={timing} />
+
                                   <span className="inline-flex rounded-lg bg-white px-2.5 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:px-3">
                                     {stats.poCount}{" "}
                                     {stats.poCount === 1
@@ -2655,7 +2720,7 @@ export default function SupplierRunsPage({
                                         vendorGroup.vendor,
                                       )
                                     }
-                                    className="flex h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+                                    className="hidden h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 sm:flex"
                                     aria-label={
                                       stopIsOpen
                                         ? `Close ${vendorGroup.vendor}`
@@ -2677,7 +2742,7 @@ export default function SupplierRunsPage({
 
                             <div className="border-t border-slate-100 bg-white px-4 py-3">
                               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="min-w-0 flex-1">
+                                <div className="hidden min-w-0 flex-1 sm:block">
                                   {!timing.arrivedAt ? (
                                     <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-500">
                                       Not arrived yet
