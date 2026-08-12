@@ -194,30 +194,85 @@ function Field({ label, value, onChange, placeholder, textarea = false }) {
 }
 
 function CategoryField({ value, onChange, options }) {
+  const [isOpen, setIsOpen] = useState(false);
   const categoryOptions = options.filter((category) => category !== "All");
+  const matchingOptions = categoryOptions.filter((category) =>
+    normalizeSearch(category).includes(normalizeSearch(value)),
+  );
+  const visibleOptions =
+    value.trim() && matchingOptions.length > 0
+      ? matchingOptions
+      : categoryOptions;
 
   return (
-    <label>
+    <div className="relative">
       <span className="mb-2 block text-sm font-black text-slate-700">
         Category
       </span>
-      <input
-        list="stocking-handbook-category-options"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Choose or type a new category"
-        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-      />
-      <datalist id="stocking-handbook-category-options">
-        {categoryOptions.map((category) => (
-          <option key={category} value={category} />
-        ))}
-      </datalist>
+      <div className="relative">
+        <input
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          placeholder="Choose or type a new category"
+          className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-4 pr-12 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+        />
+        <button
+          type="button"
+          onClick={() => setIsOpen((current) => !current)}
+          className="absolute inset-y-1 right-1 flex w-10 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+          aria-label="Show handbook categories"
+        >
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-5 w-5 transition ${isOpen ? "rotate-180" : ""}`}
+            strokeWidth={2.5}
+          />
+        </button>
+      </div>
+
+      {isOpen ? (
+        <div className="absolute z-30 mt-2 max-h-60 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+          {visibleOptions.length > 0 ? (
+            visibleOptions.map((category) => {
+              const isSelected = category === value;
+
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    onChange(category);
+                    setIsOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-black transition ${
+                    isSelected
+                      ? "bg-slate-950 text-white"
+                      : "text-slate-700 hover:bg-red-50 hover:text-[#FC2C38]"
+                  }`}
+                >
+                  <span>{category}</span>
+                  {isSelected ? <span className="text-xs">Selected</span> : null}
+                </button>
+              );
+            })
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-200 px-3 py-3 text-sm font-bold text-slate-500">
+              No saved categories match. Save this item to add it.
+            </div>
+          )}
+        </div>
+      ) : null}
+
       <p className="mt-2 text-xs font-bold text-slate-500">
         Pick an existing category or type a new one. New categories appear after
         saving.
       </p>
-    </label>
+    </div>
   );
 }
 
