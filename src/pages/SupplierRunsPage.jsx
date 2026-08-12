@@ -232,6 +232,88 @@ function getMaterialUseLabel(materialUse) {
   return labels[materialUse] || "Order";
 }
 
+function getVendorGroupStatsFromRuns(runs) {
+  const items = runs.flatMap((supplierRun) =>
+    Array.isArray(supplierRun.items) ? supplierRun.items : [],
+  );
+  const remainingItems = items.filter((item) => !item.pickedUp).length;
+
+  return {
+    poCount: runs.length,
+    itemCount: items.length,
+    remainingItems,
+  };
+}
+
+function MobileRouteProgress({ vendorGroups }) {
+  const stops = vendorGroups.map((vendorGroup) => {
+    const stats = getVendorGroupStatsFromRuns(vendorGroup.runs);
+    const isComplete =
+      stats.itemCount > 0 && stats.remainingItems === 0;
+
+    return {
+      vendor: vendorGroup.vendor,
+      isComplete,
+    };
+  });
+
+  if (stops.length <= 1) {
+    return null;
+  }
+
+  return (
+    <div className="mb-4 border-y border-slate-100 bg-white px-1 py-5 sm:hidden">
+      <p className="mb-5 text-xs font-black uppercase tracking-[0.24em] text-slate-500">
+        Route Progress
+      </p>
+
+      <div className="overflow-x-auto pb-1">
+        <div
+          className="grid min-w-full items-start"
+          style={{
+            gridTemplateColumns: `repeat(${stops.length}, minmax(96px, 1fr))`,
+          }}
+        >
+          {stops.map((stop, stopIndex) => {
+            const isLastStop = stopIndex === stops.length - 1;
+
+            return (
+              <div
+                key={`${stop.vendor}-${stopIndex}`}
+                className="relative flex flex-col items-center gap-3"
+              >
+                {!isLastStop ? (
+                  <div
+                    className={`absolute left-1/2 top-[11px] h-0.5 w-full border-t-2 border-dashed ${
+                      stop.isComplete
+                        ? "border-emerald-600"
+                        : "border-slate-300"
+                    }`}
+                    aria-hidden="true"
+                  />
+                ) : null}
+
+                <span
+                  className={`relative z-10 h-6 w-6 rounded-full border-[3px] bg-white ${
+                    stop.isComplete
+                      ? "border-emerald-700"
+                      : "border-slate-300"
+                  }`}
+                  aria-hidden="true"
+                />
+
+                <p className="line-clamp-2 max-w-[104px] text-center text-xs font-bold leading-tight text-slate-700">
+                  {stop.vendor}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getSupplierRunCustomerName(supplierRun) {
   return (
     supplierRun.customerName ||
@@ -701,6 +783,7 @@ export default function SupplierRunsPage({
       ? vendorRouteOrder
       : southVendorRouteOrder;
   const safeVendorDisplayNameMap = vendorDisplayNameMap || {};
+  const isDriverView = _viewerRole === "driver";
   const todayKey = getDateInputValue();
   const [successMessage, setSuccessMessage] = useState("");
   const [openStopKeys, setOpenStopKeys] = useState({});
@@ -1061,18 +1144,7 @@ export default function SupplierRunsPage({
   }
 
   function getVendorGroupStats(vendorGroup) {
-    const items = vendorGroup.runs.flatMap((supplierRun) =>
-      Array.isArray(supplierRun.items) ? supplierRun.items : [],
-    );
-    const remainingItems = items.filter(
-      (item) => !item.pickedUp,
-    ).length;
-
-    return {
-      poCount: vendorGroup.runs.length,
-      itemCount: items.length,
-      remainingItems,
-    };
+    return getVendorGroupStatsFromRuns(vendorGroup.runs);
   }
 
   function getVendorGroupAddress(vendorGroup) {
@@ -2273,6 +2345,7 @@ export default function SupplierRunsPage({
           {checkViewMode === "list" ? (
           <>
 
+          {!isDriverView ? (
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <label
               htmlFor="south-pickup-search"
@@ -2313,6 +2386,7 @@ export default function SupplierRunsPage({
               ) : null}
             </div>
           </div>
+          ) : null}
 
           <div className="mb-5 hidden grid-cols-3 gap-2 sm:grid sm:gap-3">
             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-2 py-3 text-center sm:px-4 sm:text-left">
@@ -2400,6 +2474,16 @@ export default function SupplierRunsPage({
                         count + vendorGroup.runs.length,
                       0,
                     );
+                  const driverCompleteRingClass =
+                    driverStats.progressPercent >= 100
+                      ? "border-emerald-700 bg-emerald-700 text-white"
+                      : driverStats.progressPercent > 0
+                        ? "border-emerald-600 bg-white text-emerald-700"
+                        : "border-emerald-100 bg-white text-emerald-600";
+                  const driverCompleteTextClass =
+                    driverStats.progressPercent >= 100
+                      ? "text-emerald-800"
+                      : "text-slate-900";
 
                   return (
                     <div
@@ -2451,7 +2535,7 @@ export default function SupplierRunsPage({
                         </div>
 
                         <div className="flex min-w-[72px] items-center justify-center gap-1.5 border-l border-slate-200 pl-2">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-4 border-emerald-100 text-emerald-600">
+                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-4 transition-colors ${driverCompleteRingClass}`}>
                             <Check
                               aria-hidden="true"
                               className="h-5 w-5"
@@ -2459,7 +2543,7 @@ export default function SupplierRunsPage({
                             />
                           </span>
                           <div>
-                            <p className="text-sm font-black leading-tight text-slate-900">
+                            <p className={`text-sm font-black leading-tight ${driverCompleteTextClass}`}>
                               {driverStats.pickedUpItems} of{" "}
                               {driverStats.itemCount}
                             </p>
@@ -2576,6 +2660,10 @@ export default function SupplierRunsPage({
                           {routeOrderError}
                         </div>
                       ) : null}
+
+                      <MobileRouteProgress
+                        vendorGroups={driverGroup.vendorGroups}
+                      />
 
                     {driverIsOpen ? (
                     <div className="space-y-3">
