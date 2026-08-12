@@ -2499,14 +2499,24 @@ export default function SupplierRunsPage({
                         count + vendorGroup.runs.length,
                       0,
                     );
-                  const driverCompleteRingClass =
-                    driverStats.progressPercent >= 100
-                      ? "border-emerald-700 bg-emerald-700 text-white"
-                      : driverStats.progressPercent > 0
-                        ? "border-emerald-600 bg-white text-emerald-700"
-                        : "border-emerald-100 bg-white text-emerald-600";
+                  const driverStopCount =
+                    driverGroup.vendorGroups.length;
+                  const completedStopCount =
+                    driverGroup.vendorGroups.filter((vendorGroup) => {
+                      const stats = getVendorGroupStats(vendorGroup);
+                      return (
+                        stats.itemCount > 0 &&
+                        stats.remainingItems === 0
+                      );
+                    }).length;
+                  const stopProgressPercent =
+                    driverStopCount > 0
+                      ? Math.round(
+                          (completedStopCount / driverStopCount) * 100,
+                        )
+                      : 0;
                   const driverCompleteTextClass =
-                    driverStats.progressPercent >= 100
+                    stopProgressPercent >= 100
                       ? "text-emerald-800"
                       : "text-slate-900";
 
@@ -2560,17 +2570,25 @@ export default function SupplierRunsPage({
                         </div>
 
                         <div className="flex min-w-[72px] items-center justify-center gap-1.5 border-l border-slate-200 pl-2">
-                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-4 transition-colors ${driverCompleteRingClass}`}>
-                            <Check
-                              aria-hidden="true"
-                              className="h-5 w-5"
-                              strokeWidth={3}
-                            />
+                          <span
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full p-1 transition-colors"
+                            style={{
+                              background: `conic-gradient(#047857 ${stopProgressPercent}%, #d1fae5 0)`,
+                            }}
+                            aria-label={`${completedStopCount} of ${driverStopCount} stops complete`}
+                          >
+                            <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-emerald-700">
+                              <Check
+                                aria-hidden="true"
+                                className="h-5 w-5"
+                                strokeWidth={3}
+                              />
+                            </span>
                           </span>
                           <div>
                             <p className={`text-sm font-black leading-tight ${driverCompleteTextClass}`}>
-                              {driverStats.pickedUpItems} of{" "}
-                              {driverStats.itemCount}
+                              {completedStopCount} of{" "}
+                              {driverStopCount}
                             </p>
                             <p className="mt-1 text-xs font-semibold leading-tight text-slate-500">
                               complete
