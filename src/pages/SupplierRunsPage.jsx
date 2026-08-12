@@ -9,6 +9,7 @@ import {
   ChevronRight,
   GripVertical,
   Home,
+  MapPin,
   Navigation,
   RefreshCw,
   Search,
@@ -2647,15 +2648,20 @@ export default function SupplierRunsPage({
                                       {vendorGroup.vendor}
                                     </h5>
 
-                                    <p className="mt-1 text-sm font-bold leading-tight text-slate-500">
-                                      {stats.poCount}{" "}
-                                      {stats.poCount === 1 ? "PO" : "POs"} •{" "}
-                                      {stats.remainingItems}{" "}
-                                      {stats.remainingItems === 1
-                                        ? "item"
-                                        : "items"}{" "}
-                                      left
-                                    </p>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                      <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-black leading-tight text-slate-900">
+                                        {stats.poCount}{" "}
+                                        {stats.poCount === 1 ? "PO" : "POs"}
+                                      </span>
+
+                                      <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-black leading-tight text-slate-900">
+                                        {stats.remainingItems}{" "}
+                                        {stats.remainingItems === 1
+                                          ? "item"
+                                          : "items"}{" "}
+                                        left
+                                      </span>
+                                    </div>
 
                                     <StopMobileTiming timing={timing} />
                                   </div>
@@ -2712,14 +2718,16 @@ export default function SupplierRunsPage({
                                       className="hidden h-3.5 w-3.5 sm:block"
                                       strokeWidth={2.6}
                                     />
-                                    <span>Directions</span>
+                                    <span className="hidden sm:inline">
+                                      Directions
+                                    </span>
                                   </a>
                                 ) : null}
 
                                 <div className="flex items-center gap-1.5 sm:gap-2">
                                   <StopDurationBadge timing={timing} />
 
-                                  <span className="inline-flex rounded-lg bg-white px-2.5 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:px-3">
+                                  <span className="hidden rounded-lg bg-white px-2.5 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:inline-flex sm:px-3">
                                     {stats.poCount}{" "}
                                     {stats.poCount === 1
                                       ? "PO"
@@ -2772,9 +2780,14 @@ export default function SupplierRunsPage({
                                     onClick={() =>
                                       onArriveSupplierStop(timing.runIds)
                                     }
-                                    className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+                                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
                                   >
-                                    Arrived at {vendorGroup.vendor}
+                                    <MapPin
+                                      aria-hidden="true"
+                                      className="h-4 w-4"
+                                      strokeWidth={2.6}
+                                    />
+                                    I've arrived
                                   </button>
                                 ) : null}
                               </div>
