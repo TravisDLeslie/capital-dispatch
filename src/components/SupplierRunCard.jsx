@@ -131,6 +131,30 @@ function getSupplierRunActionLabel(items, isComplete) {
   return "Needs Pickup";
 }
 
+function getValidDate(value) {
+  const parsedDate = value ? new Date(value) : null;
+
+  return parsedDate && !Number.isNaN(parsedDate.getTime())
+    ? parsedDate
+    : null;
+}
+
+function formatDurationMinutes(startValue, endValue) {
+  const startDate = getValidDate(startValue);
+  const endDate = getValidDate(endValue);
+
+  if (!startDate || !endDate || endDate < startDate) {
+    return "";
+  }
+
+  const minutes = Math.max(
+    1,
+    Math.round((endDate.getTime() - startDate.getTime()) / 60000),
+  );
+
+  return `${minutes} min`;
+}
+
 function formatPickupItemsForPrint(items, showCustomerName = false) {
   if (items.length === 0) {
     return `
@@ -584,6 +608,19 @@ export default function SupplierRunCard({
           : `${remainingCount}/${items.length} ${itemLabel} left`;
   const progressPercent =
     items.length > 0 ? (pickedUpCount / items.length) * 100 : 0;
+  const poCompletedAt =
+    supplierRun.completedAt ||
+    (isComplete
+      ? items
+          .map((item) => item.pickedUpAt)
+          .filter(Boolean)
+          .sort()
+          .at(-1) || ""
+      : "");
+  const poTimeAtSupplier = formatDurationMinutes(
+    supplierRun.stopArrivedAt,
+    poCompletedAt,
+  );
   const [editingItemId, setEditingItemId] = useState("");
   const [editingQuantity, setEditingQuantity] = useState("");
   const [editingDescription, setEditingDescription] =
@@ -824,6 +861,12 @@ export default function SupplierRunCard({
               </span>
             )}
 
+            {poTimeAtSupplier ? (
+              <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-black uppercase tracking-wide text-blue-700">
+                PO time {poTimeAtSupplier}
+              </span>
+            ) : null}
+
           </div>
 
           {showCustomerName && supplierRunCustomerName ? (
@@ -849,6 +892,41 @@ export default function SupplierRunCard({
               <p className="mt-1 text-sm font-black text-blue-700">
                 Driver: {supplierRun.driver || "Unassigned"}
               </p>
+
+              {poTimeAtSupplier ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {supplierRun.stopArrivedAt ? (
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-500">
+                        Supplier arrival
+                      </p>
+                      <p className="mt-0.5 text-sm font-black text-blue-800">
+                        {formatTime(supplierRun.stopArrivedAt)}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-500">
+                      PO time
+                    </p>
+                    <p className="mt-0.5 text-sm font-black text-emerald-800">
+                      {poTimeAtSupplier}
+                    </p>
+                  </div>
+
+                  {poCompletedAt ? (
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                        PO complete
+                      </p>
+                      <p className="mt-0.5 text-sm font-black text-slate-800">
+                        {formatTime(poCompletedAt)}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           ) : null}
         </div>
