@@ -2953,7 +2953,19 @@ export default function App() {
           description="Customer records and pricing tools for sales work."
           icon={UsersRound}
           primaryAction={
-            dashboardAllowedPageIds.includes("customers-add")
+            dashboardAllowedPageIds.includes("supplier-runs-add")
+              ? {
+                  label: "Add South PO",
+                  icon: Plus,
+                  onClick: () => setCurrentPage("supplier-runs-add"),
+                }
+              : dashboardAllowedPageIds.includes("their-truck-pos")
+                ? {
+                    label: "Add Their Truck PO",
+                    icon: Plus,
+                    onClick: () => setCurrentPage("their-truck-pos"),
+                  }
+                : dashboardAllowedPageIds.includes("customers-add")
               ? {
                   label: "Add Customer",
                   icon: Plus,
@@ -2978,6 +2990,48 @@ export default function App() {
             },
           ]}
           actions={[
+            dashboardAllowedPageIds.includes("supplier-runs-add")
+              ? {
+                  icon: Truck,
+                  label: "PO Request",
+                  title: "Add South PO",
+                  description:
+                    "Send a pickup request to dispatch for South runs.",
+                  metric: "+",
+                  metricLabel: "South",
+                  tone: "marketing",
+                  variant: "live",
+                  onClick: () => setCurrentPage("supplier-runs-add"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("their-truck-pos")
+              ? {
+                  icon: Warehouse,
+                  label: "Vendor Truck",
+                  title: "Add Their Truck PO",
+                  description:
+                    "Schedule a PO arriving on a supplier/vendor truck.",
+                  metric: "+",
+                  metricLabel: "Inbound",
+                  tone: "dispatch",
+                  variant: "default",
+                  onClick: () => setCurrentPage("their-truck-pos"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("stocking-handbook")
+              ? {
+                  icon: BookOpen,
+                  label: "Stock Reference",
+                  title: "Stocking Handbook",
+                  description:
+                    "Find stocked items, lengths, item numbers, and notes.",
+                  metric: stockingHandbookItems.length,
+                  metricLabel: "Items",
+                  tone: "archive",
+                  variant: "compact",
+                  onClick: () => setCurrentPage("stocking-handbook"),
+                }
+              : null,
             dashboardAllowedPageIds.includes("customers-view")
               ? {
                   icon: Search,
@@ -2989,20 +3043,17 @@ export default function App() {
                   onClick: () => setCurrentPage("customers-view"),
                 }
               : null,
-            dashboardAllowedPageIds.includes("sales-tools") ||
-            dashboardAllowedPageIds.includes("sales-converter") ||
-            dashboardAllowedPageIds.includes("stocking-handbook")
+            dashboardAllowedPageIds.includes("sales-converter")
               ? {
                   icon: Calculator,
-                  label: "Tools",
-                  title: "Sales Tools",
-                  description: "Open the stocking handbook and pricing converter.",
-                  metric:
-                    (dashboardAllowedPageIds.includes("stocking-handbook") ? 1 : 0) +
-                    (dashboardAllowedPageIds.includes("sales-converter") ? 1 : 0),
-                  metricLabel: "Tools",
+                  label: "Pricing",
+                  title: "Price Converter",
+                  description:
+                    "Convert sheet goods, board footage, and target margins.",
+                  metric: "$",
+                  metricLabel: "Margin",
                   tone: "dispatch",
-                  onClick: () => setCurrentPage("sales-tools"),
+                  onClick: () => setCurrentPage("sales-converter"),
                 }
               : null,
           ]}
