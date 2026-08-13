@@ -878,6 +878,12 @@ export default function SupplierRunsPage({
   const [routeOrderError, setRouteOrderError] = useState("");
   const [dispatchDrafts, setDispatchDrafts] = useState({});
   const [savingDispatchRunId, setSavingDispatchRunId] = useState("");
+  const [bulkDispatchDraft, setBulkDispatchDraft] = useState({
+    driver: "",
+    vehicleId: "",
+  });
+  const [selectedDispatchRunIds, setSelectedDispatchRunIds] = useState([]);
+  const [isBulkAssigning, setIsBulkAssigning] = useState(false);
   const [dispatchSearch, setDispatchSearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
   const [pickupSearch, setPickupSearch] = useState("");
@@ -1338,6 +1344,100 @@ export default function SupplierRunsPage({
     setRouteOrderError("");
   }
 
+  function toggleSelectedDispatchRun(supplierRunId) {
+    setSelectedDispatchRunIds((currentSelectedRunIds) =>
+      currentSelectedRunIds.includes(supplierRunId)
+        ? currentSelectedRunIds.filter(
+            (currentRunId) => currentRunId !== supplierRunId,
+          )
+        : [...currentSelectedRunIds, supplierRunId],
+    );
+    setRouteOrderError("");
+  }
+
+  function toggleAllFilteredDispatchRuns(filteredRuns) {
+    const filteredRunIds = filteredRuns.map((supplierRun) => supplierRun.id);
+    const allFilteredSelected =
+      filteredRunIds.length > 0 &&
+      filteredRunIds.every((supplierRunId) =>
+        selectedDispatchRunIds.includes(supplierRunId),
+      );
+
+    setSelectedDispatchRunIds((currentSelectedRunIds) =>
+      allFilteredSelected
+        ? currentSelectedRunIds.filter(
+            (supplierRunId) => !filteredRunIds.includes(supplierRunId),
+          )
+        : [
+            ...currentSelectedRunIds,
+            ...filteredRunIds.filter(
+              (supplierRunId) =>
+                !currentSelectedRunIds.includes(supplierRunId),
+            ),
+          ],
+    );
+    setRouteOrderError("");
+  }
+
+  async function assignSelectedSupplierRuns(selectedRuns) {
+    const selectedVehicle = safeVehicleOptions.find(
+      (vehicleOption) => vehicleOption.id === bulkDispatchDraft.vehicleId,
+    );
+
+    if (selectedRuns.length === 0) {
+      setRouteOrderError("Select at least one PO to assign.");
+      return;
+    }
+
+    if (!southDrivers.includes(bulkDispatchDraft.driver)) {
+      setRouteOrderError("Select a driver for the selected POs.");
+      return;
+    }
+
+    if (safeVehicleOptions.length > 0 && !selectedVehicle) {
+      setRouteOrderError("Select a truck for the selected POs.");
+      return;
+    }
+
+    setIsBulkAssigning(true);
+    setRouteOrderError("");
+
+    try {
+      await Promise.all(
+        selectedRuns.map((supplierRun) =>
+          onUpdateSupplierRun(supplierRun.id, {
+            driver: bulkDispatchDraft.driver,
+            vehicleId: selectedVehicle?.id || "",
+            vehicleTitle: selectedVehicle?.title || "",
+            vehicleBadge: selectedVehicle?.badge || "",
+            dispatchStatus: "assigned",
+          }),
+        ),
+      );
+
+      setDispatchDrafts((currentDrafts) => {
+        const nextDrafts = { ...currentDrafts };
+        selectedRuns.forEach((supplierRun) => {
+          delete nextDrafts[supplierRun.id];
+        });
+        return nextDrafts;
+      });
+      setSelectedDispatchRunIds([]);
+      setSuccessMessage(
+        `${selectedRuns.length} ${
+          selectedRuns.length === 1 ? "PO was" : "POs were"
+        } assigned to ${bulkDispatchDraft.driver}.`,
+      );
+    } catch (assignError) {
+      console.error("Unable to bulk assign South POs:", assignError);
+      setRouteOrderError(
+        "Unable to assign those POs. Check Firebase rules.",
+      );
+    } finally {
+      setIsBulkAssigning(false);
+    }
+  }
+
   async function assignSupplierRun(supplierRun) {
     const draft = getDispatchDraft(supplierRun);
     const selectedVehicle = safeVehicleOptions.find(
@@ -1596,6 +1696,17 @@ export default function SupplierRunsPage({
       supplierRunMatchesSearch(supplierRun, dispatchSearchTerm),
     ),
   );
+  const filteredDispatchRunIds = filteredDispatchRuns.map(
+    (supplierRun) => supplierRun.id,
+  );
+  const selectedFilteredDispatchRuns = filteredDispatchRuns.filter(
+    (supplierRun) => selectedDispatchRunIds.includes(supplierRun.id),
+  );
+  const allFilteredDispatchRunsSelected =
+    filteredDispatchRunIds.length > 0 &&
+    filteredDispatchRunIds.every((supplierRunId) =>
+      selectedDispatchRunIds.includes(supplierRunId),
+    );
   const selectedSupplierRunDateIsLocked =
     selectedSupplierRunDetails &&
     (selectedSupplierRunDetails.status === "complete" ||
@@ -1776,6 +1887,131 @@ export default function SupplierRunsPage({
             />
           ) : (
             <div className="space-y-4">
+              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="min-w-0">
+                    <label className="inline-flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={allFilteredDispatchRunsSelected}
+                        onChange={() =>
+                          toggleAllFilteredDispatchRuns(filteredDispatchRuns)
+                        }
+                        className="h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-[#FC2C38]"
+                      />
+                      <span className="text-sm font-black text-slate-900">
+                        Select all visible POs
+                      </span>
+                    </label>
+
+                    <p className="mt-1 text-sm font-bold text-slate-500">
+                      {selectedFilteredDispatchRuns.length} selected
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,180px)_minmax(0,180px)_auto]">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                        Driver
+                      </span>
+                      <select
+                        value={bulkDispatchDraft.driver}
+                        onChange={(event) =>
+                          setBulkDispatchDraft((currentDraft) => ({
+                            ...currentDraft,
+                            driver: event.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                      >
+                        <option value="">Select...</option>
+                        <optgroup label="Favorites">
+                          {favoriteSouthDrivers.map((driverOption) => (
+                            <option key={driverOption} value={driverOption}>
+                              {driverOption}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="All Drivers">
+                          {southDrivers
+                            .filter(
+                              (driverOption) =>
+                                !favoriteSouthDrivers.includes(driverOption),
+                            )
+                            .map((driverOption) => (
+                              <option
+                                key={driverOption}
+                                value={driverOption}
+                              >
+                                {driverOption}
+                              </option>
+                            ))}
+                        </optgroup>
+                      </select>
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                        Truck
+                      </span>
+                      <select
+                        value={bulkDispatchDraft.vehicleId}
+                        onChange={(event) =>
+                          setBulkDispatchDraft((currentDraft) => ({
+                            ...currentDraft,
+                            vehicleId: event.target.value,
+                          }))
+                        }
+                        disabled={safeVehicleOptions.length === 0}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        <option value="">
+                          {safeVehicleOptions.length > 0
+                            ? "Select..."
+                            : "No vehicles"}
+                        </option>
+                        {safeVehicleOptions.map((vehicleOption) => (
+                          <option
+                            key={vehicleOption.id}
+                            value={vehicleOption.id}
+                          >
+                            {vehicleOption.title}
+                            {vehicleOption.badge
+                              ? ` (${vehicleOption.badge})`
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        assignSelectedSupplierRuns(
+                          selectedFilteredDispatchRuns,
+                        )
+                      }
+                      disabled={
+                        selectedFilteredDispatchRuns.length === 0 ||
+                        isBulkAssigning
+                      }
+                      className="inline-flex min-h-[48px] items-center justify-center gap-2 self-end rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      <Truck
+                        aria-hidden="true"
+                        className="h-5 w-5"
+                        strokeWidth={2.5}
+                      />
+                      {isBulkAssigning
+                        ? "Assigning..."
+                        : `Assign ${
+                            selectedFilteredDispatchRuns.length || ""
+                          }`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {filteredDispatchRuns.map((supplierRun) => {
                 const draft = getDispatchDraft(supplierRun);
                 const itemCount = Array.isArray(supplierRun.items)
@@ -1809,12 +2045,32 @@ export default function SupplierRunsPage({
                 const requestIconClass = isStockRequest
                   ? "text-emerald-700"
                   : "text-blue-700";
+                const isSelectedForDispatch =
+                  selectedDispatchRunIds.includes(supplierRun.id);
 
                 return (
                   <article
                     key={supplierRun.id}
-                    className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7"
+                    className={`rounded-3xl border bg-white p-6 shadow-sm transition sm:p-7 ${
+                      isSelectedForDispatch
+                        ? "border-red-300 ring-4 ring-red-50"
+                        : "border-slate-200"
+                    }`}
                   >
+                    <label className="mb-4 inline-flex items-center gap-3 rounded-2xl bg-slate-50 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={isSelectedForDispatch}
+                        onChange={() =>
+                          toggleSelectedDispatchRun(supplierRun.id)
+                        }
+                        className="h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-[#FC2C38]"
+                      />
+                      <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-600">
+                        Select PO
+                      </span>
+                    </label>
+
                     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.58fr)] lg:items-stretch">
                       <div className="min-w-0 lg:border-r lg:border-slate-200 lg:pr-5">
                         <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
