@@ -317,6 +317,16 @@ export default function AppHeader({
     setIsMenuOpen(false);
   }
 
+  function getPrimaryGroupPageId(groupItems, group) {
+    if (group === "South" && isDriverView) {
+      return allowedPageIds?.includes("supplier-runs-check")
+        ? "supplier-runs-check"
+        : groupItems[0].id;
+    }
+
+    return groupItems[0].id;
+  }
+
   function toggleNavGroup(group) {
     setOpenNavGroups((currentOpenNavGroups) => {
       const nextIsOpen = !currentOpenNavGroups[group];
@@ -571,7 +581,7 @@ export default function AppHeader({
               type="button"
               onClick={() => {
                 if (isSinglePageGroup) {
-                  handlePageChange(groupItems[0].id);
+                  handlePageChange(getPrimaryGroupPageId(groupItems, group));
                 } else if (hasGroupItems) {
                   toggleNavGroup(group);
                 }

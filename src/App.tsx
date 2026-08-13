@@ -1218,6 +1218,11 @@ export default function App() {
     !["superAdmin", "admin"].includes(effectiveUserRole) &&
     canReadDeliveries &&
     !hasDeliveryManagementAccess;
+  const shouldShowDriverDashboard =
+    effectiveWorkView === "driver" ||
+    (hasDriverName &&
+      !["superAdmin", "admin"].includes(effectiveUserRole) &&
+      (isSouthDriverScopedView || isDeliveryDriverScopedView));
   const southViewerRole = isSouthDriverScopedView
     ? "driver"
     : effectiveUserRole;
@@ -1232,6 +1237,14 @@ export default function App() {
       supplierRun.dispatchStatus !== "needsDispatch" &&
       Boolean(supplierRun.driver),
   );
+  const receivingVisibleSupplierRuns = receivingSouthLookupRuns.filter(
+    (supplierRun) =>
+      supplierRun.dispatchStatus !== "needsDispatch" &&
+      Boolean(supplierRun.driver),
+  );
+  const checkBoardSupplierRuns = canReadSouth
+    ? assignedVisibleSupplierRuns
+    : receivingVisibleSupplierRuns;
   const visibleDeliveries =
     isDeliveryDriverScopedView
       ? deliveries
@@ -2620,7 +2633,7 @@ export default function App() {
   function renderDashboardPage() {
     const dashboardAllowedPageIds = effectiveAllowedPageIds;
 
-    if (effectiveWorkView === "driver" && (canReadSouth || canReadDeliveries)) {
+    if (shouldShowDriverDashboard && (canReadSouth || canReadDeliveries)) {
       return (
         <DriverDashboardPage
           supplierRuns={supplierRuns}
@@ -2656,17 +2669,36 @@ export default function App() {
 
         return checkedAt.slice(0, 10) === new Date().toISOString().slice(0, 10);
       });
+      const todayDateKey = new Date().toISOString().slice(0, 10);
+      const receivingDashboardSouthRuns = canReadSouth
+        ? supplierRuns
+        : receivingSouthLookupRuns;
+      const todaySouthRuns = receivingDashboardSouthRuns.filter((supplierRun) => {
+        const runDate =
+          typeof supplierRun.scheduledDate === "string"
+            ? supplierRun.scheduledDate
+            : typeof supplierRun.pickupDate === "string"
+              ? supplierRun.pickupDate
+              : typeof supplierRun.createdAt === "string"
+                ? supplierRun.createdAt.slice(0, 10)
+                : "";
+
+        return runDate === todayDateKey;
+      });
+      const completedSouthRuns = receivingDashboardSouthRuns.filter(
+        (supplierRun) => supplierRun.status === "complete",
+      );
 
       return (
         <SectionHubPage
           title="Receiving Dashboard"
           eyebrow="Receiving"
-          description="The receiving work this account can open."
+          description="Check in incoming material, see South POs, and look up stock details."
           icon={Package}
           primaryAction={
             dashboardAllowedPageIds.includes("check-in")
               ? {
-                  label: "Check In PO",
+                  label: "Check In Items",
                   icon: Plus,
                   onClick: () => setCurrentPage("check-in"),
                 }
@@ -2680,45 +2712,75 @@ export default function App() {
               note: "Checked in",
             },
             {
-              icon: Search,
-              label: "Records",
-              value: checkIns.length,
-              note: "Searchable POs",
+              icon: Truck,
+              label: "South",
+              value: todaySouthRuns.length,
+              note: "POs today",
             },
             {
-              icon: Package,
-              label: "Photos",
-              value: checkIns.filter((checkIn) =>
-                Array.isArray(checkIn.materials)
-                  ? checkIn.materials.some((material) => material.locationPhoto)
-                  : false,
-              ).length,
-              note: "With material photos",
+              icon: BookOpen,
+              label: "Handbook",
+              value: stockingHandbookItems.length,
+              note: "Stock items",
             },
           ]}
           actions={[
-            dashboardAllowedPageIds.includes("today")
+            dashboardAllowedPageIds.includes("check-in")
               ? {
                   icon: ClipboardCheck,
-                  label: "Daily Board",
-                  title: "Today's Check-Ins",
-                  description: "Review what has been checked in today.",
-                  metric: todayCheckIns.length,
-                  metricLabel: "Today",
+                  label: "Receive",
+                  title: "Check In Items",
+                  description:
+                    "Record where material landed and attach photos or notes.",
+                  metric: "+",
+                  metricLabel: "PO",
                   tone: "success",
-                  onClick: () => setCurrentPage("today"),
+                  variant: "live",
+                  onClick: () => setCurrentPage("check-in"),
                 }
               : null,
-            dashboardAllowedPageIds.includes("search")
+            dashboardAllowedPageIds.includes("supplier-runs-check") ||
+            dashboardAllowedPageIds.includes("supplier-runs-calendar") ||
+            dashboardAllowedPageIds.includes("south-calendar")
               ? {
-                  icon: Search,
-                  label: "Lookup",
-                  title: "Search POs",
-                  description: "Find receiving records by PO, customer, vendor, item, or location.",
-                  metric: checkIns.length,
-                  metricLabel: "Records",
+                  icon: Truck,
+                  label: "South Run",
+                  title: "Today's South Run",
+                  description:
+                    "See all South POs expected back from the current route.",
+                  metric: todaySouthRuns.length,
+                  metricLabel: "POs",
+                  tone: "marketing",
+                  variant: "default",
+                  onClick: () => setCurrentPage("supplier-runs-check"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("supplier-runs-history")
+              ? {
+                  icon: History,
+                  label: "Archive",
+                  title: "South PO History",
+                  description:
+                    "Review completed South runs and the POs picked up on each route.",
+                  metric: completedSouthRuns.length,
+                  metricLabel: "Done",
                   tone: "archive",
-                  onClick: () => setCurrentPage("search"),
+                  variant: "quiet",
+                  onClick: () => setCurrentPage("supplier-runs-history"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("stocking-handbook")
+              ? {
+                  icon: BookOpen,
+                  label: "Stock Reference",
+                  title: "Stocking Handbook",
+                  description:
+                    "Look up stocked items, lengths, and item numbers.",
+                  metric: stockingHandbookItems.length,
+                  metricLabel: "Items",
+                  tone: "dispatch",
+                  variant: "compact",
+                  onClick: () => setCurrentPage("stocking-handbook"),
                 }
               : null,
           ]}
@@ -3167,6 +3229,35 @@ export default function App() {
     }
 
     if (currentPage === "south" && canReadSouth) {
+      if (isSouthDriverScopedView) {
+        return (
+          <SupplierRunsPage
+            mode="check"
+            supplierRuns={checkBoardSupplierRuns}
+            vehicleOptions={southVehicleOptions}
+            vendorOptions={vendorOptions}
+            supplierAddressMap={supplierAddressMap}
+            vendorRouteOrder={vendorOptions}
+            vendorDisplayNameMap={vendorDisplayNameMap}
+            viewerRole={southViewerRole}
+            canReorderRoute={canAssignSouthRoutes}
+            canEditSupplierRuns={canAssignSouthRoutes}
+            canReadAllRouteOrders={false}
+            routeOrderDriverName={driverName}
+            onAddSupplierRun={handleAddSupplierRun}
+            onUpdateSupplierRun={handleUpdateSupplierRun}
+            onToggleSupplierRunItem={handleToggleSupplierRunItem}
+            onArriveSupplierStop={handleArriveSupplierStop}
+            onUpdateSupplierRunItemDescription={
+              handleUpdateSupplierRunItemDescription
+            }
+            onDeleteSupplierRun={handleDeleteSupplierRun}
+            onPageChange={setCurrentPage}
+            onRefreshPage={() => refreshAndRestorePage("south")}
+          />
+        );
+      }
+
       return (
         <SouthHubPage
           supplierRuns={visibleSupplierRuns}
@@ -3852,7 +3943,7 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="check"
-            supplierRuns={assignedVisibleSupplierRuns}
+            supplierRuns={checkBoardSupplierRuns}
             vehicleOptions={southVehicleOptions}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
@@ -3884,7 +3975,7 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="check"
-            supplierRuns={assignedVisibleSupplierRuns}
+            supplierRuns={checkBoardSupplierRuns}
             vehicleOptions={southVehicleOptions}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
@@ -3919,7 +4010,11 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="history"
-            supplierRuns={assignedVisibleSupplierRuns}
+            supplierRuns={
+              canReadSouth
+                ? assignedVisibleSupplierRuns
+                : receivingSouthLookupRuns
+            }
             vehicleOptions={southVehicleOptions}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}

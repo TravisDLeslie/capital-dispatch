@@ -9,6 +9,7 @@ import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { getDateInputValue } from "../utils/dateHelpers";
 import { createId } from "../utils/idHelpers";
 import { formatCustomerName } from "../utils/textFormatters";
+import SearchableSelect from "./SearchableSelect";
 
 function createEmptyPickupItem() {
   return {
@@ -762,46 +763,16 @@ export default function SupplierRunForm({
                   Vendor
                 </label>
 
-                <select
+                <SearchableSelect
                   id="supplier-run-vendor-select"
                   value={vendor}
-                  onChange={(event) => updateVendor(event.target.value)}
+                  options={safeVendorOptions}
+                  onChange={updateVendor}
                   disabled={isSubmitting}
-                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 md:hidden"
-                >
-                  <option value="">Select a vendor...</option>
-
-                  {safeVendorOptions.map((vendorOption) => (
-                    <option
-                      key={vendorOption}
-                      value={vendorOption}
-                    >
-                      {vendorOption}
-                    </option>
-                  ))}
-                </select>
-
-                <input
-                  id="supplier-run-vendor-search"
-                  type="text"
-                  list="supplier-run-vendor-options"
-                  autoComplete="off"
-                  value={vendor}
-                  onChange={(event) => updateVendor(event.target.value)}
-                  disabled={isSubmitting}
+                  allowCustomValue
                   placeholder="Start typing a vendor..."
-                  aria-label="Vendor"
-                  className="hidden w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 md:block"
+                  accent="red"
                 />
-
-                <datalist id="supplier-run-vendor-options">
-                  {safeVendorOptions.map((vendorOption) => (
-                    <option
-                      key={vendorOption}
-                      value={vendorOption}
-                    />
-                  ))}
-                </datalist>
               </div>
 
               {canAssignRoute ? (

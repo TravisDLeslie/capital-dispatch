@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   locations,
@@ -8,6 +8,7 @@ import {
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
 import { formatCustomerName } from "../utils/textFormatters";
+import SearchableSelect from "./SearchableSelect";
 
 function createEmptyMaterial() {
   return {
@@ -34,6 +35,30 @@ function formatPoNumber(value) {
 
 function normalizePoNumber(value) {
   return String(value || "").replace(/\D/g, "");
+}
+
+function getDateKey(value) {
+  if (!value) {
+    return "";
+  }
+
+  const valueString = String(value);
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(valueString)) {
+    return valueString;
+  }
+
+  const date = new Date(valueString);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toISOString().slice(0, 10);
+}
+
+function getTodayDateKey() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function findMatchingOption(value, options) {
@@ -216,6 +241,90 @@ function sortTheirTruckPOsByRecent(firstPO, secondPO) {
   );
 }
 
+function getTodaySouthRuns(supplierRuns) {
+  const todayKey = getTodayDateKey();
+
+  if (!Array.isArray(supplierRuns)) {
+    return [];
+  }
+
+  return supplierRuns
+    .filter((supplierRun) => {
+      const runDate =
+        getDateKey(supplierRun?.scheduledDate) ||
+        getDateKey(supplierRun?.completedAt) ||
+        getDateKey(supplierRun?.updatedAt) ||
+        getDateKey(supplierRun?.createdAt);
+
+      return runDate === todayKey;
+    })
+    .sort(sortSouthRunsByRecent);
+}
+
+function getTodayTheirTruckPOs(theirTruckPOs) {
+  const todayKey = getTodayDateKey();
+
+  if (!Array.isArray(theirTruckPOs)) {
+    return [];
+  }
+
+  return theirTruckPOs
+    .filter((theirTruckPO) => {
+      const deliveryDate =
+        getDateKey(theirTruckPO?.deliveryDate) ||
+        getDateKey(theirTruckPO?.updatedAt) ||
+        getDateKey(theirTruckPO?.createdAt);
+
+      return (
+        theirTruckPO?.status !== "complete" &&
+        deliveryDate === todayKey
+      );
+    })
+    .sort(sortTheirTruckPOsByRecent);
+}
+
+function getPoSuggestionLabel(poRecord, sourceType) {
+  const vendor = poRecord?.vendor || "Unknown vendor";
+  const date =
+    sourceType === "south"
+      ? formatSouthRunDate(poRecord?.scheduledDate || poRecord?.completedAt)
+      : formatSouthRunDate(poRecord?.deliveryDate);
+
+  return [vendor, date].filter(Boolean).join(" • ");
+}
+
+function getPoSuggestionTitle(poRecord, sourceType) {
+  if (sourceType === "south") {
+    const customerName = poRecord?.customerName
+      ? formatCustomerName(poRecord.customerName)
+      : "";
+    const orderNumber = poRecord?.orderNumber || poRecord?.order || "";
+
+    return [customerName, orderNumber ? `Order ${orderNumber}` : ""]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  const customerName = poRecord?.customerName
+    ? formatCustomerName(poRecord.customerName)
+    : "";
+  const orderNumber = poRecord?.orderNumber || "";
+
+  return [customerName, orderNumber ? `Order ${orderNumber}` : ""]
+    .filter(Boolean)
+    .join(" • ");
+}
+
+function getPoSuggestionItemCount(poRecord) {
+  const itemCount = Array.isArray(poRecord?.items) ? poRecord.items.length : 0;
+
+  if (itemCount === 0) {
+    return "";
+  }
+
+  return `${itemCount} ${itemCount === 1 ? "item" : "items"}`;
+}
+
 function getMatchingTheirTruckPOsForPo(poNumber, theirTruckPOs) {
   const normalizedPoNumber = normalizePoNumber(poNumber);
 
@@ -301,6 +410,8 @@ export default function CheckInForm({
   );
   const [linkedSouthRunId, setLinkedSouthRunId] = useState("");
   const [linkedTheirTruckPOId, setLinkedTheirTruckPOId] = useState("");
+  const [isPoSuggestionMenuOpen, setIsPoSuggestionMenuOpen] =
+    useState(false);
   const [processingPhotoMaterialId, setProcessingPhotoMaterialId] =
     useState("");
 
@@ -431,21 +542,56 @@ export default function CheckInForm({
   const visibleTheirTruckDate =
     formatSouthRunDate(visibleTheirTruckPO?.deliveryDate) ||
     formatSouthRunDate(visibleTheirTruckPO?.updatedAt);
+  const poSuggestions =
+    receivingTruckType === "ourTruck"
+      ? getTodaySouthRuns(supplierRuns)
+      : getTodayTheirTruckPOs(theirTruckPOs);
+  const poSuggestionSourceType =
+    receivingTruckType === "ourTruck" ? "south" : "theirTruck";
+  const filteredPoSuggestions = useMemo(() => {
+    const normalizedSearch = normalizePoNumber(poNumber);
+
+    if (!normalizedSearch) {
+      return poSuggestions;
+    }
+
+    return poSuggestions.filter((poSuggestion) =>
+      normalizePoNumber(poSuggestion?.poNumber).includes(normalizedSearch),
+    );
+  }, [poNumber, poSuggestions]);
+  const poSuggestionInputLabel =
+    receivingTruckType === "ourTruck"
+      ? "South POs from today"
+      : "Their Truck POs from today";
 
   function handlePoChange(event) {
     const nextPoNumber = formatPoNumber(event.target.value);
-    const nextMatchingRuns = getMatchingSouthRunsForPo(
-      nextPoNumber,
-      supplierRuns,
-    );
-    const nextMatchingTheirTruckPOs = getMatchingTheirTruckPOsForPo(
-      nextPoNumber,
-      theirTruckPOs,
-    );
+    const preferredSouthMatches =
+      receivingTruckType === "ourTruck"
+        ? getMatchingSouthRunsForPo(nextPoNumber, supplierRuns)
+        : [];
+    const preferredTheirTruckMatches =
+      receivingTruckType === "theirTruck"
+        ? getMatchingTheirTruckPOsForPo(nextPoNumber, theirTruckPOs)
+        : [];
+    const fallbackSouthMatches =
+      receivingTruckType !== "ourTruck"
+        ? getMatchingSouthRunsForPo(nextPoNumber, supplierRuns)
+        : [];
+    const fallbackTheirTruckMatches =
+      receivingTruckType !== "theirTruck"
+        ? getMatchingTheirTruckPOsForPo(nextPoNumber, theirTruckPOs)
+        : [];
     const nextSouthRun =
-      nextPoNumber.length === 7 ? nextMatchingRuns[0] : null;
+      nextPoNumber.length === 7
+        ? preferredSouthMatches[0] || fallbackSouthMatches[0] || null
+        : null;
     const nextTheirTruckPO =
-      nextPoNumber.length === 7 ? nextMatchingTheirTruckPOs[0] : null;
+      nextPoNumber.length === 7
+        ? preferredTheirTruckMatches[0] ||
+          fallbackTheirTruckMatches[0] ||
+          null
+        : null;
 
     setPoNumber(nextPoNumber);
 
@@ -493,6 +639,7 @@ export default function CheckInForm({
       ? supplierRun.items
       : [];
 
+    setPoNumber(formatPoNumber(String(supplierRun.poNumber || "")));
     setLinkedSouthRunId(supplierRun.id);
     setLinkedTheirTruckPOId("");
     setReceivingTruckType("ourTruck");
@@ -510,6 +657,7 @@ export default function CheckInForm({
       ? theirTruckPO.items
       : [];
 
+    setPoNumber(formatPoNumber(String(theirTruckPO.poNumber || "")));
     setLinkedTheirTruckPOId(theirTruckPO.id);
     setLinkedSouthRunId("");
     setReceivingTruckType("theirTruck");
@@ -520,6 +668,16 @@ export default function CheckInForm({
     }
 
     clearError();
+  }
+
+  function handlePoSuggestionSelect(poSuggestion) {
+    if (poSuggestionSourceType === "south") {
+      linkSouthRun(poSuggestion);
+    } else {
+      linkTheirTruckPO(poSuggestion);
+    }
+
+    setIsPoSuggestionMenuOpen(false);
   }
 
   function unlinkTheirTruckPO() {
@@ -953,6 +1111,11 @@ export default function CheckInForm({
                   type="button"
                   onClick={() => {
                     setReceivingTruckType(option.value);
+                    if (option.value === "ourTruck") {
+                      setLinkedTheirTruckPOId("");
+                    } else {
+                      setLinkedSouthRunId("");
+                    }
                     clearError();
                   }}
                   disabled={isSubmitting}
@@ -982,7 +1145,7 @@ export default function CheckInForm({
         </section>
 
         <div className="grid gap-5 md:grid-cols-2">
-          <div>
+          <div className="relative">
             <label
               htmlFor="poNumber"
               className="mb-2 block text-sm font-bold text-slate-700"
@@ -998,10 +1161,87 @@ export default function CheckInForm({
               maxLength={7}
               value={poNumber}
               onChange={handlePoChange}
+              onFocus={() => setIsPoSuggestionMenuOpen(true)}
+              onBlur={() => {
+                window.setTimeout(
+                  () => setIsPoSuggestionMenuOpen(false),
+                  150,
+                );
+              }}
               disabled={isSubmitting}
               placeholder="123-456"
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-2xl font-black tracking-[0.15em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
             />
+
+            {isPoSuggestionMenuOpen && (
+              <div className="absolute left-0 right-0 z-30 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                <div className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+                  <p className="text-[0.68rem] font-black uppercase tracking-[0.2em] text-slate-400">
+                    {poSuggestionInputLabel}
+                  </p>
+                </div>
+
+                <div className="max-h-72 overflow-y-auto overscroll-contain p-2">
+                  {filteredPoSuggestions.length > 0 ? (
+                    filteredPoSuggestions.map((poSuggestion) => {
+                      const poSuggestionTitle = getPoSuggestionTitle(
+                        poSuggestion,
+                        poSuggestionSourceType,
+                      );
+                      const itemCount =
+                        getPoSuggestionItemCount(poSuggestion);
+
+                      return (
+                        <button
+                          key={`${receivingTruckType}-${poSuggestion.id || poSuggestion.poNumber}`}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() =>
+                            handlePoSuggestionSelect(poSuggestion)
+                          }
+                          className="w-full rounded-xl px-3 py-3 text-left transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                        >
+                          <span className="flex items-start justify-between gap-3">
+                            <span>
+                              <span className="block text-xl font-black tracking-[0.08em] text-slate-950">
+                                {formatPoNumber(
+                                  String(poSuggestion.poNumber || ""),
+                                )}
+                              </span>
+                              <span className="mt-1 block text-sm font-bold text-slate-600">
+                                {getPoSuggestionLabel(
+                                  poSuggestion,
+                                  poSuggestionSourceType,
+                                )}
+                              </span>
+                              {poSuggestionTitle ? (
+                                <span className="mt-1 block text-xs font-bold uppercase tracking-[0.12em] text-blue-700">
+                                  {poSuggestionTitle}
+                                </span>
+                              ) : null}
+                            </span>
+
+                            {itemCount ? (
+                              <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-slate-600">
+                                {itemCount}
+                              </span>
+                            ) : null}
+                          </span>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="px-4 py-5 text-sm font-bold text-slate-500">
+                      No matching {poSuggestionInputLabel.toLowerCase()}.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <p className="mt-2 text-xs font-bold text-slate-500">
+              Suggestions show {poSuggestionInputLabel}; you can still type any PO.
+            </p>
           </div>
 
           <div>
@@ -1012,52 +1252,19 @@ export default function CheckInForm({
               Vendor
             </label>
 
-            <select
+            <SearchableSelect
               id="vendor-select"
               value={vendor}
-              onChange={(event) => {
-                setVendor(event.target.value);
+              options={vendors}
+              onChange={(nextVendor) => {
+                setVendor(nextVendor);
                 clearError();
               }}
               disabled={isSubmitting}
-              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:hidden"
-            >
-              <option value="">Select a vendor...</option>
-
-              {vendors.map((vendorOption) => (
-                <option
-                  key={vendorOption}
-                  value={vendorOption}
-                >
-                  {vendorOption}
-                </option>
-              ))}
-            </select>
-
-            <input
-              id="vendor-search"
-              type="text"
-              list="vendor-options"
-              autoComplete="off"
-              value={vendor}
-              onChange={(event) => {
-                setVendor(event.target.value);
-                clearError();
-              }}
-              disabled={isSubmitting}
+              allowCustomValue
               placeholder="Start typing a vendor..."
-              aria-label="Vendor"
-              className="hidden w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:block"
+              accent="emerald"
             />
-
-            <datalist id="vendor-options">
-              {vendors.map((vendorOption) => (
-                <option
-                  key={vendorOption}
-                  value={vendorOption}
-                />
-              ))}
-            </datalist>
           </div>
         </div>
 

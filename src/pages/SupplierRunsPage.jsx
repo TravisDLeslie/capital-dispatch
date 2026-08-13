@@ -3458,10 +3458,12 @@ export default function SupplierRunsPage({
                                     </h5>
 
                                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                                      <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-black leading-tight text-slate-900">
-                                        {stats.poCount}{" "}
-                                        {stats.poCount === 1 ? "PO" : "POs"}
-                                      </span>
+                                      {!isDriverView ? (
+                                        <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-black leading-tight text-slate-900">
+                                          {stats.poCount}{" "}
+                                          {stats.poCount === 1 ? "PO" : "POs"}
+                                        </span>
+                                      ) : null}
 
                                       <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-black leading-tight text-slate-900">
                                         {isCompleteStop
@@ -3550,12 +3552,14 @@ export default function SupplierRunsPage({
                                 <div className="flex items-center gap-1.5 sm:gap-2">
                                   <StopDurationBadge timing={timing} />
 
-                                  <span className="hidden rounded-lg bg-white px-2.5 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:inline-flex sm:px-3">
-                                    {stats.poCount}{" "}
-                                    {stats.poCount === 1
-                                      ? "PO"
-                                      : "POs"}
-                                  </span>
+                                  {!isDriverView ? (
+                                    <span className="hidden rounded-lg bg-white px-2.5 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:inline-flex sm:px-3">
+                                      {stats.poCount}{" "}
+                                      {stats.poCount === 1
+                                        ? "PO"
+                                        : "POs"}
+                                    </span>
+                                  ) : null}
 
                                   <button
                                     type="button"

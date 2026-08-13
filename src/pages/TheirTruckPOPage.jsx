@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
+import SearchableSelect from "../components/SearchableSelect";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { getDateInputValue, formatDateInput } from "../utils/dateHelpers";
 import { createId } from "../utils/idHelpers";
@@ -539,20 +540,15 @@ export default function TheirTruckPOPage({
                 >
                   Vendor
                 </label>
-                <input
+                <SearchableSelect
                   id="their-truck-vendor"
-                  type="text"
-                  list="their-truck-vendor-options"
                   value={vendor}
-                  onChange={(event) => updateVendor(event.target.value)}
+                  options={safeVendorOptions}
+                  onChange={updateVendor}
+                  allowCustomValue
                   placeholder="Start typing a vendor..."
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  accent="blue"
                 />
-                <datalist id="their-truck-vendor-options">
-                  {safeVendorOptions.map((vendorOption) => (
-                    <option key={vendorOption} value={vendorOption} />
-                  ))}
-                </datalist>
               </div>
 
               <div>
