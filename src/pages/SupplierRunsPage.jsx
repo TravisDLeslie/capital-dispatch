@@ -9,12 +9,17 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Edit3,
   GripVertical,
   Home,
   MapPin,
   Navigation,
+  Package,
   RefreshCw,
   Search,
+  Tag,
+  Truck,
+  User,
   X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -1781,96 +1786,248 @@ export default function SupplierRunsPage({
                 const createdAtLabel = formatCreatedAt(supplierRun.createdAt);
                 const materialSummary =
                   getSupplierRunMaterialSummary(supplierRun);
+                const isStockRequest =
+                  materialSummary.materialUses.length > 0 &&
+                  materialSummary.materialUses.every(
+                    (materialUse) => materialUse === "stock",
+                  );
+                const primaryOrderNumber =
+                  materialSummary.orderNumbers[0] || "";
+                const remainingOrderCount = Math.max(
+                  materialSummary.orderNumbers.length - 1,
+                  0,
+                );
+                const requestBadgeLabel = isStockRequest
+                  ? "Stock Replenishment"
+                  : "Customer Order";
+                const requestBadgeClass = isStockRequest
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-blue-200 bg-blue-50 text-blue-800";
+                const requestAccentClass = isStockRequest
+                  ? "border-emerald-100 bg-emerald-50/60"
+                  : "border-blue-100 bg-blue-50/60";
+                const requestIconClass = isStockRequest
+                  ? "text-emerald-700"
+                  : "text-blue-700";
 
                 return (
                   <article
                     key={supplierRun.id}
                     className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
                   >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0">
+                    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.58fr)] lg:items-stretch">
+                      <div className="min-w-0 lg:border-r lg:border-slate-200 lg:pr-5">
                         <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                           South Request
                         </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <h3 className="text-2xl font-black text-slate-950">
+                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                          <h3 className="text-4xl font-black leading-none tracking-tight text-slate-950 sm:text-5xl">
                             PO {supplierRun.poNumber}
                           </h3>
 
-                          {canViewSouthCustomerName && runCustomerName ? (
-                            <CustomerNameBadge name={runCustomerName} />
-                          ) : null}
+                          <span
+                            className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-black uppercase tracking-[0.08em] shadow-sm ${requestBadgeClass}`}
+                          >
+                            {isStockRequest ? (
+                              <Package
+                                aria-hidden="true"
+                                className="h-4 w-4"
+                                strokeWidth={2.5}
+                              />
+                            ) : (
+                              <User
+                                aria-hidden="true"
+                                className="h-4 w-4"
+                                strokeWidth={2.5}
+                              />
+                            )}
+                            {requestBadgeLabel}
+                          </span>
                         </div>
 
-                        <p className="mt-1 text-sm font-bold text-slate-500">
-                          {supplierRun.vendor || "Unknown Supplier"} •{" "}
-                          {formatDateInput(
-                            getSupplierRunDateKey(supplierRun),
-                          )}{" "}
-                          • {itemCount} {itemCount === 1 ? "item" : "items"}
-                        </p>
-
-                        {materialSummary.materialUses.length > 0 ||
-                        materialSummary.orderNumbers.length > 0 ? (
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            {materialSummary.materialUses.map(
-                              (materialUse) => (
-                                <span
-                                  key={materialUse}
-                                  className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${getMaterialUseBadgeClass(
-                                    materialUse,
-                                  )}`}
-                                >
-                                  {getMaterialUseLabel(materialUse)}
-                                  {materialSummary.materialUseCounts[
-                                    materialUse
-                                  ] > 1
-                                    ? ` x${materialSummary.materialUseCounts[
-                                        materialUse
-                                      ]}`
-                                    : ""}
-                                </span>
-                              ),
+                        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-bold text-slate-700">
+                          <span className="inline-flex items-center gap-2">
+                            <Home
+                              aria-hidden="true"
+                              className="h-4 w-4 text-slate-700"
+                              strokeWidth={2.4}
+                            />
+                            {supplierRun.vendor || "Unknown Supplier"}
+                          </span>
+                          <span className="text-slate-400">•</span>
+                          <span className="inline-flex items-center gap-2">
+                            <CalendarDays
+                              aria-hidden="true"
+                              className="h-4 w-4 text-slate-700"
+                              strokeWidth={2.4}
+                            />
+                            {formatDateInput(
+                              getSupplierRunDateKey(supplierRun),
                             )}
+                          </span>
+                          <span className="text-slate-400">•</span>
+                          <span className="inline-flex items-center gap-2">
+                            <Package
+                              aria-hidden="true"
+                              className="h-4 w-4 text-slate-700"
+                              strokeWidth={2.4}
+                            />
+                            {itemCount} {itemCount === 1 ? "Item" : "Items"}
+                          </span>
+                        </div>
 
-                            {materialSummary.orderNumbers.map(
-                              (orderNumber) => (
-                                <span
-                                  key={orderNumber}
-                                  className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-orange-700 ring-1 ring-orange-100"
-                                >
-                                  Order # {orderNumber}
-                                </span>
-                              ),
-                            )}
+                        <div
+                          className={`mt-5 grid gap-0 overflow-hidden rounded-2xl border ${requestAccentClass} sm:grid-cols-2`}
+                        >
+                          {isStockRequest ? (
+                            <>
+                              <div className="flex items-center gap-3 p-4">
+                                <Truck
+                                  aria-hidden="true"
+                                  className={`h-7 w-7 ${requestIconClass}`}
+                                  strokeWidth={2.5}
+                                />
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-600">
+                                    Vendor
+                                  </p>
+                                  <p className="text-xl font-black leading-tight text-slate-950">
+                                    {supplierRun.vendor || "Unknown Supplier"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3 border-t border-emerald-100 p-4 sm:border-l sm:border-t-0">
+                                <Package
+                                  aria-hidden="true"
+                                  className={`h-7 w-7 ${requestIconClass}`}
+                                  strokeWidth={2.5}
+                                />
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-600">
+                                    Destination
+                                  </p>
+                                  <p className="text-xl font-black leading-tight text-slate-950">
+                                    Inventory
+                                  </p>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-3 p-4">
+                                <User
+                                  aria-hidden="true"
+                                  className={`h-7 w-7 ${requestIconClass}`}
+                                  strokeWidth={2.5}
+                                />
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-600">
+                                    Customer
+                                  </p>
+                                  <p className="text-xl font-black leading-tight text-slate-950">
+                                    {canViewSouthCustomerName && runCustomerName
+                                      ? runCustomerName
+                                      : "Customer Order"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3 border-t border-blue-100 p-4 sm:border-l sm:border-t-0">
+                                <Tag
+                                  aria-hidden="true"
+                                  className={`h-7 w-7 ${requestIconClass}`}
+                                  strokeWidth={2.5}
+                                />
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-600">
+                                    Order #
+                                  </p>
+                                  <p className="text-xl font-black leading-tight text-slate-950">
+                                    {primaryOrderNumber || "Not entered"}
+                                    {remainingOrderCount > 0
+                                      ? ` +${remainingOrderCount}`
+                                      : ""}
+                                  </p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {!isStockRequest &&
+                        materialSummary.orderNumbers.length > 1 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {materialSummary.orderNumbers.map((orderNumber) => (
+                              <span
+                                key={orderNumber}
+                                className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-orange-700 ring-1 ring-orange-100"
+                              >
+                                Order # {orderNumber}
+                              </span>
+                            ))}
                           </div>
                         ) : null}
 
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.12em]">
-                          {createdAtLabel ? (
-                            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700 ring-1 ring-amber-100">
-                              Entered {createdAtLabel}
-                            </span>
-                          ) : null}
+                        <div className="mt-5 grid gap-3 border-t border-slate-200 pt-4 text-sm sm:grid-cols-3">
                           {supplierRun.orderedBy ? (
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-                              Ordered by {supplierRun.orderedBy}
-                            </span>
+                            <div className="flex items-start gap-2">
+                              <User
+                                aria-hidden="true"
+                                className="mt-0.5 h-4 w-4 text-slate-700"
+                                strokeWidth={2.4}
+                              />
+                              <div>
+                                <p className="text-slate-500">Ordered by</p>
+                                <p className="font-black text-slate-950">
+                                  {supplierRun.orderedBy}
+                                </p>
+                              </div>
+                            </div>
+                          ) : null}
+                          {createdAtLabel ? (
+                            <div className="flex items-start gap-2">
+                              <CalendarDays
+                                aria-hidden="true"
+                                className="mt-0.5 h-4 w-4 text-slate-700"
+                                strokeWidth={2.4}
+                              />
+                              <div>
+                                <p className="text-slate-500">Entered</p>
+                                <p className="font-black text-slate-950">
+                                  {createdAtLabel}
+                                </p>
+                              </div>
+                            </div>
                           ) : null}
                           {supplierRun.createdByName ||
                           supplierRun.createdByEmail ? (
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-                              Created by{" "}
-                              {supplierRun.createdByName ||
-                                supplierRun.createdByEmail}
-                            </span>
+                            <div className="flex items-start gap-2">
+                              <User
+                                aria-hidden="true"
+                                className="mt-0.5 h-4 w-4 text-slate-700"
+                                strokeWidth={2.4}
+                              />
+                              <div>
+                                <p className="text-slate-500">Created by</p>
+                                <p className="font-black text-slate-950">
+                                  {supplierRun.createdByName ||
+                                    supplierRun.createdByEmail}
+                                </p>
+                              </div>
+                            </div>
                           ) : null}
                         </div>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-[180px_180px_auto] lg:min-w-[520px]">
+                      <div className="grid gap-3 lg:content-start">
+                        <p className="text-sm font-black uppercase tracking-[0.12em] text-slate-950">
+                          Assignment
+                        </p>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
                         <label className="block">
-                          <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                          <span className="mb-1 block text-sm font-semibold text-slate-900">
                             Driver
                           </span>
                           <select
@@ -1916,7 +2073,7 @@ export default function SupplierRunsPage({
                         </label>
 
                         <label className="block">
-                          <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                          <span className="mb-1 block text-sm font-semibold text-slate-900">
                             Truck
                           </span>
                           <select
@@ -1949,26 +2106,39 @@ export default function SupplierRunsPage({
                             ))}
                           </select>
                         </label>
+                        </div>
 
                         <button
                           type="button"
                           onClick={() => assignSupplierRun(supplierRun)}
                           disabled={savingDispatchRunId === supplierRun.id}
-                          className="self-end rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                          className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
                         >
+                          <Truck
+                            aria-hidden="true"
+                            className="h-5 w-5"
+                            strokeWidth={2.5}
+                          />
                           {savingDispatchRunId === supplierRun.id
                             ? "Assigning..."
-                            : "Assign"}
+                            : "Assign Driver"}
                         </button>
 
                         {canEditSupplierRuns ? (
+                          <div className="mt-3 border-t border-slate-200 pt-3">
                           <button
                             type="button"
                             onClick={() => setEditingSupplierRun(supplierRun)}
-                            className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50 sm:col-span-3"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                           >
+                            <Edit3
+                              aria-hidden="true"
+                              className="h-5 w-5"
+                              strokeWidth={2.5}
+                            />
                             Edit PO
                           </button>
+                          </div>
                         ) : null}
                       </div>
                     </div>
