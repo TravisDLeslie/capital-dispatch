@@ -1887,26 +1887,39 @@ export default function SupplierRunsPage({
             />
           ) : (
             <div className="space-y-4">
-              <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                  <div className="min-w-0">
-                    <label className="inline-flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={allFilteredDispatchRunsSelected}
-                        onChange={() =>
-                          toggleAllFilteredDispatchRuns(filteredDispatchRuns)
-                        }
-                        className="h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-[#FC2C38]"
-                      />
-                      <span className="text-sm font-black text-slate-900">
-                        Select all visible POs
-                      </span>
-                    </label>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <label className="inline-flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredDispatchRunsSelected}
+                    onChange={() =>
+                      toggleAllFilteredDispatchRuns(filteredDispatchRuns)
+                    }
+                    className="h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-[#FC2C38]"
+                  />
+                  <span className="text-sm font-black text-slate-900">
+                    Select all visible
+                  </span>
+                </label>
 
-                    <p className="mt-1 text-sm font-bold text-slate-500">
-                      {selectedFilteredDispatchRuns.length} selected
+                <p className="text-sm font-bold text-slate-500">
+                  {selectedFilteredDispatchRuns.length} selected
+                </p>
+              </div>
+
+              {selectedFilteredDispatchRuns.length > 0 ? (
+                <div className="sticky top-3 z-10 rounded-3xl border border-red-200 bg-red-50/95 p-4 shadow-lg backdrop-blur sm:p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                      Bulk Assignment
                     </p>
+                    <h3 className="mt-1 text-xl font-black text-slate-950">
+                      Assign {selectedFilteredDispatchRuns.length}{" "}
+                      {selectedFilteredDispatchRuns.length === 1
+                        ? "PO"
+                        : "POs"}
+                    </h3>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-[minmax(0,180px)_minmax(0,180px)_auto]">
@@ -2010,7 +2023,8 @@ export default function SupplierRunsPage({
                     </button>
                   </div>
                 </div>
-              </div>
+                </div>
+              ) : null}
 
               {filteredDispatchRuns.map((supplierRun) => {
                 const draft = getDispatchDraft(supplierRun);
@@ -2057,25 +2071,25 @@ export default function SupplierRunsPage({
                         : "border-slate-200"
                     }`}
                   >
-                    <label className="mb-4 inline-flex items-center gap-3 rounded-2xl bg-slate-50 px-3 py-2">
-                      <input
-                        type="checkbox"
-                        checked={isSelectedForDispatch}
-                        onChange={() =>
-                          toggleSelectedDispatchRun(supplierRun.id)
-                        }
-                        className="h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-[#FC2C38]"
-                      />
-                      <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-600">
-                        Select PO
-                      </span>
-                    </label>
-
                     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.58fr)] lg:items-stretch">
                       <div className="min-w-0 lg:border-r lg:border-slate-200 lg:pr-5">
-                        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                          South Request
-                        </p>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                            South Request
+                          </p>
+
+                          <label className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={isSelectedForDispatch}
+                              onChange={() =>
+                                toggleSelectedDispatchRun(supplierRun.id)
+                              }
+                              className="h-4 w-4 rounded border-slate-300 text-[#FC2C38] focus:ring-[#FC2C38]"
+                            />
+                            Select
+                          </label>
+                        </div>
                         <div className="mt-2 flex flex-wrap items-center gap-3">
                           <h3 className="text-3xl font-black leading-none tracking-tight text-slate-950 sm:text-4xl">
                             PO {supplierRun.poNumber}
