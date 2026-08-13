@@ -6,14 +6,19 @@ import { deliveryDrivers } from "../data/options";
 
 const roles = [
   { value: "pending", label: "Pending" },
-  { value: "driver", label: "Driver" },
-  { value: "receiving", label: "Receiving" },
-  { value: "south", label: "Dispatch" },
-  { value: "delivery", label: "Delivery" },
-  { value: "sales", label: "Sales" },
-  { value: "accounting", label: "Accounting" },
+  { value: "customer", label: "Customer" },
   { value: "admin", label: "Admin" },
   { value: "superAdmin", label: "Super Admin" },
+];
+
+const workViews = [
+  { value: "operations", label: "Operations" },
+  { value: "driver", label: "Driver" },
+  { value: "sales", label: "Sales" },
+  { value: "receiving", label: "Receiving" },
+  { value: "south", label: "PO's / South" },
+  { value: "delivery", label: "Delivery" },
+  { value: "accounting", label: "Accounting" },
 ];
 
 const permissionGroups = [
@@ -101,6 +106,15 @@ const allPermissionIds = permissionGroups.flatMap((group) =>
 
 const rolePermissionPresets = {
   pending: [],
+  customer: ["dashboard"],
+  admin: allPermissionIds.filter(
+    (permissionId) =>
+      !["user-admin", "fleet", "bouncie"].includes(permissionId),
+  ),
+  superAdmin: allPermissionIds,
+};
+
+const legacyRolePermissionPresets = {
   driver: [
     "dashboard",
     "south",
@@ -159,11 +173,6 @@ const rolePermissionPresets = {
     "accounting-customers",
     "customer-payment-links",
   ],
-  admin: allPermissionIds.filter(
-    (permissionId) =>
-      !["user-admin", "fleet", "bouncie"].includes(permissionId),
-  ),
-  superAdmin: allPermissionIds,
 };
 
 const statuses = [
@@ -191,7 +200,35 @@ function getUserPermissions(user) {
     );
   }
 
-  return rolePermissionPresets[user.role] || [];
+  return (
+    rolePermissionPresets[user.role] ||
+    legacyRolePermissionPresets[user.role] ||
+    []
+  );
+}
+
+function getPresetRole(role) {
+  if (role === "superAdmin" || role === "admin" || role === "pending") {
+    return role;
+  }
+
+  return "customer";
+}
+
+function getWorkView(user) {
+  if (typeof user.workView === "string" && user.workView) {
+    return user.workView;
+  }
+
+  if (
+    ["driver", "sales", "receiving", "south", "delivery", "accounting"].includes(
+      user.role,
+    )
+  ) {
+    return user.role;
+  }
+
+  return "operations";
 }
 
 export default function UserAdminPage({
@@ -209,7 +246,8 @@ export default function UserAdminPage({
 
   function getDraft(user) {
     return {
-      role: user.role || "pending",
+      role: getPresetRole(user.role || "pending"),
+      workView: getWorkView(user),
       status: user.status || "pending",
       driverName: user.driverName || "",
       permissions: getUserPermissions(user),
@@ -247,6 +285,7 @@ export default function UserAdminPage({
     try {
       await onUpdateUserProfile(user.id, {
         role: draft.role,
+        workView: draft.workView || "operations",
         status: draft.status,
         driverName: draft.driverName,
         permissions: draft.permissions || [],
@@ -367,6 +406,7 @@ export default function UserAdminPage({
           const draft = getDraft(user);
           const hasChanges =
             draft.role !== (user.role || "pending") ||
+            draft.workView !== getWorkView(user) ||
             draft.status !== (user.status || "pending") ||
             draft.driverName !== (user.driverName || "") ||
             JSON.stringify([...(draft.permissions || [])].sort()) !==
@@ -406,7 +446,7 @@ export default function UserAdminPage({
                   ) : null}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3 lg:w-[540px]">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:w-[720px]">
                   <label className="block">
                     <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                       Status
@@ -457,7 +497,30 @@ export default function UserAdminPage({
 
                   <label className="block">
                     <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
-                      Driver
+                      Work View
+                    </span>
+                    <select
+                      value={draft.workView}
+                      onChange={(event) =>
+                        updateDraft(
+                          user.id,
+                          "workView",
+                          event.target.value,
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                    >
+                      {workViews.map((workView) => (
+                        <option key={workView.value} value={workView.value}>
+                          {workView.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                      Driver Name
                     </span>
                     <select
                       value={draft.driverName}

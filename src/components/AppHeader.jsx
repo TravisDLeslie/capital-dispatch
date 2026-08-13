@@ -249,6 +249,7 @@ function getNavGroupIcon(group) {
  *   currentUserProfile: Record<string, any> | null;
  *   effectiveUserRole?: string;
  *   allowedPageIds?: string[];
+ *   isDriverView?: boolean;
  *   isSuperAdmin?: boolean;
  *   previewUsers?: Array<Record<string, any>>;
  *   selectedPreviewUserId?: string;
@@ -263,6 +264,7 @@ export default function AppHeader({
   currentUserProfile,
   effectiveUserRole = "",
   allowedPageIds,
+  isDriverView = false,
   isSuperAdmin = false,
   previewUsers = [],
   selectedPreviewUserId = "",
@@ -288,8 +290,6 @@ export default function AppHeader({
     .trim()
     .charAt(0)
     .toUpperCase();
-  const isDriverView =
-    effectiveUserRole === "driver" || currentUserProfile?.role === "driver";
   const southGroupLabel = isDriverView ? "South" : "PO's";
 
   useEffect(() => {

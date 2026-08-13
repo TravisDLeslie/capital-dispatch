@@ -47,7 +47,6 @@ service cloud.firestore {
     function isReceiving() {
       return isApproved() && (
         isAdmin() ||
-        role() == "receiving" ||
         hasAnyPermission([
           "receiving",
           "check-in",
@@ -61,13 +60,19 @@ service cloud.firestore {
     function isSouth() {
       return isApproved() && (
         isAdmin() ||
-        role() == "south" ||
         hasAnyPermission([
           "south",
+          "south-overview",
           "supplier-runs-add",
+          "their-truck-overview",
+          "their-truck-pos",
           "supplier-runs-dispatch",
           "supplier-runs-check",
           "supplier-runs-calendar",
+          "south-calendar",
+          "their-truck-calendar",
+          "po-calendar",
+          "their-truck-history",
           "supplier-runs-history"
         ])
       );
@@ -76,7 +81,14 @@ service cloud.firestore {
     function isDelivery() {
       return isApproved() && (
         isAdmin() ||
-        role() == "delivery"
+        hasAnyPermission([
+          "deliveries",
+          "deliveries-add",
+          "deliveries-dispatch",
+          "deliveries-calendar",
+          "deliveries-queue",
+          "deliveries-history"
+        ])
       );
     }
 
@@ -94,8 +106,13 @@ service cloud.firestore {
 
     function isDriverFor(driverName) {
       return isApproved() &&
-        role() == "driver" &&
-        userProfile().driverName == driverName;
+        userProfile().driverName == driverName &&
+        hasAnyPermission([
+          "supplier-runs-check",
+          "supplier-runs-calendar",
+          "south-calendar",
+          "deliveries-queue"
+        ]);
     }
 
     match /users/{userId} {

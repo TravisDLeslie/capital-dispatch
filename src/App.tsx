@@ -139,6 +139,68 @@ const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
 const SOUTH_PICKUP_AUTO_REFRESH_MS = 5 * 60 * 1000;
 const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
+const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
+  driver: [
+    "dashboard",
+    "south",
+    "supplier-runs-check",
+    "supplier-runs-calendar",
+    "south-calendar",
+    "deliveries",
+    "deliveries-queue",
+  ],
+  receiving: ["dashboard", "receiving", "check-in", "today", "search", "trace"],
+  south: [
+    "dashboard",
+    "south",
+    "south-overview",
+    "supplier-runs-add",
+    "their-truck-pos",
+    "their-truck-overview",
+    "supplier-runs-dispatch",
+    "supplier-runs-check",
+    "supplier-runs-calendar",
+    "south-calendar",
+    "their-truck-calendar",
+    "po-calendar",
+    "their-truck-history",
+    "supplier-runs-history",
+  ],
+  delivery: [
+    "dashboard",
+    "deliveries",
+    "deliveries-add",
+    "deliveries-dispatch",
+    "deliveries-calendar",
+    "deliveries-queue",
+    "deliveries-history",
+  ],
+  sales: [
+    "dashboard",
+    "south",
+    "south-overview",
+    "supplier-runs-add",
+    "their-truck-pos",
+    "their-truck-overview",
+    "south-calendar",
+    "their-truck-calendar",
+    "po-calendar",
+    "their-truck-history",
+    "sales",
+    "sales-orders",
+    "customers-add",
+    "customers-view",
+    "sales-tools",
+    "sales-converter",
+    "stocking-handbook",
+  ],
+  accounting: [
+    "dashboard",
+    "accounting",
+    "accounting-customers",
+    "customer-payment-links",
+  ],
+};
 
 type UserProfile = {
   id: string;
@@ -147,6 +209,7 @@ type UserProfile = {
   displayName?: string;
   photoURL?: string;
   role?: string;
+  workView?: string;
   permissions?: string[];
   status?: string;
   driverName?: string;
@@ -476,6 +539,32 @@ function getUserRole(
   return userProfile.role || "pending";
 }
 
+function getPresetRole(role: string) {
+  if (role === "superAdmin" || role === "admin" || role === "pending") {
+    return role;
+  }
+
+  return "customer";
+}
+
+function getWorkView(userProfile: UserProfile | null, role: string) {
+  const profileWorkView = userProfile?.workView;
+
+  if (typeof profileWorkView === "string" && profileWorkView) {
+    return profileWorkView;
+  }
+
+  if (
+    ["driver", "sales", "receiving", "south", "delivery", "accounting"].includes(
+      role,
+    )
+  ) {
+    return role;
+  }
+
+  return "operations";
+}
+
 function getAllowedPageIdsForRole(role: string) {
   if (role === "superAdmin") {
     return [
@@ -572,81 +661,8 @@ function getAllowedPageIdsForRole(role: string) {
     ];
   }
 
-  if (role === "receiving") {
-    return ["dashboard", "receiving", "check-in", "today", "search", "trace"];
-  }
-
-  if (role === "south") {
-    return [
-      "dashboard",
-      "south",
-      "south-overview",
-      "supplier-runs-add",
-      "their-truck-pos",
-      "their-truck-overview",
-      "supplier-runs-dispatch",
-      "supplier-runs-check",
-      "supplier-runs-calendar",
-      "south-calendar",
-      "their-truck-calendar",
-      "po-calendar",
-      "their-truck-history",
-      "supplier-runs-history",
-    ];
-  }
-
-  if (role === "delivery") {
-    return [
-      "dashboard",
-      "deliveries",
-      "deliveries-add",
-      "deliveries-dispatch",
-      "deliveries-calendar",
-      "deliveries-queue",
-      "deliveries-history",
-    ];
-  }
-
-  if (role === "sales") {
-    return [
-      "dashboard",
-      "south",
-      "south-overview",
-      "supplier-runs-add",
-      "their-truck-pos",
-      "their-truck-overview",
-      "south-calendar",
-      "their-truck-calendar",
-      "po-calendar",
-      "their-truck-history",
-      "sales",
-      "sales-orders",
-      "customers-add",
-      "customers-view",
-      "sales-tools",
-      "sales-converter",
-      "stocking-handbook",
-    ];
-  }
-
-  if (role === "accounting") {
-    return [
-      "dashboard",
-      "accounting",
-      "accounting-customers",
-      "customer-payment-links",
-    ];
-  }
-
-  if (role === "driver") {
-    return [
-      "dashboard",
-      "south",
-      "supplier-runs-check",
-      "supplier-runs-calendar",
-      "deliveries",
-      "deliveries-queue",
-    ];
+  if (role === "customer") {
+    return ["dashboard"];
   }
 
   return [];
@@ -656,8 +672,10 @@ function getAllowedPageIds(
   role: string,
   permissions?: unknown,
 ) {
-  if (role === "superAdmin") {
-    return getAllowedPageIdsForRole(role);
+  const presetRole = getPresetRole(role);
+
+  if (presetRole === "superAdmin") {
+    return getAllowedPageIdsForRole(presetRole);
   }
 
   if (Array.isArray(permissions) && permissions.length > 0) {
@@ -671,7 +689,11 @@ function getAllowedPageIds(
     ].filter((pageId, index, pageIds) => pageIds.indexOf(pageId) === index);
   }
 
-  return getAllowedPageIdsForRole(role);
+  if (LEGACY_ROLE_PAGE_IDS[role]) {
+    return LEGACY_ROLE_PAGE_IDS[role];
+  }
+
+  return getAllowedPageIdsForRole(presetRole);
 }
 
 function PendingApproval({
@@ -929,7 +951,8 @@ export default function App() {
     setSyncError(getFirebaseErrorMessage(error));
   }
 
-  const userRole = getUserRole(userProfile, currentUser?.email);
+  const rawUserRole = getUserRole(userProfile, currentUser?.email);
+  const userRole = getPresetRole(rawUserRole);
   const isSuperAdmin = userRole === "superAdmin";
   const isApproved =
     isSuperAdmin || userProfile?.status === "approved";
@@ -1034,6 +1057,7 @@ export default function App() {
             displayName:
               currentUser?.displayName || userProfile?.displayName || "",
             role: userRole,
+            workView: userProfile?.workView || "operations",
             status: isApproved ? "approved" : userProfile?.status || "pending",
             driverName: userProfile?.driverName || "",
             permissions: userProfile?.permissions,
@@ -1072,11 +1096,19 @@ export default function App() {
     dashboardPreviewUsers[0] ||
     userProfile;
   const effectiveUserRole = isSuperAdmin
-    ? getUserRole(selectedPreviewProfile, selectedPreviewProfile?.email)
+    ? getPresetRole(
+        getUserRole(selectedPreviewProfile, selectedPreviewProfile?.email),
+      )
     : userRole;
   const effectiveAllowedPageIds = isSuperAdmin
     ? getAllowedPageIds(effectiveUserRole, selectedPreviewProfile?.permissions)
     : allowedPageIds;
+  const effectiveWorkView = isSuperAdmin
+    ? getWorkView(
+        selectedPreviewProfile,
+        getUserRole(selectedPreviewProfile, selectedPreviewProfile?.email),
+      )
+    : getWorkView(userProfile, rawUserRole);
   const driverName = isSuperAdmin
     ? selectedPreviewProfile?.driverName || ""
     : userProfile?.driverName || "";
@@ -1153,11 +1185,44 @@ export default function App() {
     canReadAccounting && effectiveAllowedPageIds.includes("accounting-customers");
   const canReadCustomers =
     canReadSales || canReadReceiving || canReadEmailList || canReadAccounting;
-  const canManageCustomerStatements = ["superAdmin", "admin", "accounting"].includes(
-    effectiveUserRole,
+  const canManageCustomerStatements =
+    ["superAdmin", "admin"].includes(effectiveUserRole) ||
+    effectiveAllowedPageIds.includes("accounting-customers");
+  const hasDriverName = Boolean(driverName);
+  const hasSouthManagementAccess = effectiveAllowedPageIds.some((pageId) =>
+    [
+      "south-overview",
+      "supplier-runs-add",
+      "their-truck-overview",
+      "their-truck-pos",
+      "supplier-runs-dispatch",
+      "supplier-runs-history",
+      "their-truck-history",
+    ].includes(pageId),
   );
+  const hasDeliveryManagementAccess = effectiveAllowedPageIds.some((pageId) =>
+    [
+      "deliveries-add",
+      "deliveries-dispatch",
+      "deliveries-calendar",
+      "deliveries-history",
+    ].includes(pageId),
+  );
+  const isSouthDriverScopedView =
+    hasDriverName &&
+    !["superAdmin", "admin"].includes(effectiveUserRole) &&
+    canReadSouth &&
+    !hasSouthManagementAccess;
+  const isDeliveryDriverScopedView =
+    hasDriverName &&
+    !["superAdmin", "admin"].includes(effectiveUserRole) &&
+    canReadDeliveries &&
+    !hasDeliveryManagementAccess;
+  const southViewerRole = isSouthDriverScopedView
+    ? "driver"
+    : effectiveUserRole;
   const visibleSupplierRuns =
-    effectiveUserRole === "driver"
+    isSouthDriverScopedView
       ? supplierRuns.filter(
           (supplierRun) => supplierRun.driver === driverName,
         )
@@ -1168,7 +1233,7 @@ export default function App() {
       Boolean(supplierRun.driver),
   );
   const visibleDeliveries =
-    effectiveUserRole === "driver"
+    isDeliveryDriverScopedView
       ? deliveries
           .filter((delivery) => {
             const drivers = Array.isArray(delivery.drivers)
@@ -1599,7 +1664,7 @@ export default function App() {
               setIsLoading(false);
             }
           },
-          effectiveUserRole === "driver" ? driverName : "",
+          isSouthDriverScopedView ? driverName : "",
         );
       } else {
         setSupplierRuns([]);
@@ -1666,7 +1731,7 @@ export default function App() {
               setIsLoading(false);
             }
           },
-          effectiveUserRole === "driver" ? driverName : "",
+          isDeliveryDriverScopedView ? driverName : "",
         );
       } else {
         setDeliveries([]);
@@ -2553,10 +2618,9 @@ export default function App() {
   }
 
   function renderDashboardPage() {
-    const dashboardRole = effectiveUserRole;
     const dashboardAllowedPageIds = effectiveAllowedPageIds;
 
-    if (dashboardRole === "driver") {
+    if (effectiveWorkView === "driver" && (canReadSouth || canReadDeliveries)) {
       return (
         <DriverDashboardPage
           supplierRuns={supplierRuns}
@@ -2569,7 +2633,7 @@ export default function App() {
       );
     }
 
-    if (dashboardRole === "superAdmin" || dashboardRole === "admin") {
+    if (effectiveWorkView === "operations" || effectiveUserRole === "superAdmin" || effectiveUserRole === "admin") {
       return (
         <DashboardPage
           operations={adminDashboardOperations}
@@ -2583,7 +2647,7 @@ export default function App() {
       );
     }
 
-    if (dashboardRole === "receiving") {
+    if (effectiveWorkView === "receiving" && canReadReceiving) {
       const todayCheckIns = checkIns.filter((checkIn) => {
         const checkedAt =
           typeof checkIn.checkedInAt === "string"
@@ -2662,7 +2726,7 @@ export default function App() {
       );
     }
 
-    if (dashboardRole === "south") {
+    if (effectiveWorkView === "south" && canReadSouth) {
       const needsDispatchRuns = supplierRuns.filter(
         (supplierRun) =>
           supplierRun.status !== "complete" &&
@@ -2772,7 +2836,7 @@ export default function App() {
       );
     }
 
-    if (dashboardRole === "delivery") {
+    if (effectiveWorkView === "delivery" && canReadDeliveries) {
       const needsDispatchDeliveries = deliveries.filter(
         (delivery) =>
           delivery.status !== "complete" &&
@@ -2881,7 +2945,7 @@ export default function App() {
       );
     }
 
-    if (dashboardRole === "sales") {
+    if (effectiveWorkView === "sales" && canReadSales) {
       return (
         <SectionHubPage
           title="Sales Dashboard"
@@ -3057,7 +3121,7 @@ export default function App() {
           supplierRuns={visibleSupplierRuns}
           theirTruckPOs={theirTruckPOs}
           allowedPageIds={effectiveAllowedPageIds}
-          isDriverView={effectiveUserRole === "driver"}
+          isDriverView={isSouthDriverScopedView}
           onPageChange={navigateToPage}
         />
       );
@@ -3686,7 +3750,7 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
-            viewerRole={effectiveUserRole}
+            viewerRole={southViewerRole}
             canAssignRoute={false}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
@@ -3713,7 +3777,7 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
-            viewerRole={effectiveUserRole}
+            viewerRole={southViewerRole}
             canAssignRoute
             canReorderRoute={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
@@ -3743,11 +3807,11 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
-            viewerRole={effectiveUserRole}
+            viewerRole={southViewerRole}
             canReorderRoute={canAssignSouthRoutes}
             canEditSupplierRuns={canAssignSouthRoutes}
             canReadAllRouteOrders={
-              effectiveUserRole !== "driver" && canReadSouth
+              !isSouthDriverScopedView && canReadSouth
             }
             routeOrderDriverName={driverName}
             onAddSupplierRun={handleAddSupplierRun}
@@ -3775,11 +3839,11 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
-            viewerRole={effectiveUserRole}
+            viewerRole={southViewerRole}
             canReorderRoute={canAssignSouthRoutes}
             canEditSupplierRuns={canAssignSouthRoutes}
             canReadAllRouteOrders={
-              effectiveUserRole !== "driver" && canReadSouth
+              !isSouthDriverScopedView && canReadSouth
             }
             routeOrderDriverName={driverName}
             initialCheckViewMode="calendar"
@@ -3810,7 +3874,7 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
-            viewerRole={effectiveUserRole}
+            viewerRole={southViewerRole}
             canEditSupplierRuns={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
@@ -4097,6 +4161,7 @@ export default function App() {
             currentUserProfile={userProfile}
             effectiveUserRole={effectiveUserRole}
             allowedPageIds={effectiveAllowedPageIds}
+            isDriverView={isSouthDriverScopedView || isDeliveryDriverScopedView}
             isSuperAdmin={isSuperAdmin}
             previewUsers={dashboardPreviewUsers}
             selectedPreviewUserId={
