@@ -376,6 +376,36 @@ function getMaterialUseBadgeClass(materialUse) {
   return "bg-slate-100 text-slate-600";
 }
 
+function getSupplierRunMaterialSummary(supplierRun) {
+  const items = Array.isArray(supplierRun.items) ? supplierRun.items : [];
+  const materialUseCounts = items.reduce((counts, item) => {
+    const materialUse = item.materialUse || "order";
+
+    return {
+      ...counts,
+      [materialUse]: (counts[materialUse] || 0) + 1,
+    };
+  }, {});
+  const materialUses = ["order", "stock", "return", "swap"].filter(
+    (materialUse) => materialUseCounts[materialUse],
+  );
+  const orderNumbers = [
+    ...new Set(
+      items
+        .map((item) => item.orderNumber)
+        .filter(Boolean)
+        .map((orderNumber) => String(orderNumber).trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  return {
+    materialUses,
+    materialUseCounts,
+    orderNumbers,
+  };
+}
+
 function getDateKeyFromDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -1749,6 +1779,8 @@ export default function SupplierRunsPage({
                 const runCustomerName =
                   getSupplierRunCustomerName(supplierRun);
                 const createdAtLabel = formatCreatedAt(supplierRun.createdAt);
+                const materialSummary =
+                  getSupplierRunMaterialSummary(supplierRun);
 
                 return (
                   <article
@@ -1777,6 +1809,42 @@ export default function SupplierRunsPage({
                           )}{" "}
                           • {itemCount} {itemCount === 1 ? "item" : "items"}
                         </p>
+
+                        {materialSummary.materialUses.length > 0 ||
+                        materialSummary.orderNumbers.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            {materialSummary.materialUses.map(
+                              (materialUse) => (
+                                <span
+                                  key={materialUse}
+                                  className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${getMaterialUseBadgeClass(
+                                    materialUse,
+                                  )}`}
+                                >
+                                  {getMaterialUseLabel(materialUse)}
+                                  {materialSummary.materialUseCounts[
+                                    materialUse
+                                  ] > 1
+                                    ? ` x${materialSummary.materialUseCounts[
+                                        materialUse
+                                      ]}`
+                                    : ""}
+                                </span>
+                              ),
+                            )}
+
+                            {materialSummary.orderNumbers.map(
+                              (orderNumber) => (
+                                <span
+                                  key={orderNumber}
+                                  className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-orange-700 ring-1 ring-orange-100"
+                                >
+                                  Order # {orderNumber}
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        ) : null}
 
                         <div className="mt-3 flex flex-wrap gap-2 text-xs font-black uppercase tracking-[0.12em]">
                           {createdAtLabel ? (
