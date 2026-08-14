@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
+  BookOpen,
   ChevronDown,
+  ClipboardList,
   DollarSign,
   LogOut,
   LayoutDashboard,
@@ -27,6 +29,11 @@ const navigationItems = [
     label: "Receiving",
   },
   {
+    group: "Yard Tasks",
+    id: "yard-tasks",
+    label: "Yard Tasks",
+  },
+  {
     group: "South",
     id: "south",
     label: "South",
@@ -40,6 +47,11 @@ const navigationItems = [
     group: "Sales",
     id: "sales",
     label: "Sales",
+  },
+  {
+    group: "Documents",
+    id: "documents",
+    label: "Documents",
   },
   {
     group: "Accounting",
@@ -96,6 +108,10 @@ function getCurrentPageLabel(currentPage) {
     return "Receiving";
   }
 
+  if (currentPage === "yard-tasks") {
+    return "Yard Tasks";
+  }
+
   if (String(currentPage || "").startsWith("deliveries-")) {
     return "Deliveries";
   }
@@ -104,10 +120,13 @@ function getCurrentPageLabel(currentPage) {
     String(currentPage || "").startsWith("customers-") ||
     currentPage === "sales-orders" ||
     currentPage === "sales-tools" ||
-    currentPage === "sales-converter" ||
-    currentPage === "stocking-handbook"
+    currentPage === "sales-converter"
   ) {
     return "Sales";
+  }
+
+  if (["documents", "stocking-handbook"].includes(currentPage)) {
+    return "Documents";
   }
 
   if (
@@ -163,6 +182,10 @@ function getCurrentPageGroup(currentPage) {
     return "Receiving";
   }
 
+  if (currentPage === "yard-tasks") {
+    return "Yard Tasks";
+  }
+
   if (
     currentPage === "deliveries" ||
     String(currentPage || "").startsWith("deliveries-")
@@ -175,10 +198,13 @@ function getCurrentPageGroup(currentPage) {
     String(currentPage || "").startsWith("customers-") ||
     currentPage === "sales-orders" ||
     currentPage === "sales-tools" ||
-    currentPage === "sales-converter" ||
-    currentPage === "stocking-handbook"
+    currentPage === "sales-converter"
   ) {
     return "Sales";
+  }
+
+  if (["documents", "stocking-handbook"].includes(currentPage)) {
+    return "Documents";
   }
 
   if (
@@ -224,6 +250,14 @@ function getNavGroupIcon(group) {
 
   if (group === "Sales") {
     return UsersRound;
+  }
+
+  if (group === "Yard Tasks") {
+    return ClipboardList;
+  }
+
+  if (group === "Documents") {
+    return BookOpen;
   }
 
   if (group === "Accounting") {
@@ -275,9 +309,11 @@ export default function AppHeader({
   const [openNavGroups, setOpenNavGroups] = useState({
     Dashboard: true,
     Receiving: true,
+    "Yard Tasks": false,
     South: false,
     Deliveries: false,
     Sales: false,
+    Documents: false,
     Accounting: false,
     Admin: false,
     Fleet: false,
@@ -302,9 +338,11 @@ export default function AppHeader({
     setOpenNavGroups({
       Dashboard: false,
       Receiving: false,
+      "Yard Tasks": false,
       South: false,
       Deliveries: false,
       Sales: false,
+      Documents: false,
       Accounting: false,
       Admin: false,
       Fleet: false,
@@ -334,9 +372,11 @@ export default function AppHeader({
       return {
         Dashboard: false,
         Receiving: false,
+        "Yard Tasks": false,
         South: false,
         Deliveries: false,
         Sales: false,
+        Documents: false,
         Accounting: false,
         Admin: false,
         Fleet: false,
@@ -423,16 +463,13 @@ export default function AppHeader({
           }
         : null,
       pageAllowed("sales-tools") ||
-      pageAllowed("stocking-handbook") ||
       pageAllowed("sales-converter")
         ? {
             id: "sales-tools",
-            label: "Tools",
+            label: "Price Converter",
             pageId: pageAllowed("sales-tools")
               ? "sales-tools"
-              : pageAllowed("stocking-handbook")
-                ? "stocking-handbook"
-                : "sales-converter",
+              : "sales-converter",
           }
         : null,
     ]
@@ -442,7 +479,7 @@ export default function AppHeader({
         isActive:
           currentPage === link.pageId ||
           (link.id === "sales-tools" &&
-            ["sales-tools", "stocking-handbook", "sales-converter"].includes(
+            ["sales-tools", "sales-converter"].includes(
               currentPage,
             )),
       }));
@@ -476,7 +513,7 @@ export default function AppHeader({
   }
 
   function renderNavigation(isMobile = false) {
-    return ["Dashboard", "Receiving", "South", "Deliveries", "Sales", "Accounting", "Admin", "Fleet"].map((group) => {
+    return ["Dashboard", "Receiving", "Yard Tasks", "South", "Deliveries", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||
@@ -496,6 +533,8 @@ export default function AppHeader({
             allowedPageIds.some((pageId) =>
               ["check-in", "today", "search", "trace"].includes(pageId),
             )) ||
+          (item.id === "yard-tasks" &&
+            allowedPageIds.includes("yard-tasks")) ||
           (item.id === "deliveries" &&
             allowedPageIds.some((pageId) =>
               String(pageId).startsWith("deliveries-"),
@@ -507,8 +546,11 @@ export default function AppHeader({
                 String(pageId).startsWith("customers-") ||
                 pageId === "sales-orders" ||
                 pageId === "sales-tools" ||
-                pageId === "sales-converter" ||
-                pageId === "stocking-handbook",
+                pageId === "sales-converter",
+            )) ||
+          (item.id === "documents" &&
+            allowedPageIds.some((pageId) =>
+              ["documents", "stocking-handbook"].includes(pageId),
             )) ||
           (item.id === "accounting" &&
             allowedPageIds.some((pageId) =>
@@ -557,9 +599,11 @@ export default function AppHeader({
       const isSinglePageGroup = [
         "Dashboard",
         "Receiving",
+        "Yard Tasks",
         "South",
         "Deliveries",
         "Sales",
+        "Documents",
         "Accounting",
         "Admin",
         "Fleet",

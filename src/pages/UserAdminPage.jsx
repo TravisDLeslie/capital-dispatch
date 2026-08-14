@@ -39,6 +39,12 @@ const permissionGroups = [
     ],
   },
   {
+    title: "Yard Tasks",
+    permissions: [
+      { id: "yard-tasks", label: "Yard Tasks" },
+    ],
+  },
+  {
     title: "PO's",
     permissions: [
       { id: "south", label: "PO's" },
@@ -76,6 +82,12 @@ const permissionGroups = [
       { id: "customers-view", label: "View Customers" },
       { id: "sales-tools", label: "Tools" },
       { id: "sales-converter", label: "Converter" },
+    ],
+  },
+  {
+    title: "Documents",
+    permissions: [
+      { id: "documents", label: "Documents" },
       { id: "stocking-handbook", label: "Stocking Handbook" },
     ],
   },
@@ -124,7 +136,15 @@ const legacyRolePermissionPresets = {
     "deliveries",
     "deliveries-queue",
   ],
-  receiving: ["dashboard", "receiving", "check-in", "today", "search", "trace"],
+  receiving: [
+    "dashboard",
+    "receiving",
+    "check-in",
+    "today",
+    "search",
+    "trace",
+  ],
+  "yard-tasks": ["dashboard", "yard-tasks"],
   south: [
     "dashboard",
     "south",
@@ -165,6 +185,7 @@ const legacyRolePermissionPresets = {
     "customers-view",
     "sales-tools",
     "sales-converter",
+    "documents",
     "stocking-handbook",
   ],
   accounting: [

@@ -52,9 +52,34 @@ service cloud.firestore {
           "check-in",
           "today",
           "search",
-          "trace"
+          "trace",
+          "yard-tasks"
         ])
       );
+    }
+
+    function canAccessYardTasks() {
+      return isAdmin() || hasAnyPermission(["yard-tasks"]);
+    }
+
+    function isAssignedYardTaskUser() {
+      return isApproved() &&
+        (
+          resource.data.assignedTo == userProfile().driverName ||
+          resource.data.assignedTo == userProfile().displayName ||
+          resource.data.assignedTo == request.auth.token.name
+        );
+    }
+
+    function isYardTaskCompletionOnlyUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "status",
+        "completedAt",
+        "completedById",
+        "completedByName",
+        "completedByEmail",
+        "updatedAt"
+      ]);
     }
 
     function isSouth() {
@@ -156,6 +181,17 @@ service cloud.firestore {
 
     match /checkIns/{checkInId} {
       allow read, create, update, delete: if isReceiving();
+    }
+
+    match /yardTasks/{yardTaskId} {
+      allow read: if canAccessYardTasks();
+      allow update: if isAdmin() ||
+        (
+          canAccessYardTasks() &&
+          isAssignedYardTaskUser() &&
+          isYardTaskCompletionOnlyUpdate()
+        );
+      allow create, delete: if isAdmin();
     }
 
     match /supplierRuns/{supplierRunId} {

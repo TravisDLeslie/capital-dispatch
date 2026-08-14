@@ -51,6 +51,7 @@ import TheirTruckPOPage from "./pages/TheirTruckPOPage";
 import TracePage from "./pages/TracePage";
 import UserAdminPage from "./pages/UserAdminPage";
 import VendorSettingsPage from "./pages/VendorSettingsPage";
+import YardTasksPage from "./pages/YardTasksPage";
 import {
   addCheckIn,
   deleteCheckIn,
@@ -117,6 +118,12 @@ import {
   saveStockingHandbookItem,
   subscribeToStockingHandbookItems,
 } from "./utils/stockingHandbookStorage";
+import {
+  deleteYardTask,
+  saveYardTask,
+  subscribeToYardTasks,
+  updateYardTask,
+} from "./utils/yardTaskStorage";
 import { subscribeToBouncieVehicleSettings } from "./utils/bouncieVehicleStorage";
 import {
   defaultDeliveryScheduleSettings,
@@ -130,9 +137,7 @@ import {
   saveVendorSettings,
   subscribeToVendorSettings,
 } from "./utils/vendorSettingsStorage";
-import {
-  capitalLumberAddress,
-} from "./data/options";
+import { capitalLumberAddress } from "./data/options";
 import { formatCustomerName } from "./utils/textFormatters";
 
 const DELETE_PO_CODE = "3105";
@@ -149,7 +154,15 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "deliveries",
     "deliveries-queue",
   ],
-  receiving: ["dashboard", "receiving", "check-in", "today", "search", "trace"],
+  receiving: [
+    "dashboard",
+    "receiving",
+    "check-in",
+    "today",
+    "search",
+    "trace",
+  ],
+  "yard-tasks": ["dashboard", "yard-tasks"],
   south: [
     "dashboard",
     "south",
@@ -192,6 +205,7 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "customers-view",
     "sales-tools",
     "sales-converter",
+    "documents",
     "stocking-handbook",
   ],
   accounting: [
@@ -222,6 +236,20 @@ type CheckIn = {
   id: string;
   receivingTruckType?: string;
   receivingTruckLabel?: string;
+  [key: string]: unknown;
+};
+
+type YardTask = {
+  id: string;
+  title?: string;
+  priority?: number;
+  area?: string;
+  assignedTo?: string;
+  notes?: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  completedAt?: string | null;
   [key: string]: unknown;
 };
 
@@ -575,6 +603,8 @@ function getAllowedPageIdsForRole(role: string) {
       "today",
       "search",
       "trace",
+      "yard-tasks",
+      "documents",
       "south",
       "south-overview",
       "supplier-runs-add",
@@ -624,6 +654,8 @@ function getAllowedPageIdsForRole(role: string) {
       "today",
       "search",
       "trace",
+      "yard-tasks",
+      "documents",
       "south",
       "south-overview",
       "supplier-runs-add",
@@ -679,14 +711,26 @@ function getAllowedPageIds(
   }
 
   if (Array.isArray(permissions) && permissions.length > 0) {
-    return [
+    const pageIds = [
       "dashboard",
       ...permissions.filter(
         (permission): permission is string =>
           typeof permission === "string" &&
           !["fleet", "bouncie"].includes(permission),
       ),
-    ].filter((pageId, index, pageIds) => pageIds.indexOf(pageId) === index);
+    ];
+
+    if (
+      pageIds.includes("stocking-handbook") &&
+      !pageIds.includes("documents")
+    ) {
+      pageIds.push("documents");
+    }
+
+    return pageIds.filter(
+      (pageId, index, currentPageIds) =>
+        currentPageIds.indexOf(pageId) === index,
+    );
   }
 
   if (LEGACY_ROLE_PAGE_IDS[role]) {
@@ -911,6 +955,7 @@ export default function App() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [yardTasks, setYardTasks] = useState<YardTask[]>([]);
   const [supplierRuns, setSupplierRuns] = useState<
     SupplierRun[]
   >([]);
@@ -1113,7 +1158,18 @@ export default function App() {
     ? selectedPreviewProfile?.driverName || ""
     : userProfile?.driverName || "";
   const canReadReceiving = effectiveAllowedPageIds.some((pageId) =>
-    ["receiving", "check-in", "today", "search", "trace"].includes(pageId),
+    [
+      "receiving",
+      "check-in",
+      "today",
+      "search",
+      "trace",
+      "yard-tasks",
+    ].includes(pageId),
+  );
+  const canReadYardTasks = effectiveAllowedPageIds.includes("yard-tasks");
+  const canManageYardTasks = ["superAdmin", "admin"].includes(
+    effectiveUserRole,
   );
   const canReadSouth = effectiveAllowedPageIds.some((pageId) =>
     [
@@ -1154,8 +1210,10 @@ export default function App() {
       "customers-view",
       "sales-tools",
       "sales-converter",
-      "stocking-handbook",
     ].includes(pageId),
+  );
+  const canReadDocuments = effectiveAllowedPageIds.some((pageId) =>
+    ["documents", "stocking-handbook"].includes(pageId),
   );
   const canReadAccounting = effectiveAllowedPageIds.some((pageId) =>
     ["accounting", "accounting-customers", "customer-payment-links"].includes(
@@ -1585,6 +1643,7 @@ export default function App() {
 
     if (!currentUser || !isApproved) {
       setCheckIns([]);
+      setYardTasks([]);
       setSupplierRuns([]);
       setTheirTruckPOs([]);
       setReceivingSouthLookupRuns([]);
@@ -1604,6 +1663,7 @@ export default function App() {
 
     let isMounted = true;
     let unsubscribeFromCheckIns = () => {};
+    let unsubscribeFromYardTasks = () => {};
     let unsubscribeFromSupplierRuns = () => {};
     let unsubscribeFromTheirTruckPOs = () => {};
     let unsubscribeFromReceivingSouthLookup = () => {};
@@ -1656,8 +1716,30 @@ export default function App() {
             }
           },
         );
+        if (canReadYardTasks) {
+          unsubscribeFromYardTasks = subscribeToYardTasks(
+          (savedYardTasks: YardTask[]) => {
+            if (isMounted) {
+              setYardTasks(savedYardTasks);
+              setSyncError("");
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to sync yard tasks:", error);
+
+            if (isMounted) {
+              reportBackgroundSyncError(error);
+              setIsLoading(false);
+            }
+          },
+          );
+        } else {
+          setYardTasks([]);
+        }
       } else {
         setCheckIns([]);
+        setYardTasks([]);
       }
 
       if (canReadSouth) {
@@ -1838,7 +1920,7 @@ export default function App() {
         setSalesOrders([]);
       }
 
-      if (canReadSales) {
+      if (canReadDocuments) {
         unsubscribeFromStockingHandbookItems =
           subscribeToStockingHandbookItems(
             (savedStockingHandbookItems: StockingHandbookItem[]) => {
@@ -1913,6 +1995,7 @@ export default function App() {
         !canReadCustomerPaymentLinks &&
         !canReadSales &&
         !canReadSalesOrders &&
+        !canReadDocuments &&
         !canReadEmailList &&
         !canReadSalesReport
       ) {
@@ -1921,8 +2004,24 @@ export default function App() {
     } else {
       if (canReadReceiving) {
         loadCheckIns();
+        if (canReadYardTasks) {
+          unsubscribeFromYardTasks = subscribeToYardTasks(
+          (savedYardTasks: YardTask[]) => {
+            if (isMounted) {
+              setYardTasks(savedYardTasks);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load yard tasks:", error);
+          },
+          );
+        } else {
+          setYardTasks([]);
+        }
       } else {
         setCheckIns([]);
+        setYardTasks([]);
       }
 
       if (canReadSouth) {
@@ -2059,7 +2158,7 @@ export default function App() {
         setSalesOrders([]);
       }
 
-      if (canReadSales) {
+      if (canReadDocuments) {
         subscribeToStockingHandbookItems(
           (savedStockingHandbookItems: StockingHandbookItem[]) => {
             if (isMounted) {
@@ -2111,6 +2210,7 @@ export default function App() {
     return () => {
       isMounted = false;
       unsubscribeFromCheckIns();
+      unsubscribeFromYardTasks();
       unsubscribeFromSupplierRuns();
       unsubscribeFromTheirTruckPOs();
       unsubscribeFromReceivingSouthLookup();
@@ -2130,10 +2230,12 @@ export default function App() {
     canReadSales,
     canReadSalesOrders,
     canReadSalesReport,
+    canReadDocuments,
     canManageCustomerStatements,
     currentUser,
     canReadDeliveries,
     canReadReceiving,
+    canReadYardTasks,
     canReadSouth,
     driverName,
     isApproved,
@@ -2198,6 +2300,30 @@ export default function App() {
   async function handleDeleteStockingHandbookItem(itemId: string) {
     const updatedItems = await deleteStockingHandbookItem(itemId);
     setStockingHandbookItems(updatedItems);
+    setSyncError("");
+  }
+
+  async function handleSaveYardTask(yardTask: YardTask) {
+    const updatedYardTasks = await saveYardTask(yardTask);
+    setYardTasks(updatedYardTasks);
+    setSyncError("");
+  }
+
+  async function handleUpdateYardTask(
+    yardTaskId: string,
+    yardTaskUpdates: Partial<YardTask>,
+  ) {
+    const updatedYardTasks = await updateYardTask(
+      yardTaskId,
+      yardTaskUpdates,
+    );
+    setYardTasks(updatedYardTasks);
+    setSyncError("");
+  }
+
+  async function handleDeleteYardTask(yardTaskId: string) {
+    const updatedYardTasks = await deleteYardTask(yardTaskId);
+    setYardTasks(updatedYardTasks);
     setSyncError("");
   }
 
@@ -2688,6 +2814,9 @@ export default function App() {
       const completedSouthRuns = receivingDashboardSouthRuns.filter(
         (supplierRun) => supplierRun.status === "complete",
       );
+      const openYardTasks = yardTasks.filter(
+        (yardTask) => yardTask.status !== "complete",
+      );
 
       return (
         <SectionHubPage
@@ -2716,6 +2845,12 @@ export default function App() {
               label: "South",
               value: todaySouthRuns.length,
               note: "POs today",
+            },
+            {
+              icon: ClipboardList,
+              label: "Yard",
+              value: openYardTasks.length,
+              note: "Open tasks",
             },
             {
               icon: BookOpen,
@@ -2767,6 +2902,20 @@ export default function App() {
                   tone: "archive",
                   variant: "quiet",
                   onClick: () => setCurrentPage("supplier-runs-history"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("yard-tasks")
+              ? {
+                  icon: ClipboardList,
+                  label: "Yard",
+                  title: "Yard Tasks",
+                  description:
+                    "Keep loose yard work prioritized without a giant checklist.",
+                  metric: openYardTasks.length,
+                  metricLabel: "Open",
+                  tone: "warning",
+                  variant: "default",
+                  onClick: () => setCurrentPage("yard-tasks"),
                 }
               : null,
             dashboardAllowedPageIds.includes("stocking-handbook")
@@ -3046,9 +3195,8 @@ export default function App() {
               icon: Calculator,
               label: "Tools",
               value:
-                (dashboardAllowedPageIds.includes("sales-converter") ? 1 : 0) +
-                (dashboardAllowedPageIds.includes("stocking-handbook") ? 1 : 0),
-              note: "Pricing and stock",
+                dashboardAllowedPageIds.includes("sales-converter") ? 1 : 0,
+              note: "Pricing",
             },
           ]}
           actions={[
@@ -3078,20 +3226,6 @@ export default function App() {
                   tone: "dispatch",
                   variant: "default",
                   onClick: () => setCurrentPage("their-truck-pos"),
-                }
-              : null,
-            dashboardAllowedPageIds.includes("stocking-handbook")
-              ? {
-                  icon: BookOpen,
-                  label: "Stock Reference",
-                  title: "Stocking Handbook",
-                  description:
-                    "Find stocked items, lengths, item numbers, and notes.",
-                  metric: stockingHandbookItems.length,
-                  metricLabel: "Items",
-                  tone: "archive",
-                  variant: "compact",
-                  onClick: () => setCurrentPage("stocking-handbook"),
                 }
               : null,
             dashboardAllowedPageIds.includes("customers-view")
@@ -3146,6 +3280,9 @@ export default function App() {
 
         return checkedAt.slice(0, 10) === new Date().toISOString().slice(0, 10);
       });
+      const openYardTasks = yardTasks.filter(
+        (yardTask) => yardTask.status !== "complete",
+      );
 
       return (
         <SectionHubPage
@@ -3173,6 +3310,12 @@ export default function App() {
               label: "Records",
               value: checkIns.length,
               note: "Searchable POs",
+            },
+            {
+              icon: ClipboardList,
+              label: "Yard",
+              value: openYardTasks.length,
+              note: "Open tasks",
             },
             {
               icon: Package,
@@ -3221,6 +3364,19 @@ export default function App() {
                   metricLabel: "Events",
                   tone: "info",
                   onClick: () => setCurrentPage("trace"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("yard-tasks")
+              ? {
+                  icon: ClipboardList,
+                  label: "Yard",
+                  title: "Yard Tasks",
+                  description:
+                    "Prioritize loose yard work by area, person, and urgency.",
+                  metric: openYardTasks.length,
+                  metricLabel: "Open",
+                  tone: "warning",
+                  onClick: () => setCurrentPage("yard-tasks"),
                 }
               : null,
           ].filter(Boolean)}
@@ -3420,7 +3576,7 @@ export default function App() {
       return (
         <SectionHubPage
           title="Sales"
-          description="Customer records, orders, and sales tools."
+          description="Customer records, orders, and quick pricing tools."
           icon={UsersRound}
           primaryAction={
             effectiveAllowedPageIds.includes("sales-orders")
@@ -3446,11 +3602,10 @@ export default function App() {
             },
             {
               icon: Calculator,
-              label: "Tools",
+              label: "Converter",
               value:
-                (effectiveAllowedPageIds.includes("sales-converter") ? 1 : 0) +
-                (effectiveAllowedPageIds.includes("stocking-handbook") ? 1 : 0),
-              note: "Converter and handbook",
+                effectiveAllowedPageIds.includes("sales-converter") ? 1 : 0,
+              note: "Pricing tool",
             },
           ]}
           actions={[
@@ -3478,19 +3633,16 @@ export default function App() {
                 }
               : null,
             effectiveAllowedPageIds.includes("sales-tools") ||
-            effectiveAllowedPageIds.includes("sales-converter") ||
-            effectiveAllowedPageIds.includes("stocking-handbook")
+            effectiveAllowedPageIds.includes("sales-converter")
               ? {
                   icon: Calculator,
-                  label: "Tools",
-                  title: "Sales Tools",
-                  description: "Open the stocking handbook and pricing converter.",
-                  metric:
-                    (effectiveAllowedPageIds.includes("stocking-handbook") ? 1 : 0) +
-                    (effectiveAllowedPageIds.includes("sales-converter") ? 1 : 0),
-                  metricLabel: "Tools",
+                  label: "Pricing",
+                  title: "Price Converter",
+                  description: "Convert panels, boards, and item pricing with margin targets.",
+                  metric: "$",
+                  metricLabel: "Margin",
                   tone: "dispatch",
-                  onClick: () => setCurrentPage("sales-tools"),
+                  onClick: () => setCurrentPage("sales-converter"),
                 }
               : null,
           ].filter(Boolean)}
@@ -3502,15 +3654,9 @@ export default function App() {
       return (
         <SectionHubPage
           title="Sales Tools"
-          description="Fast product reference and pricing tools for the sales counter."
+          description="Fast pricing tools for the sales counter."
           icon={Calculator}
           stats={[
-            {
-              icon: BookOpen,
-              label: "Handbook",
-              value: stockingHandbookItems.length,
-              note: "Stock items",
-            },
             {
               icon: Calculator,
               label: "Converter",
@@ -3519,18 +3665,6 @@ export default function App() {
             },
           ]}
           actions={[
-            effectiveAllowedPageIds.includes("stocking-handbook")
-              ? {
-                  icon: BookOpen,
-                  label: "Stock Items",
-                  title: "Stocking Handbook",
-                  description: "Search stocked items, lengths, grades, unit sizes, and notes.",
-                  metric: stockingHandbookItems.length,
-                  metricLabel: "Items",
-                  tone: "dispatch",
-                  onClick: () => setCurrentPage("stocking-handbook"),
-                }
-              : null,
             effectiveAllowedPageIds.includes("sales-converter")
               ? {
                   icon: Calculator,
@@ -3541,6 +3675,40 @@ export default function App() {
                   metricLabel: "Margin",
                   tone: "marketing",
                   onClick: () => setCurrentPage("sales-converter"),
+                }
+              : null,
+          ].filter(Boolean)}
+        />
+      );
+    }
+
+    if (currentPage === "documents" && canReadDocuments) {
+      return (
+        <SectionHubPage
+          title="Documents"
+          description="Shared reference material for the yard, counter, and office."
+          icon={BookOpen}
+          stats={[
+            {
+              icon: BookOpen,
+              label: "Handbook",
+              value: stockingHandbookItems.length,
+              note: "Stock items",
+            },
+          ]}
+          actions={[
+            effectiveAllowedPageIds.includes("stocking-handbook")
+              ? {
+                  icon: BookOpen,
+                  label: "Stock Reference",
+                  title: "Stocking Handbook",
+                  description:
+                    "Search stocked items, lengths, item numbers, grades, unit sizes, and notes.",
+                  metric: stockingHandbookItems.length,
+                  metricLabel: "Items",
+                  tone: "dispatch",
+                  variant: "compact",
+                  onClick: () => setCurrentPage("stocking-handbook"),
                 }
               : null,
           ].filter(Boolean)}
@@ -3834,6 +4002,19 @@ export default function App() {
 
       case "bouncie":
         return <BounciePage onPageChange={setCurrentPage} />;
+
+      case "yard-tasks":
+        return canReadYardTasks ? (
+          <YardTasksPage
+            yardTasks={yardTasks}
+            currentUser={currentUserCreator}
+            canManageTasks={canManageYardTasks}
+            onSaveTask={handleSaveYardTask}
+            onUpdateTask={handleUpdateYardTask}
+            onDeleteTask={handleDeleteYardTask}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
 
       case "today":
         return (
@@ -4237,8 +4418,41 @@ export default function App() {
       case "sales-converter":
         return <SalesConverterPage onPageChange={setCurrentPage} />;
 
+      case "documents":
+        return canReadDocuments ? (
+          <SectionHubPage
+            title="Documents"
+            description="Shared reference material for the yard, counter, and office."
+            icon={BookOpen}
+            stats={[
+              {
+                icon: BookOpen,
+                label: "Handbook",
+                value: stockingHandbookItems.length,
+                note: "Stock items",
+              },
+            ]}
+            actions={[
+              effectiveAllowedPageIds.includes("stocking-handbook")
+                ? {
+                    icon: BookOpen,
+                    label: "Stock Reference",
+                    title: "Stocking Handbook",
+                    description:
+                      "Search stocked items, lengths, item numbers, grades, unit sizes, and notes.",
+                    metric: stockingHandbookItems.length,
+                    metricLabel: "Items",
+                    tone: "dispatch",
+                    variant: "compact",
+                    onClick: () => setCurrentPage("stocking-handbook"),
+                  }
+                : null,
+            ].filter(Boolean)}
+          />
+        ) : null;
+
       case "stocking-handbook":
-        return canReadSales ? (
+        return canReadDocuments ? (
           <StockingHandbookPage
             items={stockingHandbookItems}
             canManage={["superAdmin", "admin"].includes(effectiveUserRole)}

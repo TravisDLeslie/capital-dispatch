@@ -558,7 +558,7 @@ export default function StockingHandbookPage({
       <div className="mb-5 sm:mb-8">
         <Breadcrumbs
           items={[
-            { label: "Sales", onClick: () => onPageChange?.("sales") },
+            { label: "Documents", onClick: () => onPageChange?.("documents") },
             { label: "Stocking Handbook" },
           ]}
         />
