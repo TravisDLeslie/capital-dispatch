@@ -199,6 +199,7 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "their-truck-calendar",
     "po-calendar",
     "their-truck-history",
+    "trace",
     "sales",
     "sales-orders",
     "customers-add",
@@ -630,6 +631,7 @@ function getAllowedPageIdsForRole(role: string) {
       "customers-view",
       "sales-tools",
       "sales-converter",
+      "trace",
       "stocking-handbook",
       "accounting",
       "accounting-customers",
@@ -681,6 +683,7 @@ function getAllowedPageIdsForRole(role: string) {
       "customers-view",
       "sales-tools",
       "sales-converter",
+      "trace",
       "stocking-handbook",
       "accounting",
       "accounting-customers",
@@ -3165,7 +3168,7 @@ export default function App() {
         <SectionHubPage
           title="Sales Dashboard"
           eyebrow="Sales"
-          description="Customer records and pricing tools for sales work."
+          description="Quick access to PO entry, PO lookup, pricing, and stock reference."
           icon={UsersRound}
           primaryAction={
             dashboardAllowedPageIds.includes("supplier-runs-add")
@@ -3188,21 +3191,7 @@ export default function App() {
                 }
               : null
           }
-          stats={[
-            {
-              icon: UsersRound,
-              label: "Customers",
-              value: customers.length,
-              note: "Saved accounts",
-            },
-            {
-              icon: Calculator,
-              label: "Tools",
-              value:
-                dashboardAllowedPageIds.includes("sales-converter") ? 1 : 0,
-              note: "Pricing",
-            },
-          ]}
+          stats={[]}
           actions={[
             dashboardAllowedPageIds.includes("supplier-runs-add")
               ? {
@@ -3232,28 +3221,43 @@ export default function App() {
                   onClick: () => setCurrentPage("their-truck-pos"),
                 }
               : null,
-            dashboardAllowedPageIds.includes("customers-view")
-              ? {
-                  icon: Search,
-                  label: "Customer Lookup",
-                  title: "View Customers",
-                  description: "Search customer records and contacts.",
-                  metric: customers.length,
-                  metricLabel: "Customers",
-                  onClick: () => setCurrentPage("customers-view"),
-                }
-              : null,
             dashboardAllowedPageIds.includes("sales-converter")
               ? {
                   icon: Calculator,
                   label: "Pricing",
-                  title: "Price Converter",
+                  title: "Pricing Converter",
                   description:
                     "Convert sheet goods, board footage, and target margins.",
                   metric: "$",
                   metricLabel: "Margin",
                   tone: "dispatch",
                   onClick: () => setCurrentPage("sales-converter"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("stocking-handbook")
+              ? {
+                  icon: BookOpen,
+                  label: "Stock Reference",
+                  title: "Stocking Handbook",
+                  description:
+                    "Look up stocked items, lengths, item numbers, and notes.",
+                  metric: stockingHandbookItems.length,
+                  metricLabel: "Items",
+                  tone: "archive",
+                  onClick: () => setCurrentPage("stocking-handbook"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("trace")
+              ? {
+                  icon: Search,
+                  label: "Lookup",
+                  title: "PO Lookup",
+                  description:
+                    "Search PO and order history across South, receiving, and deliveries.",
+                  metric: "PO",
+                  metricLabel: "Lookup",
+                  tone: "success",
+                  onClick: () => setCurrentPage("trace"),
                 }
               : null,
           ]}

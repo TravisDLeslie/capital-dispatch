@@ -82,6 +82,7 @@ const permissionGroups = [
       { id: "customers-view", label: "View Customers" },
       { id: "sales-tools", label: "Tools" },
       { id: "sales-converter", label: "Converter" },
+      { id: "trace", label: "PO Lookup" },
     ],
   },
   {
@@ -179,6 +180,7 @@ const legacyRolePermissionPresets = {
     "their-truck-calendar",
     "their-truck-history",
     "po-calendar",
+    "trace",
     "sales",
     "sales-orders",
     "customers-add",
