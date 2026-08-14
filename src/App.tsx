@@ -1402,6 +1402,10 @@ export default function App() {
         delivery.hasHardware &&
         !delivery.hardwareChecked,
     ).length,
+    yardTasksOpen: yardTasks.filter(
+      (yardTask) => yardTask.status !== "complete",
+    ).length,
+    stockingHandbookItems: stockingHandbookItems.length,
     customerCount: customers.length,
     salesMonthTotal: currentSalesTotal,
     cashCardSales: Number(currentSalesReport?.cashCardSales) || 0,

@@ -406,38 +406,55 @@ export default function DashboardPage({
   const quickActions = [
     {
       id: "supplier-runs-add",
-      title: "Add POs for South",
-      description: "Create a South pickup request.",
+      title: "Add PO to South",
+      description: "Create a pickup request for the South route.",
       icon: Plus,
-      tone: "bg-red-50 text-[#FC2C38] border-red-100 hover:border-red-200 hover:bg-red-100/70",
+      metric: "+",
+      metricLabel: "PO",
+      tone:
+        "bg-red-50 text-[#FC2C38] border-red-100 hover:border-red-200 hover:bg-red-100/70",
     },
     {
       id: "supplier-runs-dispatch",
-      title: "Dispatch South POs",
-      description: "Assign drivers and trucks.",
+      title: "South POs Need Dispatch",
+      description: "Assign drivers and trucks before they hit the route.",
       icon: Truck,
-      tone: "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-200 hover:bg-blue-100/70",
+      metric: operations.southNeedsDispatch || 0,
+      metricLabel: "Waiting",
+      tone:
+        operations.southNeedsDispatch > 0
+          ? "bg-amber-50 text-amber-800 border-amber-200 hover:border-amber-300 hover:bg-amber-100/60"
+          : "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-200 hover:bg-blue-100/70",
     },
     {
       id: "supplier-runs-check",
-      title: "POs to Pick Up",
-      description: "Open the driver pickup board.",
+      title: "View POs to Pick Up",
+      description: "Open the active South route board.",
       icon: ClipboardCheck,
-      tone: "bg-amber-50 text-amber-700 border-amber-100 hover:border-amber-200 hover:bg-amber-100/70",
+      metric: operations.southOpen || 0,
+      metricLabel: "Open",
+      tone:
+        "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-200 hover:bg-blue-100/70",
     },
     {
-      id: "sales-converter",
-      title: "Converter",
-      description: "Boards, sheets, items, and margin.",
-      icon: Calculator,
-      tone: "bg-emerald-50 text-emerald-700 border-emerald-100 hover:border-emerald-200 hover:bg-emerald-100/70",
+      id: "yard-tasks",
+      title: "Yard Tasks",
+      description: "Keep the top yard priorities visible and assigned.",
+      icon: ClipboardCheck,
+      metric: operations.yardTasksOpen || 0,
+      metricLabel: "Open",
+      tone:
+        "bg-emerald-50 text-emerald-700 border-emerald-100 hover:border-emerald-200 hover:bg-emerald-100/70",
     },
     {
-      id: "sales",
-      title: "Sales",
-      description: "Customers, orders, and tools.",
-      icon: DollarSign,
-      tone: "bg-rose-50 text-rose-700 border-rose-100 hover:border-rose-200 hover:bg-rose-100/70",
+      id: "stocking-handbook",
+      title: "Stocking Handbook",
+      description: "Look up stocked items, lengths, and item numbers.",
+      icon: Route,
+      metric: operations.stockingHandbookItems || 0,
+      metricLabel: "Items",
+      tone:
+        "bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70",
     },
   ].filter((action) => allowedPageIds.includes(action.id));
 
@@ -463,7 +480,7 @@ export default function DashboardPage({
           </h1>
 
           <p className="mt-2 max-w-3xl text-lg text-slate-500">
-            A quick heartbeat for receiving, South runs, deliveries, and sales.
+            Focused on the work that needs attention right now.
           </p>
         </div>
 
@@ -472,156 +489,20 @@ export default function DashboardPage({
         </div>
       </div>
 
-      <section className="mb-5 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-              Trace Search
-            </p>
-            <h2 className="mt-1 text-2xl font-black text-slate-950">
-              Find a PO or order
-            </h2>
-          </div>
-
-          {hasDashboardSearch ? (
-            <button
-              type="button"
-              onClick={openTraceSearch}
-              className="inline-flex items-center gap-2 text-sm font-black text-[#FC2C38] transition hover:text-red-700"
-            >
-              Open full timeline
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-
-        <label htmlFor="dashboard-trace-search" className="sr-only">
-          Search PO or order
-        </label>
-        <div className="relative">
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-            strokeWidth={2.4}
-          />
-          <input
-            id="dashboard-trace-search"
-            type="search"
-            autoComplete="off"
-            value={dashboardSearch}
-            onChange={(event) => setDashboardSearch(event.target.value)}
-            placeholder="Search PO, order #, customer, vendor, item, or SKU..."
-            className="w-full rounded-2xl border border-slate-300 bg-slate-50 py-4 pl-12 pr-4 text-lg font-black text-slate-900 outline-none transition placeholder:text-base placeholder:font-semibold placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
-          />
-        </div>
-
-        {hasDashboardSearch ? (
-          <div className="mt-4">
-            {dashboardSearchResults.length > 0 ? (
-              <div className="grid gap-3 lg:grid-cols-2">
-                {dashboardSearchResults.map((result) => {
-                  const ResultIcon = result.icon;
-
-                  return (
-                    <button
-                      key={result.id}
-                      type="button"
-                      onClick={openTraceSearch}
-                      className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-red-200 hover:bg-red-50/30"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span
-                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${result.tone}`}
-                        >
-                          <ResultIcon
-                            aria-hidden="true"
-                            className="h-5 w-5"
-                            strokeWidth={2.5}
-                          />
-                        </span>
-
-                        <span className="min-w-0 flex-1">
-                          <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
-                            {result.type}
-                          </span>
-                          <span className="mt-1 block text-xl font-black text-slate-950">
-                            {result.title}
-                          </span>
-                          <span className="mt-0.5 block text-sm font-bold text-slate-500">
-                            {result.description}
-                          </span>
-                        </span>
-
-                        {result.timestamp ? (
-                          <span className="hidden shrink-0 text-right text-xs font-black text-slate-400 sm:block">
-                            {formatDateTime(result.timestamp)}
-                          </span>
-                        ) : null}
-                      </div>
-
-                      {result.links.length > 0 ? (
-                        <div className="mt-3 space-y-2 rounded-xl bg-slate-50 p-3">
-                          {result.links.map((link) => (
-                            <p
-                              key={`${result.id}-${link.label}`}
-                              className="text-sm font-black text-slate-800"
-                            >
-                              {link.label}
-                              {link.detail ? (
-                                <span className="block text-xs font-bold text-slate-500">
-                                  {link.detail}
-                                </span>
-                              ) : null}
-                            </p>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {result.meta.length > 0 ? (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {result.meta.map((metaItem) => (
-                            <span
-                              key={`${result.id}-${metaItem}`}
-                              className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600"
-                            >
-                              {metaItem}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="rounded-2xl bg-slate-50 px-4 py-4 text-sm font-bold text-slate-500">
-                No PO or order matches yet. Try just the numbers, like 440952 or
-                158474.
-              </p>
-            )}
-          </div>
-        ) : (
-          <p className="mt-3 text-sm font-semibold text-slate-500">
-            Shows linked South POs, receiving records, and delivery orders when
-            those records share a PO or order number.
-          </p>
-        )}
-      </section>
-
       {quickActions.length > 0 ? (
         <section className="mb-5 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                Quick Actions
+                Operations
               </p>
               <h2 className="mt-1 text-2xl font-black text-slate-950">
-                Jump into the work
+                What matters today
               </h2>
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             {quickActions.map((action) => {
               const ActionIcon = action.icon;
 
@@ -649,62 +530,20 @@ export default function DashboardPage({
                     </span>
                   </span>
 
-                  <ArrowRight
-                    aria-hidden="true"
-                    className="h-4 w-4 shrink-0 opacity-60 transition group-hover:translate-x-0.5 group-hover:opacity-100"
-                    strokeWidth={2.6}
-                  />
+                  <span className="shrink-0 rounded-2xl bg-white px-4 py-3 text-center shadow-sm">
+                    <span className="block text-2xl font-black text-slate-950">
+                      {action.metric}
+                    </span>
+                    <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                      {action.metricLabel}
+                    </span>
+                  </span>
                 </button>
               );
             })}
           </div>
         </section>
       ) : null}
-
-      <section className="mb-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <HeartbeatCard
-          icon={ClipboardCheck}
-          title="Receiving"
-          description="POs checked in today."
-          value={operations.receivingToday || 0}
-          note="Today"
-          tone="success"
-          onClick={() => onPageChange?.("today")}
-        />
-
-        <HeartbeatCard
-          icon={AlertTriangle}
-          title="South Dispatch"
-          description="PO requests waiting for driver and truck assignment."
-          value={operations.southNeedsDispatch || 0}
-          note="Waiting"
-          tone={operations.southNeedsDispatch > 0 ? "warning" : "dispatch"}
-          onClick={() => onPageChange?.("supplier-runs-dispatch")}
-        />
-
-        <HeartbeatCard
-          icon={Truck}
-          title="Deliveries"
-          description="Assigned deliveries, dispatch holds, and hardware reminders."
-          value={operations.deliveryOpen || 0}
-          note={`${operations.deliveryNeedsDispatch || 0} dispatch · ${
-            operations.hardwareOpen || 0
-          } hardware`}
-          tone={
-            operations.deliveryNeedsDispatch > 0 || operations.hardwareOpen > 0
-              ? "warning"
-              : "success"
-          }
-          onClick={() =>
-            onPageChange?.(
-              operations.deliveryNeedsDispatch > 0
-                ? "deliveries-dispatch"
-                : "deliveries-queue",
-            )
-          }
-        />
-
-      </section>
 
     </PageContainer>
   );
