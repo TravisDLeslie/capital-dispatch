@@ -144,6 +144,108 @@ const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
 const SOUTH_PICKUP_AUTO_REFRESH_MS = 5 * 60 * 1000;
 const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
+
+function getProfileDisplayName(user: Partial<UserProfile> | null | undefined) {
+  const emailName = String(user?.email || "").split("@")[0] || "";
+
+  return (
+    user?.displayName ||
+    user?.driverName ||
+    emailName ||
+    ""
+  ).trim();
+}
+
+function getUniqueNames(names: string[]) {
+  const seenNames = new Set<string>();
+
+  return names
+    .map((name) => String(name || "").trim())
+    .filter(Boolean)
+    .filter((name) => {
+      const key = name.toLowerCase();
+
+      if (seenNames.has(key)) {
+        return false;
+      }
+
+      seenNames.add(key);
+      return true;
+    })
+    .sort((firstName, secondName) =>
+      firstName.localeCompare(secondName, undefined, {
+        sensitivity: "base",
+      }),
+    );
+}
+
+function normalizeEmployeeName(name: string) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function createEmployeeAliasMap(users: Partial<UserProfile>[]) {
+  const firstNameCounts = new Map<string, number>();
+  const aliasMap: Record<string, string> = {};
+
+  users.forEach((user) => {
+    const displayName = getProfileDisplayName(user);
+    const firstNameKey = normalizeEmployeeName(displayName.split(/\s+/)[0] || "");
+
+    if (firstNameKey) {
+      firstNameCounts.set(firstNameKey, (firstNameCounts.get(firstNameKey) || 0) + 1);
+    }
+  });
+
+  users.forEach((user) => {
+    const displayName = getProfileDisplayName(user);
+    const firstName = displayName.split(/\s+/)[0] || "";
+    const aliases = [
+      displayName,
+      user?.driverName || "",
+      user?.displayName || "",
+      String(user?.email || "").split("@")[0] || "",
+    ];
+    const firstNameKey = normalizeEmployeeName(firstName);
+
+    if (firstNameKey && firstNameCounts.get(firstNameKey) === 1) {
+      aliases.push(firstName);
+    }
+
+    aliases.forEach((alias) => {
+      const key = normalizeEmployeeName(alias);
+
+      if (key && displayName) {
+        aliasMap[key] = displayName;
+      }
+    });
+  });
+
+  return aliasMap;
+}
+
+function getCanonicalEmployeeName(
+  name: string,
+  aliasMap: Record<string, string>,
+) {
+  const key = normalizeEmployeeName(name);
+
+  return aliasMap[key] || name;
+}
+
+function areEmployeeNamesEqual(
+  firstName: string,
+  secondName: string,
+  aliasMap: Record<string, string>,
+) {
+  return (
+    normalizeEmployeeName(getCanonicalEmployeeName(firstName, aliasMap)) ===
+    normalizeEmployeeName(getCanonicalEmployeeName(secondName, aliasMap))
+  );
+}
+
 const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
   driver: [
     "dashboard",
@@ -1287,10 +1389,20 @@ export default function App() {
   const southViewerRole = isSouthDriverScopedView
     ? "driver"
     : effectiveUserRole;
+  const employeeAliasMap = createEmployeeAliasMap([
+    ...users.filter((user) => user.status === "approved"),
+    userProfile || {},
+    selectedPreviewProfile || {},
+  ]);
   const visibleSupplierRuns =
     isSouthDriverScopedView
       ? supplierRuns.filter(
-          (supplierRun) => supplierRun.driver === driverName,
+          (supplierRun) =>
+            areEmployeeNamesEqual(
+              supplierRun.driver || "",
+              driverName,
+              employeeAliasMap,
+            ),
         )
       : supplierRuns;
   const assignedVisibleSupplierRuns = visibleSupplierRuns.filter(
@@ -1360,6 +1472,13 @@ export default function App() {
     name: currentUserDisplayName,
     email: currentUser?.email || userProfile?.email || "",
   };
+  const approvedEmployeeNames = getUniqueNames([
+    ...users
+      .filter((user) => user.status === "approved")
+      .map(getProfileDisplayName),
+    getProfileDisplayName(userProfile),
+    currentUserDisplayName,
+  ]);
   const currentSalesMonth = new Date().toISOString().slice(0, 7);
   const currentSalesReport = salesReports.find(
     (salesReport) => salesReport.month === currentSalesMonth,
@@ -2772,6 +2891,7 @@ export default function App() {
           supplierRuns={supplierRuns}
           deliveries={deliveries}
           users={users}
+          employeeOptions={approvedEmployeeNames}
           driverName={driverName}
           isSuperAdmin={false}
           onPageChange={navigateToPage}
@@ -3399,10 +3519,12 @@ export default function App() {
             mode="check"
             supplierRuns={checkBoardSupplierRuns}
             vehicleOptions={southVehicleOptions}
+            employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
             canReorderRoute={canAssignSouthRoutes}
             canEditSupplierRuns={canAssignSouthRoutes}
@@ -3963,6 +4085,7 @@ export default function App() {
             supplierRuns={supplierRuns}
             deliveries={deliveries}
             users={users}
+            employeeOptions={approvedEmployeeNames}
             driverName={driverName}
             isSuperAdmin={isSuperAdmin}
             onPageChange={navigateToPage}
@@ -4016,6 +4139,7 @@ export default function App() {
           <YardTasksPage
             yardTasks={yardTasks}
             currentUser={currentUserCreator}
+            employeeOptions={approvedEmployeeNames}
             canManageTasks={canManageYardTasks}
             onSaveTask={handleSaveYardTask}
             onUpdateTask={handleUpdateYardTask}
@@ -4077,10 +4201,12 @@ export default function App() {
             supplierRuns={supplierRuns}
             createdBy={currentUserCreator}
             vehicleOptions={southVehicleOptions}
+            employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
             canAssignRoute={false}
             onAddSupplierRun={handleAddSupplierRun}
@@ -4104,10 +4230,12 @@ export default function App() {
             mode="dispatch"
             supplierRuns={supplierRuns}
             vehicleOptions={southVehicleOptions}
+            employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
             canAssignRoute
             canReorderRoute={canAssignSouthRoutes}
@@ -4134,10 +4262,12 @@ export default function App() {
             mode="check"
             supplierRuns={checkBoardSupplierRuns}
             vehicleOptions={southVehicleOptions}
+            employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
             canReorderRoute={canAssignSouthRoutes}
             canEditSupplierRuns={canAssignSouthRoutes}
@@ -4166,10 +4296,12 @@ export default function App() {
             mode="check"
             supplierRuns={checkBoardSupplierRuns}
             vehicleOptions={southVehicleOptions}
+            employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
             canReorderRoute={canAssignSouthRoutes}
             canEditSupplierRuns={canAssignSouthRoutes}
@@ -4205,10 +4337,12 @@ export default function App() {
                 : receivingSouthLookupRuns
             }
             vehicleOptions={southVehicleOptions}
+            employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
             vendorRouteOrder={vendorOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
+            employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
             canEditSupplierRuns={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
@@ -4236,6 +4370,7 @@ export default function App() {
             supplierAddressMap={supplierAddressMap}
             vendorDeliveryCadenceMap={vendorDeliveryCadenceMap}
             createdBy={currentUserCreator}
+            employeeOptions={approvedEmployeeNames}
             onSaveTheirTruckPO={handleSaveTheirTruckPO}
             onDeleteTheirTruckPO={handleDeleteTheirTruckPO}
             onPageChange={setCurrentPage}
@@ -4321,6 +4456,7 @@ export default function App() {
           <DeliveryDispatchPage
             deliveries={deliveries}
             vehicleOptions={southVehicleOptions}
+            employeeOptions={approvedEmployeeNames}
             deliveryOriginOptions={deliveryOriginOptions}
             canEditDeliveries={canEditDeliveryDetails}
             onUpdateDelivery={handleUpdateDelivery}
@@ -4496,6 +4632,7 @@ export default function App() {
             }
             theirTruckPOs={theirTruckPOs}
             checkedInByDefault={currentUserDisplayName}
+            teamMemberOptions={approvedEmployeeNames}
           />
         );
     }

@@ -13,17 +13,23 @@ import { getDateInputValue, formatDateInput } from "../utils/dateHelpers";
 import { createId } from "../utils/idHelpers";
 import { formatCustomerName } from "../utils/textFormatters";
 
-const orderedByOptions = [
-  "Dane",
-  "Joe",
-  "Travis",
-  "Todd",
-  "Shane",
-  "McKenzie",
-  "Tim",
-  "Justin",
-  "Pete",
-];
+function getUniqueOptions(options) {
+  const seenOptions = new Set();
+
+  return options
+    .map((option) => String(option || "").trim())
+    .filter(Boolean)
+    .filter((option) => {
+      const key = option.toLowerCase();
+
+      if (seenOptions.has(key)) {
+        return false;
+      }
+
+      seenOptions.add(key);
+      return true;
+    });
+}
 
 function formatPoNumber(value) {
   const numbersOnly = String(value || "").replace(/\D/g, "").slice(0, 6);
@@ -75,6 +81,7 @@ function getItemSummary(items) {
  *   supplierAddressMap?: Record<string, string>;
  *   vendorDeliveryCadenceMap?: Record<string, string>;
  *   createdBy?: { name?: string; email?: string };
+ *   employeeOptions?: string[];
  *   onSaveTheirTruckPO?: Function;
  *   onDeleteTheirTruckPO?: Function;
  *   onPageChange?: (pageId: string) => void;
@@ -86,6 +93,7 @@ export default function TheirTruckPOPage({
   supplierAddressMap = {},
   vendorDeliveryCadenceMap = {},
   createdBy = null,
+  employeeOptions = [],
   onSaveTheirTruckPO,
   onDeleteTheirTruckPO,
   onPageChange,
@@ -97,6 +105,11 @@ export default function TheirTruckPOPage({
   const safeVendorOptions = Array.isArray(vendorOptions)
     ? vendorOptions
     : [];
+  const orderedByOptions = getUniqueOptions([
+    ...employeeOptions,
+    ...safeTheirTruckPOs.map((theirTruckPO) => theirTruckPO.orderedBy),
+    createdBy?.name,
+  ]);
   const formRef = useRef(null);
   const [editingTheirTruckPOId, setEditingTheirTruckPOId] = useState("");
   const [poNumber, setPoNumber] = useState("");

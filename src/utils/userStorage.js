@@ -32,20 +32,22 @@ export async function ensureUserProfile(user, superAdminEmails = []) {
   const now = new Date().toISOString();
 
   if (userSnapshot.exists()) {
+    const savedProfile = userSnapshot.data();
     const superAdminUpdates = isSuperAdmin
       ? {
           role: "superAdmin",
           status: "approved",
           approvedAt:
-            userSnapshot.data().approvedAt || now,
+            savedProfile.approvedAt || now,
           approvedBy:
-            userSnapshot.data().approvedBy || "system",
+            savedProfile.approvedBy || "system",
         }
       : {};
+    const displayName = savedProfile.displayName || user.displayName || "";
 
     await updateDoc(userRef, {
       email,
-      displayName: user.displayName || "",
+      displayName,
       photoURL: user.photoURL || "",
       lastLoginAt: now,
       updatedAt: now,
@@ -54,9 +56,9 @@ export async function ensureUserProfile(user, superAdminEmails = []) {
 
     return {
       id: userSnapshot.id,
-      ...userSnapshot.data(),
+      ...savedProfile,
       email,
-      displayName: user.displayName || "",
+      displayName,
       photoURL: user.photoURL || "",
       lastLoginAt: now,
       updatedAt: now,

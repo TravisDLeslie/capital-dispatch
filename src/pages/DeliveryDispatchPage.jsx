@@ -14,9 +14,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import {
-  deliveryDrivers,
   deliveryOriginOptions as fallbackDeliveryOriginOptions,
-  favoriteDeliveryDrivers,
 } from "../data/options";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 import {
@@ -142,6 +140,24 @@ function deliveryIncludesDriver(delivery, driverName) {
   );
 }
 
+function getUniqueOptions(options) {
+  const seenOptions = new Set();
+
+  return options
+    .map((option) => String(option || "").trim())
+    .filter(Boolean)
+    .filter((option) => {
+      const key = option.toLowerCase();
+
+      if (seenOptions.has(key)) {
+        return false;
+      }
+
+      seenOptions.add(key);
+      return true;
+    });
+}
+
 function findScheduleConflict(currentDelivery, assignments, deliveries) {
   const currentWindow = getDeliveryTimeWindow(currentDelivery);
 
@@ -178,10 +194,10 @@ function getConflictingDriverNames(delivery, assignments) {
     .filter((driverName) => deliveryIncludesDriver(delivery, driverName));
 }
 
-function assignmentsReady(assignments, vehicleOptions) {
+function assignmentsReady(assignments, vehicleOptions, driverOptions) {
   return assignments.every(
     (assignment) =>
-      deliveryDrivers.includes(assignment.driver) &&
+      driverOptions.includes(assignment.driver) &&
       (vehicleOptions.length === 0 || assignment.vehicleId),
   );
 }
@@ -190,6 +206,7 @@ function assignmentsReady(assignments, vehicleOptions) {
  * @param {{
  *   deliveries: Array<Record<string, any>>;
  *   vehicleOptions?: Array<{ id: string; title: string; badge?: string }>;
+ *   employeeOptions?: string[];
  *   deliveryOriginOptions?: Array<{ name: string; address: string }>;
  *   canEditDeliveries?: boolean;
  *   onUpdateDelivery: (deliveryId: string, updates: Record<string, any>) => Promise<void>;
@@ -200,6 +217,7 @@ function assignmentsReady(assignments, vehicleOptions) {
 export default function DeliveryDispatchPage({
   deliveries,
   vehicleOptions = [],
+  employeeOptions = [],
   deliveryOriginOptions,
   canEditDeliveries = false,
   onUpdateDelivery,
@@ -210,6 +228,16 @@ export default function DeliveryDispatchPage({
     Array.isArray(deliveryOriginOptions) && deliveryOriginOptions.length > 0
       ? deliveryOriginOptions
       : fallbackDeliveryOriginOptions;
+  const driverOptions = getUniqueOptions([
+    ...employeeOptions,
+    ...deliveries.flatMap((delivery) => [
+      delivery.driver,
+      ...(Array.isArray(delivery.drivers) ? delivery.drivers : []),
+      ...(Array.isArray(delivery.dispatchAssignments)
+        ? delivery.dispatchAssignments.map((assignment) => assignment.driver)
+        : []),
+    ]),
+  ]);
   const [searchQuery, setSearchQuery] = useState("");
   const [draftAssignments, setDraftAssignments] = useState({});
   const [draftSchedules, setDraftSchedules] = useState({});
@@ -350,7 +378,7 @@ export default function DeliveryDispatchPage({
     );
     const invalidAssignment = assignments.find(
       (assignment) =>
-        !deliveryDrivers.includes(assignment.driver) ||
+        !driverOptions.includes(assignment.driver) ||
         (vehicleOptions.length > 0 && !assignment.vehicleId),
     );
 
@@ -510,6 +538,7 @@ export default function DeliveryDispatchPage({
             const canScheduleDelivery = assignmentsReady(
               assignments,
               vehicleOptions,
+              driverOptions,
             );
             const schedule = getSchedule(delivery);
             const scheduledDelivery = getDeliveryWithDraftSchedule(delivery);
@@ -674,8 +703,8 @@ export default function DeliveryDispatchPage({
                             >
                               <option value="">Assign driver...</option>
 
-                              <optgroup label="Favorites">
-                                {favoriteDeliveryDrivers.map((driverOption) => (
+                              <optgroup label="Approved Users">
+                                {driverOptions.map((driverOption) => (
                                   <option
                                     key={driverOption}
                                     value={driverOption}
@@ -683,24 +712,6 @@ export default function DeliveryDispatchPage({
                                     {driverOption}
                                   </option>
                                 ))}
-                              </optgroup>
-
-                              <optgroup label="All Drivers">
-                                {deliveryDrivers
-                                  .filter(
-                                    (driverOption) =>
-                                      !favoriteDeliveryDrivers.includes(
-                                        driverOption,
-                                      ),
-                                  )
-                                  .map((driverOption) => (
-                                    <option
-                                      key={driverOption}
-                                      value={driverOption}
-                                    >
-                                      {driverOption}
-                                    </option>
-                                  ))}
                               </optgroup>
                             </select>
                           </label>

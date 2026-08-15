@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  favoriteSouthDrivers,
-  southDrivers,
   supplierAddresses as fallbackSupplierAddresses,
   vendors as fallbackVendors,
 } from "../data/options";
@@ -72,22 +70,42 @@ function findSupplierAddress(value, vendorOptions, supplierAddressMap) {
   return matchedVendor ? supplierAddressMap[matchedVendor] || "" : "";
 }
 
-const orderedByOptions = [
-  "Dane",
-  "Joe",
-  "Travis",
-  "Todd",
-  "Shane",
-  "McKenzie",
-  "Tim",
-  "Justin",
-  "Pete",
-];
+function getUniqueOptions(options) {
+  const seenOptions = new Set();
 
+  return options
+    .map((option) => String(option || "").trim())
+    .filter(Boolean)
+    .filter((option) => {
+      const key = option.toLowerCase();
+
+      if (seenOptions.has(key)) {
+        return false;
+      }
+
+      seenOptions.add(key);
+      return true;
+    });
+}
+
+/**
+ * @param {{
+ *   onSubmit: Function;
+ *   createdBy?: Record<string, unknown>;
+ *   vehicleOptions?: any[];
+ *   employeeOptions?: string[];
+ *   vendorOptions?: string[];
+ *   supplierAddressMap?: Record<string, string>;
+ *   canAssignRoute?: boolean;
+ *   initialSupplierRun?: Record<string, any> | null;
+ *   onCancel?: Function;
+ * }} props
+ */
 export default function SupplierRunForm({
   onSubmit,
   createdBy,
   vehicleOptions,
+  employeeOptions = [],
   vendorOptions,
   supplierAddressMap,
   canAssignRoute = false,
@@ -97,6 +115,12 @@ export default function SupplierRunForm({
   const safeVehicleOptions = Array.isArray(vehicleOptions)
     ? vehicleOptions
     : [];
+  const safeEmployeeOptions = getUniqueOptions([
+    ...employeeOptions,
+    initialSupplierRun?.orderedBy,
+    initialSupplierRun?.driver,
+    createdBy?.name,
+  ]);
   const safeVendorOptions =
     Array.isArray(vendorOptions) && vendorOptions.length > 0
       ? vendorOptions
@@ -462,7 +486,7 @@ export default function SupplierRunForm({
       return;
     }
 
-    if (!isEditing && canAssignRoute && !southDrivers.includes(driver)) {
+    if (!isEditing && canAssignRoute && !safeEmployeeOptions.includes(driver)) {
       setError("Select the driver for this South PO.");
       return;
     }
@@ -661,7 +685,7 @@ export default function SupplierRunForm({
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                 >
                   <option value="">Select...</option>
-                  {orderedByOptions.map((orderedByOption) => (
+                  {safeEmployeeOptions.map((orderedByOption) => (
                     <option key={orderedByOption} value={orderedByOption}>
                       {orderedByOption}
                     </option>
@@ -797,25 +821,12 @@ export default function SupplierRunForm({
                     >
                       <option value="">Select a driver...</option>
 
-                      <optgroup label="Favorites">
-                        {favoriteSouthDrivers.map((driverOption) => (
+                      <optgroup label="Approved Users">
+                        {safeEmployeeOptions.map((driverOption) => (
                           <option key={driverOption} value={driverOption}>
                             {driverOption}
                           </option>
                         ))}
-                      </optgroup>
-
-                      <optgroup label="All Drivers">
-                        {southDrivers
-                          .filter(
-                            (driverOption) =>
-                              !favoriteSouthDrivers.includes(driverOption),
-                          )
-                          .map((driverOption) => (
-                            <option key={driverOption} value={driverOption}>
-                              {driverOption}
-                            </option>
-                          ))}
                       </optgroup>
                     </select>
                   </div>

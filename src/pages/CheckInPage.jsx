@@ -12,6 +12,7 @@ import PageContainer from "../components/PageContainer";
  *   supplierRuns?: any[];
  *   theirTruckPOs?: any[];
  *   checkedInByDefault?: string;
+ *   teamMemberOptions?: string[];
  * }} props
  */
 export default function CheckInPage({
@@ -22,6 +23,7 @@ export default function CheckInPage({
   supplierRuns = [],
   theirTruckPOs = [],
   checkedInByDefault = "",
+  teamMemberOptions = [],
 }) {
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -78,6 +80,7 @@ export default function CheckInPage({
         supplierRuns={supplierRuns}
         theirTruckPOs={theirTruckPOs}
         checkedInByDefault={checkedInByDefault}
+        teamMemberOptions={teamMemberOptions}
       />
     </PageContainer>
   );

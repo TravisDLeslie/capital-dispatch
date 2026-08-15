@@ -2,7 +2,6 @@ import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
-import { deliveryDrivers } from "../data/options";
 
 const roles = [
   { value: "pending", label: "Pending" },
@@ -116,6 +115,35 @@ const permissionGroups = [
 const allPermissionIds = permissionGroups.flatMap((group) =>
   group.permissions.map((permission) => permission.id),
 );
+
+function getProfileDisplayName(user) {
+  const emailName = String(user?.email || "").split("@")[0] || "";
+
+  return user?.displayName || user?.driverName || emailName || "";
+}
+
+function getUniqueOptions(options) {
+  const seenOptions = new Set();
+
+  return options
+    .map((option) => String(option || "").trim())
+    .filter(Boolean)
+    .filter((option) => {
+      const key = option.toLowerCase();
+
+      if (seenOptions.has(key)) {
+        return false;
+      }
+
+      seenOptions.add(key);
+      return true;
+    })
+    .sort((firstOption, secondOption) =>
+      firstOption.localeCompare(secondOption, undefined, {
+        sensitivity: "base",
+      }),
+    );
+}
 
 const rolePermissionPresets = {
   pending: [],
@@ -266,12 +294,18 @@ export default function UserAdminPage({
   const [error, setError] = useState("");
   const [openAccessPanels, setOpenAccessPanels] = useState({});
   const [openAccessGroups, setOpenAccessGroups] = useState({});
+  const driverNameOptions = getUniqueOptions(
+    users
+      .filter((appUser) => appUser.status === "approved")
+      .map(getProfileDisplayName),
+  );
 
   function getDraft(user) {
     return {
       role: getPresetRole(user.role || "pending"),
       workView: getWorkView(user),
       status: user.status || "pending",
+      displayName: user.displayName || "",
       driverName: user.driverName || "",
       permissions: getUserPermissions(user),
       ...(drafts[user.id] || {}),
@@ -310,6 +344,7 @@ export default function UserAdminPage({
         role: draft.role,
         workView: draft.workView || "operations",
         status: draft.status,
+        displayName: draft.displayName,
         driverName: draft.driverName,
         permissions: draft.permissions || [],
         approvedAt,
@@ -431,6 +466,7 @@ export default function UserAdminPage({
             draft.role !== (user.role || "pending") ||
             draft.workView !== getWorkView(user) ||
             draft.status !== (user.status || "pending") ||
+            draft.displayName !== (user.displayName || "") ||
             draft.driverName !== (user.driverName || "") ||
             JSON.stringify([...(draft.permissions || [])].sort()) !==
               JSON.stringify(getUserPermissions(user).sort());
@@ -469,7 +505,26 @@ export default function UserAdminPage({
                   ) : null}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:w-[720px]">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 xl:w-[900px]">
+                  <label className="block sm:col-span-2 xl:col-span-1">
+                    <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                      Display Name
+                    </span>
+                    <input
+                      type="text"
+                      value={draft.displayName}
+                      onChange={(event) =>
+                        updateDraft(
+                          user.id,
+                          "displayName",
+                          event.target.value,
+                        )
+                      }
+                      placeholder="Austin Miller"
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                    />
+                  </label>
+
                   <label className="block">
                     <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                       Status
@@ -557,7 +612,7 @@ export default function UserAdminPage({
                       className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
                     >
                       <option value="">None</option>
-                      {deliveryDrivers.map((driver) => (
+                      {driverNameOptions.map((driver) => (
                         <option key={driver} value={driver}>
                           {driver}
                         </option>

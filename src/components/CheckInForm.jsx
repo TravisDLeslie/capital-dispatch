@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   locations,
-  receivingTeamMembers,
   vendors as fallbackVendors,
 } from "../data/options";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
@@ -67,7 +66,25 @@ function findMatchingOption(value, options) {
   );
 }
 
-function findMatchingTeamMember(value) {
+function getUniqueOptions(options) {
+  const seenOptions = new Set();
+
+  return options
+    .map((option) => String(option || "").trim())
+    .filter(Boolean)
+    .filter((option) => {
+      const key = option.toLowerCase();
+
+      if (seenOptions.has(key)) {
+        return false;
+      }
+
+      seenOptions.add(key);
+      return true;
+    });
+}
+
+function findMatchingTeamMember(value, teamMemberOptions) {
   const normalizedValue = String(value || "").trim().toLowerCase();
   const firstName = normalizedValue.split(/\s+/)[0] || "";
 
@@ -76,7 +93,7 @@ function findMatchingTeamMember(value) {
   }
 
   return (
-    receivingTeamMembers.find((teamMember) => {
+    teamMemberOptions.find((teamMember) => {
       const normalizedTeamMember = teamMember.toLowerCase();
 
       return (
@@ -396,17 +413,26 @@ export default function CheckInForm({
   supplierRuns = [],
   theirTruckPOs = [],
   checkedInByDefault = "",
+  teamMemberOptions = [],
 }) {
   const vendors =
     Array.isArray(vendorOptions) && vendorOptions.length > 0
       ? vendorOptions
       : fallbackVendors;
+  const teamMembers = useMemo(
+    () =>
+      getUniqueOptions([
+        ...teamMemberOptions,
+        checkedInByDefault,
+      ]),
+    [checkedInByDefault, teamMemberOptions],
+  );
   const [poNumber, setPoNumber] = useState("");
   const [vendor, setVendor] = useState("");
   const [receivingTruckType, setReceivingTruckType] =
     useState("theirTruck");
   const [checkedInBy, setCheckedInBy] = useState(() =>
-    findMatchingTeamMember(checkedInByDefault),
+    findMatchingTeamMember(checkedInByDefault, teamMembers),
   );
   const [linkedSouthRunId, setLinkedSouthRunId] = useState("");
   const [linkedTheirTruckPOId, setLinkedTheirTruckPOId] = useState("");
@@ -428,12 +454,15 @@ export default function CheckInForm({
       return;
     }
 
-    const defaultTeamMember = findMatchingTeamMember(checkedInByDefault);
+    const defaultTeamMember = findMatchingTeamMember(
+      checkedInByDefault,
+      teamMembers,
+    );
 
     if (defaultTeamMember) {
       setCheckedInBy(defaultTeamMember);
     }
-  }, [checkedInBy, checkedInByDefault]);
+  }, [checkedInBy, checkedInByDefault, teamMembers]);
 
   useEffect(() => {
     if (poNumber.length !== 7 || linkedSouthRunId || linkedTheirTruckPOId) {
@@ -846,7 +875,7 @@ export default function CheckInForm({
     setPoNumber("");
     setVendor("");
     setReceivingTruckType("theirTruck");
-    setCheckedInBy(findMatchingTeamMember(checkedInByDefault));
+    setCheckedInBy(findMatchingTeamMember(checkedInByDefault, teamMembers));
     setLinkedSouthRunId("");
     setLinkedTheirTruckPOId("");
     setProcessingPhotoMaterialId("");
@@ -937,7 +966,7 @@ export default function CheckInForm({
       return;
     }
 
-    if (!receivingTeamMembers.includes(checkedInBy)) {
+    if (!teamMembers.includes(checkedInBy)) {
       setError("Select who checked in this PO.");
       return;
     }
@@ -1289,7 +1318,7 @@ export default function CheckInForm({
             >
               <option value="">Select a team member...</option>
 
-              {receivingTeamMembers.map((teamMember) => (
+              {teamMembers.map((teamMember) => (
                 <option key={teamMember} value={teamMember}>
                   {teamMember}
                 </option>

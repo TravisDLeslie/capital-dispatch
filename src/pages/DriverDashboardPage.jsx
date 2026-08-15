@@ -9,7 +9,6 @@ import {
   Truck,
 } from "lucide-react";
 import PageContainer from "../components/PageContainer";
-import { deliveryDrivers } from "../data/options";
 
 const UNASSIGNED_DRIVER = "Unassigned Driver";
 
@@ -98,11 +97,17 @@ function getRouteCompletionPercent({ completeItems, totalItems }) {
   return Math.round((completeItems / totalItems) * 100);
 }
 
-function getDriverOptions({ supplierRuns, deliveries, users }) {
+function getProfileDisplayName(user) {
+  const emailName = String(user?.email || "").split("@")[0] || "";
+
+  return user?.displayName || user?.driverName || emailName || "";
+}
+
+function getDriverOptions({ supplierRuns, deliveries, users, employeeOptions }) {
   return [
     ...new Set(
       [
-        ...deliveryDrivers,
+        ...employeeOptions,
         ...supplierRuns.map((supplierRun) =>
           getDriverName(supplierRun.driver),
         ),
@@ -110,7 +115,7 @@ function getDriverOptions({ supplierRuns, deliveries, users }) {
           getDriverName(delivery.driver),
         ),
         ...users
-          .map((user) => user.driverName)
+          .map(getProfileDisplayName)
           .filter(Boolean)
           .map(getDriverName),
       ].filter((driver) => driver !== UNASSIGNED_DRIVER),
@@ -227,6 +232,7 @@ function DriverInfoTile({ label, value, detail, tone = "slate" }) {
  *   supplierRuns: Array<Record<string, any>>;
  *   deliveries: Array<Record<string, any>>;
  *   users: Array<Record<string, any>>;
+ *   employeeOptions?: string[];
  *   driverName?: string;
  *   isSuperAdmin?: boolean;
  *   onPageChange: (pageId: string) => void;
@@ -237,6 +243,7 @@ export default function DriverDashboardPage({
   supplierRuns,
   deliveries,
   users,
+  employeeOptions = [],
   driverName = "",
   isSuperAdmin = false,
   onPageChange,
@@ -247,6 +254,7 @@ export default function DriverDashboardPage({
     supplierRuns,
     deliveries,
     users: safeUsers,
+    employeeOptions,
   });
   const [previewDriver, setPreviewDriver] = useState(
     driverName || driverOptions[0] || "",

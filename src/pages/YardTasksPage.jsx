@@ -15,7 +15,7 @@ import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SearchableSelect from "../components/SearchableSelect";
 import { createId } from "../utils/idHelpers";
-import { locations, receivingTeamMembers } from "../data/options";
+import { locations } from "../data/options";
 
 const priorityOptions = [
   { value: 1, label: "Low", tone: "bg-slate-100 text-slate-600" },
@@ -108,6 +108,24 @@ function countOpenTasksForAssignee(tasks, assignee, excludedTaskId = "") {
       task.status !== "complete" &&
       isSameAssignedPerson(task.assignedTo, assignee),
   ).length;
+}
+
+function getUniqueOptions(options) {
+  const seenOptions = new Set();
+
+  return options
+    .map((option) => String(option || "").trim())
+    .filter(Boolean)
+    .filter((option) => {
+      const key = option.toLowerCase();
+
+      if (seenOptions.has(key)) {
+        return false;
+      }
+
+      seenOptions.add(key);
+      return true;
+    });
 }
 
 function YardTaskCard({
@@ -238,9 +256,22 @@ function YardTaskCard({
   );
 }
 
+/**
+ * @param {{
+ *   yardTasks: any[];
+ *   currentUser?: Record<string, any> | null;
+ *   employeeOptions?: string[];
+ *   canManageTasks?: boolean;
+ *   onSaveTask?: Function;
+ *   onUpdateTask?: Function;
+ *   onDeleteTask?: Function;
+ *   onPageChange?: Function;
+ * }} props
+ */
 export default function YardTasksPage({
   yardTasks,
   currentUser,
+  employeeOptions = [],
   canManageTasks = false,
   onSaveTask,
   onUpdateTask,
@@ -262,6 +293,16 @@ export default function YardTasksPage({
   const [editArea, setEditArea] = useState("");
   const [editAssignedTo, setEditAssignedTo] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const assigneeOptions = useMemo(
+    () =>
+      getUniqueOptions([
+        ...employeeOptions,
+        assignedTo,
+        editAssignedTo,
+        currentUser?.name || currentUser?.displayName || "",
+      ]),
+    [assignedTo, currentUser, editAssignedTo, employeeOptions],
+  );
 
   const openTasks = useMemo(
     () => yardTasks.filter((task) => task.status !== "complete"),
@@ -568,7 +609,7 @@ export default function YardTasksPage({
               <SearchableSelect
                 id="yard-task-assigned-to"
                 value={assignedTo}
-                options={receivingTeamMembers}
+                options={assigneeOptions}
                 onChange={setAssignedTo}
                 placeholder="Optional..."
                 allowCustomValue
@@ -817,7 +858,7 @@ export default function YardTasksPage({
                 <SearchableSelect
                   id="yard-task-edit-assigned-to"
                   value={editAssignedTo}
-                  options={receivingTeamMembers}
+                  options={assigneeOptions}
                   onChange={setEditAssignedTo}
                   placeholder="Optional..."
                   allowCustomValue

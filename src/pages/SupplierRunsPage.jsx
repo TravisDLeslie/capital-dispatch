@@ -28,11 +28,7 @@ import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
 import SupplierRunForm from "../components/SupplierRunForm";
-import {
-  favoriteSouthDrivers,
-  southDrivers,
-  southVendorRouteOrder,
-} from "../data/options";
+import { southVendorRouteOrder } from "../data/options";
 import {
   formatDateInput,
   formatTime,
@@ -62,6 +58,13 @@ const driverAvatarColors = [
 
 function normalizeVendorName(vendor) {
   return String(vendor || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function normalizeDriverName(driver) {
+  return String(driver || "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
@@ -162,6 +165,24 @@ function getDriverAvatar(driver) {
   };
 }
 
+function getUniqueOptions(options) {
+  const seenOptions = new Set();
+
+  return options
+    .map((option) => String(option || "").trim())
+    .filter(Boolean)
+    .filter((option) => {
+      const key = option.toLowerCase();
+
+      if (seenOptions.has(key)) {
+        return false;
+      }
+
+      seenOptions.add(key);
+      return true;
+    });
+}
+
 function groupRunsByVendor(
   supplierRuns,
   manualVendorOrder = [],
@@ -199,9 +220,13 @@ function groupRunsByDriverAndVendor(
   routeOrdersByDriver = {},
   vendorRouteOrder = southVendorRouteOrder,
   vendorDisplayNameMap = {},
+  employeeAliasMap = {},
 ) {
   const runsByDriver = supplierRuns.reduce((groups, supplierRun) => {
-    const driver = supplierRun.driver || UNASSIGNED_DRIVER;
+    const driver =
+      employeeAliasMap[normalizeDriverName(supplierRun.driver)] ||
+      supplierRun.driver ||
+      UNASSIGNED_DRIVER;
 
     return {
       ...groups,
@@ -823,6 +848,35 @@ function groupHistoryRunsByPickupDate(
     }));
 }
 
+/**
+ * @param {{
+ *   mode?: string;
+ *   supplierRuns: any[];
+ *   onAddSupplierRun?: Function;
+ *   onToggleSupplierRunItem?: Function;
+ *   onUpdateSupplierRunItemDescription?: Function;
+ *   onUpdateSupplierRun?: Function;
+ *   onDeleteSupplierRun?: Function;
+ *   onArriveSupplierStop?: Function;
+ *   createdBy?: Record<string, unknown>;
+ *   vehicleOptions?: any[];
+ *   employeeOptions?: string[];
+ *   vendorOptions?: string[];
+ *   supplierAddressMap?: Record<string, string>;
+ *   vendorRouteOrder?: string[];
+ *   vendorDisplayNameMap?: Record<string, string>;
+ *   employeeAliasMap?: Record<string, string>;
+ *   canAssignRoute?: boolean;
+ *   canReorderRoute?: boolean;
+ *   canEditSupplierRuns?: boolean;
+ *   canReadAllRouteOrders?: boolean;
+ *   routeOrderDriverName?: string;
+ *   initialCheckViewMode?: string;
+ *   viewerRole?: string;
+ *   onPageChange?: Function;
+ *   onRefreshPage?: Function;
+ * }} props
+ */
 export default function SupplierRunsPage({
   mode = "add",
   supplierRuns,
@@ -834,10 +888,12 @@ export default function SupplierRunsPage({
   onArriveSupplierStop,
   createdBy = {},
   vehicleOptions,
+  employeeOptions = [],
   vendorOptions,
   supplierAddressMap,
   vendorRouteOrder,
   vendorDisplayNameMap,
+  employeeAliasMap = {},
   canAssignRoute = false,
   canReorderRoute = false,
   canEditSupplierRuns = canAssignRoute || canReorderRoute,
@@ -851,11 +907,16 @@ export default function SupplierRunsPage({
   const safeVehicleOptions = Array.isArray(vehicleOptions)
     ? vehicleOptions
     : [];
+  const safeEmployeeOptions = getUniqueOptions([
+    ...employeeOptions,
+    routeOrderDriverName,
+  ]);
   const safeVendorRouteOrder =
     Array.isArray(vendorRouteOrder) && vendorRouteOrder.length > 0
       ? vendorRouteOrder
       : southVendorRouteOrder;
   const safeVendorDisplayNameMap = vendorDisplayNameMap || {};
+  const safeEmployeeAliasMap = employeeAliasMap || {};
   const isDriverView = _viewerRole === "driver";
   const todayKey = getDateInputValue();
   const [successMessage, setSuccessMessage] = useState("");
@@ -1389,7 +1450,7 @@ export default function SupplierRunsPage({
       return;
     }
 
-    if (!southDrivers.includes(bulkDispatchDraft.driver)) {
+    if (!safeEmployeeOptions.includes(bulkDispatchDraft.driver)) {
       setRouteOrderError("Select a driver for the selected POs.");
       return;
     }
@@ -1444,7 +1505,7 @@ export default function SupplierRunsPage({
       (vehicleOption) => vehicleOption.id === draft.vehicleId,
     );
 
-    if (!southDrivers.includes(draft.driver)) {
+    if (!safeEmployeeOptions.includes(draft.driver)) {
       setRouteOrderError(`Select a driver for PO ${supplierRun.poNumber}.`);
       return;
     }
@@ -1647,7 +1708,11 @@ export default function SupplierRunsPage({
     .reduce(
       (ordersByDriver, routeOrder) => ({
         ...ordersByDriver,
-        [routeOrder.driver || UNASSIGNED_DRIVER]: routeOrder,
+        [
+          safeEmployeeAliasMap[normalizeDriverName(routeOrder.driver)] ||
+          routeOrder.driver ||
+          UNASSIGNED_DRIVER
+        ]: routeOrder,
       }),
       {},
     );
@@ -1657,6 +1722,7 @@ export default function SupplierRunsPage({
     mode === "check" ? routeOrdersByDriver : {},
     safeVendorRouteOrder,
     safeVendorDisplayNameMap,
+    safeEmployeeAliasMap,
   );
   const completeRunGroups =
     groupRunsByDriverAndVendor(
@@ -1664,6 +1730,7 @@ export default function SupplierRunsPage({
       mode === "check" ? routeOrdersByDriver : {},
       safeVendorRouteOrder,
       safeVendorDisplayNameMap,
+      safeEmployeeAliasMap,
     );
   const openStopsCount = openRunGroups.reduce(
     (count, driverGroup) =>
@@ -1812,6 +1879,7 @@ export default function SupplierRunsPage({
           onSubmit={handleSubmit}
           createdBy={createdBy}
           vehicleOptions={safeVehicleOptions}
+          employeeOptions={safeEmployeeOptions}
           vendorOptions={vendorOptions}
           supplierAddressMap={supplierAddressMap}
           canAssignRoute={canAssignRoute}
@@ -1938,27 +2006,12 @@ export default function SupplierRunsPage({
                         className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
                       >
                         <option value="">Select...</option>
-                        <optgroup label="Favorites">
-                          {favoriteSouthDrivers.map((driverOption) => (
+                        <optgroup label="Approved Users">
+                          {safeEmployeeOptions.map((driverOption) => (
                             <option key={driverOption} value={driverOption}>
                               {driverOption}
                             </option>
                           ))}
-                        </optgroup>
-                        <optgroup label="All Drivers">
-                          {southDrivers
-                            .filter(
-                              (driverOption) =>
-                                !favoriteSouthDrivers.includes(driverOption),
-                            )
-                            .map((driverOption) => (
-                              <option
-                                key={driverOption}
-                                value={driverOption}
-                              >
-                                {driverOption}
-                              </option>
-                            ))}
                         </optgroup>
                       </select>
                     </label>
@@ -2312,8 +2365,8 @@ export default function SupplierRunsPage({
                             className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
                           >
                             <option value="">Select...</option>
-                            <optgroup label="Favorites">
-                              {favoriteSouthDrivers.map((driverOption) => (
+                            <optgroup label="Approved Users">
+                              {safeEmployeeOptions.map((driverOption) => (
                                 <option
                                   key={driverOption}
                                   value={driverOption}
@@ -2321,23 +2374,6 @@ export default function SupplierRunsPage({
                                   {driverOption}
                                 </option>
                               ))}
-                            </optgroup>
-                            <optgroup label="All Drivers">
-                              {southDrivers
-                                .filter(
-                                  (driverOption) =>
-                                    !favoriteSouthDrivers.includes(
-                                      driverOption,
-                                    ),
-                                )
-                                .map((driverOption) => (
-                                  <option
-                                    key={driverOption}
-                                    value={driverOption}
-                                  >
-                                    {driverOption}
-                                  </option>
-                                ))}
                             </optgroup>
                           </select>
                         </label>
@@ -3954,6 +3990,7 @@ export default function SupplierRunsPage({
                 onSubmit={handleEditSubmit}
                 createdBy={createdBy}
                 vehicleOptions={safeVehicleOptions}
+                employeeOptions={safeEmployeeOptions}
                 vendorOptions={vendorOptions}
                 supplierAddressMap={supplierAddressMap}
                 canAssignRoute={
