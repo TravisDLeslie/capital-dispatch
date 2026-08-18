@@ -232,6 +232,10 @@ const statuses = [
   { value: "disabled", label: "Disabled" },
 ];
 
+function isActiveEmployee(user) {
+  return user.status === "approved" && user.employeeActive !== false;
+}
+
 function getStatusClass(status) {
   if (status === "approved") {
     return "bg-emerald-100 text-emerald-700";
@@ -296,7 +300,7 @@ export default function UserAdminPage({
   const [openAccessGroups, setOpenAccessGroups] = useState({});
   const driverNameOptions = getUniqueOptions(
     users
-      .filter((appUser) => appUser.status === "approved")
+      .filter(isActiveEmployee)
       .map(getProfileDisplayName),
   );
 
@@ -305,6 +309,7 @@ export default function UserAdminPage({
       role: getPresetRole(user.role || "pending"),
       workView: getWorkView(user),
       status: user.status || "pending",
+      employeeActive: user.employeeActive !== false,
       displayName: user.displayName || "",
       driverName: user.driverName || "",
       permissions: getUserPermissions(user),
@@ -344,6 +349,7 @@ export default function UserAdminPage({
         role: draft.role,
         workView: draft.workView || "operations",
         status: draft.status,
+        employeeActive: Boolean(draft.employeeActive),
         displayName: draft.displayName,
         driverName: draft.driverName,
         permissions: draft.permissions || [],
@@ -466,6 +472,7 @@ export default function UserAdminPage({
             draft.role !== (user.role || "pending") ||
             draft.workView !== getWorkView(user) ||
             draft.status !== (user.status || "pending") ||
+            draft.employeeActive !== (user.employeeActive !== false) ||
             draft.displayName !== (user.displayName || "") ||
             draft.driverName !== (user.driverName || "") ||
             JSON.stringify([...(draft.permissions || [])].sort()) !==
@@ -491,6 +498,18 @@ export default function UserAdminPage({
                     >
                       {user.status || "pending"}
                     </span>
+
+                    {user.status === "approved" ? (
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${
+                          user.employeeActive === false
+                            ? "bg-slate-100 text-slate-500"
+                            : "bg-blue-100 text-blue-700"
+                        }`}
+                      >
+                        {user.employeeActive === false ? "inactive" : "active"}
+                      </span>
+                    ) : null}
                   </div>
 
                   <p className="mt-1 text-sm font-semibold text-slate-500">
@@ -505,7 +524,7 @@ export default function UserAdminPage({
                   ) : null}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 xl:w-[900px]">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6 xl:w-[1080px]">
                   <label className="block sm:col-span-2 xl:col-span-1">
                     <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                       Display Name
@@ -548,6 +567,26 @@ export default function UserAdminPage({
                           {status.label}
                         </option>
                       ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                      Employee
+                    </span>
+                    <select
+                      value={draft.employeeActive ? "active" : "inactive"}
+                      onChange={(event) =>
+                        updateDraft(
+                          user.id,
+                          "employeeActive",
+                          event.target.value === "active",
+                        )
+                      }
+                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
                     </select>
                   </label>
 

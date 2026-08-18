@@ -117,8 +117,6 @@ export default function SupplierRunForm({
     : [];
   const safeEmployeeOptions = getUniqueOptions([
     ...employeeOptions,
-    initialSupplierRun?.orderedBy,
-    initialSupplierRun?.driver,
     createdBy?.name,
   ]);
   const safeVendorOptions =

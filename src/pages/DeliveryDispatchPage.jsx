@@ -230,13 +230,6 @@ export default function DeliveryDispatchPage({
       : fallbackDeliveryOriginOptions;
   const driverOptions = getUniqueOptions([
     ...employeeOptions,
-    ...deliveries.flatMap((delivery) => [
-      delivery.driver,
-      ...(Array.isArray(delivery.drivers) ? delivery.drivers : []),
-      ...(Array.isArray(delivery.dispatchAssignments)
-        ? delivery.dispatchAssignments.map((assignment) => assignment.driver)
-        : []),
-    ]),
   ]);
   const [searchQuery, setSearchQuery] = useState("");
   const [draftAssignments, setDraftAssignments] = useState({});

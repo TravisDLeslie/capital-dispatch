@@ -108,16 +108,6 @@ function getDriverOptions({ supplierRuns, deliveries, users, employeeOptions }) 
     ...new Set(
       [
         ...employeeOptions,
-        ...supplierRuns.map((supplierRun) =>
-          getDriverName(supplierRun.driver),
-        ),
-        ...deliveries.map((delivery) =>
-          getDriverName(delivery.driver),
-        ),
-        ...users
-          .map(getProfileDisplayName)
-          .filter(Boolean)
-          .map(getDriverName),
       ].filter((driver) => driver !== UNASSIGNED_DRIVER),
     ),
   ].sort((firstDriver, secondDriver) =>

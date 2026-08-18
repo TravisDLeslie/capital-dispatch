@@ -246,6 +246,10 @@ function areEmployeeNamesEqual(
   );
 }
 
+function isActiveEmployee(user: Partial<UserProfile> | null | undefined) {
+  return user?.status === "approved" && user?.employeeActive !== false;
+}
+
 const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
   driver: [
     "dashboard",
@@ -329,6 +333,7 @@ type UserProfile = {
   workView?: string;
   permissions?: string[];
   status?: string;
+  employeeActive?: boolean;
   driverName?: string;
   approvedAt?: string | null;
   approvedBy?: string;
@@ -1205,7 +1210,7 @@ export default function App() {
             uid: currentUser?.uid || userProfile?.uid || "",
             email: currentUser?.email || userProfile?.email || "",
             displayName:
-              currentUser?.displayName || userProfile?.displayName || "",
+              getProfileDisplayName(userProfile) || currentUser?.displayName || "",
             role: userRole,
             workView: userProfile?.workView || "operations",
             status: isApproved ? "approved" : userProfile?.status || "pending",
@@ -1390,7 +1395,7 @@ export default function App() {
     ? "driver"
     : effectiveUserRole;
   const employeeAliasMap = createEmployeeAliasMap([
-    ...users.filter((user) => user.status === "approved"),
+    ...users.filter(isActiveEmployee),
     userProfile || {},
     selectedPreviewProfile || {},
   ]);
@@ -1462,10 +1467,10 @@ export default function App() {
           })
       : deliveries;
   const currentUserDisplayName =
+    getProfileDisplayName(userProfile) ||
     currentUser?.displayName ||
-    userProfile?.displayName ||
-    currentUser?.email ||
     userProfile?.email ||
+    currentUser?.email ||
     "";
   const currentUserCreator = {
     id: currentUser?.uid || userProfile?.uid || userProfile?.id || "",
@@ -1474,10 +1479,9 @@ export default function App() {
   };
   const approvedEmployeeNames = getUniqueNames([
     ...users
-      .filter((user) => user.status === "approved")
+      .filter(isActiveEmployee)
       .map(getProfileDisplayName),
-    getProfileDisplayName(userProfile),
-    currentUserDisplayName,
+    ...(isActiveEmployee(userProfile) ? [getProfileDisplayName(userProfile)] : []),
   ]);
   const currentSalesMonth = new Date().toISOString().slice(0, 7);
   const currentSalesReport = salesReports.find(

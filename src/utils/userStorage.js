@@ -73,6 +73,7 @@ export async function ensureUserProfile(user, superAdminEmails = []) {
     photoURL: user.photoURL || "",
     role: isSuperAdmin ? "superAdmin" : "pending",
     status: isSuperAdmin ? "approved" : "pending",
+    employeeActive: true,
     driverName: "",
     createdAt: now,
     updatedAt: now,

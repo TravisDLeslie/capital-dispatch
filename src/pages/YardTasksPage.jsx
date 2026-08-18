@@ -297,11 +297,9 @@ export default function YardTasksPage({
     () =>
       getUniqueOptions([
         ...employeeOptions,
-        assignedTo,
-        editAssignedTo,
         currentUser?.name || currentUser?.displayName || "",
       ]),
-    [assignedTo, currentUser, editAssignedTo, employeeOptions],
+    [currentUser, employeeOptions],
   );
 
   const openTasks = useMemo(

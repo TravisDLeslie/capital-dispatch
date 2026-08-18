@@ -107,7 +107,6 @@ export default function TheirTruckPOPage({
     : [];
   const orderedByOptions = getUniqueOptions([
     ...employeeOptions,
-    ...safeTheirTruckPOs.map((theirTruckPO) => theirTruckPO.orderedBy),
     createdBy?.name,
   ]);
   const formRef = useRef(null);
