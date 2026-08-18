@@ -70,6 +70,17 @@ function normalizeDriverName(driver) {
     .replace(/[^a-z0-9]/g, "");
 }
 
+function getCanonicalDriverName(driver, employeeAliasMap = {}) {
+  return employeeAliasMap[normalizeDriverName(driver)] || driver || "";
+}
+
+function driverNamesMatch(firstDriver, secondDriver, employeeAliasMap = {}) {
+  return (
+    normalizeDriverName(getCanonicalDriverName(firstDriver, employeeAliasMap)) ===
+    normalizeDriverName(getCanonicalDriverName(secondDriver, employeeAliasMap))
+  );
+}
+
 function getDisplayVendorName(vendor, vendorDisplayNameMap = {}) {
   const normalizedVendor = normalizeVendorName(vendor);
 
@@ -1680,18 +1691,28 @@ export default function SupplierRunsPage({
 
   const visibleRuns =
     mode === "history" ? historyRuns : dailyRuns;
+  const driverScopedRuns =
+    isDriverView && routeOrderDriverName
+      ? visibleRuns.filter((supplierRun) =>
+          driverNamesMatch(
+            supplierRun.driver,
+            routeOrderDriverName,
+            safeEmployeeAliasMap,
+          ),
+        )
+      : visibleRuns;
   const canViewSouthCustomerName = canEditSupplierRuns;
   const pickupSearchTerm = normalizeSearchText(pickupSearch);
   const filteredVisibleRuns =
     mode === "check" && checkViewMode === "list"
-      ? visibleRuns.filter((supplierRun) =>
+      ? driverScopedRuns.filter((supplierRun) =>
           supplierRunMatchesPickupSearch(
             supplierRun,
             pickupSearchTerm,
             canViewSouthCustomerName,
           ),
         )
-      : visibleRuns;
+      : driverScopedRuns;
 
   const openRuns = filteredVisibleRuns.filter(
     (supplierRun) => supplierRun.status !== "complete",

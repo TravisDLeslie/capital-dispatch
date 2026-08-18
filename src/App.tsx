@@ -1423,6 +1423,9 @@ export default function App() {
   const checkBoardSupplierRuns = canReadSouth
     ? assignedVisibleSupplierRuns
     : receivingVisibleSupplierRuns;
+  const driverDashboardSupplierRuns = isSouthDriverScopedView
+    ? assignedVisibleSupplierRuns
+    : supplierRuns;
   const visibleDeliveries =
     isDeliveryDriverScopedView
       ? deliveries
@@ -2165,6 +2168,7 @@ export default function App() {
           (error: Error) => {
             console.error("Unable to load supplier runs:", error);
           },
+          isSouthDriverScopedView ? driverName : "",
         );
       } else {
         setSupplierRuns([]);
@@ -2892,7 +2896,7 @@ export default function App() {
     if (shouldShowDriverDashboard && (canReadSouth || canReadDeliveries)) {
       return (
         <DriverDashboardPage
-          supplierRuns={supplierRuns}
+          supplierRuns={driverDashboardSupplierRuns}
           deliveries={deliveries}
           users={users}
           employeeOptions={approvedEmployeeNames}
@@ -4086,7 +4090,7 @@ export default function App() {
       case "driver-dashboard":
         return (
           <DriverDashboardPage
-            supplierRuns={supplierRuns}
+            supplierRuns={isSuperAdmin ? supplierRuns : driverDashboardSupplierRuns}
             deliveries={deliveries}
             users={users}
             employeeOptions={approvedEmployeeNames}
