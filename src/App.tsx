@@ -1423,6 +1423,12 @@ export default function App() {
   const checkBoardSupplierRuns = canReadSouth
     ? assignedVisibleSupplierRuns
     : receivingVisibleSupplierRuns;
+  const southLookupSupplierRuns = canReadSouth
+    ? visibleSupplierRuns
+    : receivingSouthLookupRuns;
+  const southAssignedLookupSupplierRuns = canReadSouth
+    ? assignedVisibleSupplierRuns
+    : receivingVisibleSupplierRuns;
   const driverDashboardSupplierRuns = isSouthDriverScopedView
     ? assignedVisibleSupplierRuns
     : supplierRuns;
@@ -2931,9 +2937,7 @@ export default function App() {
         return checkedAt.slice(0, 10) === new Date().toISOString().slice(0, 10);
       });
       const todayDateKey = new Date().toISOString().slice(0, 10);
-      const receivingDashboardSouthRuns = canReadSouth
-        ? supplierRuns
-        : receivingSouthLookupRuns;
+      const receivingDashboardSouthRuns = southLookupSupplierRuns;
       const todaySouthRuns = receivingDashboardSouthRuns.filter((supplierRun) => {
         const runDate =
           typeof supplierRun.scheduledDate === "string"
@@ -3073,19 +3077,19 @@ export default function App() {
     }
 
     if (effectiveWorkView === "south" && canReadSouth) {
-      const needsDispatchRuns = supplierRuns.filter(
+      const needsDispatchRuns = visibleSupplierRuns.filter(
         (supplierRun) =>
           supplierRun.status !== "complete" &&
           (supplierRun.dispatchStatus === "needsDispatch" ||
             !supplierRun.driver),
       );
-      const openRuns = supplierRuns.filter(
+      const openRuns = visibleSupplierRuns.filter(
         (supplierRun) =>
           supplierRun.status !== "complete" &&
           supplierRun.dispatchStatus !== "needsDispatch" &&
           supplierRun.driver,
       );
-      const completeRuns = supplierRuns.filter(
+      const completeRuns = visibleSupplierRuns.filter(
         (supplierRun) => supplierRun.status === "complete",
       );
 
@@ -3399,7 +3403,7 @@ export default function App() {
         onPageChange={navigateToPage}
         allowedPageIds={effectiveAllowedPageIds}
         checkIns={checkIns}
-        supplierRuns={canReadSouth ? supplierRuns : receivingSouthLookupRuns}
+        supplierRuns={southLookupSupplierRuns}
         deliveries={canReadDeliveries ? deliveries : []}
         onTraceSearch={handleTraceSearch}
       />
@@ -4090,7 +4094,7 @@ export default function App() {
       case "driver-dashboard":
         return (
           <DriverDashboardPage
-            supplierRuns={isSuperAdmin ? supplierRuns : driverDashboardSupplierRuns}
+            supplierRuns={driverDashboardSupplierRuns}
             deliveries={deliveries}
             users={users}
             employeeOptions={approvedEmployeeNames}
@@ -4161,9 +4165,7 @@ export default function App() {
           <TodayPage
             checkIns={checkIns}
             customers={customers}
-            supplierRuns={
-              canReadSouth ? supplierRuns : receivingSouthLookupRuns
-            }
+            supplierRuns={southLookupSupplierRuns}
             theirTruckPOs={theirTruckPOs}
             onDeleteCheckIn={handleDeleteCheckIn}
             onUpdateAssignment={
@@ -4177,9 +4179,7 @@ export default function App() {
         return (
           <SearchPage
             checkIns={checkIns}
-            supplierRuns={
-              canReadSouth ? supplierRuns : receivingSouthLookupRuns
-            }
+            supplierRuns={southLookupSupplierRuns}
             theirTruckPOs={theirTruckPOs}
             onDeleteCheckIn={handleDeleteCheckIn}
             onUpdateAssignment={
@@ -4193,9 +4193,7 @@ export default function App() {
         return (
           <TracePage
             checkIns={checkIns}
-            supplierRuns={
-              canReadSouth ? supplierRuns : receivingSouthLookupRuns
-            }
+            supplierRuns={southLookupSupplierRuns}
             deliveries={canReadDeliveries ? deliveries : []}
             initialSearch={traceInitialSearch}
             onPageChange={navigateToPage}
@@ -4339,11 +4337,7 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="history"
-            supplierRuns={
-              canReadSouth
-                ? assignedVisibleSupplierRuns
-                : receivingSouthLookupRuns
-            }
+            supplierRuns={southAssignedLookupSupplierRuns}
             vehicleOptions={southVehicleOptions}
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
@@ -4409,7 +4403,7 @@ export default function App() {
       case "south-calendar":
         return canReadSouth ? (
           <POCalendarPage
-            supplierRuns={supplierRuns}
+            supplierRuns={visibleSupplierRuns}
             theirTruckPOs={[]}
             mode="south"
             onEditSouthPO={handleEditSouthPOFromCalendar}
@@ -4420,7 +4414,7 @@ export default function App() {
       case "po-calendar":
         return canReadSouth ? (
           <POCalendarPage
-            supplierRuns={supplierRuns}
+            supplierRuns={visibleSupplierRuns}
             theirTruckPOs={theirTruckPOs}
             mode="all"
             onEditSouthPO={handleEditSouthPOFromCalendar}
@@ -4635,9 +4629,7 @@ export default function App() {
             }
             onPageChange={setCurrentPage}
             vendorOptions={vendorOptions}
-            supplierRuns={
-              canReadSouth ? supplierRuns : receivingSouthLookupRuns
-            }
+            supplierRuns={southLookupSupplierRuns}
             theirTruckPOs={theirTruckPOs}
             checkedInByDefault={currentUserDisplayName}
             teamMemberOptions={approvedEmployeeNames}
