@@ -60,6 +60,14 @@ function getMaterialLocationPhotos(material) {
   return material.locationPhoto?.dataUrl ? [material.locationPhoto] : [];
 }
 
+function getMaterialDamagePhotos(material) {
+  if (Array.isArray(material.damagePhotos)) {
+    return material.damagePhotos.filter((photo) => photo?.dataUrl);
+  }
+
+  return material.damagePhoto?.dataUrl ? [material.damagePhoto] : [];
+}
+
 export default function CheckInCard({
   checkIn,
   customers = [],
@@ -370,13 +378,13 @@ export default function CheckInCard({
       material.notes ||
       material.conditionGood === false ||
       getMaterialLocationPhotos(material).length > 0 ||
-      material.damagePhoto?.dataUrl,
+      getMaterialDamagePhotos(material).length > 0,
   );
   const materialPhotoCount = materials.reduce(
     (count, material) =>
       count +
       getMaterialLocationPhotos(material).length +
-      (material.damagePhoto?.dataUrl ? 1 : 0),
+      getMaterialDamagePhotos(material).length,
     checkIn.locationPhoto?.dataUrl ? 1 : 0,
   );
   const hasAnyPhoto = materialPhotoCount > 0;
@@ -398,9 +406,12 @@ export default function CheckInCard({
             tone: "photo",
           }
         : null,
-      material.damagePhoto?.dataUrl
+      getMaterialDamagePhotos(material).length > 0
         ? {
-            label: "Damage photo",
+            label:
+              getMaterialDamagePhotos(material).length === 1
+                ? "Damage photo"
+                : `${getMaterialDamagePhotos(material).length} damage photos`,
             tone: "damage",
           }
         : null,
@@ -1300,28 +1311,35 @@ export default function CheckInCard({
                       </div>
                     ) : null}
 
-                    {material.damagePhoto?.dataUrl ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setViewingPhoto({
-                            dataUrl: material.damagePhoto.dataUrl,
-                            title: `Item ${index + 1} Damage Photo`,
-                            subtitle: material.description,
-                          })
-                        }
-                        className="mt-3 block w-full overflow-hidden rounded-xl border border-red-200 bg-white text-left"
-                      >
-                        <img
-                          src={material.damagePhoto.dataUrl}
-                          alt={`Damage for item ${index + 1}`}
-                          className="h-32 w-full object-cover sm:h-44 lg:h-56"
-                        />
+                    {getMaterialDamagePhotos(material).length > 0 ? (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        {getMaterialDamagePhotos(material).map(
+                          (photo, photoIndex) => (
+                            <button
+                              key={`${material.id}-damage-photo-${photoIndex}`}
+                              type="button"
+                              onClick={() =>
+                                setViewingPhoto({
+                                  dataUrl: photo.dataUrl,
+                                  title: `Item ${index + 1} Damage Photo ${photoIndex + 1}`,
+                                  subtitle: material.description,
+                                })
+                              }
+                              className="block w-full overflow-hidden rounded-xl border border-red-200 bg-white text-left"
+                            >
+                              <img
+                                src={photo.dataUrl}
+                                alt={`Damage ${photoIndex + 1} for item ${index + 1}`}
+                                className="h-32 w-full object-cover sm:h-44 lg:h-56"
+                              />
 
-                        <span className="block px-3 py-2 text-sm font-black text-red-700">
-                          View damage photo
-                        </span>
-                      </button>
+                              <span className="block px-3 py-2 text-sm font-black text-red-700">
+                                View damage photo {photoIndex + 1}
+                              </span>
+                            </button>
+                          ),
+                        )}
+                      </div>
                     ) : null}
                   </div>
                 ))}

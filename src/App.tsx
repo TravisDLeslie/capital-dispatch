@@ -3351,12 +3351,6 @@ export default function App() {
               value: openYardTasks.length,
               note: "Open tasks",
             },
-            {
-              icon: BookOpen,
-              label: "Handbook",
-              value: stockingHandbookItems.length,
-              note: "Stock items",
-            },
           ]}
           statsClassName="hidden sm:grid"
           actions={[

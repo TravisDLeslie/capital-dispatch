@@ -36,6 +36,7 @@ function createEmptyMaterial() {
     notes: "",
     conditionGood: true,
     damagePhoto: null,
+    damagePhotos: [],
     saved: false,
   };
 }
@@ -108,6 +109,14 @@ function getMaterialLocationPhotos(material) {
   }
 
   return material.locationPhoto ? [material.locationPhoto] : [];
+}
+
+function getMaterialDamagePhotos(material) {
+  if (Array.isArray(material.damagePhotos)) {
+    return material.damagePhotos.filter(Boolean);
+  }
+
+  return material.damagePhoto ? [material.damagePhoto] : [];
 }
 
 function findMatchingTeamMember(value, teamMemberOptions) {
@@ -803,7 +812,10 @@ export default function CheckInForm({
               conditionGood,
               damagePhoto: conditionGood
                 ? null
-                : material.damagePhoto,
+                : getMaterialDamagePhotos(material)[0] || null,
+              damagePhotos: conditionGood
+                ? []
+                : getMaterialDamagePhotos(material),
             }
           : material,
       ),
@@ -949,6 +961,20 @@ export default function CheckInForm({
             };
           }
 
+          if (photoField === "damagePhoto") {
+            const currentDamagePhotos = getMaterialDamagePhotos(material);
+            const nextDamagePhotos = [
+              ...currentDamagePhotos,
+              ...photos,
+            ];
+
+            return {
+              ...material,
+              damagePhoto: nextDamagePhotos[0] || null,
+              damagePhotos: nextDamagePhotos,
+            };
+          }
+
           return {
             ...material,
             [photoField]: photos[0] || null,
@@ -990,6 +1016,28 @@ export default function CheckInForm({
     clearError();
   }
 
+  function removeMaterialDamagePhoto(materialId, photoIndex) {
+    setMaterials((currentMaterials) =>
+      currentMaterials.map((material) => {
+        if (material.id !== materialId) {
+          return material;
+        }
+
+        const nextDamagePhotos = getMaterialDamagePhotos(material).filter(
+          (_photo, index) => index !== photoIndex,
+        );
+
+        return {
+          ...material,
+          damagePhoto: nextDamagePhotos[0] || null,
+          damagePhotos: nextDamagePhotos,
+        };
+      }),
+    );
+
+    clearError();
+  }
+
   function removeMaterialPhotoField(materialId, photoField) {
     setMaterials((currentMaterials) =>
       currentMaterials.map((material) =>
@@ -999,6 +1047,9 @@ export default function CheckInForm({
               [photoField]: null,
               ...(photoField === "locationPhoto"
                 ? { locationPhotos: [] }
+                : {}),
+              ...(photoField === "damagePhoto"
+                ? { damagePhotos: [] }
                 : {}),
             }
           : material,
@@ -1032,7 +1083,7 @@ export default function CheckInForm({
     (material) => material.conditionGood === false,
   );
   const damagedMaterialsMissingPhotos = damagedMaterials.filter(
-    (material) => !material.damagePhoto,
+    (material) => getMaterialDamagePhotos(material).length === 0,
   );
   function validateStepOne() {
     if (!/^\d{3}-\d{3}$/.test(poNumber)) {
@@ -1128,7 +1179,8 @@ export default function CheckInForm({
       locationPhoto: getMaterialLocationPhotos(material)[0] || null,
       locationPhotos: getMaterialLocationPhotos(material),
       conditionGood: material.conditionGood !== false,
-      damagePhoto: material.damagePhoto,
+      damagePhoto: getMaterialDamagePhotos(material)[0] || null,
+      damagePhotos: getMaterialDamagePhotos(material),
       notes: material.notes.trim(),
     }));
 
@@ -1874,6 +1926,8 @@ export default function CheckInForm({
               {savedMaterials.map((material, index) => {
                 const materialLocationPhotos =
                   getMaterialLocationPhotos(material);
+                const materialDamagePhotos =
+                  getMaterialDamagePhotos(material);
 
                 return (
                 <section
@@ -2033,13 +2087,13 @@ export default function CheckInForm({
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-black uppercase tracking-[0.08em] text-red-800">
-                            Damage Photo *
+                            Damage Photos *
                           </p>
                           <p className="mt-1 text-xs font-semibold text-red-700">
-                            Capture a close-up of the damaged part.
+                            Capture one or more close-ups of the damaged part.
                           </p>
                         </div>
-                        {material.damagePhoto ? (
+                        {materialDamagePhotos.length > 0 ? (
                           <button
                             type="button"
                             onClick={() =>
@@ -2054,34 +2108,65 @@ export default function CheckInForm({
                             }
                             className="text-sm font-bold text-red-700"
                           >
-                            Remove
+                            Remove all
                           </button>
                         ) : null}
                       </div>
+
+                      {materialDamagePhotos.length > 0 ? (
+                        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                          {materialDamagePhotos.map((photo, photoIndex) => (
+                            <div
+                              key={`${material.id}-damage-photo-${photoIndex}`}
+                              className="relative overflow-hidden rounded-xl border border-red-200 bg-white"
+                            >
+                              <img
+                                src={photo.dataUrl}
+                                alt={`Damage preview ${photoIndex + 1} for material ${index + 1}`}
+                                className="h-28 w-full object-cover sm:h-32"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  removeMaterialDamagePhoto(
+                                    material.id,
+                                    photoIndex,
+                                  )
+                                }
+                                disabled={
+                                  isSubmitting ||
+                                  Boolean(processingPhotoMaterialId)
+                                }
+                                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-red-700"
+                                aria-label={`Remove damage photo ${photoIndex + 1}`}
+                              >
+                                <X className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                              <span className="block px-2 py-1 text-xs font-black text-red-700">
+                                Damage {photoIndex + 1}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+
                       <label
                         htmlFor={`damage-photo-${material.id}`}
                         className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-red-200 bg-white px-4 py-4 text-center transition hover:border-red-400 hover:bg-red-50"
                       >
-                        {material.damagePhoto ? (
-                          <img
-                            src={material.damagePhoto.dataUrl}
-                            alt={`Damage preview for material ${index + 1}`}
-                            className="h-36 w-full rounded-lg object-cover"
-                          />
-                        ) : (
-                          <>
-                            <Camera className="h-7 w-7 text-red-700" aria-hidden="true" />
-                            <span className="mt-2 text-sm font-black text-red-800">
-                              Add Damage Photo
-                            </span>
-                          </>
-                        )}
+                        <Camera className="h-7 w-7 text-red-700" aria-hidden="true" />
+                        <span className="mt-2 text-sm font-black text-red-800">
+                          {materialDamagePhotos.length > 0
+                            ? "Add Another Damage Photo"
+                            : "Add Damage Photo"}
+                        </span>
                       </label>
                       <input
                         id={`damage-photo-${material.id}`}
                         type="file"
                         accept="image/*"
                         capture="environment"
+                        multiple
                         onChange={(event) =>
                           handleMaterialPhotoChange(
                             material.id,
