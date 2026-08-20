@@ -86,9 +86,12 @@ function getSearchableText(record) {
     [
       record.poNumber,
       record.sourceSupplierRunPoNumber,
+      record.sourceTheirTruckPONumber,
       record.orderNumber,
       record.vendor,
+      record.sourceTheirTruckVendor,
       record.customerName,
+      record.sourceTheirTruckCustomerName,
       record.supplierAddress,
       record.driver,
       record.checkedInBy,
@@ -104,11 +107,20 @@ function getSearchableText(record) {
       record.orderAssignment?.orderedBy,
       record.orderAssignment?.jobName,
       record.orderAssignment?.internalReference,
+      record.sourceTheirTruckOrderNumber,
       ...(Array.isArray(record.items)
         ? record.items.flatMap((item) => [
             item.quantity,
             item.description,
             item.internalReference,
+            item.sku,
+            item.itemNumber,
+            item.itemNo,
+            item.soNumber,
+            item.stockNumber,
+            item.productCode,
+            item.name,
+            item.notes,
             item.orderNumber,
             item.customerName,
             item.returnNotes,
@@ -119,6 +131,11 @@ function getSearchableText(record) {
             material.description,
             material.location,
             material.notes,
+            material.internalReference,
+            material.sku,
+            material.itemNumber,
+            material.itemNo,
+            material.soNumber,
           ])
         : []),
     ]
@@ -141,11 +158,27 @@ function recordMatchesSearch(record, searchValue) {
     [
       record.poNumber,
       record.sourceSupplierRunPoNumber,
+      record.sourceTheirTruckPONumber,
       record.orderNumber,
       ...(Array.isArray(record.items)
         ? record.items.flatMap((item) => [
             item.orderNumber,
             item.internalReference,
+            item.sku,
+            item.itemNumber,
+            item.itemNo,
+            item.soNumber,
+            item.stockNumber,
+            item.productCode,
+          ])
+        : []),
+      ...(Array.isArray(record.materials)
+        ? record.materials.flatMap((material) => [
+            material.internalReference,
+            material.sku,
+            material.itemNumber,
+            material.itemNo,
+            material.soNumber,
           ])
         : []),
       record.orderAssignment?.internalReference,
@@ -197,6 +230,15 @@ function getEventTone(type) {
     };
   }
 
+  if (type === "theirTruck") {
+    return {
+      icon: Package,
+      dot: "bg-indigo-600",
+      badge: "bg-indigo-50 text-indigo-700",
+      border: "border-indigo-100",
+    };
+  }
+
   return {
     icon: ClipboardCheck,
     dot: "bg-emerald-600",
@@ -209,6 +251,7 @@ function getEventTone(type) {
  * @param {{
  *   checkIns?: Array<Record<string, any>>;
  *   supplierRuns?: Array<Record<string, any>>;
+ *   theirTruckPOs?: Array<Record<string, any>>;
  *   deliveries?: Array<Record<string, any>>;
  *   initialSearch?: string;
  *   onPageChange?: (pageId: string) => void;
@@ -217,6 +260,7 @@ function getEventTone(type) {
 export default function TracePage({
   checkIns = [],
   supplierRuns = [],
+  theirTruckPOs = [],
   deliveries = [],
   initialSearch = "",
   onPageChange,
@@ -232,6 +276,7 @@ export default function TracePage({
     if (!hasSearch) {
       return {
         supplierRuns: [],
+        theirTruckPOs: [],
         checkIns: [],
         deliveries: [],
         events: [],
@@ -241,12 +286,18 @@ export default function TracePage({
     const matchedSupplierRuns = supplierRuns.filter((supplierRun) =>
       recordMatchesSearch(supplierRun, searchValue),
     );
+    const matchedTheirTruckPOs = theirTruckPOs.filter((theirTruckPO) =>
+      recordMatchesSearch(theirTruckPO, searchValue),
+    );
     const matchedSupplierRunIds = new Set(
       matchedSupplierRuns.map((supplierRun) => supplierRun.id),
     );
+    const matchedTheirTruckPOIds = new Set(
+      matchedTheirTruckPOs.map((theirTruckPO) => theirTruckPO.id),
+    );
     const matchedPoNumbers = new Set(
-      matchedSupplierRuns
-        .map((supplierRun) => normalizeNumber(supplierRun.poNumber))
+      [...matchedSupplierRuns, ...matchedTheirTruckPOs]
+        .map((record) => normalizeNumber(record.poNumber))
         .filter(Boolean),
     );
 
@@ -254,13 +305,23 @@ export default function TracePage({
       const linkedSouthRunMatches =
         checkIn.sourceSupplierRunId &&
         matchedSupplierRunIds.has(checkIn.sourceSupplierRunId);
+      const linkedTheirTruckMatches =
+        checkIn.sourceTheirTruckPOId &&
+        matchedTheirTruckPOIds.has(checkIn.sourceTheirTruckPOId);
       const linkedPoMatches =
-        normalizeNumber(checkIn.sourceSupplierRunPoNumber) &&
-        matchedPoNumbers.has(normalizeNumber(checkIn.sourceSupplierRunPoNumber));
+        (normalizeNumber(checkIn.sourceSupplierRunPoNumber) &&
+          matchedPoNumbers.has(
+            normalizeNumber(checkIn.sourceSupplierRunPoNumber),
+          )) ||
+        (normalizeNumber(checkIn.sourceTheirTruckPONumber) &&
+          matchedPoNumbers.has(
+            normalizeNumber(checkIn.sourceTheirTruckPONumber),
+          ));
 
       return (
         recordMatchesSearch(checkIn, searchValue) ||
         linkedSouthRunMatches ||
+        linkedTheirTruckMatches ||
         linkedPoMatches
       );
     });
@@ -349,6 +410,56 @@ export default function TracePage({
             : null,
         ].filter(Boolean);
       }),
+      ...matchedTheirTruckPOs.flatMap((theirTruckPO) => {
+        const items = Array.isArray(theirTruckPO.items)
+          ? theirTruckPO.items
+          : [];
+
+        return [
+          makeEvent({
+            id: `their-truck-created-${theirTruckPO.id}`,
+            type: "theirTruck",
+            title: `Their Truck PO ${theirTruckPO.poNumber}`,
+            description: `${theirTruckPO.vendor || "Vendor"} inbound PO was scheduled.`,
+            timestamp:
+              theirTruckPO.createdAt ||
+              theirTruckPO.deliveryDate ||
+              theirTruckPO.updatedAt,
+            meta: [
+              theirTruckPO.deliveryDate
+                ? `Delivery ${formatDateOnly(theirTruckPO.deliveryDate)}`
+                : "",
+              theirTruckPO.isStock
+                ? "Stock"
+                : theirTruckPO.customerName
+                  ? `Customer ${formatCustomerName(theirTruckPO.customerName)}`
+                  : "",
+              theirTruckPO.orderNumber
+                ? `Order ${theirTruckPO.orderNumber}`
+                : "",
+              theirTruckPO.createdByName
+                ? `Created by ${theirTruckPO.createdByName}`
+                : "",
+              theirTruckPO.orderedBy ? `Ordered by ${theirTruckPO.orderedBy}` : "",
+              `${items.length} ${items.length === 1 ? "item" : "items"}`,
+            ],
+            recordType: "theirTruck",
+            recordId: theirTruckPO.id,
+          }),
+          theirTruckPO.status === "complete" || theirTruckPO.completedAt
+            ? makeEvent({
+                id: `their-truck-complete-${theirTruckPO.id}`,
+                type: "theirTruck",
+                title: "Their Truck PO complete",
+                description: `PO ${theirTruckPO.poNumber} was completed.`,
+                timestamp: theirTruckPO.completedAt || theirTruckPO.updatedAt,
+                meta: [theirTruckPO.vendor],
+                recordType: "theirTruck",
+                recordId: theirTruckPO.id,
+              })
+            : null,
+        ].filter(Boolean);
+      }),
       ...matchedCheckIns.map((checkIn) => {
         const assignment = getAssignment(checkIn);
 
@@ -363,6 +474,7 @@ export default function TracePage({
           meta: [
             checkIn.poLocation,
             checkIn.sourceType === "south" ? "Linked from South" : "",
+            checkIn.sourceType === "theirTruck" ? "Linked from Their Truck" : "",
             assignment?.businessName
               ? `Customer ${formatCustomerName(assignment.businessName)}`
               : "",
@@ -409,14 +521,16 @@ export default function TracePage({
 
     return {
       supplierRuns: matchedSupplierRuns,
+      theirTruckPOs: matchedTheirTruckPOs,
       checkIns: matchedCheckIns,
       deliveries: matchedDeliveries,
       events,
     };
-  }, [checkIns, deliveries, hasSearch, searchValue, supplierRuns]);
+  }, [checkIns, deliveries, hasSearch, searchValue, supplierRuns, theirTruckPOs]);
 
   const totalMatches =
     traceResults.supplierRuns.length +
+    traceResults.theirTruckPOs.length +
     traceResults.checkIns.length +
     traceResults.deliveries.length;
 
@@ -440,7 +554,7 @@ export default function TracePage({
 
         <p className="mt-2 max-w-3xl text-slate-500">
           Search a PO, order number, customer, vendor, item, or SKU to see the
-          chain across South pickups, receiving, and deliveries.
+          chain across South pickups, Their Truck POs, receiving, and deliveries.
         </p>
       </div>
 
@@ -498,6 +612,11 @@ export default function TracePage({
                   icon={Route}
                   label="South POs"
                   value={traceResults.supplierRuns.length}
+                />
+                <SummaryPill
+                  icon={Package}
+                  label="Their Truck"
+                  value={traceResults.theirTruckPOs.length}
                 />
                 <SummaryPill
                   icon={ClipboardCheck}
@@ -566,6 +685,8 @@ function TimelineEvent({ event, onPageChange }) {
   const destination =
     event.recordType === "south"
       ? "supplier-runs-check"
+      : event.recordType === "theirTruck"
+        ? "their-truck-pos"
       : event.recordType === "delivery"
         ? "deliveries-queue"
         : "search";

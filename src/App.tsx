@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import {
   Calculator,
   CalendarDays,
   ClipboardList,
   ClipboardCheck,
+  Copy,
   DollarSign,
   History,
   BookOpen,
@@ -177,6 +178,124 @@ function getUniqueNames(names: string[]) {
         sensitivity: "base",
       }),
     );
+}
+
+function normalizeSearchText(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function normalizeSearchNumber(value: unknown) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+function getLookupItemText(item: Record<string, unknown>) {
+  return [
+    item.quantity,
+    item.qty,
+    item.description,
+    item.name,
+    item.material,
+    item.materialDescription,
+    item.itemDescription,
+    item.internalReference,
+    item.sku,
+    item.itemNumber,
+    item.itemNo,
+    item.soNumber,
+    item.stockNumber,
+    item.productCode,
+    item.orderNumber,
+    item.customerName,
+    item.location,
+    item.notes,
+  ]
+    .map((value) => normalizeSearchText(value))
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getLookupItemNumberText(item: Record<string, unknown>) {
+  return [
+    item.internalReference,
+    item.sku,
+    item.itemNumber,
+    item.itemNo,
+    item.soNumber,
+    item.stockNumber,
+    item.productCode,
+    item.orderNumber,
+  ]
+    .map((value) => normalizeSearchNumber(value))
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getLookupItemLabel(item: Record<string, unknown>) {
+  const quantity = String(item.quantity ?? item.qty ?? "").trim();
+  const description = String(
+    item.description ??
+      item.name ??
+      item.material ??
+      item.materialDescription ??
+      item.itemDescription ??
+      "",
+  ).trim();
+  const itemNumber = String(
+    item.internalReference ??
+      item.sku ??
+      item.itemNumber ??
+      item.itemNo ??
+      item.soNumber ??
+      item.stockNumber ??
+      item.productCode ??
+      "",
+  ).trim();
+
+  return {
+    quantity,
+    description: description || "Item detail",
+    itemNumber,
+  };
+}
+
+function formatQuickLookupDate(value: unknown) {
+  if (typeof value !== "string" || !value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+async function copyTextToClipboard(value: string) {
+  const text = value.trim();
+
+  if (!text) {
+    return;
+  }
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.setAttribute("readonly", "true");
+  textArea.style.position = "fixed";
+  textArea.style.left = "-9999px";
+  document.body.appendChild(textArea);
+  textArea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textArea);
 }
 
 function normalizeEmployeeName(name: string) {
@@ -1058,6 +1177,8 @@ export default function App() {
   const [previewUserId, setPreviewUserId] =
     useState("");
   const [traceInitialSearch, setTraceInitialSearch] = useState("");
+  const [receivingDashboardSearch, setReceivingDashboardSearch] =
+    useState("");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] =
     useState<UserProfile | null>(null);
@@ -2699,6 +2820,18 @@ export default function App() {
     setCurrentPage("trace");
   }
 
+  function handleReceivingDashboardSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextSearch = receivingDashboardSearch.trim();
+
+    if (!nextSearch) {
+      return;
+    }
+
+    setTraceInitialSearch(nextSearch);
+    setCurrentPage("trace");
+  }
+
   function handleEditSouthPOFromCalendar(supplierRunId: string) {
     setCurrentPage("supplier-runs-calendar");
 
@@ -2956,6 +3089,192 @@ export default function App() {
       const openYardTasks = yardTasks.filter(
         (yardTask) => yardTask.status !== "complete",
       );
+      const receivingQuickLookupQuery = receivingDashboardSearch.trim();
+      const receivingQuickLookupText = normalizeSearchText(
+        receivingQuickLookupQuery,
+      );
+      const receivingQuickLookupNumber = normalizeSearchNumber(
+        receivingQuickLookupQuery,
+      );
+      const receivingQuickMatches = receivingQuickLookupQuery
+        ? [
+            ...receivingDashboardSouthRuns.map((supplierRun) => {
+              const items = Array.isArray(supplierRun.items)
+                ? supplierRun.items.map((item) => item as Record<string, unknown>)
+                : [];
+              const recordText = [
+                supplierRun.poNumber,
+                supplierRun.vendor,
+                supplierRun.customerName,
+                supplierRun.driver,
+                supplierRun.orderedBy,
+                supplierRun.createdByName,
+                supplierRun.supplierAddress,
+                ...items.map(getLookupItemText),
+              ]
+                .map((value) => normalizeSearchText(value))
+                .filter(Boolean)
+                .join(" ");
+              const recordNumberText = [
+                supplierRun.poNumber,
+                ...items.map(getLookupItemNumberText),
+              ]
+                .map((value) => normalizeSearchNumber(value))
+                .filter(Boolean)
+                .join(" ");
+              const matchingItems = items.filter((item) => {
+                const itemText = getLookupItemText(item);
+                const itemNumberText = getLookupItemNumberText(item);
+
+                return (
+                  (receivingQuickLookupText &&
+                    itemText.includes(receivingQuickLookupText)) ||
+                  (receivingQuickLookupNumber &&
+                    itemNumberText.includes(receivingQuickLookupNumber))
+                );
+              });
+
+              return {
+                id: `south-${supplierRun.id}`,
+                source: "South",
+                tone: "red",
+                poNumber: supplierRun.poNumber || "No PO",
+                vendor: supplierRun.vendor || "Vendor not entered",
+                date: formatQuickLookupDate(
+                  supplierRun.scheduledDate ||
+                    supplierRun.pickupDate ||
+                    supplierRun.createdAt,
+                ),
+                customerName: supplierRun.customerName || "",
+                orderNumber:
+                  items.find((item) => item.orderNumber)?.orderNumber || "",
+                items,
+                matchingItems,
+                recordText,
+                recordNumberText,
+              };
+            }),
+            ...theirTruckPOs.map((theirTruckPO) => {
+              const items = Array.isArray(theirTruckPO.items)
+                ? theirTruckPO.items.map((item) => item as Record<string, unknown>)
+                : [];
+              const recordText = [
+                theirTruckPO.poNumber,
+                theirTruckPO.vendor,
+                theirTruckPO.customerName,
+                theirTruckPO.orderNumber,
+                ...items.map(getLookupItemText),
+              ]
+                .map((value) => normalizeSearchText(value))
+                .filter(Boolean)
+                .join(" ");
+              const recordNumberText = [
+                theirTruckPO.poNumber,
+                theirTruckPO.orderNumber,
+                ...items.map(getLookupItemNumberText),
+              ]
+                .map((value) => normalizeSearchNumber(value))
+                .filter(Boolean)
+                .join(" ");
+              const matchingItems = items.filter((item) => {
+                const itemText = getLookupItemText(item);
+                const itemNumberText = getLookupItemNumberText(item);
+
+                return (
+                  (receivingQuickLookupText &&
+                    itemText.includes(receivingQuickLookupText)) ||
+                  (receivingQuickLookupNumber &&
+                    itemNumberText.includes(receivingQuickLookupNumber))
+                );
+              });
+
+              return {
+                id: `their-truck-${theirTruckPO.id}`,
+                source: "Their Truck",
+                tone: "blue",
+                poNumber: theirTruckPO.poNumber || "No PO",
+                vendor: theirTruckPO.vendor || "Vendor not entered",
+                date: formatQuickLookupDate(
+                  theirTruckPO.deliveryDate || theirTruckPO.createdAt,
+                ),
+                customerName: theirTruckPO.customerName || "",
+                orderNumber: String(theirTruckPO.orderNumber || ""),
+                items,
+                matchingItems,
+                recordText,
+                recordNumberText,
+              };
+            }),
+            ...checkIns.map((checkIn) => {
+              const rawItems =
+                Array.isArray(checkIn.materials)
+                  ? checkIn.materials
+                  : Array.isArray(checkIn.items)
+                    ? checkIn.items
+                    : [];
+              const items = rawItems.map(
+                (item) => item as Record<string, unknown>,
+              );
+              const recordText = [
+                checkIn.poNumber,
+                checkIn.vendor,
+                checkIn.customerName,
+                checkIn.orderNumber,
+                ...items.map(getLookupItemText),
+              ]
+                .map((value) => normalizeSearchText(value))
+                .filter(Boolean)
+                .join(" ");
+              const recordNumberText = [
+                checkIn.poNumber,
+                checkIn.orderNumber,
+                ...items.map(getLookupItemNumberText),
+              ]
+                .map((value) => normalizeSearchNumber(value))
+                .filter(Boolean)
+                .join(" ");
+              const matchingItems = items.filter((item) => {
+                const itemText = getLookupItemText(item);
+                const itemNumberText = getLookupItemNumberText(item);
+
+                return (
+                  (receivingQuickLookupText &&
+                    itemText.includes(receivingQuickLookupText)) ||
+                  (receivingQuickLookupNumber &&
+                    itemNumberText.includes(receivingQuickLookupNumber))
+                );
+              });
+
+              return {
+                id: `receiving-${checkIn.id}`,
+                source: "Receiving",
+                tone: "slate",
+                poNumber: String(checkIn.poNumber || "No PO"),
+                vendor: String(checkIn.vendor || "Vendor not entered"),
+                date: formatQuickLookupDate(
+                  checkIn.checkedInAt || checkIn.createdAt,
+                ),
+                customerName: String(checkIn.customerName || ""),
+                orderNumber: String(checkIn.orderNumber || ""),
+                items,
+                matchingItems,
+                recordText,
+                recordNumberText,
+              };
+            }),
+          ]
+            .filter((match) => {
+              const textMatch =
+                receivingQuickLookupText &&
+                match.recordText.includes(receivingQuickLookupText);
+              const numberMatch =
+                receivingQuickLookupNumber &&
+                match.recordNumberText.includes(receivingQuickLookupNumber);
+
+              return textMatch || numberMatch;
+            })
+            .slice(0, 6)
+        : [];
 
       return (
         <SectionHubPage
@@ -2998,6 +3317,7 @@ export default function App() {
               note: "Stock items",
             },
           ]}
+          statsClassName="hidden sm:grid"
           actions={[
             dashboardAllowedPageIds.includes("check-in")
               ? {
@@ -3072,7 +3392,216 @@ export default function App() {
                 }
               : null,
           ]}
-        />
+        >
+          {dashboardAllowedPageIds.includes("search") ? (
+            <form
+              onSubmit={handleReceivingDashboardSearch}
+              className="mb-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+            >
+              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                    Search for a PO
+                  </p>
+                  <h2 className="mt-1 text-xl font-black text-slate-950">
+                    Find PO chain
+                  </h2>
+                </div>
+                <p className="text-sm font-semibold text-slate-500">
+                  Search Their Truck POs, receiving, South runs, item, vendor, or customer.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search
+                    aria-hidden="true"
+                    className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+                    strokeWidth={2.5}
+                  />
+                  <input
+                    type="search"
+                    value={receivingDashboardSearch}
+                    onChange={(event) =>
+                      setReceivingDashboardSearch(event.target.value)
+                    }
+                    placeholder="Search PO, item, vendor..."
+                    className="min-h-[52px] w-full rounded-2xl border border-slate-300 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!receivingDashboardSearch.trim()}
+                  className="inline-flex min-h-[52px] items-center justify-center rounded-2xl bg-slate-950 px-6 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  Full Lookup
+                </button>
+              </div>
+
+              {receivingQuickLookupQuery ? (
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                      Quick PO Matches
+                    </p>
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+                      {receivingQuickMatches.length} shown
+                    </p>
+                  </div>
+
+                  {receivingQuickMatches.length > 0 ? (
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      {receivingQuickMatches.map((match) => {
+                        const visibleItems =
+                          match.matchingItems.length > 0
+                            ? match.matchingItems
+                            : match.items;
+                        const hiddenItemCount = Math.max(
+                          match.items.length - visibleItems.slice(0, 3).length,
+                          0,
+                        );
+                        const isSouth = match.tone === "red";
+                        const isTheirTruck = match.tone === "blue";
+
+                        return (
+                          <article
+                            key={match.id}
+                            className={`rounded-3xl border bg-white p-4 shadow-sm ${
+                              isSouth
+                                ? "border-red-100"
+                                : isTheirTruck
+                                  ? "border-blue-100"
+                                  : "border-slate-200"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
+                                      isSouth
+                                        ? "bg-red-50 text-[#FC2C38]"
+                                        : isTheirTruck
+                                          ? "bg-blue-50 text-blue-700"
+                                          : "bg-slate-100 text-slate-600"
+                                    }`}
+                                  >
+                                    {match.source}
+                                  </span>
+                                  {match.date ? (
+                                    <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                                      {match.date}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  <h3 className="text-2xl font-black leading-none text-slate-950 sm:text-3xl">
+                                    PO {match.poNumber}
+                                  </h3>
+                                  <button
+                                    type="button"
+                                    disabled={!match.poNumber || match.poNumber === "No PO"}
+                                    onClick={() =>
+                                      copyTextToClipboard(String(match.poNumber))
+                                    }
+                                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                    aria-label={`Copy PO number ${match.poNumber}`}
+                                  >
+                                    <Copy
+                                      aria-hidden="true"
+                                      className="h-3.5 w-3.5"
+                                      strokeWidth={2.5}
+                                    />
+                                    Copy
+                                  </button>
+                                </div>
+                                <p className="mt-1 truncate text-sm font-black text-slate-600">
+                                  {match.vendor}
+                                </p>
+                              </div>
+
+                              <span className="shrink-0 rounded-2xl bg-slate-100 px-3 py-2 text-sm font-black text-slate-700">
+                                {match.items.length}{" "}
+                                {match.items.length === 1 ? "item" : "items"}
+                              </span>
+                            </div>
+
+                            {match.customerName || match.orderNumber ? (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {match.customerName ? (
+                                  <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
+                                    Customer:{" "}
+                                    {formatCustomerName(
+                                      String(match.customerName),
+                                    )}
+                                  </span>
+                                ) : null}
+                                {match.orderNumber ? (
+                                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-blue-700">
+                                    Order {String(match.orderNumber)}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : null}
+
+                            <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                              {visibleItems.length > 0 ? (
+                                <ul className="space-y-2">
+                                  {visibleItems.slice(0, 3).map((item, index) => {
+                                    const itemLabel = getLookupItemLabel(item);
+
+                                    return (
+                                      <li
+                                        key={`${match.id}-item-${index}`}
+                                        className="flex items-start justify-between gap-3 border-b border-slate-200/70 pb-2 last:border-0 last:pb-0"
+                                      >
+                                        <div className="min-w-0">
+                                          <p className="text-sm font-black text-slate-950">
+                                            {itemLabel.quantity
+                                              ? `${itemLabel.quantity} `
+                                              : ""}
+                                            {itemLabel.description}
+                                          </p>
+                                          {itemLabel.itemNumber ? (
+                                            <p className="mt-0.5 text-xs font-black uppercase tracking-[0.08em] text-blue-700">
+                                              Item / SO #: {itemLabel.itemNumber}
+                                            </p>
+                                          ) : null}
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              ) : (
+                                <p className="text-sm font-bold text-slate-500">
+                                  No item lines saved on this PO yet.
+                                </p>
+                              )}
+
+                              {hiddenItemCount > 0 ? (
+                                <p className="mt-2 text-sm font-black text-blue-700">
+                                  + {hiddenItemCount} more{" "}
+                                  {hiddenItemCount === 1 ? "item" : "items"}
+                                </p>
+                              ) : null}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-bold text-slate-500">
+                      No quick PO or item matches yet. Use Full Lookup to search
+                      the full PO chain.
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </form>
+          ) : null}
+        </SectionHubPage>
       );
     }
 
@@ -4194,6 +4723,7 @@ export default function App() {
           <TracePage
             checkIns={checkIns}
             supplierRuns={southLookupSupplierRuns}
+            theirTruckPOs={theirTruckPOs}
             deliveries={canReadDeliveries ? deliveries : []}
             initialSearch={traceInitialSearch}
             onPageChange={navigateToPage}

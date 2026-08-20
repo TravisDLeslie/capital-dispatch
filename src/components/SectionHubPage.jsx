@@ -245,6 +245,7 @@ function ActionRow({
  *   }>;
  *   actions: Array<Record<string, unknown> | null>;
  *   headerAccessory?: import("react").ReactNode;
+ *   statsClassName?: string;
  *   children?: import("react").ReactNode;
  * }} props
  */
@@ -258,6 +259,7 @@ export default function SectionHubPage({
   stats,
   actions,
   headerAccessory = null,
+  statsClassName = "",
   children = null,
 }) {
   const PrimaryActionIcon = primaryAction?.icon;
@@ -327,7 +329,9 @@ export default function SectionHubPage({
       </div>
 
       {stats?.length ? (
-        <section className="mb-5 grid grid-cols-3 gap-2 sm:gap-4">
+        <section
+          className={`mb-5 grid grid-cols-3 gap-2 sm:gap-4 ${statsClassName}`}
+        >
           {stats.map((stat) => (
             <StatTile key={stat.label} {...stat} />
           ))}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Building2, ChevronDown } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import CheckInCard from "../components/CheckInCard";
@@ -114,10 +114,15 @@ export default function SearchPage({
   onDeleteCheckIn,
   onUpdateAssignment,
   onPageChange,
+  initialSearch = "",
 }) {
   const [searchValue, setSearchValue] = useState("");
   const [openDateGroups, setOpenDateGroups] = useState({});
   const [openVendorGroups, setOpenVendorGroups] = useState({});
+
+  useEffect(() => {
+    setSearchValue(initialSearch || "");
+  }, [initialSearch]);
 
   const matchingCheckIns = useMemo(() => {
     const textSearch = normalizeText(searchValue);
