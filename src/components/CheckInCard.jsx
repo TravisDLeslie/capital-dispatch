@@ -388,6 +388,58 @@ export default function CheckInCard({
     checkIn.locationPhoto?.dataUrl ? 1 : 0,
   );
   const hasAnyPhoto = materialPhotoCount > 0;
+  const previewPhotos = [];
+  const seenPreviewPhotoUrls = new Set();
+
+  function addPreviewPhoto(photo, title, subtitle, tone = "location") {
+    if (!photo?.dataUrl || seenPreviewPhotoUrls.has(photo.dataUrl)) {
+      return;
+    }
+
+    seenPreviewPhotoUrls.add(photo.dataUrl);
+    previewPhotos.push({
+      dataUrl: photo.dataUrl,
+      title,
+      subtitle,
+      tone,
+    });
+  }
+
+  if (checkIn.locationPhoto?.dataUrl) {
+    addPreviewPhoto(
+      checkIn.locationPhoto,
+      "PO Location Photo",
+      "Wide photo of where the material was placed",
+    );
+  }
+
+  materials.forEach((material, index) => {
+    const materialName = material.description || `Item ${index + 1}`;
+
+    getMaterialLocationPhotos(material).forEach((photo, photoIndex) => {
+      addPreviewPhoto(
+        photo,
+        `Location Photo ${photoIndex + 1}`,
+        materialName,
+        "location",
+      );
+    });
+
+    getMaterialDamagePhotos(material).forEach((photo, photoIndex) => {
+      addPreviewPhoto(
+        photo,
+        `Damage Photo ${photoIndex + 1}`,
+        materialName,
+        "damage",
+      );
+    });
+  });
+
+  const visiblePreviewPhotos = previewPhotos.slice(0, 4);
+  const hiddenPreviewPhotoCount = Math.max(
+    previewPhotos.length - visiblePreviewPhotos.length,
+    0,
+  );
 
   function renderMaterialSummary(material, index, isCompact = false) {
     const badges = [
@@ -426,12 +478,12 @@ export default function CheckInCard({
     return (
       <div
         key={`${isCompact ? "mobile" : "desktop"}-${material.id || index}`}
-        className={`rounded-xl border border-[#DCE4EF] bg-slate-50 ${
+        className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${
           isCompact ? "px-3 py-2.5" : "px-3.5 py-3"
         }`}
       >
         <div className="flex items-start gap-2.5">
-          <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white text-xs font-black text-[#1D64C8] shadow-sm">
+          <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-black text-slate-600">
             {index + 1}
           </span>
 
@@ -451,12 +503,12 @@ export default function CheckInCard({
                     key={`${material.id || index}-${badge.label}`}
                     className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-black uppercase tracking-[0.08em] ${
                       badge.tone === "damage"
-                        ? "bg-red-50 text-red-700"
+                        ? "bg-red-50 text-red-700 ring-1 ring-red-100"
                         : badge.tone === "note"
-                          ? "bg-amber-50 text-amber-700"
+                          ? "bg-amber-50 text-amber-700 ring-1 ring-amber-100"
                           : badge.tone === "photo"
-                            ? "bg-blue-50 text-[#1D64C8]"
-                            : "bg-white text-[#64748B]"
+                            ? "bg-blue-50 text-[#1D64C8] ring-1 ring-blue-100"
+                            : "bg-slate-100 text-[#64748B]"
                     }`}
                   >
                     {badge.tone === "photo" ||
@@ -479,13 +531,19 @@ export default function CheckInCard({
   }
 
   return (
-    <article className="rounded-2xl border border-[#DCE4EF] bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md lg:p-5">
+    <article className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_14px_40px_rgba(15,23,42,0.07)] transition hover:border-slate-300">
+      <div className="border-b border-slate-100 bg-gradient-to-br from-slate-50 via-white to-white p-4 lg:p-5">
       <div className="lg:hidden">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
           <div className="min-w-0">
-            <h2 className="min-w-0 whitespace-nowrap text-[23px] font-black leading-none tracking-tight text-[#0F172A]">
-              {checkIn.poNumber}
-            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="min-w-0 whitespace-nowrap text-[23px] font-black leading-none tracking-tight text-[#0F172A]">
+                {checkIn.poNumber}
+              </h2>
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                Checked In
+              </span>
+            </div>
 
             {hasAnyPhoto ? (
               <button
@@ -495,7 +553,7 @@ export default function CheckInCard({
                     ? setViewingPhoto(locationPhoto)
                     : setIsViewingMaterials(true)
                 }
-                className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-[#1D64C8]"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-[#1D64C8]"
               >
                 <Camera
                   aria-hidden="true"
@@ -523,7 +581,7 @@ export default function CheckInCard({
           </div>
         </div>
 
-        <div className="mt-3 flex min-w-0 items-start gap-3">
+        <div className="mt-4 flex min-w-0 items-start gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38]">
             <Building2
               aria-hidden="true"
@@ -567,9 +625,16 @@ export default function CheckInCard({
 
       <div className="hidden gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
         <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(150px,auto)_minmax(0,1fr)] xl:items-start xl:gap-5">
-          <h2 className="whitespace-nowrap text-[30px] font-black leading-none tracking-tight text-[#0F172A]">
-            {checkIn.poNumber}
-          </h2>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="whitespace-nowrap text-[30px] font-black leading-none tracking-tight text-[#0F172A]">
+                {checkIn.poNumber}
+              </h2>
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                Checked In
+              </span>
+            </div>
+          </div>
 
           <div className="flex min-w-0 items-start gap-3">
             <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38]">
@@ -639,7 +704,7 @@ export default function CheckInCard({
                     ? setViewingPhoto(locationPhoto)
                     : setIsViewingMaterials(true)
                 }
-                className="mt-2 inline-flex items-center justify-end gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-[#1D64C8]"
+                className="mt-2 inline-flex items-center justify-end gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-[#1D64C8]"
               >
                 <Camera
                   aria-hidden="true"
@@ -653,32 +718,40 @@ export default function CheckInCard({
           </div>
         </div>
       </div>
+      </div>
 
       {!isEditing ? (
-        <>
-          <div className="mt-4 border-t border-[#DCE4EF] pt-4 lg:border-t-0 lg:pt-0">
-            <h3 className="text-xl font-black tracking-tight text-[#0F172A] lg:text-[21px] lg:leading-tight">
-              {getAssignmentHeading()}
-            </h3>
+        <div className="p-4 lg:p-5">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                  Assignment
+                </p>
+                <h3 className="mt-1 text-xl font-black tracking-tight text-[#0F172A] lg:text-[21px] lg:leading-tight">
+                  {getAssignmentHeading()}
+                </h3>
 
-            <p className="mt-1 text-sm font-semibold text-[#64748B] lg:text-base lg:leading-tight">
-              {getAssignmentSubheading()}
-            </p>
+                <p className="mt-1 text-sm font-semibold text-[#64748B] lg:text-base lg:leading-tight">
+                  {getAssignmentSubheading()}
+                </p>
+              </div>
 
-            {getAssignmentReferenceText() ? (
-              <p
-                className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.1em] ${
-                  savedAssignment?.type === "customer"
-                    ? "bg-orange-50 text-[#B45309]"
-                    : "bg-blue-50 text-[#1D64C8]"
-                }`}
-              >
-                {getAssignmentReferenceText()}
-              </p>
-            ) : null}
+              {getAssignmentReferenceText() ? (
+                <p
+                  className={`inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.1em] ${
+                    savedAssignment?.type === "customer"
+                      ? "bg-orange-50 text-[#B45309] ring-1 ring-orange-100"
+                      : "bg-blue-50 text-[#1D64C8] ring-1 ring-blue-100"
+                  }`}
+                >
+                  {getAssignmentReferenceText()}
+                </p>
+              ) : null}
+            </div>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-[#DCE4EF] px-3 py-3 lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-0 lg:py-0 lg:pt-4">
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-3">
             <div className="grid gap-3 md:grid-cols-2 lg:gap-4">
               <button
                 type="button"
@@ -780,7 +853,7 @@ export default function CheckInCard({
             </div>
           </div>
 
-          <div className="mt-3 rounded-2xl border border-[#DCE4EF] px-3 py-3 lg:rounded-none lg:border-x-0 lg:border-b-0 lg:px-0 lg:py-0 lg:pt-4">
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <Package
@@ -824,7 +897,7 @@ export default function CheckInCard({
                   <button
                     type="button"
                     onClick={() => setIsViewingMaterials(true)}
-                    className="flex w-full items-center pt-3 text-left text-base font-black text-[#1D64C8] transition hover:text-blue-800 lg:hidden"
+                    className="flex w-full items-center rounded-xl bg-white px-3 py-2 text-left text-sm font-black text-[#1D64C8] shadow-sm transition hover:text-blue-800 lg:hidden"
                   >
                     + {mobileHiddenMaterialCount} more{" "}
                     {mobileHiddenMaterialCount === 1
@@ -838,27 +911,11 @@ export default function CheckInCard({
                   </button>
                 ) : null}
 
-                {mobileHiddenMaterialCount === 0 &&
-                hasMaterialDetails ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsViewingMaterials(true)}
-                    className="flex w-full items-center pt-3 text-left text-base font-black text-[#1D64C8] transition hover:text-blue-800 lg:hidden"
-                  >
-                    View material details
-                    <ChevronRight
-                      aria-hidden="true"
-                      className="ml-auto h-6 w-6 text-[#64748B]"
-                      strokeWidth={2.5}
-                    />
-                  </button>
-                ) : null}
-
                 {hiddenMaterialCount > 0 ? (
                   <button
                     type="button"
                     onClick={() => setIsViewingMaterials(true)}
-                    className="hidden pt-1 text-left text-base font-black text-[#1D64C8] transition hover:text-blue-800 lg:block lg:text-[17px]"
+                    className="hidden rounded-xl bg-white px-3 py-2 text-left text-sm font-black text-[#1D64C8] shadow-sm transition hover:text-blue-800 lg:block"
                   >
                     + {hiddenMaterialCount} more{" "}
                     {hiddenMaterialCount === 1
@@ -867,16 +924,6 @@ export default function CheckInCard({
                   </button>
                 ) : null}
 
-                {hiddenMaterialCount === 0 &&
-                hasMaterialDetails ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsViewingMaterials(true)}
-                    className="hidden pt-1 text-left text-base font-black text-[#1D64C8] transition hover:text-blue-800 lg:block lg:text-[17px]"
-                  >
-                    View material details
-                  </button>
-                ) : null}
               </div>
             ) : (
               <p className="mt-4 text-lg font-semibold text-[#64748B]">
@@ -897,57 +944,79 @@ export default function CheckInCard({
             </div>
           ) : null}
 
-          {checkIn.locationPhoto?.dataUrl ? (
-            <div className="mt-5 rounded-2xl border border-[#DCE4EF] bg-slate-50 p-3">
-              <div className="mb-3 flex items-center justify-between gap-3 px-1">
+          {previewPhotos.length > 0 ? (
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#64748B]">
-                    Location Photo
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                    Photos
                   </p>
 
-                  <p className="mt-1 text-sm font-semibold text-[#64748B]">
-                    Wide photo of where the material was placed
+                  <p className="mt-1 text-sm font-bold text-slate-600">
+                    {previewPhotos.length} saved{" "}
+                    {previewPhotos.length === 1 ? "photo" : "photos"}
                   </p>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setViewingPhoto({
-                      dataUrl: checkIn.locationPhoto.dataUrl,
-                      title: "Location Photo",
-                      subtitle:
-                        "Wide photo of where the material was placed",
-                    })
-                  }
-                  className="rounded-lg border border-[#DCE4EF] bg-white px-3 py-2 text-sm font-black text-[#0F172A] transition hover:border-[#1D64C8] hover:text-[#1D64C8]"
+                  onClick={() => setIsViewingMaterials(true)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-[#1D64C8] shadow-sm transition hover:border-blue-200 hover:bg-blue-50"
                 >
-                  View
+                  View all
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setViewingPhoto({
-                    dataUrl: checkIn.locationPhoto.dataUrl,
-                    title: "Location Photo",
-                    subtitle:
-                      "Wide photo of where the material was placed",
-                  })
-                }
-                className="block w-full overflow-hidden rounded-xl"
-              >
-                <img
-                  src={checkIn.locationPhoto.dataUrl}
-                  alt={`Material location for PO ${checkIn.poNumber}`}
-                  className="h-36 w-full object-cover sm:h-52 lg:h-64"
-                />
-              </button>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {visiblePreviewPhotos.map((photo, index) => (
+                  <button
+                    key={`${photo.dataUrl}-${index}`}
+                    type="button"
+                    onClick={() => setViewingPhoto(photo)}
+                    className="group overflow-hidden rounded-2xl border border-white bg-white text-left shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:ring-blue-200"
+                  >
+                    <div className="relative">
+                      <img
+                        src={photo.dataUrl}
+                        alt={`${photo.title} for PO ${checkIn.poNumber}`}
+                        className="h-28 w-full object-cover sm:h-32 lg:h-36"
+                      />
+                      <span
+                        className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${
+                          photo.tone === "damage"
+                            ? "bg-red-50 text-red-700 ring-1 ring-red-100"
+                            : "bg-blue-50 text-[#1D64C8] ring-1 ring-blue-100"
+                        }`}
+                      >
+                        {photo.tone === "damage" ? "Damage" : "Location"}
+                      </span>
+                    </div>
+                    <div className="px-3 py-2">
+                      <p className="truncate text-xs font-black text-slate-950">
+                        {photo.title}
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] font-bold text-slate-500">
+                        {photo.subtitle}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {hiddenPreviewPhotoCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setIsViewingMaterials(true)}
+                  className="mt-2 w-full rounded-2xl bg-white px-3 py-2 text-left text-sm font-black text-[#1D64C8] shadow-sm ring-1 ring-slate-200 transition hover:bg-blue-50"
+                >
+                  + {hiddenPreviewPhotoCount} more{" "}
+                  {hiddenPreviewPhotoCount === 1 ? "photo" : "photos"}
+                </button>
+              ) : null}
             </div>
           ) : null}
 
-          <div className="mt-4 flex gap-2 border-t border-[#DCE4EF] pt-4 sm:justify-end lg:border-t-0 lg:pt-0">
+          <div className="mt-4 flex gap-2 border-t border-slate-200 pt-4 sm:justify-end">
             <button
               type="button"
               onClick={openEditor}
@@ -976,9 +1045,9 @@ export default function CheckInCard({
               </button>
             ) : null}
           </div>
-        </>
+        </div>
       ) : (
-        <div className="mt-8 border-t border-slate-200 pt-6">
+        <div className="p-4 lg:p-5">
           <form onSubmit={handleAssignmentSave}>
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
