@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   Clock,
+  CloudRain,
   Edit3,
   ExternalLink,
   MapPin,
@@ -56,6 +57,22 @@ function formatCreatedAt(value) {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatTimeLabel(value) {
+  if (!value) {
+    return "";
+  }
+
+  const [hours = "0", minutes = "00"] = value.split(":");
+  const date = new Date();
+
+  date.setHours(Number(hours), Number(minutes), 0, 0);
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function createAssignment(index, assignment = {}) {
@@ -576,6 +593,24 @@ export default function DeliveryDispatchPage({
                             aria-hidden="true"
                           />
                           Hardware
+                        </span>
+                      ) : null}
+
+                      {delivery.needsTarp ? (
+                        <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700">
+                          <CloudRain
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
+                          Tarp
+                        </span>
+                      ) : null}
+
+                      {delivery.driverTargetArrivalTime ? (
+                        <span className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-sm font-black text-violet-700">
+                          <Clock className="h-4 w-4" aria-hidden="true" />
+                          Driver there{" "}
+                          {formatTimeLabel(delivery.driverTargetArrivalTime)}
                         </span>
                       ) : null}
 

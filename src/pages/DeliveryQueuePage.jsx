@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  CloudRain,
   Edit3,
   ExternalLink,
   MapPin,
@@ -28,6 +29,22 @@ function getDirectionsUrl(address) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
     address,
   )}`;
+}
+
+function formatTimeLabel(value) {
+  if (!value) {
+    return "";
+  }
+
+  const [hours = "0", minutes = "00"] = value.split(":");
+  const date = new Date();
+
+  date.setHours(Number(hours), Number(minutes), 0, 0);
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function readFileAsDataUrl(file) {
@@ -442,10 +459,33 @@ export default function DeliveryQueuePage({
                               Site around {getDeliverySiteArrivalLabel(delivery)}
                             </span>
 
+                            {delivery.driverTargetArrivalTime ? (
+                              <span className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-sm font-black text-violet-700">
+                                <Clock
+                                  className="h-4 w-4"
+                                  aria-hidden="true"
+                                />
+                                Be there{" "}
+                                {formatTimeLabel(
+                                  delivery.driverTargetArrivalTime,
+                                )}
+                              </span>
+                            ) : null}
+
                             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-700">
                               <Truck className="h-4 w-4" aria-hidden="true" />
                               {delivery.unloadType}
                             </span>
+
+                            {delivery.needsTarp ? (
+                              <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700">
+                                <CloudRain
+                                  className="h-4 w-4"
+                                  aria-hidden="true"
+                                />
+                                Tarp
+                              </span>
+                            ) : null}
                           </span>
                         </button>
 
@@ -706,6 +746,22 @@ export default function DeliveryQueuePage({
                               label="hardware photo"
                             />
                           </div>
+                        </section>
+                      ) : null}
+
+                      {delivery.needsTarp ? (
+                        <section className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                          <p className="flex items-center gap-2 text-lg font-black text-slate-900">
+                            <CloudRain
+                              className="h-5 w-5 text-blue-700"
+                              aria-hidden="true"
+                            />
+                            Tarp needed
+                          </p>
+
+                          <p className="mt-1 text-sm font-bold text-blue-700">
+                            Make sure the load is tarped before leaving.
+                          </p>
                         </section>
                       ) : null}
 

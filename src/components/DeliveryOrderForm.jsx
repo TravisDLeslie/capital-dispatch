@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   Check,
+  Clock,
+  CloudRain,
   ExternalLink,
   MapPin,
   Package,
@@ -86,6 +88,22 @@ function getDirectionsUrl(originAddress, destinationAddress) {
   return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
     originAddress || "",
   )}&destination=${encodeURIComponent(destinationAddress || "")}`;
+}
+
+function formatTimeLabel(value) {
+  if (!value) {
+    return "";
+  }
+
+  const [hours = "0", minutes = "00"] = value.split(":");
+  const date = new Date();
+
+  date.setHours(Number(hours), Number(minutes), 0, 0);
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function getOriginAddress(originName, originOptions = fallbackDeliveryOriginOptions) {
@@ -184,9 +202,11 @@ export default function DeliveryOrderForm({
     getOriginAddress("Capital Lumber", safeDeliveryOriginOptions),
   );
   const [oneWayDriveMinutes, setOneWayDriveMinutes] = useState("");
+  const [driverTargetArrivalTime, setDriverTargetArrivalTime] = useState("");
   const [deliveryScope, setDeliveryScope] = useState("shipOrderComplete");
   const [deliveryScopeNotes, setDeliveryScopeNotes] = useState("");
   const [hasHardware, setHasHardware] = useState(false);
+  const [needsTarp, setNeedsTarp] = useState(false);
   const [deliveryLocationNotes, setDeliveryLocationNotes] =
     useState("");
   const [generalNotes, setGeneralNotes] = useState("");
@@ -225,9 +245,11 @@ export default function DeliveryOrderForm({
         ? String(initialDelivery.oneWayDriveMinutes)
         : "",
     );
+    setDriverTargetArrivalTime(initialDelivery.driverTargetArrivalTime || "");
     setDeliveryScope(getDeliveryScopeOption(initialDelivery).value);
     setDeliveryScopeNotes(initialDelivery.deliveryScopeNotes || "");
     setHasHardware(Boolean(initialDelivery.hasHardware));
+    setNeedsTarp(Boolean(initialDelivery.needsTarp));
     setDeliveryLocationNotes(
       initialDelivery.deliveryLocationNotes ||
         initialDelivery.deliveryNotes ||
@@ -374,9 +396,11 @@ export default function DeliveryOrderForm({
       getOriginAddress("Capital Lumber", safeDeliveryOriginOptions),
     );
     setOneWayDriveMinutes("");
+    setDriverTargetArrivalTime("");
     setDeliveryScope("shipOrderComplete");
     setDeliveryScopeNotes("");
     setHasHardware(false);
+    setNeedsTarp(false);
     setDeliveryLocationNotes("");
     setGeneralNotes("");
     setItems([createEmptyDeliveryItem()]);
@@ -453,6 +477,7 @@ export default function DeliveryOrderForm({
       deliveryOriginName,
       deliveryOriginAddress,
       oneWayDriveMinutes: Number(oneWayDriveMinutes) || 0,
+      driverTargetArrivalTime,
       estimatedDurationMinutes: getDeliveryDurationMinutes(
         unloadType,
         null,
@@ -461,6 +486,7 @@ export default function DeliveryOrderForm({
       deliveryScope: selectedScope.value,
       deliveryScopeNotes: deliveryScopeNotes.trim(),
       hasHardware,
+      needsTarp,
       hardwareChecked: hasHardware
         ? Boolean(initialDelivery?.hardwareChecked)
         : false,
@@ -717,6 +743,41 @@ export default function DeliveryOrderForm({
             })}
           </div>
 
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <label
+              htmlFor="driver-target-arrival-time"
+              className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
+            >
+              <Clock className="h-4 w-4" aria-hidden="true" />
+              What time should the driver be there?
+              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                Optional
+              </span>
+            </label>
+
+            <div className="grid gap-3 sm:grid-cols-[minmax(180px,0.35fr)_1fr] sm:items-center">
+              <input
+                id="driver-target-arrival-time"
+                type="time"
+                value={driverTargetArrivalTime}
+                onChange={(event) => {
+                  setDriverTargetArrivalTime(event.target.value);
+                  clearError();
+                }}
+                disabled={isSubmitting}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-lg font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              />
+
+              <p className="text-sm font-semibold text-slate-500">
+                {driverTargetArrivalTime
+                  ? `Drivers will see “be there around ${formatTimeLabel(
+                      driverTargetArrivalTime,
+                    )}.”`
+                  : "Leave blank if dispatch should control the timing later."}
+              </p>
+            </div>
+          </div>
+
           <div className="mb-3 mt-6">
             <h4 className="text-sm font-bold text-slate-700">
               Where is the delivery leaving from?
@@ -918,6 +979,33 @@ export default function DeliveryOrderForm({
             <span className="mt-1 block text-sm font-semibold text-slate-600">
               Drivers will see a large reminder and must check hardware
               off before completing the delivery.
+            </span>
+          </span>
+        </label>
+
+        <label className="mt-3 flex cursor-pointer items-start gap-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 transition hover:border-blue-200">
+          <input
+            type="checkbox"
+            checked={needsTarp}
+            onChange={(event) => {
+              setNeedsTarp(event.target.checked);
+              clearError();
+            }}
+            disabled={isSubmitting}
+            className="mt-1 h-5 w-5 rounded border-blue-300 text-blue-700 focus:ring-blue-200"
+          />
+
+          <span>
+            <span className="flex items-center gap-2 text-sm font-black text-slate-900">
+              <CloudRain
+                className="h-4 w-4 text-blue-700"
+                aria-hidden="true"
+              />
+              Tarp needed
+            </span>
+
+            <span className="mt-1 block text-sm font-semibold text-slate-600">
+              Mark this when the load should be tarped before leaving.
             </span>
           </span>
         </label>

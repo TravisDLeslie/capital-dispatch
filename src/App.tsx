@@ -721,6 +721,8 @@ type Delivery = {
   driver: string;
   unloadType: string;
   hasHardware?: boolean;
+  needsTarp?: boolean;
+  driverTargetArrivalTime?: string;
   hardwareChecked?: boolean;
   deliveryLocationNotes?: string;
   generalNotes?: string;
