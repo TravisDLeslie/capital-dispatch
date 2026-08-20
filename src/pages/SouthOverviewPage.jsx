@@ -135,8 +135,8 @@ export default function SouthOverviewPage({
     <PageContainer>
       <Breadcrumbs
         items={[
-          { label: "PO's", onClick: () => onPageChange?.("south") },
-          { label: "South" },
+          { label: "Inbound POs", onClick: () => onPageChange?.("south") },
+          { label: "South Pickups" },
         ]}
       />
 
@@ -144,10 +144,10 @@ export default function SouthOverviewPage({
         <div>
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
             <Truck aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />
-            South
+            South Pickups
           </p>
           <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950">
-            South
+            South Pickups
           </h1>
           <p className="mt-2 max-w-3xl text-lg font-semibold text-slate-500">
             Add pickups, dispatch routes, and see what is being picked up today.

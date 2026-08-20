@@ -350,7 +350,7 @@ export default function SouthHubPage({
   ].filter(Boolean);
   const actionCards =
     activeActionTab === "theirTruck" ? theirTruckActionCards : southActionCards;
-  const pageTitle = isDriverView ? "South" : "PO's";
+  const pageTitle = isDriverView ? "South" : "Inbound POs";
   const pageEyebrow = isDriverView ? "South" : "PO Routing";
   const southLandingPage =
     (canOpen("supplier-runs-add") && "supplier-runs-add") ||
@@ -404,7 +404,7 @@ export default function SouthHubPage({
           <p className="mt-2 max-w-3xl text-lg font-semibold text-slate-500">
             {isDriverView
               ? "Work assigned South pickups and keep dispatch updated."
-              : "Choose how a PO is coming in, then route it through the right workflow."}
+              : "Route supplier POs by how the material is getting to the yard."}
           </p>
         </div>
 
@@ -417,7 +417,7 @@ export default function SouthHubPage({
                 className="inline-flex min-h-[48px] min-w-[160px] items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-[#FC2C38] px-4 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:px-5"
               >
                 <Plus aria-hidden="true" className="h-5 w-5" strokeWidth={2.7} />
-                Add South PO
+                Add South Pickup
               </button>
             ) : null}
 
@@ -447,10 +447,10 @@ export default function SouthHubPage({
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-                Create PO
+                Inbound PO
               </p>
               <h2 className="mt-1 text-2xl font-black text-slate-950">
-                Choose how it is arriving
+                Choose how material is arriving
               </h2>
             </div>
           </div>
@@ -467,7 +467,7 @@ export default function SouthHubPage({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-lg font-black text-slate-950">
-                    South PO
+                    South Pickup
                   </span>
                   <span className="mt-1 block text-sm font-semibold text-slate-600">
                     Our driver is picking it up from a supplier.

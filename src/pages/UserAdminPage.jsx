@@ -15,7 +15,7 @@ const workViews = [
   { value: "driver", label: "Driver" },
   { value: "sales", label: "Sales" },
   { value: "receiving", label: "Receiving" },
-  { value: "south", label: "PO's / South" },
+  { value: "south", label: "Inbound POs" },
   { value: "delivery", label: "Delivery" },
   { value: "accounting", label: "Accounting" },
 ];
@@ -44,11 +44,11 @@ const permissionGroups = [
     ],
   },
   {
-    title: "PO's",
+    title: "Inbound POs",
     permissions: [
-      { id: "south", label: "PO's" },
-      { id: "south-overview", label: "South Overview" },
-      { id: "supplier-runs-add", label: "Add POs" },
+      { id: "south", label: "Inbound POs" },
+      { id: "south-overview", label: "South Pickups" },
+      { id: "supplier-runs-add", label: "Add South Pickup" },
       { id: "their-truck-overview", label: "Their Truck Overview" },
       { id: "their-truck-pos", label: "Add Their Truck PO" },
       { id: "supplier-runs-dispatch", label: "Needs Dispatch" },
