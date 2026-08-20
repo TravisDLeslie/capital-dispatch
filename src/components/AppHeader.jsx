@@ -15,7 +15,7 @@ import {
   UserRound,
   UsersRound,
 } from "lucide-react";
-import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
+import capitalLumberLogo from "../assets/capital-lumber-new.svg";
 
 const navigationItems = [
   {
@@ -71,9 +71,9 @@ const navigationItems = [
 ];
 
 function getNavButtonClass(isActive, isMobile = false) {
-  const activeClass = "text-[#FC2C38]";
+  const activeClass = "bg-white/10 text-white";
   const inactiveClass =
-    "text-slate-900 hover:bg-slate-50 hover:text-[#FC2C38]";
+    "text-white/80 hover:bg-white/10 hover:text-white";
 
   return `${isMobile ? "px-4 py-2.5" : "px-7 py-2.5"} flex w-full items-center gap-4 rounded-xl text-left text-sm font-semibold transition ${
     isActive ? activeClass : inactiveClass
@@ -83,7 +83,7 @@ function getNavButtonClass(isActive, isMobile = false) {
 function getActionNavButtonClass(isActive, isMobile = false) {
   const stateClass = isActive
     ? "bg-[#FC2C38] text-white shadow-sm"
-    : "bg-red-50 text-[#FC2C38] hover:bg-[#FC2C38] hover:text-white hover:shadow-sm";
+    : "bg-white/10 text-white hover:bg-[#FC2C38] hover:text-white hover:shadow-sm";
 
   return `${
     isMobile ? "px-4 py-3" : "px-5 py-3"
@@ -612,13 +612,13 @@ export default function AppHeader({
       return hasGroupItems ? (
         <div
           key={group}
-          className="border-b border-slate-200 py-4 first:pt-0 last:border-b-0"
+          className="border-b border-white/10 py-4 first:pt-0 last:border-b-0"
         >
           <div
             className={`flex w-full items-center rounded-xl transition ${
               groupIsActive
-                ? "bg-red-50 text-[#FC2C38]"
-                : "text-slate-900 hover:bg-slate-50"
+                ? "bg-[#FC2C38] text-white"
+                : "text-white hover:bg-white/10"
             }`}
           >
             <button
@@ -656,7 +656,7 @@ export default function AppHeader({
               <button
                 type="button"
                 onClick={() => toggleNavGroup(group)}
-                className="flex h-full min-h-[56px] w-12 shrink-0 items-center justify-center rounded-r-xl text-slate-400 transition hover:text-[#FC2C38]"
+                className="flex h-full min-h-[56px] w-12 shrink-0 items-center justify-center rounded-r-xl text-white/70 transition hover:text-white"
                 aria-label={`${isGroupOpen ? "Collapse" : "Open"} ${
                   group === "South" ? southGroupLabel : group
                 } menu`}
@@ -671,7 +671,7 @@ export default function AppHeader({
                 />
               </button>
             ) : hasGroupItems && !isSinglePageGroup ? (
-              <span className="pr-4 text-slate-400">
+              <span className="pr-4 text-white/70">
                 <ChevronDown
                   aria-hidden="true"
                   className={`h-5 w-5 transition-transform ${
@@ -692,13 +692,13 @@ export default function AppHeader({
                   onClick={() => handlePageChange(link.pageId)}
                   className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
                     link.isActive
-                      ? "bg-slate-950 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                      ? "bg-[#FC2C38] text-white shadow-sm"
+                      : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
                   <span
                     className={`h-2 w-2 shrink-0 rounded-full ${
-                      link.isActive ? "bg-white" : "bg-slate-300"
+                      link.isActive ? "bg-white" : "bg-white/40"
                     }`}
                     aria-hidden="true"
                   />
@@ -719,13 +719,13 @@ export default function AppHeader({
                   onClick={() => handlePageChange(link.pageId)}
                   className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
                     link.isActive
-                      ? "bg-slate-950 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                      ? "bg-[#FC2C38] text-white shadow-sm"
+                      : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
                   <span
                     className={`h-2 w-2 shrink-0 rounded-full ${
-                      link.isActive ? "bg-white" : "bg-slate-300"
+                      link.isActive ? "bg-white" : "bg-white/40"
                     }`}
                     aria-hidden="true"
                   />
@@ -746,13 +746,13 @@ export default function AppHeader({
                   onClick={() => handlePageChange(link.pageId)}
                   className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
                     link.isActive
-                      ? "bg-slate-950 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                      ? "bg-[#FC2C38] text-white shadow-sm"
+                      : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
                   <span
                     className={`h-2 w-2 shrink-0 rounded-full ${
-                      link.isActive ? "bg-white" : "bg-slate-300"
+                      link.isActive ? "bg-white" : "bg-white/40"
                     }`}
                     aria-hidden="true"
                   />
@@ -795,7 +795,7 @@ export default function AppHeader({
                     ) : (
                       <span
                         className={`h-2 w-2 shrink-0 rounded-full ${
-                          isActive ? "bg-[#FC2C38]" : "bg-slate-400"
+                          isActive ? "bg-white" : "bg-white/40"
                         }`}
                         aria-hidden="true"
                       />
@@ -823,8 +823,8 @@ export default function AppHeader({
     }
 
     return (
-      <label className="block border-b border-slate-200 px-4 py-3">
-        <span className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+      <label className="block border-b border-white/10 px-4 py-3">
+        <span className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/60">
           <UserRound
             aria-hidden="true"
             className="h-3.5 w-3.5"
@@ -836,7 +836,7 @@ export default function AppHeader({
         <select
           value={selectedPreviewUserId}
           onChange={(event) => onPreviewUserChange?.(event.target.value)}
-          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+          className="w-full rounded-xl border border-white/20 bg-white px-3 py-2 text-xs font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-500/20"
         >
           {previewUsers.map((previewUser) => {
             const previewUserId = getPreviewUserId(previewUser);
@@ -857,7 +857,7 @@ export default function AppHeader({
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-slate-200 bg-white md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-white/10 bg-[#1e1e1e] md:flex">
         <button
           type="button"
           onClick={() => handlePageChange("dashboard")}
@@ -866,7 +866,7 @@ export default function AppHeader({
           <img
             src={capitalLumberLogo}
             alt="Capital Lumber Co."
-            className="h-auto w-48"
+            className="h-auto w-52"
           />
         </button>
 
@@ -874,8 +874,8 @@ export default function AppHeader({
           {renderNavigation()}
         </nav>
 
-        <div className="border-t border-slate-200 p-5">
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-t border-white/10 p-5">
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm">
             {renderPreviewSelect()}
 
             <div className="flex items-center gap-3 px-4 py-3">
@@ -884,7 +884,7 @@ export default function AppHeader({
               </span>
 
               <span className="min-w-0">
-                <span className="block truncate text-xs font-black text-slate-900">
+                <span className="block truncate text-xs font-black text-white">
                   {currentUser?.displayName ||
                     currentUser?.email ||
                     "Signed in"}
@@ -895,7 +895,7 @@ export default function AppHeader({
                     Super Admin
                   </span>
                 ) : currentUserProfile?.role ? (
-                  <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                  <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-white/60">
                     {currentUserProfile.role}
                   </span>
                 ) : null}
@@ -905,7 +905,7 @@ export default function AppHeader({
             <button
               type="button"
               onClick={onSignOut}
-              className="flex w-full items-center gap-3 border-t border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+              className="flex w-full items-center gap-3 border-t border-white/10 px-4 py-3 text-left text-sm font-semibold text-white/75 transition hover:bg-white/10 hover:text-white"
             >
               <LogOut
                 aria-hidden="true"
@@ -918,13 +918,13 @@ export default function AppHeader({
         </div>
       </aside>
 
-      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white md:hidden">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#1e1e1e] md:hidden">
         <div className="mx-auto max-w-5xl px-4 sm:px-6">
           <div className="flex min-h-20 items-center justify-between gap-4 py-4">
             <button
               type="button"
               onClick={() => setIsMenuOpen((current) => !current)}
-              className="flex shrink-0 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-700 shadow-sm transition hover:bg-slate-100"
+              className="flex shrink-0 items-center gap-3 rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-white shadow-sm transition hover:bg-white/10"
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={isMenuOpen}
             >
@@ -963,14 +963,14 @@ export default function AppHeader({
               <img
                 src={capitalLumberLogo}
                 alt="Capital Lumber Co."
-                className="mx-auto h-auto w-36 max-w-[52vw]"
+                className="mx-auto h-auto w-40 max-w-[52vw]"
               />
             </button>
 
             <button
               type="button"
               onClick={() => setIsMenuOpen(true)}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-black text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-200"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-black text-white ring-1 ring-white/15 transition hover:bg-white/15"
               aria-label="Open account menu"
             >
               {userInitial}
@@ -988,7 +988,7 @@ export default function AppHeader({
             onClick={() => setIsMenuOpen(false)}
           />
 
-          <aside className="relative flex h-full w-[86vw] max-w-[340px] flex-col border-r border-slate-200 bg-white shadow-2xl">
+          <aside className="relative flex h-full w-[86vw] max-w-[340px] flex-col border-r border-white/10 bg-[#1e1e1e] shadow-2xl">
             <div className="flex items-center justify-between px-6 pb-5 pt-6">
               <button
                 type="button"
@@ -998,14 +998,14 @@ export default function AppHeader({
                 <img
                   src={capitalLumberLogo}
                   alt="Capital Lumber Co."
-                  className="h-auto w-44 max-w-full"
+                  className="h-auto w-48 max-w-full"
                 />
               </button>
 
               <button
                 type="button"
                 onClick={() => setIsMenuOpen(false)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl font-semibold leading-none text-slate-600 shadow-sm"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl font-semibold leading-none text-white shadow-sm"
                 aria-label="Close menu"
               >
                 ×
@@ -1016,24 +1016,24 @@ export default function AppHeader({
               {renderNavigation(true)}
             </nav>
 
-            <div className="border-t border-slate-200 px-5 py-3">
-              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="border-t border-white/10 px-5 py-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 shadow-sm">
                 {renderPreviewSelect()}
 
                 <div className="flex items-center gap-3 px-3 py-3">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-bold text-slate-600">
+                  <span className="block truncate text-xs font-bold text-white">
                     {currentUser?.displayName ||
                       currentUser?.email ||
                       "Signed in"}
                   </span>
 
                   {isSuperAdmin ? (
-                    <span className="mt-0.5 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                    <span className="mt-0.5 block text-[10px] font-black uppercase tracking-[0.14em] text-white/60">
                       Super Admin
                     </span>
                   ) : currentUserProfile?.role ? (
-                    <span className="mt-0.5 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                    <span className="mt-0.5 block text-[10px] font-black uppercase tracking-[0.14em] text-white/60">
                       {currentUserProfile.role}
                     </span>
                   ) : null}
@@ -1042,7 +1042,7 @@ export default function AppHeader({
                 <button
                   type="button"
                   onClick={onSignOut}
-                  className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900"
+                  className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 text-xs font-bold text-white shadow-sm transition hover:bg-white/10"
                 >
                   <LogOut
                     aria-hidden="true"
