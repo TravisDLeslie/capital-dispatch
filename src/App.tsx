@@ -1259,6 +1259,17 @@ export default function App() {
     [vendorSettings.vendors],
   );
   const vendorOptions = useMemo(
+    () =>
+      activeVendors
+        .map((vendor) => vendor.name)
+        .sort((firstVendor, secondVendor) =>
+          firstVendor.localeCompare(secondVendor, undefined, {
+            sensitivity: "base",
+          }),
+        ),
+    [activeVendors],
+  );
+  const vendorRouteOptions = useMemo(
     () => activeVendors.map((vendor) => vendor.name),
     [activeVendors],
   );
@@ -3048,10 +3059,16 @@ export default function App() {
     setSyncError("");
   }
 
-  function renderDashboardPage() {
+  function renderDashboardPage(forcedWorkView = "") {
     const dashboardAllowedPageIds = effectiveAllowedPageIds;
+    const dashboardWorkView = forcedWorkView || effectiveWorkView;
+    const isForcedWorkView = Boolean(forcedWorkView);
 
-    if (shouldShowDriverDashboard && (canReadSouth || canReadDeliveries)) {
+    if (
+      !isForcedWorkView &&
+      shouldShowDriverDashboard &&
+      (canReadSouth || canReadDeliveries)
+    ) {
       return (
         <DriverDashboardPage
           supplierRuns={driverDashboardSupplierRuns}
@@ -3065,7 +3082,12 @@ export default function App() {
       );
     }
 
-    if (effectiveWorkView === "operations" || effectiveUserRole === "superAdmin" || effectiveUserRole === "admin") {
+    if (
+      !isForcedWorkView &&
+      (dashboardWorkView === "operations" ||
+        effectiveUserRole === "superAdmin" ||
+        effectiveUserRole === "admin")
+    ) {
       return (
         <DashboardPage
           operations={adminDashboardOperations}
@@ -3079,7 +3101,7 @@ export default function App() {
       );
     }
 
-    if (effectiveWorkView === "receiving" && canReadReceiving) {
+    if (dashboardWorkView === "receiving" && canReadReceiving) {
       const todayCheckIns = checkIns.filter((checkIn) => {
         const checkedAt =
           typeof checkIn.checkedInAt === "string"
@@ -3350,6 +3372,20 @@ export default function App() {
                   tone: "success",
                   variant: "live",
                   onClick: () => setCurrentPage("check-in"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("today")
+              ? {
+                  icon: PackageCheck,
+                  label: "Received",
+                  title: "View Checked In Items",
+                  description:
+                    "Review POs and materials that have already been checked in today.",
+                  metric: todayCheckIns.length,
+                  metricLabel: "Items",
+                  tone: "success",
+                  variant: "default",
+                  onClick: () => setCurrentPage("today"),
                 }
               : null,
             dashboardAllowedPageIds.includes("supplier-runs-check") ||
@@ -3649,7 +3685,7 @@ export default function App() {
       );
     }
 
-    if (effectiveWorkView === "south" && canReadSouth) {
+    if (dashboardWorkView === "south" && canReadSouth) {
       const needsDispatchRuns = visibleSupplierRuns.filter(
         (supplierRun) =>
           supplierRun.status !== "complete" &&
@@ -3759,7 +3795,7 @@ export default function App() {
       );
     }
 
-    if (effectiveWorkView === "delivery" && canReadDeliveries) {
+    if (dashboardWorkView === "delivery" && canReadDeliveries) {
       const needsDispatchDeliveries = deliveries.filter(
         (delivery) =>
           delivery.status !== "complete" &&
@@ -3868,7 +3904,7 @@ export default function App() {
       );
     }
 
-    if (effectiveWorkView === "sales" && canReadSales) {
+    if (dashboardWorkView === "sales" && canReadSales) {
       return (
         <SectionHubPage
           title="Sales Dashboard"
@@ -3985,116 +4021,7 @@ export default function App() {
 
   function renderCurrentPage() {
     if (currentPage === "receiving" && canReadReceiving) {
-      const todayCheckIns = checkIns.filter((checkIn) => {
-        const checkedAt =
-          typeof checkIn.checkedInAt === "string"
-            ? checkIn.checkedInAt
-            : "";
-
-        return checkedAt.slice(0, 10) === new Date().toISOString().slice(0, 10);
-      });
-      const openYardTasks = yardTasks.filter(
-        (yardTask) => yardTask.status !== "complete",
-      );
-
-      return (
-        <SectionHubPage
-          title="Receiving"
-          description="Check in vendor POs, review today's work, and search past receiving records."
-          icon={Package}
-          primaryAction={
-            effectiveAllowedPageIds.includes("check-in")
-              ? {
-                  label: "Check In PO",
-                  icon: Plus,
-                  onClick: () => setCurrentPage("check-in"),
-                }
-              : null
-          }
-          stats={[
-            {
-              icon: ClipboardCheck,
-              label: "Today",
-              value: todayCheckIns.length,
-              note: "Checked in",
-            },
-            {
-              icon: Search,
-              label: "Records",
-              value: checkIns.length,
-              note: "Searchable POs",
-            },
-            {
-              icon: ClipboardList,
-              label: "Yard",
-              value: openYardTasks.length,
-              note: "Open tasks",
-            },
-            {
-              icon: Package,
-              label: "Photos",
-              value: checkIns.filter((checkIn) =>
-                Array.isArray(checkIn.materials)
-                  ? checkIn.materials.some((material) => material.locationPhoto)
-                  : false,
-              ).length,
-              note: "With material photos",
-            },
-          ]}
-          actions={[
-            effectiveAllowedPageIds.includes("today")
-              ? {
-                  icon: ClipboardCheck,
-                  label: "Daily Board",
-                  title: "Today's Check-Ins",
-                  description: "Review what has been checked in today.",
-                  metric: todayCheckIns.length,
-                  metricLabel: "Today",
-                  tone: "success",
-                  onClick: () => setCurrentPage("today"),
-                }
-              : null,
-            effectiveAllowedPageIds.includes("search")
-              ? {
-                  icon: Search,
-                  label: "Lookup",
-                  title: "Search POs",
-                  description: "Find receiving records by PO, customer, vendor, item, or location.",
-                  metric: checkIns.length,
-                  metricLabel: "Records",
-                  tone: "archive",
-                  onClick: () => setCurrentPage("search"),
-                }
-              : null,
-            effectiveAllowedPageIds.includes("trace")
-              ? {
-                  icon: CalendarDays,
-                  label: "Timeline",
-                  title: "Trace PO / Order",
-                  description:
-                    "See the chain across South pickups, receiving, and deliveries.",
-                  metric: "+",
-                  metricLabel: "Events",
-                  tone: "info",
-                  onClick: () => setCurrentPage("trace"),
-                }
-              : null,
-            effectiveAllowedPageIds.includes("yard-tasks")
-              ? {
-                  icon: ClipboardList,
-                  label: "Yard",
-                  title: "Yard Tasks",
-                  description:
-                    "Prioritize loose yard work by area, person, and urgency.",
-                  metric: openYardTasks.length,
-                  metricLabel: "Open",
-                  tone: "warning",
-                  onClick: () => setCurrentPage("yard-tasks"),
-                }
-              : null,
-          ].filter(Boolean)}
-        />
-      );
+      return renderDashboardPage("receiving");
     }
 
     if (currentPage === "south" && canReadSouth) {
@@ -4107,7 +4034,7 @@ export default function App() {
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
-            vendorRouteOrder={vendorOptions}
+            vendorRouteOrder={vendorRouteOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
             employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
@@ -4784,7 +4711,7 @@ export default function App() {
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
-            vendorRouteOrder={vendorOptions}
+            vendorRouteOrder={vendorRouteOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
             employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
@@ -4813,7 +4740,7 @@ export default function App() {
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
-            vendorRouteOrder={vendorOptions}
+            vendorRouteOrder={vendorRouteOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
             employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
@@ -4845,7 +4772,7 @@ export default function App() {
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
-            vendorRouteOrder={vendorOptions}
+            vendorRouteOrder={vendorRouteOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
             employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
@@ -4879,7 +4806,7 @@ export default function App() {
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
-            vendorRouteOrder={vendorOptions}
+            vendorRouteOrder={vendorRouteOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
             employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
@@ -4916,7 +4843,7 @@ export default function App() {
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
-            vendorRouteOrder={vendorOptions}
+            vendorRouteOrder={vendorRouteOptions}
             vendorDisplayNameMap={vendorDisplayNameMap}
             employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}

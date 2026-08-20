@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MapPin, Plus, Save, Trash2, Warehouse } from "lucide-react";
+import { MapPin, Plus, Save, Trash2, Warehouse, X } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
@@ -25,6 +25,7 @@ export default function VendorSettingsPage({
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [newVendorDraft, setNewVendorDraft] = useState(null);
 
   useEffect(() => {
     setDraftVendors(
@@ -59,11 +60,46 @@ export default function VendorSettingsPage({
   }
 
   function addVendor() {
-    setDraftVendors((currentVendors) => [
-      ...currentVendors,
-      createEmptyVendor(currentVendors.length + 1),
-    ]);
+    setNewVendorDraft(createEmptyVendor(draftVendors.length + 1));
     setMessage("");
+    setError("");
+  }
+
+  function updateNewVendor(field, value) {
+    setNewVendorDraft((currentVendor) =>
+      currentVendor
+        ? {
+            ...currentVendor,
+            [field]:
+              field === "routeOrder"
+                ? value.replace(/\D/g, "").slice(0, 3)
+                : value,
+          }
+        : currentVendor,
+    );
+    setMessage("");
+    setError("");
+  }
+
+  function saveNewVendor() {
+    const cleanVendor = {
+      ...newVendorDraft,
+      name: String(newVendorDraft?.name || "").trim(),
+      address: String(newVendorDraft?.address || "").trim(),
+      deliveryCadence: String(newVendorDraft?.deliveryCadence || "").trim(),
+      routeOrder:
+        Number(newVendorDraft?.routeOrder) || draftVendors.length + 1,
+      active: true,
+    };
+
+    if (!cleanVendor.name) {
+      setError("Enter the vendor name before adding it.");
+      return;
+    }
+
+    setDraftVendors((currentVendors) => [...currentVendors, cleanVendor]);
+    setNewVendorDraft(null);
+    setMessage("Vendor added. Save vendor settings when you are ready.");
     setError("");
   }
 
@@ -276,6 +312,133 @@ export default function VendorSettingsPage({
           {isSaving ? "Saving..." : "Save Vendor Settings"}
         </button>
       </form>
+
+      {newVendorDraft ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 px-4 py-4 sm:items-center">
+          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                  Add Vendor
+                </p>
+                <h2 className="mt-1 text-2xl font-black text-slate-950">
+                  New Supplier
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  Add the vendor details here, then save vendor settings.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNewVendorDraft(null);
+                  setError("");
+                }}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+                aria-label="Close add vendor"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  Route Order
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={newVendorDraft.routeOrder || ""}
+                  onChange={(event) =>
+                    updateNewVendor("routeOrder", event.target.value)
+                  }
+                  disabled={isSaving}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  Vendor Name
+                </span>
+                <input
+                  type="text"
+                  value={newVendorDraft.name}
+                  onChange={(event) =>
+                    updateNewVendor("name", event.target.value)
+                  }
+                  disabled={isSaving}
+                  placeholder="Boise Cascade"
+                  autoFocus
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+              </label>
+            </div>
+
+            <label className="mt-4 block">
+              <span className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                Address
+              </span>
+              <input
+                type="text"
+                value={newVendorDraft.address}
+                onChange={(event) =>
+                  updateNewVendor("address", event.target.value)
+                }
+                disabled={isSaving}
+                placeholder="4300 S Enterprise St, Boise, ID 83705"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              />
+            </label>
+
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                Delivery Cadence
+              </span>
+              <input
+                type="text"
+                value={newVendorDraft.deliveryCadence || ""}
+                onChange={(event) =>
+                  updateNewVendor("deliveryCadence", event.target.value)
+                }
+                disabled={isSaving}
+                placeholder="M-W-F"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              />
+            </label>
+
+            {error ? (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                {error}
+              </div>
+            ) : null}
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setNewVendorDraft(null);
+                  setError("");
+                }}
+                className="min-h-[52px] rounded-xl border border-slate-300 bg-white px-5 text-base font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveNewVendor}
+                className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-5 text-base font-black text-white shadow-sm transition hover:bg-red-600"
+              >
+                <Plus className="h-5 w-5" aria-hidden="true" />
+                Add Vendor
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }
