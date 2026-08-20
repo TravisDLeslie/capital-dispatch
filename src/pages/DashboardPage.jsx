@@ -162,6 +162,55 @@ function checkInMatchesDashboardSearch(checkIn, searchValue) {
   );
 }
 
+function getItemDescription(item) {
+  return String(
+    item?.description ||
+      item?.materialDescription ||
+      item?.itemDescription ||
+      item?.material ||
+      "Item detail",
+  ).trim();
+}
+
+function getItemQuantity(item) {
+  return String(item?.quantity || item?.qty || item?.amount || "").trim();
+}
+
+function getItemReference(item) {
+  return String(
+    item?.internalReference ||
+      item?.sku ||
+      item?.itemNumber ||
+      item?.itemNo ||
+      item?.soNumber ||
+      "",
+  ).trim();
+}
+
+function summarizeItems(items, options = {}) {
+  const itemList = Array.isArray(items) ? items : [];
+  const visibleItems = itemList.slice(0, options.limit || 2).map((item) => {
+    const quantity = getItemQuantity(item);
+    const description = getItemDescription(item);
+    const reference = getItemReference(item);
+    const location = String(item?.location || "").trim();
+
+    return {
+      id:
+        item?.id ||
+        [quantity, description, reference, location].filter(Boolean).join("-"),
+      label: [quantity, description].filter(Boolean).join(" ") || description,
+      detail: [reference ? `#${reference}` : "", location].filter(Boolean).join(" • "),
+    };
+  });
+
+  return {
+    total: itemList.length,
+    visibleItems,
+    hiddenCount: Math.max(itemList.length - visibleItems.length, 0),
+  };
+}
+
 /**
  * @param {{
  *   title: string;
@@ -320,6 +369,9 @@ export default function DashboardPage({
           supplierRun.driver ? `Driver ${supplierRun.driver}` : "",
           supplierRun.status === "complete" ? "Complete" : "Open",
         ].filter(Boolean),
+        itemSummary: summarizeItems(
+          Array.isArray(supplierRun.items) ? supplierRun.items : [],
+        ),
         links: getSouthOrderLinks(supplierRun).map((link) => ({
           label: `Linked order ${link.orderNumber}`,
           detail: [
@@ -353,6 +405,9 @@ export default function DashboardPage({
           delivery.driver ? `Driver ${delivery.driver}` : "",
           delivery.status === "complete" ? "Delivered" : "Open",
         ].filter(Boolean),
+        itemSummary: summarizeItems(
+          Array.isArray(delivery.items) ? delivery.items : [],
+        ),
         links: supplierRuns
           .filter((supplierRun) =>
             getSouthOrderLinks(supplierRun).some(
@@ -384,6 +439,9 @@ export default function DashboardPage({
           checkIn.checkedInBy ? `Checked in by ${checkIn.checkedInBy}` : "",
           checkIn.sourceType === "south" ? "From South" : "",
         ].filter(Boolean),
+        itemSummary: summarizeItems(
+          Array.isArray(checkIn.materials) ? checkIn.materials : [],
+        ),
         links: checkIn.sourceSupplierRunPoNumber
           ? [
               {
@@ -575,6 +633,28 @@ export default function DashboardPage({
                             ? ` · ${formatDateTime(result.timestamp)}`
                             : ""}
                         </span>
+                        {result.itemSummary?.total > 0 ? (
+                          <span className="mt-2 flex flex-wrap gap-1.5">
+                            {result.itemSummary.visibleItems.map((item) => (
+                              <span
+                                key={item.id}
+                                className="inline-flex max-w-full flex-col rounded-xl bg-white px-2.5 py-1 text-xs font-black text-slate-700 shadow-sm ring-1 ring-slate-200"
+                              >
+                                <span className="truncate">{item.label}</span>
+                                {item.detail ? (
+                                  <span className="truncate text-[11px] font-bold text-slate-400">
+                                    {item.detail}
+                                  </span>
+                                ) : null}
+                              </span>
+                            ))}
+                            {result.itemSummary.hiddenCount > 0 ? (
+                              <span className="inline-flex items-center rounded-xl bg-slate-200 px-2.5 py-1 text-xs font-black text-slate-600">
+                                +{result.itemSummary.hiddenCount} more
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : null}
                       </span>
                       <ArrowRight
                         aria-hidden="true"
