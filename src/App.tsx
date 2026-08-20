@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import {
   Calculator,
   CalendarDays,
+  Check,
   ClipboardList,
   ClipboardCheck,
   Copy,
@@ -1178,6 +1179,8 @@ export default function App() {
     useState("");
   const [traceInitialSearch, setTraceInitialSearch] = useState("");
   const [receivingDashboardSearch, setReceivingDashboardSearch] =
+    useState("");
+  const [copiedReceivingQuickPO, setCopiedReceivingQuickPO] =
     useState("");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] =
@@ -2832,6 +2835,22 @@ export default function App() {
     setCurrentPage("trace");
   }
 
+  async function handleCopyReceivingQuickPO(poNumber: string) {
+    const nextPONumber = poNumber.trim();
+
+    if (!nextPONumber || nextPONumber === "No PO") {
+      return;
+    }
+
+    await copyTextToClipboard(nextPONumber);
+    setCopiedReceivingQuickPO(nextPONumber);
+    window.setTimeout(() => {
+      setCopiedReceivingQuickPO((currentPONumber) =>
+        currentPONumber === nextPONumber ? "" : currentPONumber,
+      );
+    }, 1600);
+  }
+
   function handleEditSouthPOFromCalendar(supplierRunId: string) {
     setCurrentPage("supplier-runs-calendar");
 
@@ -3463,6 +3482,8 @@ export default function App() {
                         );
                         const isSouth = match.tone === "red";
                         const isTheirTruck = match.tone === "blue";
+                        const isCopied =
+                          copiedReceivingQuickPO === String(match.poNumber);
 
                         return (
                           <article
@@ -3503,19 +3524,42 @@ export default function App() {
                                   <button
                                     type="button"
                                     disabled={!match.poNumber || match.poNumber === "No PO"}
-                                    onClick={() =>
-                                      copyTextToClipboard(String(match.poNumber))
+                                    onClick={() => {
+                                      void handleCopyReceivingQuickPO(
+                                        String(match.poNumber),
+                                      );
+                                    }}
+                                    className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border shadow-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                                      isCopied
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                        : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                    }`}
+                                    aria-label={
+                                      isCopied
+                                        ? `Copied PO number ${match.poNumber}`
+                                        : `Copy PO number ${match.poNumber}`
                                     }
-                                    className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-slate-600 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                                    aria-label={`Copy PO number ${match.poNumber}`}
+                                    title={isCopied ? "Copied" : "Copy PO"}
                                   >
-                                    <Copy
-                                      aria-hidden="true"
-                                      className="h-3.5 w-3.5"
-                                      strokeWidth={2.5}
-                                    />
-                                    Copy
+                                    {isCopied ? (
+                                      <Check
+                                        aria-hidden="true"
+                                        className="h-4 w-4"
+                                        strokeWidth={3}
+                                      />
+                                    ) : (
+                                      <Copy
+                                        aria-hidden="true"
+                                        className="h-4 w-4"
+                                        strokeWidth={2.5}
+                                      />
+                                    )}
                                   </button>
+                                  {isCopied ? (
+                                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                                      Copied
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <p className="mt-1 truncate text-sm font-black text-slate-600">
                                   {match.vendor}
