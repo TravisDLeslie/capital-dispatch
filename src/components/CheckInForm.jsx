@@ -32,6 +32,7 @@ function createEmptyMaterial() {
     description: "",
     location: "",
     locationPhoto: null,
+    locationPhotos: [],
     notes: "",
     conditionGood: true,
     damagePhoto: null,
@@ -99,6 +100,14 @@ function getUniqueOptions(options) {
       seenOptions.add(key);
       return true;
     });
+}
+
+function getMaterialLocationPhotos(material) {
+  if (Array.isArray(material.locationPhotos)) {
+    return material.locationPhotos.filter(Boolean);
+  }
+
+  return material.locationPhoto ? [material.locationPhoto] : [];
 }
 
 function findMatchingTeamMember(value, teamMemberOptions) {
@@ -902,13 +911,13 @@ export default function CheckInForm({
     event,
     photoField = "locationPhoto",
   ) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
 
-    if (!file) {
+    if (files.length === 0) {
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
+    if (files.some((file) => !file.type.startsWith("image/"))) {
       setError("Choose an image file for the material photo.");
       event.target.value = "";
       return;
@@ -918,16 +927,33 @@ export default function CheckInForm({
     clearError();
 
     try {
-      const photo = await createLocationPhoto(file);
+      const photos = await Promise.all(files.map(createLocationPhoto));
       setMaterials((currentMaterials) =>
-        currentMaterials.map((material) =>
-          material.id === materialId
-            ? {
-                ...material,
-                [photoField]: photo,
-              }
-            : material,
-        ),
+        currentMaterials.map((material) => {
+          if (material.id !== materialId) {
+            return material;
+          }
+
+          if (photoField === "locationPhoto") {
+            const currentLocationPhotos =
+              getMaterialLocationPhotos(material);
+            const nextLocationPhotos = [
+              ...currentLocationPhotos,
+              ...photos,
+            ];
+
+            return {
+              ...material,
+              locationPhoto: nextLocationPhotos[0] || null,
+              locationPhotos: nextLocationPhotos,
+            };
+          }
+
+          return {
+            ...material,
+            [photoField]: photos[0] || null,
+          };
+        }),
       );
     } catch (photoError) {
       console.error("Unable to prepare photo:", photoError);
@@ -942,6 +968,28 @@ export default function CheckInForm({
     removeMaterialPhotoField(materialId, "locationPhoto");
   }
 
+  function removeMaterialLocationPhoto(materialId, photoIndex) {
+    setMaterials((currentMaterials) =>
+      currentMaterials.map((material) => {
+        if (material.id !== materialId) {
+          return material;
+        }
+
+        const nextLocationPhotos = getMaterialLocationPhotos(material).filter(
+          (_photo, index) => index !== photoIndex,
+        );
+
+        return {
+          ...material,
+          locationPhoto: nextLocationPhotos[0] || null,
+          locationPhotos: nextLocationPhotos,
+        };
+      }),
+    );
+
+    clearError();
+  }
+
   function removeMaterialPhotoField(materialId, photoField) {
     setMaterials((currentMaterials) =>
       currentMaterials.map((material) =>
@@ -949,6 +997,9 @@ export default function CheckInForm({
           ? {
               ...material,
               [photoField]: null,
+              ...(photoField === "locationPhoto"
+                ? { locationPhotos: [] }
+                : {}),
             }
           : material,
       ),
@@ -974,7 +1025,9 @@ export default function CheckInForm({
         : "Their Truck";
   const allSavedMaterialsHaveLocationPhotos =
     savedMaterials.length > 0 &&
-    savedMaterials.every((material) => material.locationPhoto);
+    savedMaterials.every(
+      (material) => getMaterialLocationPhotos(material).length > 0,
+    );
   const damagedMaterials = savedMaterials.filter(
     (material) => material.conditionGood === false,
   );
@@ -1072,7 +1125,8 @@ export default function CheckInForm({
       id: material.id,
       description: material.description.trim(),
       location: findMatchingOption(material.location, locations),
-      locationPhoto: material.locationPhoto,
+      locationPhoto: getMaterialLocationPhotos(material)[0] || null,
+      locationPhotos: getMaterialLocationPhotos(material),
       conditionGood: material.conditionGood !== false,
       damagePhoto: material.damagePhoto,
       notes: material.notes.trim(),
@@ -1679,8 +1733,13 @@ export default function CheckInForm({
                             className="hidden w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100 md:block"
                           />
                           <div className="mt-3 flex flex-wrap gap-2">
-                            {["Building C", "Inner Yard", "Street", "On Truck/Delivery"].map(
-                              (location) => (
+                            {[
+                              "Building C - Bay 1 Rack",
+                              "Inner Yard",
+                              "On Street",
+                              "On Truck/Delivery",
+                              "Window/door Rack",
+                            ].map((location) => (
                                 <button
                                   key={location}
                                   type="button"
@@ -1694,8 +1753,7 @@ export default function CheckInForm({
                                 >
                                   {location}
                                 </button>
-                              ),
-                            )}
+                              ))}
                           </div>
                         </div>
 
@@ -1813,7 +1871,11 @@ export default function CheckInForm({
             </div>
 
             <div className="space-y-4">
-              {savedMaterials.map((material, index) => (
+              {savedMaterials.map((material, index) => {
+                const materialLocationPhotos =
+                  getMaterialLocationPhotos(material);
+
+                return (
                 <section
                   key={material.id}
                   className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -1838,7 +1900,7 @@ export default function CheckInForm({
                         value: true,
                         label: "No, all items are in good condition",
                         icon: CheckCircle2,
-                        className: "border-slate-200 bg-white text-slate-800",
+                        className: "border-emerald-300 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-100",
                       },
                       {
                         value: false,
@@ -1876,10 +1938,15 @@ export default function CheckInForm({
 
                   <div className="mt-4">
                     <div className="mb-2 flex items-center justify-between gap-3">
-                      <p className="text-sm font-black uppercase tracking-[0.08em] text-slate-700">
-                        Location Photo *
-                      </p>
-                      {material.locationPhoto ? (
+                      <div>
+                        <p className="text-sm font-black uppercase tracking-[0.08em] text-slate-700">
+                          Location Photos *
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          Add one or more wide photos showing where this material was placed.
+                        </p>
+                      </div>
+                      {materialLocationPhotos.length > 0 ? (
                         <button
                           type="button"
                           onClick={() => removeMaterialPhoto(material.id)}
@@ -1889,37 +1956,68 @@ export default function CheckInForm({
                           }
                           className="text-sm font-bold text-red-600"
                         >
-                          Remove
+                          Remove all
                         </button>
                       ) : null}
                     </div>
+
+                    {materialLocationPhotos.length > 0 ? (
+                      <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                        {materialLocationPhotos.map((photo, photoIndex) => (
+                          <div
+                            key={`${material.id}-location-photo-${photoIndex}`}
+                            className="relative overflow-hidden rounded-xl border border-slate-200 bg-white"
+                          >
+                            <img
+                              src={photo.dataUrl}
+                              alt={`Location preview ${photoIndex + 1} for material ${index + 1}`}
+                              className="h-28 w-full object-cover sm:h-32"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeMaterialLocationPhoto(
+                                  material.id,
+                                  photoIndex,
+                                )
+                              }
+                              disabled={
+                                isSubmitting ||
+                                Boolean(processingPhotoMaterialId)
+                              }
+                              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-red-700"
+                              aria-label={`Remove location photo ${photoIndex + 1}`}
+                            >
+                              <X className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <span className="block px-2 py-1 text-xs font-black text-slate-600">
+                              Photo {photoIndex + 1}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
                     <label
                       htmlFor={`material-photo-${material.id}`}
-                      className="flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center transition hover:border-blue-600 hover:bg-blue-50"
+                      className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center transition hover:border-blue-600 hover:bg-blue-50"
                     >
-                      {material.locationPhoto ? (
-                        <img
-                          src={material.locationPhoto.dataUrl}
-                          alt={`Location preview for material ${index + 1}`}
-                          className="h-40 w-full rounded-lg object-cover"
-                        />
-                      ) : (
-                        <>
-                          <Camera className="h-8 w-8 text-blue-700" aria-hidden="true" />
-                          <span className="mt-2 text-sm font-black text-blue-700">
-                            Add Location Photo
-                          </span>
-                          <span className="mt-1 text-xs font-semibold text-slate-500">
-                            Please take a wide photo showing where this material was placed.
-                          </span>
-                        </>
-                      )}
+                      <Camera className="h-8 w-8 text-blue-700" aria-hidden="true" />
+                      <span className="mt-2 text-sm font-black text-blue-700">
+                        {materialLocationPhotos.length > 0
+                          ? "Add Another Location Photo"
+                          : "Add Location Photo"}
+                      </span>
+                      <span className="mt-1 text-xs font-semibold text-slate-500">
+                        Please take a wide photo showing where this material was placed.
+                      </span>
                     </label>
                     <input
                       id={`material-photo-${material.id}`}
                       type="file"
                       accept="image/*"
                       capture="environment"
+                      multiple
                       onChange={(event) =>
                         handleMaterialPhotoChange(material.id, event)
                       }
@@ -1999,7 +2097,8 @@ export default function CheckInForm({
                     </div>
                   ) : null}
                 </section>
-              ))}
+                );
+              })}
             </div>
 
             {processingPhotoMaterialId ? (

@@ -52,6 +52,14 @@ function getSourceItemDescription(item, index) {
   );
 }
 
+function getMaterialLocationPhotos(material) {
+  if (Array.isArray(material.locationPhotos)) {
+    return material.locationPhotos.filter((photo) => photo?.dataUrl);
+  }
+
+  return material.locationPhoto?.dataUrl ? [material.locationPhoto] : [];
+}
+
 export default function CheckInCard({
   checkIn,
   customers = [],
@@ -302,12 +310,15 @@ export default function CheckInCard({
     0,
   );
   const firstLocationPhotoMaterial = materials.find(
-    (material) => material.locationPhoto?.dataUrl,
+    (material) => getMaterialLocationPhotos(material).length > 0,
   );
-  const locationPhoto = firstLocationPhotoMaterial?.locationPhoto
-    ?.dataUrl
+  const firstLocationPhoto =
+    firstLocationPhotoMaterial
+      ? getMaterialLocationPhotos(firstLocationPhotoMaterial)[0]
+      : null;
+  const locationPhoto = firstLocationPhoto?.dataUrl
     ? {
-        dataUrl: firstLocationPhotoMaterial.locationPhoto.dataUrl,
+        dataUrl: firstLocationPhoto.dataUrl,
         title: "Location Photo",
         subtitle:
           firstLocationPhotoMaterial.description ||
@@ -358,13 +369,13 @@ export default function CheckInCard({
       material.location ||
       material.notes ||
       material.conditionGood === false ||
-      material.locationPhoto?.dataUrl ||
+      getMaterialLocationPhotos(material).length > 0 ||
       material.damagePhoto?.dataUrl,
   );
   const materialPhotoCount = materials.reduce(
     (count, material) =>
       count +
-      (material.locationPhoto?.dataUrl ? 1 : 0) +
+      getMaterialLocationPhotos(material).length +
       (material.damagePhoto?.dataUrl ? 1 : 0),
     checkIn.locationPhoto?.dataUrl ? 1 : 0,
   );
@@ -378,9 +389,12 @@ export default function CheckInCard({
             tone: "neutral",
           }
         : null,
-      material.locationPhoto?.dataUrl
+      getMaterialLocationPhotos(material).length > 0
         ? {
-            label: "Location photo",
+            label:
+              getMaterialLocationPhotos(material).length === 1
+                ? "Location photo"
+                : `${getMaterialLocationPhotos(material).length} location photos`,
             tone: "photo",
           }
         : null,
@@ -1255,29 +1269,35 @@ export default function CheckInCard({
                         : "Good condition"}
                     </p>
 
-                    {material.locationPhoto?.dataUrl ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setViewingPhoto({
-                            dataUrl:
-                              material.locationPhoto.dataUrl,
-                            title: `Item ${index + 1} Location Photo`,
-                            subtitle: material.description,
-                          })
-                        }
-                        className="mt-3 block w-full overflow-hidden rounded-xl border border-[#DCE4EF] bg-white text-left"
-                      >
-                        <img
-                          src={material.locationPhoto.dataUrl}
-                          alt={`Location for item ${index + 1}`}
-                          className="h-32 w-full object-cover sm:h-44 lg:h-56"
-                        />
+                    {getMaterialLocationPhotos(material).length > 0 ? (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        {getMaterialLocationPhotos(material).map(
+                          (photo, photoIndex) => (
+                            <button
+                              key={`${material.id}-location-photo-${photoIndex}`}
+                              type="button"
+                              onClick={() =>
+                                setViewingPhoto({
+                                  dataUrl: photo.dataUrl,
+                                  title: `Item ${index + 1} Location Photo ${photoIndex + 1}`,
+                                  subtitle: material.description,
+                                })
+                              }
+                              className="block w-full overflow-hidden rounded-xl border border-[#DCE4EF] bg-white text-left"
+                            >
+                              <img
+                                src={photo.dataUrl}
+                                alt={`Location ${photoIndex + 1} for item ${index + 1}`}
+                                className="h-32 w-full object-cover sm:h-44 lg:h-56"
+                              />
 
-                        <span className="block px-3 py-2 text-sm font-black text-[#1D64C8]">
-                          View location photo
-                        </span>
-                      </button>
+                              <span className="block px-3 py-2 text-sm font-black text-[#1D64C8]">
+                                View location photo {photoIndex + 1}
+                              </span>
+                            </button>
+                          ),
+                        )}
+                      </div>
                     ) : null}
 
                     {material.damagePhoto?.dataUrl ? (

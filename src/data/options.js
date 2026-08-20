@@ -60,6 +60,7 @@ export const locations = [
   "Building C - Bay 2 Rack",
   "On Street",
   "On Truck/Delivery",
+  "Window/door Rack",
   "Order yard",
   "Inner Yard",
   "Outer Yard",
