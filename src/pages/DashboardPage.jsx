@@ -489,6 +489,112 @@ export default function DashboardPage({
         </div>
       </div>
 
+      {allowedPageIds.includes("trace") ? (
+        <section className="mb-5 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              openTraceSearch();
+            }}
+            className="space-y-4"
+          >
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                  Search for a PO
+                </p>
+                <h2 className="mt-1 text-2xl font-black text-slate-950">
+                  Find PO chain
+                </h2>
+              </div>
+              <p className="max-w-2xl text-sm font-semibold text-slate-500">
+                Search POs, order numbers, vendors, customers, or item details.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <label className="relative flex-1">
+                <span className="sr-only">Search PO chain</span>
+                <Search
+                  aria-hidden="true"
+                  className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+                  strokeWidth={2.5}
+                />
+                <input
+                  type="search"
+                  value={dashboardSearch}
+                  onChange={(event) => setDashboardSearch(event.target.value)}
+                  placeholder="Search PO, order, customer, vendor, or item..."
+                  className="min-h-[52px] w-full rounded-2xl border border-slate-300 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+              </label>
+
+              <button
+                type="submit"
+                className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-slate-950 px-6 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+              >
+                Find Chain
+                <ArrowRight
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  strokeWidth={2.8}
+                />
+              </button>
+            </div>
+          </form>
+
+          {hasDashboardSearch ? (
+            <div className="mt-4 grid gap-2">
+              {dashboardSearchResults.length > 0 ? (
+                dashboardSearchResults.slice(0, 3).map((result) => {
+                  const ResultIcon = result.icon;
+
+                  return (
+                    <button
+                      key={result.id}
+                      type="button"
+                      onClick={() => onTraceSearch?.(dashboardSearch)}
+                      className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-slate-300 hover:bg-white"
+                    >
+                      <span
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${result.tone}`}
+                      >
+                        <ResultIcon
+                          aria-hidden="true"
+                          className="h-5 w-5"
+                          strokeWidth={2.5}
+                        />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-black text-slate-950">
+                          {result.title} · {result.description}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
+                          {result.type}
+                          {result.timestamp
+                            ? ` · ${formatDateTime(result.timestamp)}`
+                            : ""}
+                        </span>
+                      </span>
+                      <ArrowRight
+                        aria-hidden="true"
+                        className="h-4 w-4 shrink-0 text-slate-400"
+                        strokeWidth={2.8}
+                      />
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-bold text-slate-500">
+                  No quick matches yet. Open the full PO chain search to dig
+                  deeper.
+                </div>
+              )}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {quickActions.length > 0 ? (
         <section className="mb-5 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
