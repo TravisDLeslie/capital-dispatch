@@ -211,6 +211,73 @@ function summarizeItems(items, options = {}) {
   };
 }
 
+const RECEIVING_STATUS_STAMPS = {
+  pending: "border-amber-200 bg-amber-50 text-amber-800",
+  partial: "border-orange-200 bg-orange-50 text-orange-700",
+  received: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
+
+function getReceivedMaterialCount(checkIn) {
+  if (Array.isArray(checkIn?.materials)) {
+    return checkIn.materials.length;
+  }
+
+  if (Array.isArray(checkIn?.items)) {
+    return checkIn.items.length;
+  }
+
+  return 0;
+}
+
+function checkInMatchesPO(checkIn, poNumber) {
+  const normalizedPO = normalizeNumber(poNumber);
+
+  if (!normalizedPO) {
+    return false;
+  }
+
+  return [
+    checkIn?.poNumber,
+    checkIn?.sourceSupplierRunPoNumber,
+    checkIn?.sourceTheirTruckPONumber,
+  ]
+    .filter(Boolean)
+    .some((value) => normalizeNumber(value) === normalizedPO);
+}
+
+function getReceivingStatusForPO(checkIns, poNumber, expectedItemCount = 0) {
+  const matches = Array.isArray(checkIns)
+    ? checkIns.filter((checkIn) => checkInMatchesPO(checkIn, poNumber))
+    : [];
+
+  if (matches.length === 0) {
+    return {
+      key: "pending",
+      label: "Pending Check-In",
+      className: RECEIVING_STATUS_STAMPS.pending,
+    };
+  }
+
+  const receivedItemCount = matches.reduce(
+    (total, checkIn) => total + getReceivedMaterialCount(checkIn),
+    0,
+  );
+
+  if (expectedItemCount > 0 && receivedItemCount < expectedItemCount) {
+    return {
+      key: "partial",
+      label: "Partial Check-In",
+      className: RECEIVING_STATUS_STAMPS.partial,
+    };
+  }
+
+  return {
+    key: "received",
+    label: "Checked In",
+    className: RECEIVING_STATUS_STAMPS.received,
+  };
+}
+
 /**
  * @param {{
  *   title: string;
@@ -330,6 +397,7 @@ function HeartbeatCard({
  *   };
  *   checkIns?: Array<Record<string, any>>;
  *   supplierRuns?: Array<Record<string, any>>;
+ *   theirTruckPOs?: Array<Record<string, any>>;
  *   deliveries?: Array<Record<string, any>>;
  *   onTraceSearch?: (searchValue: string) => void;
  * }} props
@@ -341,6 +409,7 @@ export default function DashboardPage({
   operations = {},
   checkIns = [],
   supplierRuns = [],
+  theirTruckPOs = [],
   deliveries = [],
   onTraceSearch,
 }) {
@@ -356,32 +425,79 @@ export default function DashboardPage({
         supplierRunMatchesDashboardSearch(supplierRun, dashboardSearch),
       )
       .slice(0, 4)
-      .map((supplierRun) => ({
-        id: `south-${supplierRun.id}`,
-        type: "South PO",
-        title: `PO ${supplierRun.poNumber}`,
-        description: supplierRun.vendor || "South pickup",
-        timestamp: supplierRun.updatedAt || supplierRun.createdAt,
-        destination: "trace",
-        icon: Route,
-        tone: "bg-blue-50 text-blue-700",
-        meta: [
-          supplierRun.driver ? `Driver ${supplierRun.driver}` : "",
-          supplierRun.status === "complete" ? "Complete" : "Open",
-        ].filter(Boolean),
-        itemSummary: summarizeItems(
-          Array.isArray(supplierRun.items) ? supplierRun.items : [],
-        ),
-        links: getSouthOrderLinks(supplierRun).map((link) => ({
-          label: `Linked order ${link.orderNumber}`,
-          detail: [
-            link.customerName ? formatCustomerName(link.customerName) : "",
-            `${link.itemCount} ${link.itemCount === 1 ? "item" : "items"}`,
-          ]
-            .filter(Boolean)
-            .join(" • "),
-        })),
-      }));
+      .map((supplierRun) => {
+        const items = Array.isArray(supplierRun.items)
+          ? supplierRun.items
+          : [];
+
+        return {
+          id: `south-${supplierRun.id}`,
+          type: "South PO",
+          title: `PO ${supplierRun.poNumber}`,
+          traceValue: supplierRun.poNumber || dashboardSearch,
+          description: supplierRun.vendor || "South pickup",
+          timestamp: supplierRun.updatedAt || supplierRun.createdAt,
+          destination: "trace",
+          icon: Route,
+          tone: "bg-blue-50 text-blue-700",
+          receivingStatus: getReceivingStatusForPO(
+            checkIns,
+            supplierRun.poNumber,
+            items.length,
+          ),
+          meta: [
+            supplierRun.driver ? `Driver ${supplierRun.driver}` : "",
+            supplierRun.status === "complete" ? "Complete" : "Open",
+          ].filter(Boolean),
+          itemSummary: summarizeItems(items),
+          links: getSouthOrderLinks(supplierRun).map((link) => ({
+            label: `Linked order ${link.orderNumber}`,
+            detail: [
+              link.customerName ? formatCustomerName(link.customerName) : "",
+              `${link.itemCount} ${link.itemCount === 1 ? "item" : "items"}`,
+            ]
+              .filter(Boolean)
+              .join(" • "),
+          })),
+        };
+      });
+
+    const theirTruckResults = theirTruckPOs
+      .filter((theirTruckPO) =>
+        supplierRunMatchesDashboardSearch(theirTruckPO, dashboardSearch),
+      )
+      .slice(0, 4)
+      .map((theirTruckPO) => {
+        const items = Array.isArray(theirTruckPO.items)
+          ? theirTruckPO.items
+          : [];
+
+        return {
+          id: `their-truck-${theirTruckPO.id}`,
+          type: "Their Truck PO",
+          title: `PO ${theirTruckPO.poNumber}`,
+          traceValue: theirTruckPO.poNumber || dashboardSearch,
+          description: theirTruckPO.vendor || "Vendor inbound",
+          timestamp:
+            theirTruckPO.updatedAt ||
+            theirTruckPO.deliveryDate ||
+            theirTruckPO.createdAt,
+          destination: "trace",
+          icon: Truck,
+          tone: "bg-blue-50 text-blue-700",
+          receivingStatus: getReceivingStatusForPO(
+            checkIns,
+            theirTruckPO.poNumber,
+            items.length,
+          ),
+          meta: [
+            theirTruckPO.deliveryDate ? "Scheduled" : "",
+            theirTruckPO.status === "complete" ? "Complete" : "Open",
+          ].filter(Boolean),
+          itemSummary: summarizeItems(items),
+          links: [],
+        };
+      });
 
     const deliveryResults = deliveries
       .filter((delivery) =>
@@ -392,6 +508,7 @@ export default function DashboardPage({
         id: `delivery-${delivery.id}`,
         type: "Delivery",
         title: `Order ${delivery.orderNumber}`,
+        traceValue: delivery.orderNumber || dashboardSearch,
         description: formatCustomerName(delivery.customerName || "Customer"),
         timestamp:
           delivery.deliveredAt ||
@@ -430,11 +547,21 @@ export default function DashboardPage({
         id: `receiving-${checkIn.id}`,
         type: "Receiving",
         title: `PO ${checkIn.poNumber}`,
+        traceValue:
+          checkIn.poNumber ||
+          checkIn.sourceSupplierRunPoNumber ||
+          checkIn.sourceTheirTruckPONumber ||
+          dashboardSearch,
         description: checkIn.vendor || "Receiving check-in",
         timestamp: checkIn.checkedInAt,
         destination: "trace",
         icon: ClipboardCheck,
         tone: "bg-emerald-50 text-emerald-700",
+        receivingStatus: {
+          key: "received",
+          label: "Checked In",
+          className: RECEIVING_STATUS_STAMPS.received,
+        },
         meta: [
           checkIn.checkedInBy ? `Checked in by ${checkIn.checkedInBy}` : "",
           checkIn.sourceType === "south" ? "From South" : "",
@@ -452,14 +579,26 @@ export default function DashboardPage({
           : [],
       }));
 
-    return [...southResults, ...deliveryResults, ...receivingResults]
+    return [
+      ...southResults,
+      ...theirTruckResults,
+      ...deliveryResults,
+      ...receivingResults,
+    ]
       .sort(
         (firstResult, secondResult) =>
           new Date(secondResult.timestamp || 0) -
           new Date(firstResult.timestamp || 0),
       )
       .slice(0, 8);
-  }, [checkIns, dashboardSearch, deliveries, hasDashboardSearch, supplierRuns]);
+  }, [
+    checkIns,
+    dashboardSearch,
+    deliveries,
+    hasDashboardSearch,
+    supplierRuns,
+    theirTruckPOs,
+  ]);
 
   const quickActions = [
     {
@@ -611,7 +750,9 @@ export default function DashboardPage({
                     <button
                       key={result.id}
                       type="button"
-                      onClick={() => onTraceSearch?.(dashboardSearch)}
+                      onClick={() =>
+                        onTraceSearch?.(String(result.traceValue || dashboardSearch))
+                      }
                       className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-slate-300 hover:bg-white"
                     >
                       <span
@@ -624,8 +765,17 @@ export default function DashboardPage({
                         />
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-black text-slate-950">
-                          {result.title} · {result.description}
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-sm font-black text-slate-950">
+                            {result.title} · {result.description}
+                          </span>
+                          {result.receivingStatus ? (
+                            <span
+                              className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${result.receivingStatus.className}`}
+                            >
+                              {result.receivingStatus.label}
+                            </span>
+                          ) : null}
                         </span>
                         <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
                           {result.type}

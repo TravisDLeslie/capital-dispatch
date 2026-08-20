@@ -81,6 +81,152 @@ function getAssignment(checkIn) {
   return null;
 }
 
+const RECEIVING_STATUS_STAMPS = {
+  pending: "border-amber-200 bg-amber-50 text-amber-800",
+  partial: "border-orange-200 bg-orange-50 text-orange-700",
+  received: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
+
+function getReceivedMaterialCount(checkIn) {
+  if (Array.isArray(checkIn?.materials)) {
+    return checkIn.materials.length;
+  }
+
+  if (Array.isArray(checkIn?.items)) {
+    return checkIn.items.length;
+  }
+
+  return 0;
+}
+
+function checkInMatchesPO(checkIn, poNumber) {
+  const normalizedPO = normalizeNumber(poNumber);
+
+  if (!normalizedPO) {
+    return false;
+  }
+
+  return [
+    checkIn?.poNumber,
+    checkIn?.sourceSupplierRunPoNumber,
+    checkIn?.sourceTheirTruckPONumber,
+  ]
+    .filter(Boolean)
+    .some((value) => normalizeNumber(value) === normalizedPO);
+}
+
+function getReceivingStatusForPO(checkIns, poNumber, expectedItemCount = 0) {
+  const matches = Array.isArray(checkIns)
+    ? checkIns.filter((checkIn) => checkInMatchesPO(checkIn, poNumber))
+    : [];
+
+  if (matches.length === 0) {
+    return {
+      key: "pending",
+      label: "Pending Check-In",
+      className: RECEIVING_STATUS_STAMPS.pending,
+      checkedInAt: "",
+    };
+  }
+
+  const receivedItemCount = matches.reduce(
+    (total, checkIn) => total + getReceivedMaterialCount(checkIn),
+    0,
+  );
+  const latestCheckIn = [...matches].sort(
+    (firstCheckIn, secondCheckIn) =>
+      new Date(secondCheckIn.checkedInAt || secondCheckIn.createdAt || 0) -
+      new Date(firstCheckIn.checkedInAt || firstCheckIn.createdAt || 0),
+  )[0];
+
+  if (expectedItemCount > 0 && receivedItemCount < expectedItemCount) {
+    return {
+      key: "partial",
+      label: "Partial Check-In",
+      className: RECEIVING_STATUS_STAMPS.partial,
+      checkedInAt: latestCheckIn?.checkedInAt || latestCheckIn?.createdAt || "",
+    };
+  }
+
+  return {
+    key: "received",
+    label: "Checked In",
+    className: RECEIVING_STATUS_STAMPS.received,
+    checkedInAt: latestCheckIn?.checkedInAt || latestCheckIn?.createdAt || "",
+  };
+}
+
+function getTracePOStatusCards(traceResults, checkIns) {
+  const cards = new Map();
+
+  traceResults.supplierRuns.forEach((supplierRun) => {
+    const poNumber = supplierRun.poNumber || "";
+    const items = Array.isArray(supplierRun.items) ? supplierRun.items : [];
+
+    if (!poNumber) {
+      return;
+    }
+
+    cards.set(`south-${normalizeNumber(poNumber) || poNumber}`, {
+      id: `south-${supplierRun.id || poNumber}`,
+      source: "South",
+      poNumber,
+      vendor: supplierRun.vendor || "Supplier",
+      status: getReceivingStatusForPO(checkIns, poNumber, items.length),
+    });
+  });
+
+  traceResults.theirTruckPOs.forEach((theirTruckPO) => {
+    const poNumber = theirTruckPO.poNumber || "";
+    const items = Array.isArray(theirTruckPO.items) ? theirTruckPO.items : [];
+
+    if (!poNumber) {
+      return;
+    }
+
+    cards.set(`their-${normalizeNumber(poNumber) || poNumber}`, {
+      id: `their-${theirTruckPO.id || poNumber}`,
+      source: "Their Truck",
+      poNumber,
+      vendor: theirTruckPO.vendor || "Vendor",
+      status: getReceivingStatusForPO(checkIns, poNumber, items.length),
+    });
+  });
+
+  traceResults.checkIns.forEach((checkIn) => {
+    const poNumber =
+      checkIn.poNumber ||
+      checkIn.sourceSupplierRunPoNumber ||
+      checkIn.sourceTheirTruckPONumber ||
+      "";
+
+    if (!poNumber) {
+      return;
+    }
+
+    const key = `received-${normalizeNumber(poNumber) || poNumber}`;
+
+    if ([...cards.values()].some((card) => normalizeNumber(card.poNumber) === normalizeNumber(poNumber))) {
+      return;
+    }
+
+    cards.set(key, {
+      id: `received-${checkIn.id || poNumber}`,
+      source: "Receiving",
+      poNumber,
+      vendor: checkIn.vendor || "Vendor",
+      status: {
+        key: "received",
+        label: "Checked In",
+        className: RECEIVING_STATUS_STAMPS.received,
+        checkedInAt: checkIn.checkedInAt || checkIn.createdAt || "",
+      },
+    });
+  });
+
+  return [...cards.values()];
+}
+
 function getSearchableText(record) {
   return normalizeText(
     [
@@ -533,6 +679,10 @@ export default function TracePage({
     traceResults.theirTruckPOs.length +
     traceResults.checkIns.length +
     traceResults.deliveries.length;
+  const tracePOStatusCards = useMemo(
+    () => getTracePOStatusCards(traceResults, checkIns),
+    [checkIns, traceResults],
+  );
 
   return (
     <PageContainer>
@@ -602,6 +752,46 @@ export default function TracePage({
       {totalMatches > 0 ? (
         <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="space-y-3">
+            {tracePOStatusCards.length > 0 ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                  Receiving Status
+                </p>
+
+                <div className="mt-4 grid gap-2">
+                  {tracePOStatusCards.map((card) => (
+                    <div
+                      key={card.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-slate-950">
+                            PO {card.poNumber}
+                          </p>
+                          <p className="mt-0.5 truncate text-xs font-bold text-slate-500">
+                            {card.source} · {card.vendor}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${card.status.className}`}
+                        >
+                          {card.status.label}
+                        </span>
+                      </div>
+
+                      {card.status.checkedInAt ? (
+                        <p className="mt-2 text-xs font-bold text-slate-500">
+                          {formatDateTime(card.status.checkedInAt)}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
                 Matches

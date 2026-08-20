@@ -9,6 +9,7 @@ import {
   Copy,
   DollarSign,
   History,
+  Images,
   BookOpen,
   Mail,
   MailCheck,
@@ -20,6 +21,7 @@ import {
   Truck,
   UsersRound,
   Warehouse,
+  X,
 } from "lucide-react";
 import AppHeader from "./components/AppHeader";
 import SectionHubPage from "./components/SectionHubPage";
@@ -257,6 +259,166 @@ function getLookupItemLabel(item: Record<string, unknown>) {
     description: description || "Item detail",
     itemNumber,
   };
+}
+
+const QUICK_RECEIVING_STATUS_STAMPS = {
+  pending: "border-amber-200 bg-amber-50 text-amber-800",
+  partial: "border-orange-200 bg-orange-50 text-orange-700",
+  received: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
+
+function getQuickReceivedMaterialCount(checkIn: Record<string, unknown>) {
+  if (Array.isArray(checkIn.materials)) {
+    return checkIn.materials.length;
+  }
+
+  if (Array.isArray(checkIn.items)) {
+    return checkIn.items.length;
+  }
+
+  return 0;
+}
+
+function checkInMatchesQuickPO(
+  checkIn: Record<string, unknown>,
+  poNumber: unknown,
+) {
+  const normalizedPO = normalizeSearchNumber(poNumber);
+
+  if (!normalizedPO) {
+    return false;
+  }
+
+  return [
+    checkIn.poNumber,
+    checkIn.sourceSupplierRunPoNumber,
+    checkIn.sourceTheirTruckPONumber,
+  ]
+    .filter(Boolean)
+    .some((value) => normalizeSearchNumber(value) === normalizedPO);
+}
+
+function getQuickReceivingStatusForPO(
+  checkIns: Array<Record<string, unknown>>,
+  poNumber: unknown,
+  expectedItemCount = 0,
+) {
+  const matches = checkIns.filter((checkIn) =>
+    checkInMatchesQuickPO(checkIn, poNumber),
+  );
+
+  if (matches.length === 0) {
+    return {
+      key: "pending",
+      label: "Pending Check-In",
+      className: QUICK_RECEIVING_STATUS_STAMPS.pending,
+    };
+  }
+
+  const receivedItemCount = matches.reduce(
+    (total, checkIn) => total + getQuickReceivedMaterialCount(checkIn),
+    0,
+  );
+
+  if (expectedItemCount > 0 && receivedItemCount < expectedItemCount) {
+    return {
+      key: "partial",
+      label: "Partial Check-In",
+      className: QUICK_RECEIVING_STATUS_STAMPS.partial,
+    };
+  }
+
+  return {
+    key: "received",
+    label: "Checked In",
+    className: QUICK_RECEIVING_STATUS_STAMPS.received,
+  };
+}
+
+function getQuickPhotoDataUrl(photo: unknown) {
+  if (!photo || typeof photo !== "object") {
+    return "";
+  }
+
+  return String((photo as { dataUrl?: unknown }).dataUrl || "").trim();
+}
+
+function getQuickPhotoArray(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function getQuickPOPhotosForPO(
+  checkIns: Array<Record<string, unknown>>,
+  poNumber: unknown,
+) {
+  const photos: Array<{
+    id: string;
+    dataUrl: string;
+    title: string;
+    subtitle: string;
+  }> = [];
+  const seenDataUrls = new Set<string>();
+
+  checkIns
+    .filter((checkIn) => checkInMatchesQuickPO(checkIn, poNumber))
+    .forEach((checkIn) => {
+      const checkInPONumber = String(checkIn.poNumber || poNumber || "PO");
+      const checkedInAt = String(checkIn.checkedInAt || checkIn.createdAt || "");
+      const addPhoto = (
+        photo: unknown,
+        title: string,
+        subtitleParts: Array<string | undefined>,
+      ) => {
+        const dataUrl = getQuickPhotoDataUrl(photo);
+
+        if (!dataUrl || seenDataUrls.has(dataUrl)) {
+          return;
+        }
+
+        seenDataUrls.add(dataUrl);
+        photos.push({
+          id: `${checkIn.id || checkInPONumber}-${photos.length}`,
+          dataUrl,
+          title,
+          subtitle: subtitleParts.filter(Boolean).join(" • "),
+        });
+      };
+
+      addPhoto(checkIn.locationPhoto, "PO Location Photo", [
+        `PO ${checkInPONumber}`,
+        checkedInAt ? formatQuickLookupDate(checkedInAt) : "",
+      ]);
+
+      const materials = Array.isArray(checkIn.materials)
+        ? checkIn.materials
+        : Array.isArray(checkIn.items)
+          ? checkIn.items
+          : [];
+
+      materials.forEach((material, materialIndex) => {
+        const materialRecord = material as Record<string, unknown>;
+        const label = getLookupItemLabel(materialRecord);
+        const location = String(materialRecord.location || "").trim();
+        const materialName = label.description || `Material ${materialIndex + 1}`;
+        const subtitleParts = [
+          `PO ${checkInPONumber}`,
+          materialName,
+          location,
+        ];
+
+        getQuickPhotoArray(materialRecord.locationPhotos).forEach((photo) => {
+          addPhoto(photo, "Location Photo", subtitleParts);
+        });
+        addPhoto(materialRecord.locationPhoto, "Location Photo", subtitleParts);
+
+        getQuickPhotoArray(materialRecord.damagePhotos).forEach((photo) => {
+          addPhoto(photo, "Damage Photo", subtitleParts);
+        });
+        addPhoto(materialRecord.damagePhoto, "Damage Photo", subtitleParts);
+      });
+    });
+
+  return photos;
 }
 
 function formatQuickLookupDate(value: unknown) {
@@ -1182,6 +1344,16 @@ export default function App() {
     useState("");
   const [copiedReceivingQuickPO, setCopiedReceivingQuickPO] =
     useState("");
+  const [viewingReceivingQuickPhotos, setViewingReceivingQuickPhotos] =
+    useState<{
+      poNumber: string;
+      photos: Array<{
+        id: string;
+        dataUrl: string;
+        title: string;
+        subtitle: string;
+      }>;
+    } | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] =
     useState<UserProfile | null>(null);
@@ -3095,6 +3267,7 @@ export default function App() {
           allowedPageIds={dashboardAllowedPageIds}
           checkIns={checkIns}
           supplierRuns={supplierRuns}
+          theirTruckPOs={theirTruckPOs}
           deliveries={deliveries}
           onTraceSearch={handleTraceSearch}
         />
@@ -3137,6 +3310,8 @@ export default function App() {
       const receivingQuickLookupNumber = normalizeSearchNumber(
         receivingQuickLookupQuery,
       );
+      const quickReceivingCheckIns =
+        checkIns as unknown as Array<Record<string, unknown>>;
       const receivingQuickMatches = receivingQuickLookupQuery
         ? [
             ...receivingDashboardSouthRuns.map((supplierRun) => {
@@ -3189,6 +3364,15 @@ export default function App() {
                 customerName: supplierRun.customerName || "",
                 orderNumber:
                   items.find((item) => item.orderNumber)?.orderNumber || "",
+                receivingStatus: getQuickReceivingStatusForPO(
+                  quickReceivingCheckIns,
+                  supplierRun.poNumber,
+                  items.length,
+                ),
+                photos: getQuickPOPhotosForPO(
+                  quickReceivingCheckIns,
+                  supplierRun.poNumber,
+                ),
                 items,
                 matchingItems,
                 recordText,
@@ -3240,6 +3424,15 @@ export default function App() {
                 ),
                 customerName: theirTruckPO.customerName || "",
                 orderNumber: String(theirTruckPO.orderNumber || ""),
+                receivingStatus: getQuickReceivingStatusForPO(
+                  quickReceivingCheckIns,
+                  theirTruckPO.poNumber,
+                  items.length,
+                ),
+                photos: getQuickPOPhotosForPO(
+                  quickReceivingCheckIns,
+                  theirTruckPO.poNumber,
+                ),
                 items,
                 matchingItems,
                 recordText,
@@ -3297,6 +3490,17 @@ export default function App() {
                 ),
                 customerName: String(checkIn.customerName || ""),
                 orderNumber: String(checkIn.orderNumber || ""),
+                receivingStatus: {
+                  key: "received",
+                  label: "Checked In",
+                  className: QUICK_RECEIVING_STATUS_STAMPS.received,
+                },
+                photos: getQuickPOPhotosForPO(
+                  quickReceivingCheckIns,
+                  checkIn.poNumber ||
+                    checkIn.sourceSupplierRunPoNumber ||
+                    checkIn.sourceTheirTruckPONumber,
+                ),
                 items,
                 matchingItems,
                 recordText,
@@ -3514,6 +3718,9 @@ export default function App() {
                         const isTheirTruck = match.tone === "blue";
                         const isCopied =
                           copiedReceivingQuickPO === String(match.poNumber);
+                        const matchPhotos = Array.isArray(match.photos)
+                          ? match.photos
+                          : [];
 
                         return (
                           <article
@@ -3540,6 +3747,13 @@ export default function App() {
                                   >
                                     {match.source}
                                   </span>
+                                  {match.receivingStatus ? (
+                                    <span
+                                      className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${match.receivingStatus.className}`}
+                                    >
+                                      {match.receivingStatus.label}
+                                    </span>
+                                  ) : null}
                                   {match.date ? (
                                     <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
                                       {match.date}
@@ -3589,6 +3803,29 @@ export default function App() {
                                     <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
                                       Copied
                                     </span>
+                                  ) : null}
+                                  {matchPhotos.length > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setViewingReceivingQuickPhotos({
+                                          poNumber: String(match.poNumber),
+                                          photos: matchPhotos,
+                                        })
+                                      }
+                                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 text-slate-600 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                      aria-label={`View ${matchPhotos.length} photos for PO ${match.poNumber}`}
+                                      title={`View ${matchPhotos.length} photos`}
+                                    >
+                                      <Images
+                                        aria-hidden="true"
+                                        className="h-4 w-4"
+                                        strokeWidth={2.5}
+                                      />
+                                      <span className="text-xs font-black">
+                                        {matchPhotos.length}
+                                      </span>
+                                    </button>
                                   ) : null}
                                 </div>
                                 <p className="mt-1 truncate text-sm font-black text-slate-600">
@@ -3671,6 +3908,77 @@ export default function App() {
                       the full PO chain.
                     </div>
                   )}
+                </div>
+              ) : null}
+
+              {viewingReceivingQuickPhotos ? (
+                <div
+                  className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="quick-po-photos-title"
+                >
+                  <div className="max-h-[88vh] w-full max-w-5xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+                    <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                          PO Photos
+                        </p>
+                        <h3
+                          id="quick-po-photos-title"
+                          className="mt-1 text-2xl font-black text-slate-950"
+                        >
+                          PO {viewingReceivingQuickPhotos.poNumber}
+                        </h3>
+                        <p className="mt-1 text-sm font-bold text-slate-500">
+                          {viewingReceivingQuickPhotos.photos.length} saved{" "}
+                          {viewingReceivingQuickPhotos.photos.length === 1
+                            ? "photo"
+                            : "photos"}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setViewingReceivingQuickPhotos(null)}
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:text-slate-950"
+                        aria-label="Close PO photos"
+                      >
+                        <X
+                          aria-hidden="true"
+                          className="h-5 w-5"
+                          strokeWidth={2.5}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="max-h-[72vh] overflow-auto bg-slate-50 p-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {viewingReceivingQuickPhotos.photos.map((photo) => (
+                          <figure
+                            key={photo.id}
+                            className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+                          >
+                            <img
+                              src={photo.dataUrl}
+                              alt={`${photo.title} for PO ${viewingReceivingQuickPhotos.poNumber}`}
+                              className="max-h-[520px] w-full object-contain bg-slate-950"
+                            />
+                            <figcaption className="border-t border-slate-200 px-4 py-3">
+                              <p className="text-sm font-black text-slate-950">
+                                {photo.title}
+                              </p>
+                              {photo.subtitle ? (
+                                <p className="mt-0.5 text-xs font-bold text-slate-500">
+                                  {photo.subtitle}
+                                </p>
+                              ) : null}
+                            </figcaption>
+                          </figure>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : null}
             </form>
@@ -4007,6 +4315,7 @@ export default function App() {
         allowedPageIds={effectiveAllowedPageIds}
         checkIns={checkIns}
         supplierRuns={southLookupSupplierRuns}
+        theirTruckPOs={theirTruckPOs}
         deliveries={canReadDeliveries ? deliveries : []}
         onTraceSearch={handleTraceSearch}
       />
