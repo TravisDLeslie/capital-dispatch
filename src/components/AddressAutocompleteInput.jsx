@@ -1,6 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { getGoogleMapsApiKey, loadGooglePlaces } from "../utils/googlePlaces";
 
+function getPlaceComponent(place, type, useShortName = false) {
+  const component = place?.address_components?.find((addressComponent) =>
+    addressComponent.types?.includes(type),
+  );
+
+  return useShortName ? component?.short_name || "" : component?.long_name || "";
+}
+
+function getFullAddressFromPlace(place, fallbackAddress = "") {
+  const streetNumber = getPlaceComponent(place, "street_number");
+  const route = getPlaceComponent(place, "route");
+  const city =
+    getPlaceComponent(place, "locality") ||
+    getPlaceComponent(place, "postal_town") ||
+    getPlaceComponent(place, "administrative_area_level_2");
+  const state = getPlaceComponent(place, "administrative_area_level_1", true);
+  const zip = getPlaceComponent(place, "postal_code");
+  const streetAddress = [streetNumber, route].filter(Boolean).join(" ");
+  const cityStateZip = [
+    city,
+    [state, zip].filter(Boolean).join(" "),
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const fullAddress = [streetAddress, cityStateZip].filter(Boolean).join(", ");
+
+  return fullAddress || place?.formatted_address || fallbackAddress;
+}
+
 export default function AddressAutocompleteInput({
   id,
   value,
@@ -55,8 +84,10 @@ export default function AddressAutocompleteInput({
 
         listener = autocomplete.addListener("place_changed", () => {
           const place = autocomplete.getPlace();
-          const nextAddress =
-            place.formatted_address || inputRef.current?.value || "";
+          const nextAddress = getFullAddressFromPlace(
+            place,
+            inputRef.current?.value || "",
+          );
 
           onChange(nextAddress);
           onPlaceSelected?.(place, nextAddress);

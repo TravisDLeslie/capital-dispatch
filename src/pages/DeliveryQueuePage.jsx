@@ -399,6 +399,8 @@ const DRIVER_DELIVERY_STEPS = [
   "Complete",
 ];
 
+const MOBILE_DRIVER_DELIVERY_STEPS = ["Load", "Route", "Photos", "Done"];
+
 function MobileDeliveryFlowCard({
   delivery,
   deliveryIndex,
@@ -416,9 +418,13 @@ function MobileDeliveryFlowCard({
   onHardwareChecked,
   onCompleteDelivery,
 }) {
+  const [loadedDeliveryKeys, setLoadedDeliveryKeys] = useState({});
   const items = Array.isArray(delivery.items) ? delivery.items : [];
   const originAddress =
     delivery.deliveryOriginAddress || "3105 W State St, Boise, ID 83703";
+  const isMaterialLoaded = Boolean(loadedDeliveryKeys[delivery.id]);
+  const isHardwareLoaded = !delivery.hasHardware || Boolean(delivery.hardwareChecked);
+  const canLeaveYard = isMaterialLoaded && isHardwareLoaded;
   const stepStatus =
     deliveryStep === 1
       ? "EN ROUTE"
@@ -449,10 +455,14 @@ function MobileDeliveryFlowCard({
           <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </button>
 
-        <p className="text-sm font-black text-slate-900">
-          {Math.min(deliveryIndex + 1, deliveryCount)} of {deliveryCount}{" "}
-          Deliveries
-        </p>
+        <div className="text-center">
+          <p className="text-sm font-black text-slate-900">
+            {Math.min(deliveryIndex + 1, deliveryCount)} of {deliveryCount}
+          </p>
+          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+            Deliveries
+          </p>
+        </div>
 
         <button
           type="button"
@@ -464,6 +474,46 @@ function MobileDeliveryFlowCard({
       </div>
 
       <div className="space-y-4 p-4">
+        <div className="grid grid-cols-4 items-start gap-1">
+          {MOBILE_DRIVER_DELIVERY_STEPS.map((stepLabel, stepIndex) => {
+            const isActiveStep = deliveryStep === stepIndex;
+            const isCompleteStep = deliveryStep > stepIndex;
+
+            return (
+              <button
+                key={stepLabel}
+                type="button"
+                onClick={() => setDeliveryStep(delivery.id, stepIndex)}
+                className="min-w-0 text-center"
+                aria-current={isActiveStep ? "step" : undefined}
+              >
+                <span
+                  className={`mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-black ${
+                    isActiveStep
+                      ? "bg-[#FC2C38] text-white"
+                      : isCompleteStep
+                        ? "bg-emerald-700 text-white"
+                        : "border border-slate-300 bg-slate-50 text-slate-500"
+                  }`}
+                >
+                  {isCompleteStep ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    stepIndex + 1
+                  )}
+                </span>
+                <span
+                  className={`mt-1 block truncate text-[10px] font-black uppercase leading-3 tracking-[0.04em] ${
+                    isActiveStep ? "text-slate-950" : "text-slate-500"
+                  }`}
+                >
+                  {stepLabel}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         {deliveryStep < 3 ? (
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
@@ -556,6 +606,13 @@ function MobileDeliveryFlowCard({
               <label className="mt-4 flex items-center gap-3 text-sm font-semibold text-slate-900">
                 <input
                   type="checkbox"
+                  checked={isMaterialLoaded}
+                  onChange={(event) =>
+                    setLoadedDeliveryKeys((currentLoadedDeliveryKeys) => ({
+                      ...currentLoadedDeliveryKeys,
+                      [delivery.id]: event.target.checked,
+                    }))
+                  }
                   className="h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-red-200"
                 />
                 Material loaded
@@ -579,12 +636,22 @@ function MobileDeliveryFlowCard({
 
             <button
               type="button"
-              onClick={goToNextStep}
-              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#FC2C38] px-4 py-4 text-sm font-black uppercase tracking-[0.04em] text-white shadow-sm"
+              onClick={() => {
+                if (canLeaveYard) {
+                  goToNextStep();
+                }
+              }}
+              disabled={!canLeaveYard || isUpdating}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#FC2C38] px-4 py-4 text-sm font-black uppercase tracking-[0.04em] text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
             >
               Ready To Leave
               <ArrowRight className="h-5 w-5" aria-hidden="true" />
             </button>
+            {!canLeaveYard ? (
+              <p className="text-center text-xs font-bold text-slate-500">
+                Check {delivery.hasHardware ? "material and hardware" : "material"} loaded before leaving.
+              </p>
+            ) : null}
           </>
         ) : null}
 
