@@ -1681,14 +1681,6 @@ export default function App() {
       "their-truck-history",
     ].includes(pageId),
   );
-  const hasDeliveryManagementAccess = effectiveAllowedPageIds.some((pageId) =>
-    [
-      "deliveries-add",
-      "deliveries-dispatch",
-      "deliveries-calendar",
-      "deliveries-history",
-    ].includes(pageId),
-  );
   const isSouthDriverScopedView =
     hasDriverName &&
     !["superAdmin", "admin"].includes(effectiveUserRole) &&
@@ -1697,8 +1689,7 @@ export default function App() {
   const isDeliveryDriverScopedView =
     hasDriverName &&
     !["superAdmin", "admin"].includes(effectiveUserRole) &&
-    canReadDeliveries &&
-    !hasDeliveryManagementAccess;
+    canReadDeliveries;
   const shouldShowDriverDashboard =
     effectiveWorkView === "driver" ||
     (hasDriverName &&
@@ -1760,10 +1751,25 @@ export default function App() {
 
             return (
               delivery.dispatchStatus !== "needsDispatch" &&
-              (delivery.driver === driverName ||
-                drivers.includes(driverName) ||
+              (areEmployeeNamesEqual(
+                delivery.driver || "",
+                driverName,
+                employeeAliasMap,
+              ) ||
+                drivers.some((assignedDriver) =>
+                  areEmployeeNamesEqual(
+                    assignedDriver,
+                    driverName,
+                    employeeAliasMap,
+                  ),
+                ) ||
                 dispatchAssignments.some(
-                  (assignment) => assignment.driver === driverName,
+                  (assignment) =>
+                    areEmployeeNamesEqual(
+                      assignment.driver || "",
+                      driverName,
+                      employeeAliasMap,
+                    ),
                 ))
             );
           })
@@ -1774,7 +1780,12 @@ export default function App() {
               ? delivery.dispatchAssignments
               : [];
             const driverAssignment = dispatchAssignments.find(
-              (assignment) => assignment.driver === driverName,
+              (assignment) =>
+                areEmployeeNamesEqual(
+                  assignment.driver || "",
+                  driverName,
+                  employeeAliasMap,
+                ),
             );
 
             return {
@@ -5259,7 +5270,9 @@ export default function App() {
             onUpdateDelivery={handleUpdateDelivery}
             canEditDeliveries={canEditDeliveryDetails}
             onEditDelivery={handleEditDelivery}
+            onDeleteDelivery={handleDeleteDelivery}
             onPageChange={navigateToPage}
+            isDriverView={isDeliveryDriverScopedView}
           />
         );
 

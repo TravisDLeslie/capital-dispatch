@@ -270,6 +270,8 @@ export default function DeliveryOrderForm({
   const [items, setItems] = useState([createEmptyDeliveryItem()]);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState("");
+  const [routeEtaStatus, setRouteEtaStatus] = useState("idle");
+  const [routeEtaMessage, setRouteEtaMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -319,6 +321,8 @@ export default function DeliveryOrderForm({
     setItems(createItemsFromDelivery(initialDelivery));
     setCurrentStep(1);
     setError("");
+    setRouteEtaStatus("idle");
+    setRouteEtaMessage("");
   }, [initialDelivery, safeDeliveryOriginOptions]);
 
   function clearError() {
@@ -353,6 +357,8 @@ export default function DeliveryOrderForm({
 
     if (matchedAddress && (force || !address.trim())) {
       setAddress(matchedAddress);
+      setRouteEtaStatus("idle");
+      setRouteEtaMessage("");
     }
 
     if (primaryContact?.name && (force || !contactName.trim())) {
@@ -469,6 +475,58 @@ export default function DeliveryOrderForm({
     setItems([createEmptyDeliveryItem()]);
     setCurrentStep(1);
     setError("");
+    setRouteEtaStatus("idle");
+    setRouteEtaMessage("");
+  }
+
+  async function handleCalculateRouteEta() {
+    const origin = deliveryOriginAddress.trim();
+    const destination = address.trim();
+
+    if (!origin || !destination) {
+      setRouteEtaStatus("error");
+      setRouteEtaMessage("Enter the delivery address before calculating ETA.");
+      return;
+    }
+
+    setRouteEtaStatus("loading");
+    setRouteEtaMessage("");
+
+    try {
+      const routeResponse = await fetch(
+        `/api/maps/route?origin=${encodeURIComponent(
+          origin,
+        )}&destination=${encodeURIComponent(destination)}`,
+      );
+      const routeData = await routeResponse.json().catch(() => ({}));
+
+      if (!routeResponse.ok) {
+        throw new Error(
+          routeData?.error || "Google Maps could not calculate this route.",
+        );
+      }
+
+      const routeMinutes = Math.max(
+        1,
+        Math.round(Number(routeData.durationSeconds || 0) / 60),
+      );
+
+      setOneWayDriveMinutes(String(routeMinutes));
+      setRouteEtaStatus("success");
+      setRouteEtaMessage(
+        `${routeData.durationText || `${routeMinutes} min`} one-way${
+          routeData.distanceText ? ` · ${routeData.distanceText}` : ""
+        }`,
+      );
+      clearError();
+    } catch (routeError) {
+      console.error("Unable to calculate delivery route ETA:", routeError);
+      setRouteEtaStatus("error");
+      setRouteEtaMessage(
+        routeError?.message ||
+          "Route ETA unavailable. You can still enter minutes manually.",
+      );
+    }
   }
 
   async function handleSubmit(event) {
@@ -882,6 +940,8 @@ export default function DeliveryOrderForm({
               value={address}
               onChange={(nextAddress) => {
                 setAddress(nextAddress);
+                setRouteEtaStatus("idle");
+                setRouteEtaMessage("");
                 clearError();
               }}
               disabled={isSubmitting}
@@ -1164,6 +1224,8 @@ export default function DeliveryOrderForm({
                   setDeliveryOriginAddress(
                     getOriginAddress(originName, safeDeliveryOriginOptions),
                   );
+                  setRouteEtaStatus("idle");
+                  setRouteEtaMessage("");
                   clearError();
                 }}
                 disabled={isSubmitting}
@@ -1229,6 +1291,35 @@ export default function DeliveryOrderForm({
               <p className="mt-2 text-xs font-bold text-slate-500">
                 Used twice for out-and-back time.
               </p>
+
+              <button
+                type="button"
+                onClick={handleCalculateRouteEta}
+                disabled={
+                  isSubmitting ||
+                  routeEtaStatus === "loading" ||
+                  !deliveryOriginAddress.trim() ||
+                  !address.trim()
+                }
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-[#FC2C38] transition hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                <MapPin className="h-4 w-4" aria-hidden="true" />
+                {routeEtaStatus === "loading"
+                  ? "Calculating..."
+                  : "Calculate ETA"}
+              </button>
+
+              {routeEtaMessage ? (
+                <p
+                  className={`mt-2 text-xs font-black ${
+                    routeEtaStatus === "error"
+                      ? "text-red-600"
+                      : "text-emerald-700"
+                  }`}
+                >
+                  {routeEtaMessage}
+                </p>
+              ) : null}
             </div>
           </div>
           </FormSection>

@@ -16,6 +16,7 @@ import {
   Package,
   Phone,
   ShieldAlert,
+  Trash2,
   Truck,
   UserRound,
 } from "lucide-react";
@@ -312,7 +313,9 @@ function RoutePreviewCard({ delivery }) {
         setRouteState({
           status: "error",
           route: null,
-          error: "Route ETA unavailable. Open maps for live navigation.",
+          error:
+            routeError?.message ||
+            "Route ETA unavailable. Open maps for live navigation.",
         });
       });
 
@@ -417,6 +420,7 @@ function MobileDeliveryFlowCard({
   onPhotoChange,
   onHardwareChecked,
   onCompleteDelivery,
+  isFocusedDriverView = false,
 }) {
   const [loadedDeliveryKeys, setLoadedDeliveryKeys] = useState({});
   const items = Array.isArray(delivery.items) ? delivery.items : [];
@@ -443,7 +447,11 @@ function MobileDeliveryFlowCard({
   }
 
   return (
-    <article className="lg:hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+    <article
+      className={`rounded-[28px] border border-slate-200 bg-white shadow-sm ${
+        isFocusedDriverView ? "" : "lg:hidden"
+      }`}
+    >
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <button
           type="button"
@@ -906,7 +914,9 @@ export default function DeliveryQueuePage({
   onUpdateDelivery,
   canEditDeliveries = false,
   onEditDelivery,
+  onDeleteDelivery,
   onPageChange,
+  isDriverView = false,
 }) {
   const [error, setError] = useState("");
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
@@ -938,6 +948,8 @@ export default function DeliveryQueuePage({
             (delivery.driver || "Unassigned Driver") === selectedDriver,
         );
   const driverGroups = groupDeliveriesByDriver(filteredDeliveries);
+  const currentDriverDelivery = isDriverView ? openDeliveries[0] : null;
+  const upNextDriverDeliveries = isDriverView ? openDeliveries.slice(1) : [];
 
   function toggleDriver(driver) {
     setOpenDriverKeys((currentOpenDriverKeys) => ({
@@ -1054,6 +1066,155 @@ export default function DeliveryQueuePage({
     } finally {
       setUpdatingDeliveryId("");
     }
+  }
+
+  if (isDriverView) {
+    const currentDeliveryItems = Array.isArray(currentDriverDelivery?.items)
+      ? currentDriverDelivery.items
+      : [];
+    const currentDeliveryPhotos = currentDriverDelivery
+      ? getPhotoList(
+          currentDriverDelivery,
+          "deliveryPhoto",
+          "deliveryPhotos",
+        )
+      : [];
+    const currentHardwarePhotos = currentDriverDelivery
+      ? getPhotoList(
+          currentDriverDelivery,
+          "hardwarePhoto",
+          "hardwarePhotos",
+        )
+      : [];
+    const currentScopeSummary = currentDriverDelivery
+      ? getDeliveryScopeSummary(currentDriverDelivery)
+      : null;
+    const currentDeliveryStep = currentDriverDelivery
+      ? getDeliveryStep(currentDriverDelivery.id)
+      : 0;
+
+    return (
+      <PageContainer>
+        <div className="mb-5">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
+            Driver
+          </p>
+
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+            My Deliveries
+          </h1>
+
+          <p className="mt-2 text-base font-semibold text-slate-500">
+            Focus on the current stop. Finish it, then move to the next one.
+          </p>
+        </div>
+
+        {error ? (
+          <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+            {error}
+          </div>
+        ) : null}
+
+        {!currentDriverDelivery ? (
+          <EmptyState
+            title="No deliveries assigned"
+            description="Assigned delivery orders will show here when dispatch sends them to you."
+          />
+        ) : (
+          <div className="space-y-5">
+            <section>
+              <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                Current Delivery
+              </p>
+
+              <MobileDeliveryFlowCard
+                delivery={currentDriverDelivery}
+                deliveryIndex={0}
+                deliveryCount={openDeliveries.length}
+                deliveryStep={currentDeliveryStep}
+                setDeliveryStep={setDeliveryStep}
+                isUpdating={updatingDeliveryId === currentDriverDelivery.id}
+                deliveryPhotos={currentDeliveryPhotos}
+                hardwarePhotos={currentHardwarePhotos}
+                scopeSummary={currentScopeSummary}
+                contactPhone={
+                  currentDriverDelivery.contactPhone ||
+                  currentDriverDelivery.phoneNumber ||
+                  ""
+                }
+                deliveryLocationNotes={
+                  currentDriverDelivery.deliveryLocationNotes ||
+                  currentDriverDelivery.deliveryNotes ||
+                  ""
+                }
+                generalNotes={currentDriverDelivery.generalNotes || ""}
+                onPhotoChange={handlePhotoChange}
+                onHardwareChecked={handleHardwareChecked}
+                onCompleteDelivery={handleCompleteDelivery}
+                isFocusedDriverView
+              />
+            </section>
+
+            {upNextDriverDeliveries.length > 0 ? (
+              <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                    Up Next
+                  </p>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                    {upNextDriverDeliveries.length}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {upNextDriverDeliveries.map((delivery, index) => {
+                    const items = Array.isArray(delivery.items)
+                      ? delivery.items
+                      : [];
+
+                    return (
+                      <article
+                        key={delivery.id}
+                        className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                              Delivery {index + 2} of {openDeliveries.length}
+                            </p>
+                            <h2 className="mt-1 truncate text-xl font-black text-slate-900">
+                              {formatCustomerName(delivery.customerName)}
+                            </h2>
+                            <p className="mt-1 text-sm font-bold text-slate-500">
+                              Order #{delivery.orderNumber}
+                            </p>
+                          </div>
+
+                          <ChevronDown
+                            className="mt-2 h-5 w-5 shrink-0 text-slate-400"
+                            aria-hidden="true"
+                          />
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">
+                            {getDeliveryTimeRange(delivery)}
+                          </span>
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">
+                            {items.length}{" "}
+                            {items.length === 1 ? "item" : "items"}
+                          </span>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+          </div>
+        )}
+      </PageContainer>
+    );
   }
 
   return (
@@ -1320,17 +1481,33 @@ export default function DeliveryQueuePage({
                           </button>
 
                           {canEditDeliveries ? (
-                          <button
-                            type="button"
-                            onClick={() => onEditDelivery(delivery.id)}
-                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100"
-                          >
-                            <Edit3
-                              className="h-4 w-4"
-                              aria-hidden="true"
-                            />
-                            Edit
-                          </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => onEditDelivery(delivery.id)}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100"
+                              >
+                                <Edit3
+                                  className="h-4 w-4"
+                                  aria-hidden="true"
+                                />
+                                Edit
+                              </button>
+
+                              {onDeleteDelivery ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteDelivery(delivery.id)}
+                                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-[#FC2C38] shadow-sm transition hover:bg-red-50"
+                                >
+                                  <Trash2
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                  />
+                                  Delete
+                                </button>
+                              ) : null}
+                            </>
                           ) : null}
 
                           <a

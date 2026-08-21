@@ -3,7 +3,6 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-  orderBy,
   query,
   setDoc,
   updateDoc,
@@ -53,28 +52,103 @@ function sortDeliveries(deliveries) {
   );
 }
 
+function deliveryIncludesDriver(delivery, driverName) {
+  if (!driverName) {
+    return true;
+  }
+
+  const drivers = Array.isArray(delivery.drivers) ? delivery.drivers : [];
+
+  return delivery.driver === driverName || drivers.includes(driverName);
+}
+
 export function subscribeToDeliveries(
   onDeliveries,
   onError,
   driverName = "",
 ) {
   if (!db) {
-    onDeliveries(getLocalDeliveries());
+    onDeliveries(
+      sortDeliveries(
+        getLocalDeliveries().filter((delivery) =>
+          deliveryIncludesDriver(delivery, driverName),
+        ),
+      ),
+    );
     return () => {};
   }
 
-  const deliveriesQuery = driverName
-    ? query(
-        collection(db, DELIVERIES_COLLECTION),
-        where("driver", "==", driverName),
-      )
-    : query(
-        collection(db, DELIVERIES_COLLECTION),
-        orderBy("createdAt", "desc"),
+  if (driverName) {
+    const primaryDriverMap = new Map();
+    const assignedDriversMap = new Map();
+    let hasPrimarySnapshot = false;
+    let hasDriversSnapshot = false;
+
+    function emitScopedDeliveries() {
+      if (!hasPrimarySnapshot || !hasDriversSnapshot) {
+        return;
+      }
+
+      const deliveryMap = new Map([
+        ...primaryDriverMap,
+        ...assignedDriversMap,
+      ]);
+      const deliveries = sortDeliveries(
+        [...deliveryMap.values()].filter((delivery) =>
+          deliveryIncludesDriver(delivery, driverName),
+        ),
       );
 
+      saveLocalDeliveries(deliveries);
+      onDeliveries(deliveries);
+    }
+
+    const unsubscribePrimaryDriver = onSnapshot(
+      query(
+        collection(db, DELIVERIES_COLLECTION),
+        where("driver", "==", driverName),
+      ),
+      (deliverySnapshot) => {
+        primaryDriverMap.clear();
+        deliverySnapshot.docs.forEach((deliveryDoc) => {
+          primaryDriverMap.set(deliveryDoc.id, {
+            id: deliveryDoc.id,
+            ...deliveryDoc.data(),
+          });
+        });
+        hasPrimarySnapshot = true;
+        emitScopedDeliveries();
+      },
+      onError,
+    );
+
+    const unsubscribeAssignedDrivers = onSnapshot(
+      query(
+        collection(db, DELIVERIES_COLLECTION),
+        where("drivers", "array-contains", driverName),
+      ),
+      (deliverySnapshot) => {
+        assignedDriversMap.clear();
+        deliverySnapshot.docs.forEach((deliveryDoc) => {
+          assignedDriversMap.set(deliveryDoc.id, {
+            id: deliveryDoc.id,
+            ...deliveryDoc.data(),
+          });
+        });
+        hasDriversSnapshot = true;
+        emitScopedDeliveries();
+      },
+      onError,
+    );
+
+    return () => {
+      unsubscribePrimaryDriver();
+      unsubscribeAssignedDrivers();
+    };
+  }
+
   return onSnapshot(
-    deliveriesQuery,
+    collection(db, DELIVERIES_COLLECTION),
     (deliverySnapshot) => {
       const deliveries = deliverySnapshot.docs.map(
         (deliveryDoc) => ({
