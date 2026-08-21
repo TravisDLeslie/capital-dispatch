@@ -719,7 +719,9 @@ type Delivery = {
   contactPhone?: string;
   phoneNumber?: string;
   driver: string;
+  deliveryType?: string;
   unloadType: string;
+  forkliftType?: string;
   hasHardware?: boolean;
   needsTarp?: boolean;
   driverTargetArrivalTime?: string;
@@ -729,7 +731,9 @@ type Delivery = {
   deliveryNotes?: string;
   items: DeliveryItem[];
   deliveryPhoto?: unknown | null;
+  deliveryPhotos?: unknown[];
   hardwarePhoto?: unknown | null;
+  hardwarePhotos?: unknown[];
   deliveredAt?: string;
   dispatchStatus?: string;
   deliveryScope?: string;

@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
   Camera,
   CheckCircle2,
   ChevronDown,
@@ -8,7 +11,10 @@ import {
   Edit3,
   ExternalLink,
   MapPin,
+  MessageSquare,
+  Navigation,
   Package,
+  Phone,
   ShieldAlert,
   Truck,
   UserRound,
@@ -31,6 +37,16 @@ function getDirectionsUrl(address) {
   )}`;
 }
 
+function getRouteDirectionsUrl(originAddress, destinationAddress) {
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
+    originAddress || "",
+  )}&destination=${encodeURIComponent(destinationAddress || "")}`;
+}
+
+function getGoogleMapsApiKey() {
+  return import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+}
+
 function formatTimeLabel(value) {
   if (!value) {
     return "";
@@ -45,6 +61,53 @@ function formatTimeLabel(value) {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
+}
+
+function formatDeliveryTypeLabel(value) {
+  if (value === "priority") {
+    return "Priority";
+  }
+
+  if (value === "hotShot") {
+    return "Hot Shot";
+  }
+
+  return "Standard";
+}
+
+function formatForkliftLabel(value) {
+  if (value === "donkey") {
+    return "Donkey 5000 lbs";
+  }
+
+  if (value === "manitou") {
+    return "Manitou 4500 lbs";
+  }
+
+  if (value === "moffit") {
+    return "Moffit 5500 lbs";
+  }
+
+  return "";
+}
+
+function getPhotoList(delivery, photoField, photosField) {
+  const photos = Array.isArray(delivery?.[photosField])
+    ? delivery[photosField].filter((photo) => photo?.dataUrl)
+    : [];
+  const legacyPhoto = delivery?.[photoField]?.dataUrl ? delivery[photoField] : null;
+
+  if (!legacyPhoto) {
+    return photos;
+  }
+
+  if (
+    photos.some((photo) => photo.dataUrl === legacyPhoto.dataUrl)
+  ) {
+    return photos;
+  }
+
+  return [legacyPhoto, ...photos];
 }
 
 function readFileAsDataUrl(file) {
@@ -158,6 +221,619 @@ function PhotoPreview({ photo, label }) {
   );
 }
 
+function PhotoPreviewGrid({ photos, label }) {
+  if (!photos.length) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {photos.map((photo, photoIndex) => (
+        <PhotoPreview
+          key={`${label}-${photo.dataUrl}-${photoIndex}`}
+          photo={photo}
+          label={`${label} ${photoIndex + 1}`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RoutePreviewCard({ delivery }) {
+  const originAddress =
+    delivery.deliveryOriginAddress || "3105 W State St, Boise, ID 83703";
+  const destinationAddress = delivery.address || "";
+  const [routeState, setRouteState] = useState({
+    status: "idle",
+    route: null,
+    error: "",
+  });
+  const googleMapsApiKey = getGoogleMapsApiKey();
+
+  const staticMapUrl = useMemo(() => {
+    const encodedPolyline = routeState.route?.encodedPolyline;
+
+    if (!googleMapsApiKey || !encodedPolyline || !destinationAddress) {
+      return "";
+    }
+
+    const params = new URLSearchParams({
+      key: googleMapsApiKey,
+      size: "640x320",
+      scale: "2",
+      maptype: "roadmap",
+    });
+
+    params.append("markers", `color:blue|label:A|${originAddress}`);
+    params.append("markers", `color:red|label:B|${destinationAddress}`);
+    params.append("path", `color:0xff2a3dff|weight:5|enc:${encodedPolyline}`);
+
+    return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
+  }, [
+    destinationAddress,
+    googleMapsApiKey,
+    originAddress,
+    routeState.route?.encodedPolyline,
+  ]);
+
+  useEffect(() => {
+    if (!originAddress || !destinationAddress) {
+      setRouteState({ status: "idle", route: null, error: "" });
+      return;
+    }
+
+    const controller = new AbortController();
+
+    setRouteState({ status: "loading", route: null, error: "" });
+
+    const params = new URLSearchParams({
+      origin: originAddress,
+      destination: destinationAddress,
+    });
+
+    fetch(`/api/maps/route?${params.toString()}`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Unable to calculate route.");
+        }
+
+        setRouteState({ status: "ready", route: data, error: "" });
+      })
+      .catch((routeError) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        console.warn("Unable to load delivery route:", routeError);
+        setRouteState({
+          status: "error",
+          route: null,
+          error: "Route ETA unavailable. Open maps for live navigation.",
+        });
+      });
+
+    return () => controller.abort();
+  }, [destinationAddress, originAddress]);
+
+  return (
+    <section className="rounded-2xl border border-red-100 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-black text-slate-900">
+            <Navigation
+              className="h-4 w-4 text-[#FC2C38]"
+              aria-hidden="true"
+            />
+            Route Preview
+          </p>
+
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            From {delivery.deliveryOriginName || "Capital Lumber"} to the jobsite.
+          </p>
+        </div>
+
+        <a
+          href={getRouteDirectionsUrl(originAddress, destinationAddress)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-600"
+        >
+          Open Maps
+          <ExternalLink className="h-4 w-4" aria-hidden="true" />
+        </a>
+      </div>
+
+      {staticMapUrl ? (
+        <img
+          src={staticMapUrl}
+          alt={`Route map to ${delivery.address}`}
+          className="mt-4 h-44 w-full rounded-2xl border border-slate-200 object-cover"
+        />
+      ) : (
+        <div className="mt-4 flex h-36 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-sm font-bold text-slate-500">
+          {routeState.status === "loading"
+            ? "Loading route map..."
+            : "Map preview appears when Google Maps is configured."}
+        </div>
+      )}
+
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-red-50 px-4 py-3 text-center">
+          <p className="text-2xl font-black text-slate-900">
+            {routeState.route?.durationText ||
+              (routeState.status === "loading" ? "..." : "--")}
+          </p>
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+            ETA
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-slate-50 px-4 py-3 text-center">
+          <p className="text-2xl font-black text-slate-900">
+            {routeState.route?.distanceText ||
+              (routeState.status === "loading" ? "..." : "--")}
+          </p>
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+            Distance
+          </p>
+        </div>
+      </div>
+
+      {routeState.error ? (
+        <p className="mt-3 text-sm font-bold text-amber-700">
+          {routeState.error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+const DRIVER_DELIVERY_STEPS = [
+  "Review & Load",
+  "En Route",
+  "Unload & Photos",
+  "Complete",
+];
+
+function MobileDeliveryFlowCard({
+  delivery,
+  deliveryIndex,
+  deliveryCount,
+  deliveryStep,
+  setDeliveryStep,
+  isUpdating,
+  deliveryPhotos,
+  hardwarePhotos,
+  scopeSummary,
+  contactPhone,
+  deliveryLocationNotes,
+  generalNotes,
+  onPhotoChange,
+  onHardwareChecked,
+  onCompleteDelivery,
+}) {
+  const items = Array.isArray(delivery.items) ? delivery.items : [];
+  const originAddress =
+    delivery.deliveryOriginAddress || "3105 W State St, Boise, ID 83703";
+  const stepStatus =
+    deliveryStep === 1
+      ? "EN ROUTE"
+      : deliveryStep === 2
+        ? "COMPLETE DELIVERY"
+        : deliveryStep === 3
+          ? "DELIVERY COMPLETE"
+          : "TODAY'S DELIVERY";
+
+  function goToNextStep() {
+    setDeliveryStep(delivery.id, deliveryStep + 1);
+  }
+
+  function goToPreviousStep() {
+    setDeliveryStep(delivery.id, deliveryStep - 1);
+  }
+
+  return (
+    <article className="lg:hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <button
+          type="button"
+          onClick={goToPreviousStep}
+          disabled={deliveryStep === 0}
+          className="flex h-10 w-10 items-center justify-center rounded-full text-slate-900 transition hover:bg-slate-100 disabled:opacity-30"
+          aria-label="Previous delivery step"
+        >
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+        </button>
+
+        <p className="text-sm font-black text-slate-900">
+          {Math.min(deliveryIndex + 1, deliveryCount)} of {deliveryCount}{" "}
+          Deliveries
+        </p>
+
+        <button
+          type="button"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-slate-900 transition hover:bg-slate-100"
+          aria-label="Message dispatch"
+        >
+          <MessageSquare className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className="space-y-4 p-4">
+        {deliveryStep < 3 ? (
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+              {stepStatus}
+            </p>
+
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
+              {formatCustomerName(delivery.customerName)}
+            </h2>
+
+            <p className="text-base font-semibold text-slate-900">
+              Order #{delivery.orderNumber}
+            </p>
+          </div>
+        ) : null}
+
+        {deliveryStep === 0 ? (
+          <>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <MapPin
+                  className="mt-1 h-5 w-5 shrink-0 text-slate-900"
+                  aria-hidden="true"
+                />
+                <p className="text-sm font-semibold leading-5 text-slate-900">
+                  {delivery.address}
+                </p>
+              </div>
+
+              <a
+                href={getRouteDirectionsUrl(originAddress, delivery.address)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-900 shadow-sm"
+              >
+                <Navigation
+                  className="h-5 w-5 text-[#FC2C38]"
+                  aria-hidden="true"
+                />
+                Navigate
+              </a>
+            </div>
+
+            <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-900">
+              <div className="flex items-center gap-2 border-b border-r border-slate-200 px-3 py-3">
+                <Clock className="h-4 w-4" aria-hidden="true" />
+                {formatDeliveryTypeLabel(delivery.deliveryType)}
+              </div>
+              <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-3">
+                <Truck className="h-4 w-4" aria-hidden="true" />
+                {delivery.unloadType}
+              </div>
+              <div className="flex items-center gap-2 border-r border-slate-200 px-3 py-3">
+                <Package className="h-4 w-4" aria-hidden="true" />
+                {items.length} {items.length === 1 ? "Item" : "Items"}
+              </div>
+              <div className="flex items-center gap-2 px-3 py-3">
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                {scopeSummary.shortLabel || scopeSummary.label}
+              </div>
+            </div>
+
+            {delivery.hasHardware ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center">
+                <p className="flex items-center justify-center gap-2 text-sm font-black uppercase tracking-[0.08em] text-[#FC2C38]">
+                  <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+                  Hardware Included
+                </p>
+                <p className="mt-2 text-sm font-semibold leading-5 text-slate-900">
+                  Don&apos;t forget the hardware. A photo of the hardware will
+                  be required at delivery.
+                </p>
+              </div>
+            ) : null}
+
+            {delivery.needsTarp ? (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                <p className="flex items-center gap-2 text-sm font-black text-blue-800">
+                  <CloudRain className="h-5 w-5" aria-hidden="true" />
+                  Tarp needed before leaving.
+                </p>
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-900">
+                Before You Leave
+              </p>
+
+              <label className="mt-4 flex items-center gap-3 text-sm font-semibold text-slate-900">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-red-200"
+                />
+                Material loaded
+              </label>
+
+              {delivery.hasHardware ? (
+                <label className="mt-4 flex items-center gap-3 text-sm font-semibold text-slate-900">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(delivery.hardwareChecked)}
+                    onChange={(event) =>
+                      onHardwareChecked(delivery, event.target.checked)
+                    }
+                    disabled={isUpdating}
+                    className="h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-red-200"
+                  />
+                  Hardware loaded
+                </label>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              onClick={goToNextStep}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#FC2C38] px-4 py-4 text-sm font-black uppercase tracking-[0.04em] text-white shadow-sm"
+            >
+              Ready To Leave
+              <ArrowRight className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </>
+        ) : null}
+
+        {deliveryStep === 1 ? (
+          <>
+            <div className="flex items-start gap-3">
+              <MapPin className="mt-1 h-5 w-5 text-slate-900" />
+              <p className="text-sm font-semibold leading-5 text-slate-900">
+                {delivery.address}
+              </p>
+            </div>
+
+            <RoutePreviewCard delivery={delivery} />
+
+            <section>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-900">
+                Delivery Instructions
+              </p>
+              <p className="mt-2 text-base font-semibold leading-6 text-slate-900">
+                {deliveryLocationNotes ||
+                  generalNotes ||
+                  "No delivery instructions added."}
+              </p>
+              {contactPhone ? (
+                <p className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+                  <Phone className="h-4 w-4" aria-hidden="true" />
+                  Call {delivery.contactName || "contact"} before arriving.
+                </p>
+              ) : null}
+            </section>
+
+            {delivery.hasHardware ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                <p className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.08em] text-[#FC2C38]">
+                  <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+                  Hardware on this delivery
+                </p>
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={goToNextStep}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#FC2C38] px-4 py-4 text-sm font-black uppercase tracking-[0.04em] text-white shadow-sm"
+            >
+              I&apos;ve Arrived
+              <ArrowRight className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </>
+        ) : null}
+
+        {deliveryStep === 2 ? (
+          <>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.08em] text-slate-900">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FC2C38] text-xs text-white">
+                    1
+                  </span>
+                  Material Photo
+                </p>
+                <span className="text-xs font-black uppercase text-[#FC2C38]">
+                  Required
+                </span>
+              </div>
+              <p className="mt-2 text-sm font-semibold text-slate-600">
+                Take a photo of the delivered material.
+              </p>
+
+              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm font-black text-[#FC2C38]">
+                <Camera className="h-5 w-5" aria-hidden="true" />
+                Take Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  disabled={isUpdating}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    onPhotoChange(
+                      delivery,
+                      file,
+                      "deliveryPhoto",
+                      "deliveryPhotos",
+                    );
+                    event.target.value = "";
+                  }}
+                  className="sr-only"
+                />
+              </label>
+
+              <div className="mt-3">
+                <PhotoPreviewGrid photos={deliveryPhotos} label="delivery photo" />
+              </div>
+            </div>
+
+            {delivery.hasHardware ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.08em] text-slate-900">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FC2C38] text-xs text-white">
+                      2
+                    </span>
+                    Hardware Photo
+                  </p>
+                  <span className="text-xs font-black uppercase text-[#FC2C38]">
+                    Required
+                  </span>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-slate-700">
+                  Take a photo showing the hardware was delivered.
+                </p>
+
+                <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-red-200 bg-white px-4 py-4 text-sm font-black text-[#FC2C38]">
+                  <Camera className="h-5 w-5" aria-hidden="true" />
+                  Take Hardware Photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={isUpdating}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      onPhotoChange(
+                        delivery,
+                        file,
+                        "hardwarePhoto",
+                        "hardwarePhotos",
+                      );
+                      event.target.value = "";
+                    }}
+                    className="sr-only"
+                  />
+                </label>
+
+                <label className="mt-3 flex items-center gap-3 text-sm font-black text-slate-900">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(delivery.hardwareChecked)}
+                    onChange={(event) =>
+                      onHardwareChecked(delivery, event.target.checked)
+                    }
+                    disabled={isUpdating}
+                    className="h-5 w-5 rounded border-red-300 text-[#FC2C38] focus:ring-red-200"
+                  />
+                  Hardware delivered
+                </label>
+
+                <div className="mt-3">
+                  <PhotoPreviewGrid photos={hardwarePhotos} label="hardware photo" />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.08em] text-slate-900">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#FC2C38] text-xs text-white">
+                  {delivery.hasHardware ? 3 : 2}
+                </span>
+                Condition
+              </p>
+              <p className="mt-2 text-sm font-semibold text-slate-700">
+                Was everything delivered in good condition?
+              </p>
+              <button
+                type="button"
+                onClick={goToNextStep}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white"
+              >
+                <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+                Yes, everything is good
+              </button>
+              <button
+                type="button"
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-[#FC2C38]"
+              >
+                <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+                No, there was an issue
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {deliveryStep === 3 ? (
+          <>
+            <div className="py-4 text-center">
+              <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                <CheckCircle2 className="h-14 w-14" aria-hidden="true" />
+              </div>
+              <h2 className="mt-5 text-2xl font-black text-slate-950">
+                Delivery Complete!
+              </h2>
+              <p className="mt-2 text-base font-semibold text-slate-700">
+                Thank you. Great job.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-900">
+                Delivery Summary
+              </p>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="flex justify-between gap-4">
+                  <span className="font-semibold text-slate-500">Order</span>
+                  <span className="font-bold text-slate-900">
+                    {delivery.orderNumber}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="font-semibold text-slate-500">Customer</span>
+                  <span className="text-right font-bold text-slate-900">
+                    {formatCustomerName(delivery.customerName)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="font-semibold text-slate-500">Items</span>
+                  <span className="font-bold text-slate-900">
+                    {items.length} {scopeSummary.label}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="font-semibold text-slate-500">Hardware</span>
+                  <span className="font-bold text-emerald-700">
+                    {delivery.hasHardware
+                      ? delivery.hardwareChecked
+                        ? "Delivered"
+                        : "Needs check"
+                      : "None"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onCompleteDelivery(delivery)}
+              disabled={isUpdating}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#FC2C38] px-4 py-4 text-sm font-black uppercase tracking-[0.04em] text-white shadow-sm disabled:opacity-60"
+            >
+              Complete Delivery
+              <ArrowRight className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 export default function DeliveryQueuePage({
   deliveries,
   onUpdateDelivery,
@@ -170,6 +846,7 @@ export default function DeliveryQueuePage({
   const [selectedDriver, setSelectedDriver] = useState("All");
   const [openDriverKeys, setOpenDriverKeys] = useState({});
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
+  const [deliveryStepKeys, setDeliveryStepKeys] = useState({});
 
   const openDeliveries = deliveries.filter(
     (delivery) =>
@@ -217,19 +894,33 @@ export default function DeliveryQueuePage({
     return openDeliveryKeys[deliveryId] ?? deliveryIndex === 0;
   }
 
-  async function handlePhotoChange(deliveryId, file, photoField) {
+  function getDeliveryStep(deliveryId) {
+    return deliveryStepKeys[deliveryId] ?? 0;
+  }
+
+  function setDeliveryStep(deliveryId, stepIndex) {
+    setDeliveryStepKeys((currentDeliveryStepKeys) => ({
+      ...currentDeliveryStepKeys,
+      [deliveryId]: Math.max(0, Math.min(stepIndex, 3)),
+    }));
+  }
+
+  async function handlePhotoChange(delivery, file, photoField, photosField) {
     if (!file) {
       return;
     }
 
     setError("");
-    setUpdatingDeliveryId(deliveryId);
+    setUpdatingDeliveryId(delivery.id);
 
     try {
       const photo = await createPhotoFromFile(file);
+      const currentPhotos = getPhotoList(delivery, photoField, photosField);
+      const nextPhotos = [...currentPhotos, photo];
 
-      await onUpdateDelivery(deliveryId, {
+      await onUpdateDelivery(delivery.id, {
         [photoField]: photo,
+        [photosField]: nextPhotos,
       });
     } catch (photoError) {
       console.error("Unable to save delivery photo:", photoError);
@@ -253,14 +944,25 @@ export default function DeliveryQueuePage({
   }
 
   async function handleCompleteDelivery(delivery) {
-    if (!delivery.deliveryPhoto) {
+    const deliveryPhotos = getPhotoList(
+      delivery,
+      "deliveryPhoto",
+      "deliveryPhotos",
+    );
+    const hardwarePhotos = getPhotoList(
+      delivery,
+      "hardwarePhoto",
+      "hardwarePhotos",
+    );
+
+    if (deliveryPhotos.length === 0) {
       setError(
         `Add a delivery photo before completing order ${delivery.orderNumber}.`,
       );
       return;
     }
 
-    if (delivery.hasHardware && !delivery.hardwarePhoto) {
+    if (delivery.hasHardware && hardwarePhotos.length === 0) {
       setError(
         `Add a hardware photo before completing order ${delivery.orderNumber}.`,
       );
@@ -423,12 +1125,39 @@ export default function DeliveryQueuePage({
                     delivery.id,
                     deliveryIndex,
                   );
+                  const deliveryStep = getDeliveryStep(delivery.id);
+                  const deliveryPhotos = getPhotoList(
+                    delivery,
+                    "deliveryPhoto",
+                    "deliveryPhotos",
+                  );
+                  const hardwarePhotos = getPhotoList(
+                    delivery,
+                    "hardwarePhoto",
+                    "hardwarePhotos",
+                  );
 
                   return (
-                    <article
-                      key={delivery.id}
-                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-                    >
+                    <div key={delivery.id}>
+                      <MobileDeliveryFlowCard
+                        delivery={delivery}
+                        deliveryIndex={deliveryIndex}
+                        deliveryCount={driverGroup.deliveries.length}
+                        deliveryStep={deliveryStep}
+                        setDeliveryStep={setDeliveryStep}
+                        isUpdating={isUpdating}
+                        deliveryPhotos={deliveryPhotos}
+                        hardwarePhotos={hardwarePhotos}
+                        scopeSummary={scopeSummary}
+                        contactPhone={contactPhone}
+                        deliveryLocationNotes={deliveryLocationNotes}
+                        generalNotes={generalNotes}
+                        onPhotoChange={handlePhotoChange}
+                        onHardwareChecked={handleHardwareChecked}
+                        onCompleteDelivery={handleCompleteDelivery}
+                      />
+
+                    <article className="hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:block">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <button
                           type="button"
@@ -475,6 +1204,25 @@ export default function DeliveryQueuePage({
                             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-700">
                               <Truck className="h-4 w-4" aria-hidden="true" />
                               {delivery.unloadType}
+                            </span>
+
+                            {delivery.unloadType === "Forklift" &&
+                            delivery.forkliftType ? (
+                              <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-sm font-black text-orange-800">
+                                {formatForkliftLabel(delivery.forkliftType)}
+                              </span>
+                            ) : null}
+
+                            <span
+                              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-black ${
+                                delivery.deliveryType === "hotShot"
+                                  ? "bg-red-50 text-[#FC2C38]"
+                                  : delivery.deliveryType === "priority"
+                                    ? "bg-amber-50 text-amber-800"
+                                    : "bg-white text-slate-700"
+                              }`}
+                            >
+                              {formatDeliveryTypeLabel(delivery.deliveryType)}
                             </span>
 
                             {delivery.needsTarp ? (
@@ -535,6 +1283,57 @@ export default function DeliveryQueuePage({
 
                       {deliveryIsOpen ? (
                       <>
+                      <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                        <div className="grid grid-cols-4 gap-2">
+                          {DRIVER_DELIVERY_STEPS.map((stepLabel, stepIndex) => {
+                            const isActiveStep = deliveryStep === stepIndex;
+                            const isCompleteStep = deliveryStep > stepIndex;
+
+                            return (
+                              <button
+                                key={stepLabel}
+                                type="button"
+                                onClick={() =>
+                                  setDeliveryStep(delivery.id, stepIndex)
+                                }
+                                className={`flex min-w-0 flex-col items-center gap-2 rounded-xl px-2 py-3 text-center transition ${
+                                  isActiveStep
+                                    ? "bg-slate-950 text-white shadow-sm"
+                                    : isCompleteStep
+                                      ? "bg-emerald-50 text-emerald-800"
+                                      : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+                                }`}
+                                aria-current={isActiveStep ? "step" : undefined}
+                              >
+                                <span
+                                  className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-black ${
+                                    isActiveStep
+                                      ? "bg-[#FC2C38] text-white"
+                                      : isCompleteStep
+                                        ? "bg-emerald-700 text-white"
+                                        : "bg-white text-slate-500"
+                                  }`}
+                                >
+                                  {isCompleteStep ? (
+                                    <CheckCircle2
+                                      className="h-4 w-4"
+                                      aria-hidden="true"
+                                    />
+                                  ) : (
+                                    stepIndex + 1
+                                  )}
+                                </span>
+
+                                <span className="text-[10px] font-black uppercase leading-4 tracking-[0.08em] sm:text-xs">
+                                  {stepLabel}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {deliveryStep === 0 ? (
                       <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
                         <section className="rounded-2xl border border-slate-200 bg-white p-4">
                           <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
@@ -614,7 +1413,15 @@ export default function DeliveryQueuePage({
                           </a>
                         </section>
                       </div>
+                      ) : null}
 
+                      {deliveryStep === 1 ? (
+                      <div className="mt-4">
+                        <RoutePreviewCard delivery={delivery} />
+                      </div>
+                      ) : null}
+
+                      {deliveryStep === 0 ? (
                       <div className="mt-4 grid gap-4 lg:grid-cols-2">
                         <section className="rounded-2xl border border-slate-200 bg-white p-4">
                           <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
@@ -646,8 +1453,9 @@ export default function DeliveryQueuePage({
                           </section>
                         ) : null}
                       </div>
+                      ) : null}
 
-                      {generalNotes ? (
+                      {deliveryStep === 0 && generalNotes ? (
                         <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                           <p className="text-sm font-black text-slate-900">
                             General Notes
@@ -659,7 +1467,7 @@ export default function DeliveryQueuePage({
                         </section>
                       ) : null}
 
-                      {delivery.hasHardware ? (
+                      {deliveryStep === 2 && delivery.hasHardware ? (
                         <section className="mt-4 rounded-2xl border-2 border-[#FC2C38] bg-red-50 p-4">
                           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-start gap-3">
@@ -716,9 +1524,10 @@ export default function DeliveryQueuePage({
                               onChange={(event) => {
                                 const file = event.target.files?.[0];
                                 handlePhotoChange(
-                                  delivery.id,
+                                  delivery,
                                   file,
                                   "hardwarePhoto",
+                                  "hardwarePhotos",
                                 );
                                 event.target.value = "";
                               }}
@@ -729,9 +1538,13 @@ export default function DeliveryQueuePage({
                               Take / Upload Hardware Photo
                             </span>
 
-                            {delivery.hardwarePhoto ? (
+                            {hardwarePhotos.length > 0 ? (
                               <span className="text-sm font-bold text-emerald-700">
-                                Hardware photo saved
+                                {hardwarePhotos.length} hardware{" "}
+                                {hardwarePhotos.length === 1
+                                  ? "photo"
+                                  : "photos"}{" "}
+                                saved
                               </span>
                             ) : (
                               <span className="text-sm font-bold text-red-700">
@@ -741,15 +1554,15 @@ export default function DeliveryQueuePage({
                           </label>
 
                           <div className="mt-4">
-                            <PhotoPreview
-                              photo={delivery.hardwarePhoto}
+                            <PhotoPreviewGrid
+                              photos={hardwarePhotos}
                               label="hardware photo"
                             />
                           </div>
                         </section>
                       ) : null}
 
-                      {delivery.needsTarp ? (
+                      {deliveryStep === 0 && delivery.needsTarp ? (
                         <section className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
                           <p className="flex items-center gap-2 text-lg font-black text-slate-900">
                             <CloudRain
@@ -765,6 +1578,7 @@ export default function DeliveryQueuePage({
                         </section>
                       ) : null}
 
+                      {deliveryStep === 0 ? (
                       <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                         <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
                           <Package
@@ -804,7 +1618,9 @@ export default function DeliveryQueuePage({
                           </ul>
                         ) : null}
                       </section>
+                      ) : null}
 
+                      {deliveryStep === 2 ? (
                       <section className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
                         <p className="flex items-center gap-2 text-sm font-black text-slate-900">
                           <Camera
@@ -832,9 +1648,10 @@ export default function DeliveryQueuePage({
                             onChange={(event) => {
                               const file = event.target.files?.[0];
                               handlePhotoChange(
-                                delivery.id,
+                                delivery,
                                 file,
                                 "deliveryPhoto",
+                                "deliveryPhotos",
                               );
                               event.target.value = "";
                             }}
@@ -845,9 +1662,13 @@ export default function DeliveryQueuePage({
                             Take / Upload Delivery Photo
                           </span>
 
-                          {delivery.deliveryPhoto ? (
+                          {deliveryPhotos.length > 0 ? (
                             <span className="text-sm font-bold text-emerald-700">
-                              Delivery photo saved
+                              {deliveryPhotos.length} delivery{" "}
+                              {deliveryPhotos.length === 1
+                                ? "photo"
+                                : "photos"}{" "}
+                              saved
                             </span>
                           ) : (
                             <span className="max-w-full text-wrap text-xs font-semibold leading-5 text-slate-500">
@@ -856,28 +1677,121 @@ export default function DeliveryQueuePage({
                           )}
                         </label>
 
-                        <PhotoPreview
-                          photo={delivery.deliveryPhoto}
+                        <PhotoPreviewGrid
+                          photos={deliveryPhotos}
                           label="delivery photo"
                         />
                         </div>
 
+                      </section>
+                      ) : null}
+
+                      {deliveryStep === 3 ? (
+                        <section className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                              <p className="text-xl font-black text-slate-900">
+                                Complete this delivery
+                              </p>
+
+                              <p className="mt-1 text-sm font-bold text-emerald-800">
+                                Confirm photos, hardware, and condition before
+                                closing order {delivery.orderNumber}.
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleCompleteDelivery(delivery)}
+                              disabled={isUpdating}
+                              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 sm:px-5 sm:py-4 lg:w-auto"
+                            >
+                              <CheckCircle2
+                                className="h-5 w-5"
+                                aria-hidden="true"
+                              />
+                              Complete Delivery
+                            </button>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                            <div className="rounded-2xl bg-white px-4 py-3">
+                              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                                Delivery Photos
+                              </p>
+                              <p className="mt-1 text-2xl font-black text-slate-900">
+                                {deliveryPhotos.length}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-white px-4 py-3">
+                              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                                Hardware
+                              </p>
+                              <p className="mt-1 text-base font-black text-slate-900">
+                                {delivery.hasHardware
+                                  ? delivery.hardwareChecked
+                                    ? "Delivered"
+                                    : "Needs Check"
+                                  : "None"}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl bg-white px-4 py-3">
+                              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                                Back Around
+                              </p>
+                              <p className="mt-1 text-base font-black text-slate-900">
+                                {getDeliveryBackAroundLabel(delivery)}
+                              </p>
+                            </div>
+                          </div>
+
+                          {deliveryPhotos.length || hardwarePhotos.length ? (
+                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                              <PhotoPreviewGrid
+                                photos={deliveryPhotos}
+                                label="delivery photo"
+                              />
+
+                              <PhotoPreviewGrid
+                                photos={hardwarePhotos}
+                                label="hardware photo"
+                              />
+                            </div>
+                          ) : null}
+                        </section>
+                      ) : null}
+
+                      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-between">
                         <button
                           type="button"
-                          onClick={() => handleCompleteDelivery(delivery)}
-                          disabled={isUpdating}
-                          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 sm:px-5 sm:py-4"
+                          onClick={() =>
+                            setDeliveryStep(delivery.id, deliveryStep - 1)
+                          }
+                          disabled={deliveryStep === 0}
+                          className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                          <CheckCircle2
-                            className="h-5 w-5"
-                            aria-hidden="true"
-                          />
-                          Complete Delivery
+                          Back
                         </button>
-                      </section>
+
+                        {deliveryStep < DRIVER_DELIVERY_STEPS.length - 1 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDeliveryStep(delivery.id, deliveryStep + 1)
+                            }
+                            className="rounded-xl bg-[#FC2C38] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-600"
+                          >
+                            Next:{" "}
+                            {DRIVER_DELIVERY_STEPS[deliveryStep + 1]}
+                          </button>
+                        ) : null}
+                      </div>
                       </>
                       ) : null}
                     </article>
+                    </div>
                   );
                 })}
               </div>

@@ -35,6 +35,22 @@ function getDirectionsUrl(address) {
   )}`;
 }
 
+function formatForkliftLabel(value) {
+  if (value === "donkey") {
+    return "Donkey 5000 lbs";
+  }
+
+  if (value === "manitou") {
+    return "Manitou 4500 lbs";
+  }
+
+  if (value === "moffit") {
+    return "Moffit 5500 lbs";
+  }
+
+  return "";
+}
+
 export default function DeliveriesPage({
   deliveries,
   customers,
@@ -160,6 +176,13 @@ export default function DeliveriesPage({
                           />
                           {delivery.unloadType}
                         </span>
+
+                        {delivery.unloadType === "Forklift" &&
+                        delivery.forkliftType ? (
+                          <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-sm font-black text-orange-800">
+                            {formatForkliftLabel(delivery.forkliftType)}
+                          </span>
+                        ) : null}
 
                         {delivery.hasHardware ? (
                           <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm font-black text-[#FC2C38]">

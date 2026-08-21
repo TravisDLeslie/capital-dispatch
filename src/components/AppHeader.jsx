@@ -512,6 +512,37 @@ export default function AppHeader({
       }));
   }
 
+  function getDeliveriesDropdownLinks() {
+    if (!["superAdmin", "admin"].includes(effectiveUserRole)) {
+      return [];
+    }
+
+    const pageAllowed = (pageId) =>
+      !allowedPageIds || allowedPageIds.includes(pageId);
+
+    return [
+      pageAllowed("deliveries-dispatch")
+        ? {
+            id: "deliveries-needs-dispatch",
+            label: "Needs Dispatch",
+            pageId: "deliveries-dispatch",
+          }
+        : null,
+      pageAllowed("deliveries-queue")
+        ? {
+            id: "deliveries-upcoming",
+            label: "View Upcoming Deliveries",
+            pageId: "deliveries-queue",
+          }
+        : null,
+    ]
+      .filter(Boolean)
+      .map((link) => ({
+        ...link,
+        isActive: currentPage === link.pageId,
+      }));
+  }
+
   function renderNavigation(isMobile = false) {
     return ["Dashboard", "Receiving", "Yard Tasks", "South", "Deliveries", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
@@ -584,12 +615,18 @@ export default function AppHeader({
       const groupIsActive = currentPageGroup === group;
       const southDropdownLinks =
         group === "South" ? getSouthDropdownLinks() : [];
+      const deliveriesDropdownLinks =
+        group === "Deliveries" ? getDeliveriesDropdownLinks() : [];
       const salesDropdownLinks =
         group === "Sales" ? getSalesDropdownLinks() : [];
       const accountingDropdownLinks =
         group === "Accounting" ? getAccountingDropdownLinks() : [];
       const shouldShowSouthDropdown =
         group === "South" && isGroupOpen && southDropdownLinks.length > 0;
+      const shouldShowDeliveriesDropdown =
+        group === "Deliveries" &&
+        isGroupOpen &&
+        deliveriesDropdownLinks.length > 0;
       const shouldShowSalesDropdown =
         group === "Sales" && isGroupOpen && salesDropdownLinks.length > 0;
       const shouldShowAccountingDropdown =
@@ -633,6 +670,7 @@ export default function AppHeader({
               className="flex min-w-0 flex-1 items-center gap-4 rounded-l-xl px-4 py-4 text-left text-lg font-black"
               aria-expanded={
                 shouldShowSouthDropdown ||
+                shouldShowDeliveriesDropdown ||
                 shouldShowSalesDropdown ||
                 shouldShowAccountingDropdown ||
                 !isSinglePageGroup
@@ -651,6 +689,8 @@ export default function AppHeader({
             </button>
 
             {(group === "South" && southDropdownLinks.length > 0) ||
+            (group === "Deliveries" &&
+              deliveriesDropdownLinks.length > 0) ||
             (group === "Sales" && salesDropdownLinks.length > 0) ||
             (group === "Accounting" && accountingDropdownLinks.length > 0) ? (
               <button
@@ -686,6 +726,33 @@ export default function AppHeader({
           {shouldShowSouthDropdown ? (
             <div className="mt-3 space-y-2 pl-5">
               {southDropdownLinks.map((link) => (
+                <button
+                  key={link.id}
+                  type="button"
+                  onClick={() => handlePageChange(link.pageId)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
+                    link.isActive
+                      ? "bg-[#FC2C38] text-white shadow-sm"
+                      : "text-white/80 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${
+                      link.isActive ? "bg-white" : "bg-white/40"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0 flex-1 truncate">
+                    {link.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {shouldShowDeliveriesDropdown ? (
+            <div className="mt-3 space-y-2 pl-5">
+              {deliveriesDropdownLinks.map((link) => (
                 <button
                   key={link.id}
                   type="button"

@@ -44,6 +44,22 @@ const timelineHourMarks = Array.from({ length: 10 }, (_, index) => {
   };
 });
 
+function formatForkliftLabel(value) {
+  if (value === "donkey") {
+    return "Donkey 5000 lbs";
+  }
+
+  if (value === "manitou") {
+    return "Manitou 4500 lbs";
+  }
+
+  if (value === "moffit") {
+    return "Moffit 5500 lbs";
+  }
+
+  return "";
+}
+
 function formatDateLabel(dateValue) {
   if (!dateValue) {
     return "Unscheduled";
@@ -328,6 +344,11 @@ function CompactDeliveryCard({
         <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-slate-700">
           {delivery.unloadType}
         </span>
+        {delivery.unloadType === "Forklift" && delivery.forkliftType ? (
+          <span className="rounded-full bg-orange-50 px-3 py-1.5 text-xs font-black text-orange-800">
+            {formatForkliftLabel(delivery.forkliftType)}
+          </span>
+        ) : null}
         <span className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-black text-[#FC2C38]">
           {scopeSummary.shortLabel}
         </span>

@@ -58,6 +58,34 @@ function formatTimeLabel(value) {
   }).format(date);
 }
 
+function formatDeliveryTypeLabel(value) {
+  if (value === "priority") {
+    return "Priority";
+  }
+
+  if (value === "hotShot") {
+    return "Hot Shot";
+  }
+
+  return "Standard";
+}
+
+function formatForkliftLabel(value) {
+  if (value === "donkey") {
+    return "Donkey 5000 lbs";
+  }
+
+  if (value === "manitou") {
+    return "Manitou 4500 lbs";
+  }
+
+  if (value === "moffit") {
+    return "Moffit 5500 lbs";
+  }
+
+  return "";
+}
+
 function PhotoPreview({ photo, label, isHardware = false }) {
   if (!photo?.dataUrl) {
     return null;
@@ -90,6 +118,40 @@ function PhotoPreview({ photo, label, isHardware = false }) {
       </span>
     </a>
   );
+}
+
+function getPhotoList(delivery, photoField, photosField) {
+  const photos = Array.isArray(delivery?.[photosField])
+    ? delivery[photosField].filter((photo) => photo?.dataUrl)
+    : [];
+  const legacyPhoto = delivery?.[photoField]?.dataUrl
+    ? delivery[photoField]
+    : null;
+
+  if (!legacyPhoto) {
+    return photos;
+  }
+
+  if (photos.some((photo) => photo.dataUrl === legacyPhoto.dataUrl)) {
+    return photos;
+  }
+
+  return [legacyPhoto, ...photos];
+}
+
+function PhotoPreviewGrid({ photos, label, isHardware = false }) {
+  if (!photos.length) {
+    return null;
+  }
+
+  return photos.map((photo, photoIndex) => (
+    <PhotoPreview
+      key={`${label}-${photo.dataUrl}-${photoIndex}`}
+      photo={photo}
+      label={`${label} ${photoIndex + 1}`}
+      isHardware={isHardware}
+    />
+  ));
 }
 
 export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
@@ -229,6 +291,16 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
               openDeliveryKeys[delivery.id],
             );
             const scopeSummary = getDeliveryScopeSummary(delivery);
+            const deliveryPhotos = getPhotoList(
+              delivery,
+              "deliveryPhoto",
+              "deliveryPhotos",
+            );
+            const hardwarePhotos = getPhotoList(
+              delivery,
+              "hardwarePhoto",
+              "hardwarePhotos",
+            );
 
             return (
               <article
@@ -264,6 +336,25 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
                     <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
                       <Truck className="h-4 w-4" aria-hidden="true" />
                       {delivery.unloadType}
+                    </span>
+
+                    {delivery.unloadType === "Forklift" &&
+                    delivery.forkliftType ? (
+                      <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-sm font-black text-orange-800">
+                        {formatForkliftLabel(delivery.forkliftType)}
+                      </span>
+                    ) : null}
+
+                    <span
+                      className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-black ${
+                        delivery.deliveryType === "hotShot"
+                          ? "bg-red-50 text-[#FC2C38]"
+                          : delivery.deliveryType === "priority"
+                            ? "bg-amber-50 text-amber-800"
+                            : "bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      {formatDeliveryTypeLabel(delivery.deliveryType)}
                     </span>
 
                     {delivery.hasHardware ? (
@@ -410,13 +501,13 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
                 </div>
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <PhotoPreview
-                    photo={delivery.deliveryPhoto}
+                  <PhotoPreviewGrid
+                    photos={deliveryPhotos}
                     label="delivery photo"
                   />
 
-                  <PhotoPreview
-                    photo={delivery.hardwarePhoto}
+                  <PhotoPreviewGrid
+                    photos={hardwarePhotos}
                     label="hardware photo"
                     isHardware
                   />

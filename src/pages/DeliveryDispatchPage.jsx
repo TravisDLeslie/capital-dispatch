@@ -75,6 +75,34 @@ function formatTimeLabel(value) {
   }).format(date);
 }
 
+function formatDeliveryTypeLabel(value) {
+  if (value === "priority") {
+    return "Priority";
+  }
+
+  if (value === "hotShot") {
+    return "Hot Shot";
+  }
+
+  return "Standard";
+}
+
+function formatForkliftLabel(value) {
+  if (value === "donkey") {
+    return "Donkey 5000 lbs";
+  }
+
+  if (value === "manitou") {
+    return "Manitou 4500 lbs";
+  }
+
+  if (value === "moffit") {
+    return "Moffit 5500 lbs";
+  }
+
+  return "";
+}
+
 function createAssignment(index, assignment = {}) {
   return {
     id: assignment.id || `truck-${index + 1}`,
@@ -584,6 +612,25 @@ export default function DeliveryDispatchPage({
                       <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
                         <Truck className="h-4 w-4" aria-hidden="true" />
                         {delivery.unloadType}
+                      </span>
+
+                      {delivery.unloadType === "Forklift" &&
+                      delivery.forkliftType ? (
+                        <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1.5 text-sm font-black text-orange-800">
+                          {formatForkliftLabel(delivery.forkliftType)}
+                        </span>
+                      ) : null}
+
+                      <span
+                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-black ${
+                          delivery.deliveryType === "hotShot"
+                            ? "bg-red-50 text-[#FC2C38]"
+                            : delivery.deliveryType === "priority"
+                              ? "bg-amber-50 text-amber-800"
+                              : "bg-slate-100 text-slate-700"
+                        }`}
+                      >
+                        {formatDeliveryTypeLabel(delivery.deliveryType)}
                       </span>
 
                       {delivery.hasHardware ? (
@@ -1142,6 +1189,13 @@ export default function DeliveryDispatchPage({
                     <p className="text-sm font-black text-slate-900">
                       {delivery.unloadType}
                     </p>
+
+                    {delivery.unloadType === "Forklift" &&
+                    delivery.forkliftType ? (
+                      <p className="mt-1 text-sm font-black text-orange-800">
+                        {formatForkliftLabel(delivery.forkliftType)}
+                      </p>
+                    ) : null}
 
                     <p className="mt-1 text-sm font-semibold text-slate-600">
                       {scopeSummary.shortLabel}

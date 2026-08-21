@@ -3,14 +3,19 @@ import {
   Check,
   Clock,
   CloudRain,
+  Diamond,
   ExternalLink,
+  Hand,
+  ListChecks,
   MapPin,
   Package,
   Phone,
   Plus,
   ShieldCheck,
+  Truck,
   Trash2,
   UserRound,
+  Zap,
 } from "lucide-react";
 import AddressAutocompleteInput from "./AddressAutocompleteInput";
 import {
@@ -147,6 +152,56 @@ function getPrimaryCustomerContact(customer) {
   );
 }
 
+const deliveryTypeOptions = [
+  {
+    value: "standard",
+    label: "Standard",
+    description: "Normal delivery within the standard schedule.",
+    Icon: Truck,
+  },
+  {
+    value: "priority",
+    label: "Priority",
+    description: "Faster delivery with priority scheduling.",
+    Icon: Zap,
+  },
+  {
+    value: "hotShot",
+    label: "Hot Shot",
+    description: "Urgent delivery with maximum attention.",
+    Icon: Diamond,
+  },
+];
+
+const forkliftOptions = [
+  {
+    value: "donkey",
+    label: "Donkey",
+    capacity: "5000 lbs",
+    detail: "3 way",
+  },
+  {
+    value: "manitou",
+    label: "Manitou",
+    capacity: "4500 lbs",
+    detail: "Crab, 12' Tall",
+  },
+  {
+    value: "moffit",
+    label: "Moffit",
+    capacity: "5500 lbs",
+    detail: "Crab, 10' Tall",
+  },
+];
+
+const deliverySteps = [
+  "Order & Customer",
+  "Delivery Setup",
+  "What's Going",
+  "Driver Instructions",
+  "Review & Send",
+];
+
 function FormSection({ eyebrow, title, description, children }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -193,7 +248,9 @@ export default function DeliveryOrderForm({
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [driver, setDriver] = useState("");
+  const [deliveryType, setDeliveryType] = useState("standard");
   const [unloadType, setUnloadType] = useState("Forklift");
+  const [forkliftType, setForkliftType] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [deliveryTimeSlot, setDeliveryTimeSlot] = useState("");
   const [deliveryOriginName, setDeliveryOriginName] =
@@ -211,6 +268,7 @@ export default function DeliveryOrderForm({
     useState("");
   const [generalNotes, setGeneralNotes] = useState("");
   const [items, setItems] = useState([createEmptyDeliveryItem()]);
+  const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -227,7 +285,9 @@ export default function DeliveryOrderForm({
       initialDelivery.contactPhone || initialDelivery.phoneNumber || "",
     );
     setDriver(initialDelivery.driver || "");
+    setDeliveryType(initialDelivery.deliveryType || "standard");
     setUnloadType(initialDelivery.unloadType || "Forklift");
+    setForkliftType(initialDelivery.forkliftType || "");
     setDeliveryDate(initialDelivery.deliveryDate || "");
     setDeliveryTimeSlot(initialDelivery.deliveryTimeSlot || "");
     setDeliveryOriginName(
@@ -257,6 +317,7 @@ export default function DeliveryOrderForm({
     );
     setGeneralNotes(initialDelivery.generalNotes || "");
     setItems(createItemsFromDelivery(initialDelivery));
+    setCurrentStep(1);
     setError("");
   }, [initialDelivery, safeDeliveryOriginOptions]);
 
@@ -388,7 +449,9 @@ export default function DeliveryOrderForm({
     setContactName("");
     setContactPhone("");
     setDriver("");
+    setDeliveryType("standard");
     setUnloadType("Forklift");
+    setForkliftType("");
     setDeliveryDate("");
     setDeliveryTimeSlot("");
     setDeliveryOriginName("Capital Lumber");
@@ -404,11 +467,25 @@ export default function DeliveryOrderForm({
     setDeliveryLocationNotes("");
     setGeneralNotes("");
     setItems([createEmptyDeliveryItem()]);
+    setCurrentStep(1);
     setError("");
   }
 
   async function handleSubmit(event) {
-    event.preventDefault();
+    event?.preventDefault();
+
+    if (currentStep < deliverySteps.length) {
+      const stepError = validateStep(currentStep);
+
+      if (stepError) {
+        setError(stepError);
+        return;
+      }
+
+      setCurrentStep((step) => Math.min(step + 1, deliverySteps.length));
+      clearError();
+      return;
+    }
 
     if (!/^\d{3}-\d{3}$/.test(orderNumber)) {
       setError("Enter a complete six-digit order number.");
@@ -471,7 +548,9 @@ export default function DeliveryOrderForm({
       phoneNumber: contactPhone.trim(),
       driver,
       dispatchStatus: driver ? "assigned" : "needsDispatch",
+      deliveryType,
       unloadType,
+      forkliftType: unloadType === "Forklift" ? forkliftType : "",
       deliveryDate,
       deliveryTimeSlot,
       deliveryOriginName,
@@ -521,30 +600,191 @@ export default function DeliveryOrderForm({
     }
   }
 
+  function validateStep(step) {
+    const selectedScope = getDeliveryScopeOption(deliveryScope);
+
+    if (step === 1) {
+      if (!/^\d{3}-\d{3}$/.test(orderNumber)) {
+        return "Enter a complete six-digit order number.";
+      }
+
+      if (!customerName.trim()) {
+        return "Enter the customer name.";
+      }
+
+      if (!address.trim()) {
+        return "Enter the delivery address.";
+      }
+    }
+
+    if (step === 2) {
+      if (!deliveryUnloadTypes.includes(unloadType)) {
+        return "Select the delivery unload type.";
+      }
+
+    }
+
+    if (step === 3) {
+      if (selectedScope.requiresNotes && !deliveryScopeNotes.trim()) {
+        return `Enter ${selectedScope.noteLabel.toLowerCase()}.`;
+      }
+
+      const savedDeliveryItems = items.filter((item) =>
+        item.description.trim(),
+      );
+
+      if (selectedScope.usesItems && savedDeliveryItems.length === 0) {
+        return "Add at least one item for the driver to deliver.";
+      }
+
+      if (
+        selectedScope.usesItems &&
+        savedDeliveryItems.some((item) => !item.saved)
+      ) {
+        return "Save each delivery item before continuing.";
+      }
+    }
+
+    return "";
+  }
+
+  function goToStep(step) {
+    if (step < currentStep) {
+      setCurrentStep(step);
+      clearError();
+      return;
+    }
+
+    for (let stepIndex = currentStep; stepIndex < step; stepIndex += 1) {
+      const stepError = validateStep(stepIndex);
+
+      if (stepError) {
+        setError(stepError);
+        setCurrentStep(stepIndex);
+        return;
+      }
+    }
+
+    setCurrentStep(step);
+    clearError();
+  }
+
+  function goToNextStep() {
+    const stepError = validateStep(currentStep);
+
+    if (stepError) {
+      setError(stepError);
+      return;
+    }
+
+    setCurrentStep((step) => Math.min(step + 1, deliverySteps.length));
+    clearError();
+  }
+
+  const selectedScope = getDeliveryScopeOption(deliveryScope);
+  const savedItems = items.filter((item) => item.description.trim());
+  const selectedDeliveryType =
+    deliveryTypeOptions.find((option) => option.value === deliveryType) ||
+    deliveryTypeOptions[0];
+  const selectedForklift =
+    forkliftOptions.find((option) => option.value === forkliftType) || null;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <div className="mb-7">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
-          Delivery's for Drivers
-        </p>
+    <form onSubmit={(event) => event.preventDefault()} className="space-y-5">
+      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
+              Create Delivery
+            </p>
 
-        <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
-          {isEditing ? "Edit Delivery Order" : "Add Delivery"}
-        </h2>
+            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
+              {isEditing ? "Edit Delivery Order" : "Add Delivery"}
+            </h2>
 
-        <p className="mt-2 text-slate-500">
-          {isEditing
-            ? "Update the customer stop, unload method, notes, and delivery items."
-            : "Build the order now. Dispatch can assign the driver when it is ready."}
-        </p>
+            <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
+              {isEditing
+                ? "Update the customer stop, setup, reminders, and items."
+                : "Walk through the delivery details, then send it to dispatch."}
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            {isEditing && onCancel ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={isSubmitting}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+            ) : null}
+
+            {currentStep > 1 ? (
+              <button
+                type="button"
+                onClick={() => setCurrentStep((step) => Math.max(step - 1, 1))}
+                disabled={isSubmitting}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Back
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-2 lg:grid-cols-5">
+          {deliverySteps.map((stepLabel, index) => {
+            const stepNumber = index + 1;
+            const isActive = currentStep === stepNumber;
+            const isComplete = currentStep > stepNumber;
+
+            return (
+              <button
+                key={stepLabel}
+                type="button"
+                onClick={() => goToStep(stepNumber)}
+                className={`flex items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+                  isActive
+                    ? "border-[#FC2C38] bg-red-50 text-slate-900"
+                    : isComplete
+                      ? "border-emerald-200 bg-emerald-50 text-slate-900"
+                      : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-white"
+                }`}
+              >
+                <span
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                    isActive
+                      ? "bg-[#FC2C38] text-white"
+                      : isComplete
+                        ? "bg-emerald-700 text-white"
+                        : "bg-white text-slate-500"
+                  }`}
+                >
+                  {isComplete ? (
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    stepNumber
+                  )}
+                </span>
+
+                <span className="text-xs font-black uppercase tracking-[0.08em]">
+                  {stepLabel}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="space-y-5">
-        <FormSection
-          eyebrow="Step 1"
-          title="Order & Customer"
-          description="Start with the order number, customer, delivery address, and site contact."
-        >
+        {currentStep === 1 ? (
+          <FormSection
+            eyebrow="Step 1 of 5"
+            title="Order & Customer"
+            description="Start with the order number, customer, delivery address, and site contact."
+          >
         <div className="grid gap-5 lg:grid-cols-2">
           <div>
             <label
@@ -698,13 +938,67 @@ export default function DeliveryOrderForm({
             />
           </div>
         </div>
-        </FormSection>
+          </FormSection>
+        ) : null}
 
-        <FormSection
-          eyebrow="Step 2"
-          title="Unload & Timing"
-          description="Pick the delivery method, origin, and rough route time. Dispatch can schedule the driver later."
-        >
+        {currentStep === 2 ? (
+          <FormSection
+            eyebrow="Step 2 of 5"
+            title="Delivery Setup"
+            description="Choose the delivery urgency, unload method, timing, and where the driver is leaving from."
+          >
+          <h4 className="mb-3 text-sm font-bold text-slate-700">
+            Delivery Type
+          </h4>
+
+          <div className="mb-5 grid gap-3 sm:grid-cols-3">
+            {deliveryTypeOptions.map((typeOption) => {
+              const TypeIcon = typeOption.Icon;
+              const isSelected = deliveryType === typeOption.value;
+
+              return (
+                <button
+                  key={typeOption.value}
+                  type="button"
+                  onClick={() => {
+                    setDeliveryType(typeOption.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                    isSelected
+                      ? "border-[#FC2C38] bg-red-50 text-slate-900 shadow-sm"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <TypeIcon
+                      className={`h-5 w-5 ${
+                        isSelected ? "text-[#FC2C38]" : "text-slate-500"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    {isSelected ? (
+                      <Check
+                        className="h-4 w-4 text-[#FC2C38]"
+                        aria-hidden="true"
+                        strokeWidth={3}
+                      />
+                    ) : null}
+                  </span>
+
+                  <span className="mt-3 block text-sm font-black">
+                    {typeOption.label}
+                  </span>
+
+                  <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">
+                    {typeOption.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <h4 className="mb-3 text-sm font-bold text-slate-700">
             Unload Type
           </h4>
@@ -719,6 +1013,9 @@ export default function DeliveryOrderForm({
                   type="button"
                   onClick={() => {
                     setUnloadType(unloadOption);
+                    if (unloadOption !== "Forklift") {
+                      setForkliftType("");
+                    }
                     clearError();
                   }}
                   disabled={isSubmitting}
@@ -742,6 +1039,64 @@ export default function DeliveryOrderForm({
               );
             })}
           </div>
+
+          {unloadType === "Forklift" ? (
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="mb-3 flex flex-col gap-1">
+                <h4 className="text-sm font-black text-slate-900">
+                  Which forklift?
+                </h4>
+                <p className="text-sm font-semibold text-slate-500">
+                  Pick the forklift that should go with this delivery.
+                </p>
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                {forkliftOptions.map((forkliftOption) => {
+                  const isSelected = forkliftType === forkliftOption.value;
+
+                  return (
+                    <button
+                      key={forkliftOption.value}
+                      type="button"
+                      onClick={() => {
+                        setForkliftType(forkliftOption.value);
+                        clearError();
+                      }}
+                      disabled={isSubmitting}
+                      className={`rounded-2xl border px-4 py-4 text-left transition ${
+                        isSelected
+                          ? "border-[#FC2C38] bg-white text-slate-900 shadow-sm"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      <span className="flex items-start justify-between gap-3">
+                        <span>
+                          <span className="block text-base font-black">
+                            {forkliftOption.label}
+                          </span>
+                          <span className="mt-1 block text-sm font-black text-[#FC2C38]">
+                            {forkliftOption.capacity}
+                          </span>
+                          <span className="mt-1 block text-xs font-bold text-slate-500">
+                            {forkliftOption.detail}
+                          </span>
+                        </span>
+
+                        {isSelected ? (
+                          <Check
+                            className="h-5 w-5 shrink-0 text-[#FC2C38]"
+                            aria-hidden="true"
+                            strokeWidth={3}
+                          />
+                        ) : null}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <label
@@ -876,14 +1231,15 @@ export default function DeliveryOrderForm({
               </p>
             </div>
           </div>
-        </FormSection>
+          </FormSection>
+        ) : null}
 
-        <FormSection
-          eyebrow="Step 3"
-          title="Delivery Scope"
-          description="Use this instead of writing every item for large deliveries."
-        >
-
+        {currentStep === 3 ? (
+          <FormSection
+            eyebrow="Step 3 of 5"
+            title="What's Going"
+            description="Pick the delivery scope and add item details only when they are useful."
+          >
           <div className="grid gap-3 lg:grid-cols-4">
             {deliveryScopeOptions.map((scopeOption) => {
               const isSelected = deliveryScope === scopeOption.value;
@@ -928,7 +1284,7 @@ export default function DeliveryOrderForm({
               className="mb-2 block text-sm font-bold text-slate-700"
             >
               {getDeliveryScopeOption(deliveryScope).noteLabel}
-              {getDeliveryScopeOption(deliveryScope).requiresNotes ? (
+              {selectedScope.requiresNotes ? (
                 <span className="ml-2 text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38]">
                   Required
                 </span>
@@ -944,125 +1300,17 @@ export default function DeliveryOrderForm({
               }}
               disabled={isSubmitting}
               rows={3}
-              placeholder={getDeliveryScopeOption(deliveryScope).notePlaceholder}
+              placeholder={selectedScope.notePlaceholder}
               className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
           </div>
-        </FormSection>
 
-        <FormSection
-          eyebrow="Step 4"
-          title="Notes & Reminders"
-          description="Add instructions the driver should not miss."
-        >
-        <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-red-100 bg-red-50 p-4 transition hover:border-red-200">
-          <input
-            type="checkbox"
-            checked={hasHardware}
-            onChange={(event) => {
-              setHasHardware(event.target.checked);
-              clearError();
-            }}
-            disabled={isSubmitting}
-            className="mt-1 h-5 w-5 rounded border-red-300 text-[#FC2C38] focus:ring-red-200"
-          />
-
-          <span>
-            <span className="flex items-center gap-2 text-sm font-black text-slate-900">
-              <ShieldCheck
-                className="h-4 w-4 text-[#FC2C38]"
-                aria-hidden="true"
-              />
-              Hardware to deliver
-            </span>
-
-            <span className="mt-1 block text-sm font-semibold text-slate-600">
-              Drivers will see a large reminder and must check hardware
-              off before completing the delivery.
-            </span>
-          </span>
-        </label>
-
-        <label className="mt-3 flex cursor-pointer items-start gap-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 transition hover:border-blue-200">
-          <input
-            type="checkbox"
-            checked={needsTarp}
-            onChange={(event) => {
-              setNeedsTarp(event.target.checked);
-              clearError();
-            }}
-            disabled={isSubmitting}
-            className="mt-1 h-5 w-5 rounded border-blue-300 text-blue-700 focus:ring-blue-200"
-          />
-
-          <span>
-            <span className="flex items-center gap-2 text-sm font-black text-slate-900">
-              <CloudRain
-                className="h-4 w-4 text-blue-700"
-                aria-hidden="true"
-              />
-              Tarp needed
-            </span>
-
-            <span className="mt-1 block text-sm font-semibold text-slate-600">
-              Mark this when the load should be tarped before leaving.
-            </span>
-          </span>
-        </label>
-
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <div>
-          <label
-            htmlFor="delivery-location-notes"
-            className="mb-2 block text-sm font-bold text-slate-700"
-          >
-            Delivery Location Notes
-          </label>
-
-          <textarea
-            id="delivery-location-notes"
-            value={deliveryLocationNotes}
-            onChange={(event) => {
-              setDeliveryLocationNotes(event.target.value);
-              clearError();
-            }}
-            disabled={isSubmitting}
-            rows={3}
-            placeholder="Example: Place on driveway, leave by garage."
-            className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-          />
-          </div>
-
-          <div>
-            <label
-              htmlFor="delivery-general-notes"
-              className="mb-2 block text-sm font-bold text-slate-700"
-            >
-              General Notes
-            </label>
-
-            <textarea
-              id="delivery-general-notes"
-              value={generalNotes}
-              onChange={(event) => {
-                setGeneralNotes(event.target.value);
-                clearError();
-              }}
-              disabled={isSubmitting}
-              rows={3}
-              placeholder='Example: Call "John" before leaving.'
-              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-            />
-          </div>
-        </div>
-        </FormSection>
-
-        {getDeliveryScopeOption(deliveryScope).usesItems ? (
-        <FormSection
-          eyebrow="Step 5"
-          title="Delivery Items"
-          description="These become the driver's delivery checklist."
-        >
+          {selectedScope.usesItems ? (
+          <div className="mt-5 border-t border-slate-100 pt-5">
+            <div className="mb-4 flex items-center gap-2 text-sm font-black text-slate-900">
+              <ListChecks className="h-4 w-4" aria-hidden="true" />
+              Delivery Items
+            </div>
 
           <div className="space-y-4">
             {items.map((item, index) => (
@@ -1192,7 +1440,221 @@ export default function DeliveryOrderForm({
             <Plus className="h-4 w-4" aria-hidden="true" />
             Add Item
           </button>
-        </FormSection>
+          </div>
+          ) : null}
+          </FormSection>
+        ) : null}
+
+        {currentStep === 4 ? (
+          <FormSection
+            eyebrow="Step 4 of 5"
+            title="Driver Instructions"
+            description="Add reminders, site placement details, and anything the driver should know before leaving."
+          >
+        <div className="grid gap-3 lg:grid-cols-2">
+          <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-red-100 bg-red-50 p-4 transition hover:border-red-200">
+            <input
+              type="checkbox"
+              checked={hasHardware}
+              onChange={(event) => {
+                setHasHardware(event.target.checked);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              className="mt-1 h-5 w-5 rounded border-red-300 text-[#FC2C38] focus:ring-red-200"
+            />
+
+            <span>
+              <span className="flex items-center gap-2 text-sm font-black text-slate-900">
+                <ShieldCheck
+                  className="h-4 w-4 text-[#FC2C38]"
+                  aria-hidden="true"
+                />
+                Hardware to deliver
+              </span>
+
+              <span className="mt-1 block text-sm font-semibold text-slate-600">
+                Drivers will see a reminder and must check hardware off.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 transition hover:border-blue-200">
+            <input
+              type="checkbox"
+              checked={needsTarp}
+              onChange={(event) => {
+                setNeedsTarp(event.target.checked);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              className="mt-1 h-5 w-5 rounded border-blue-300 text-blue-700 focus:ring-blue-200"
+            />
+
+            <span>
+              <span className="flex items-center gap-2 text-sm font-black text-slate-900">
+                <CloudRain
+                  className="h-4 w-4 text-blue-700"
+                  aria-hidden="true"
+                />
+                Tarp needed
+              </span>
+
+              <span className="mt-1 block text-sm font-semibold text-slate-600">
+                Mark this when the load should be tarped before leaving.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <div>
+            <label
+              htmlFor="delivery-location-notes"
+              className="mb-2 block text-sm font-bold text-slate-700"
+            >
+              Delivery Location Notes
+            </label>
+
+            <textarea
+              id="delivery-location-notes"
+              value={deliveryLocationNotes}
+              onChange={(event) => {
+                setDeliveryLocationNotes(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              rows={4}
+              placeholder="Example: Place on driveway, leave by garage."
+              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="delivery-general-notes"
+              className="mb-2 block text-sm font-bold text-slate-700"
+            >
+              General Notes
+            </label>
+
+            <textarea
+              id="delivery-general-notes"
+              value={generalNotes}
+              onChange={(event) => {
+                setGeneralNotes(event.target.value);
+                clearError();
+              }}
+              disabled={isSubmitting}
+              rows={4}
+              placeholder='Example: Call "John" before leaving.'
+              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+            />
+          </div>
+        </div>
+          </FormSection>
+        ) : null}
+
+        {currentStep === 5 ? (
+          <FormSection
+            eyebrow="Step 5 of 5"
+            title="Review & Send"
+            description="Give it one last look before this goes to Needs Dispatch."
+          >
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                  Order & Customer
+                </p>
+                <p className="mt-2 text-2xl font-black text-slate-900">
+                  {orderNumber || "No order"}
+                </p>
+                <p className="mt-1 text-lg font-black text-slate-900">
+                  {formatCustomerName(customerName) || "No customer"}
+                </p>
+                <p className="mt-2 text-sm font-semibold text-slate-600">
+                  {address || "No address entered"}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                  Delivery Setup
+                </p>
+                <p className="mt-2 text-lg font-black text-slate-900">
+                  {selectedDeliveryType.label} · {unloadType}
+                </p>
+                {unloadType === "Forklift" ? (
+                  <p className="mt-1 text-sm font-black text-[#FC2C38]">
+                    Forklift:{" "}
+                    {selectedForklift
+                      ? `${selectedForklift.label} · ${selectedForklift.capacity}`
+                      : "Not selected"}
+                  </p>
+                ) : null}
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  From {deliveryOriginName}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  Driver there:{" "}
+                  {driverTargetArrivalTime
+                    ? formatTimeLabel(driverTargetArrivalTime)
+                    : "Dispatch decides"}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                  What's Going
+                </p>
+                <p className="mt-2 text-lg font-black text-slate-900">
+                  {selectedScope.label}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  {selectedScope.usesItems
+                    ? `${savedItems.length} ${
+                        savedItems.length === 1 ? "item" : "items"
+                      } listed`
+                    : selectedScope.description}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {hasHardware ? (
+                    <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-[#FC2C38]">
+                      Hardware
+                    </span>
+                  ) : null}
+                  {needsTarp ? (
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                      Tarp
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {selectedScope.usesItems && savedItems.length > 0 ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="mb-3 text-sm font-black text-slate-900">
+                  Delivery Items
+                </p>
+                <ul className="space-y-2">
+                  {savedItems.map((item) => (
+                    <li
+                      key={item.id}
+                      className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
+                    >
+                      {item.quantity ? (
+                        <span className="mr-2 font-black text-[#FC2C38]">
+                          {item.quantity}
+                        </span>
+                      ) : null}
+                      {item.description}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </FormSection>
         ) : null}
 
         {error ? (
@@ -1201,29 +1663,41 @@ export default function DeliveryOrderForm({
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          {isEditing ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+          <button
+            type="button"
+            onClick={() => setCurrentStep((step) => Math.max(step - 1, 1))}
+            disabled={isSubmitting || currentStep === 1}
+            className="rounded-xl border border-slate-300 bg-white px-5 py-4 text-base font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:w-44"
+          >
+            Back
+          </button>
+
+          {currentStep < deliverySteps.length ? (
             <button
               type="button"
-              onClick={onCancel}
+              onClick={goToNextStep}
               disabled={isSubmitting}
-              className="rounded-xl border border-slate-300 bg-white px-5 py-4 text-base font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-44"
+              className="flex-1 rounded-xl bg-[#FC2C38] px-5 py-4 text-base font-black text-white shadow-lg shadow-red-200 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-sm"
             >
-              Cancel
+              {currentStep === deliverySteps.length - 1
+                ? "Review Delivery"
+                : `Next: ${deliverySteps[currentStep]}`}
             </button>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="flex-1 rounded-xl bg-[#FC2C38] px-5 py-4 text-base font-black text-white shadow-lg shadow-red-200 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting
-              ? "Saving Delivery..."
-              : isEditing
-                ? "Save Order Changes"
-                : "Send to Needs Dispatch"}
-          </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="flex-1 rounded-xl bg-[#FC2C38] px-5 py-4 text-base font-black text-white shadow-lg shadow-red-200 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60 sm:max-w-sm"
+            >
+              {isSubmitting
+                ? "Saving Delivery..."
+                : isEditing
+                  ? "Save Order Changes"
+                  : "Send to Needs Dispatch"}
+            </button>
+          )}
         </div>
 
         {isEditing && onDelete ? (
