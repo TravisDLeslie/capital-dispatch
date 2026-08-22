@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Truck,
   UserRound,
+  X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
@@ -86,17 +87,16 @@ function formatForkliftLabel(value) {
   return "";
 }
 
-function PhotoPreview({ photo, label, isHardware = false }) {
+function PhotoPreview({ photo, label, isHardware = false, onView }) {
   if (!photo?.dataUrl) {
     return null;
   }
 
   return (
-    <a
-      href={photo.dataUrl}
-      target="_blank"
-      rel="noreferrer"
-      className={`block overflow-hidden rounded-2xl border bg-white transition ${
+    <button
+      type="button"
+      onClick={() => onView?.({ ...photo, label })}
+      className={`block w-full overflow-hidden rounded-2xl border bg-white text-left transition ${
         isHardware
           ? "border-red-200 hover:bg-red-50"
           : "border-slate-200 hover:bg-slate-50"
@@ -105,7 +105,7 @@ function PhotoPreview({ photo, label, isHardware = false }) {
       <img
         src={photo.dataUrl}
         alt={label}
-        className="h-40 w-full object-cover"
+        className="h-48 w-full bg-slate-100 object-contain sm:h-64"
       />
 
       <span
@@ -116,7 +116,7 @@ function PhotoPreview({ photo, label, isHardware = false }) {
         <Camera className="h-4 w-4" aria-hidden="true" />
         View {label}
       </span>
-    </a>
+    </button>
   );
 }
 
@@ -139,7 +139,7 @@ function getPhotoList(delivery, photoField, photosField) {
   return [legacyPhoto, ...photos];
 }
 
-function PhotoPreviewGrid({ photos, label, isHardware = false }) {
+function PhotoPreviewGrid({ photos, label, isHardware = false, onView }) {
   if (!photos.length) {
     return null;
   }
@@ -150,6 +150,7 @@ function PhotoPreviewGrid({ photos, label, isHardware = false }) {
       photo={photo}
       label={`${label} ${photoIndex + 1}`}
       isHardware={isHardware}
+      onView={onView}
     />
   ));
 }
@@ -157,6 +158,7 @@ function PhotoPreviewGrid({ photos, label, isHardware = false }) {
 export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
   const [searchValue, setSearchValue] = useState("");
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
+  const [viewingPhoto, setViewingPhoto] = useState(null);
 
   const completedDeliveries = useMemo(
     () =>
@@ -505,12 +507,14 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
                   <PhotoPreviewGrid
                     photos={deliveryPhotos}
                     label="delivery photo"
+                    onView={setViewingPhoto}
                   />
 
                   <PhotoPreviewGrid
                     photos={hardwarePhotos}
                     label="hardware photo"
                     isHardware
+                    onView={setViewingPhoto}
                   />
                 </div>
                 </>
@@ -518,6 +522,38 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
               </article>
             );
           })}
+        </div>
+      ) : null}
+      {viewingPhoto?.dataUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={viewingPhoto.label || "Delivery photo"}
+        >
+          <div className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <p className="truncate text-sm font-black uppercase tracking-[0.12em] text-slate-700">
+                {viewingPhoto.label || "Delivery Photo"}
+              </p>
+              <button
+                type="button"
+                onClick={() => setViewingPhoto(null)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100"
+                aria-label="Close photo"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-950 p-3">
+              <img
+                src={viewingPhoto.dataUrl}
+                alt={viewingPhoto.label || "Delivery photo"}
+                className="max-h-[78vh] w-auto max-w-full object-contain"
+              />
+            </div>
+          </div>
         </div>
       ) : null}
     </PageContainer>
