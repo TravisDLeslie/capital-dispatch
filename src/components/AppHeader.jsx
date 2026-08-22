@@ -535,6 +535,13 @@ export default function AppHeader({
             pageId: "deliveries-queue",
           }
         : null,
+      pageAllowed("deliveries-history")
+        ? {
+            id: "deliveries-past-history",
+            label: "Past History",
+            pageId: "deliveries-history",
+          }
+        : null,
     ]
       .filter(Boolean)
       .map((link) => ({
