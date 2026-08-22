@@ -5307,6 +5307,8 @@ export default function App() {
           <DeliveryHistoryPage
             deliveries={visibleDeliveries}
             onPageChange={navigateToPage}
+            onUpdateDelivery={handleUpdateDelivery}
+            isSuperAdmin={isSuperAdmin}
           />
         );
 

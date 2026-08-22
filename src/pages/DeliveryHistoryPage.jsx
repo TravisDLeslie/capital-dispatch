@@ -9,6 +9,7 @@ import {
   Phone,
   Search,
   ShieldCheck,
+  Trash2,
   Truck,
   UserRound,
   X,
@@ -87,7 +88,15 @@ function formatForkliftLabel(value) {
   return "";
 }
 
-function PhotoPreview({ photo, label, isHardware = false, onView }) {
+function PhotoPreview({
+  photo,
+  label,
+  isHardware = false,
+  onView,
+  deliveryId,
+  photoField,
+  photosField,
+}) {
   if (!photo?.dataUrl) {
     return null;
   }
@@ -95,7 +104,15 @@ function PhotoPreview({ photo, label, isHardware = false, onView }) {
   return (
     <button
       type="button"
-      onClick={() => onView?.({ ...photo, label })}
+      onClick={() =>
+        onView?.({
+          ...photo,
+          label,
+          deliveryId,
+          photoField,
+          photosField,
+        })
+      }
       className={`block w-full overflow-hidden rounded-2xl border bg-white text-left transition ${
         isHardware
           ? "border-red-200 hover:bg-red-50"
@@ -139,7 +156,15 @@ function getPhotoList(delivery, photoField, photosField) {
   return [legacyPhoto, ...photos];
 }
 
-function PhotoPreviewGrid({ photos, label, isHardware = false, onView }) {
+function PhotoPreviewGrid({
+  photos,
+  label,
+  isHardware = false,
+  onView,
+  deliveryId,
+  photoField,
+  photosField,
+}) {
   if (!photos.length) {
     return null;
   }
@@ -151,11 +176,19 @@ function PhotoPreviewGrid({ photos, label, isHardware = false, onView }) {
       label={`${label} ${photoIndex + 1}`}
       isHardware={isHardware}
       onView={onView}
+      deliveryId={deliveryId}
+      photoField={photoField}
+      photosField={photosField}
     />
   ));
 }
 
-export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
+export default function DeliveryHistoryPage({
+  deliveries,
+  onPageChange,
+  onUpdateDelivery,
+  isSuperAdmin = false,
+}) {
   const [searchValue, setSearchValue] = useState("");
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
   const [viewingPhoto, setViewingPhoto] = useState(null);
@@ -210,6 +243,39 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
       ...currentOpenDeliveryKeys,
       [deliveryId]: !currentOpenDeliveryKeys[deliveryId],
     }));
+  }
+
+  async function handleDeletePhoto() {
+    if (!isSuperAdmin || !viewingPhoto?.deliveryId || !viewingPhoto?.dataUrl) {
+      return;
+    }
+
+    const delivery = deliveries.find(
+      (currentDelivery) => currentDelivery.id === viewingPhoto.deliveryId,
+    );
+
+    if (!delivery || !onUpdateDelivery) {
+      return;
+    }
+
+    const photosField = viewingPhoto.photosField;
+    const photoField = viewingPhoto.photoField;
+    const nextPhotos = Array.isArray(delivery[photosField])
+      ? delivery[photosField].filter(
+          (photo) => photo?.dataUrl && photo.dataUrl !== viewingPhoto.dataUrl,
+        )
+      : [];
+    const nextUpdates = {
+      [photosField]: nextPhotos,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (delivery[photoField]?.dataUrl === viewingPhoto.dataUrl) {
+      nextUpdates[photoField] = nextPhotos[0] || null;
+    }
+
+    await onUpdateDelivery(delivery.id, nextUpdates);
+    setViewingPhoto(null);
   }
 
   return (
@@ -504,18 +570,24 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
                 </div>
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                  <PhotoPreviewGrid
-                    photos={deliveryPhotos}
-                    label="delivery photo"
-                    onView={setViewingPhoto}
-                  />
+	                  <PhotoPreviewGrid
+	                    photos={deliveryPhotos}
+	                    label="delivery photo"
+	                    onView={setViewingPhoto}
+	                    deliveryId={delivery.id}
+	                    photoField="deliveryPhoto"
+	                    photosField="deliveryPhotos"
+	                  />
 
-                  <PhotoPreviewGrid
-                    photos={hardwarePhotos}
-                    label="hardware photo"
-                    isHardware
-                    onView={setViewingPhoto}
-                  />
+	                  <PhotoPreviewGrid
+	                    photos={hardwarePhotos}
+	                    label="hardware photo"
+	                    isHardware
+	                    onView={setViewingPhoto}
+	                    deliveryId={delivery.id}
+	                    photoField="hardwarePhoto"
+	                    photosField="hardwarePhotos"
+	                  />
                 </div>
                 </>
                 ) : null}
@@ -536,14 +608,27 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
               <p className="truncate text-sm font-black uppercase tracking-[0.12em] text-slate-700">
                 {viewingPhoto.label || "Delivery Photo"}
               </p>
-              <button
-                type="button"
-                onClick={() => setViewingPhoto(null)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100"
-                aria-label="Close photo"
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {isSuperAdmin ? (
+                  <button
+                    type="button"
+                    onClick={handleDeletePhoto}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-[#FC2C38] shadow-sm transition hover:bg-red-100"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    Delete
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => setViewingPhoto(null)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100"
+                  aria-label="Close photo"
+                >
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-950 p-3">
