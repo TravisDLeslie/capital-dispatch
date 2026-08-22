@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  ChevronDown,
   Clock,
   CloudRain,
   Edit3,
@@ -57,6 +58,24 @@ function formatCreatedAt(value) {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatDateLabel(value) {
+  if (!value) {
+    return "No date";
+  }
+
+  const date = new Date(`${value}T12:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(date);
 }
 
 function formatTimeLabel(value) {
@@ -279,6 +298,7 @@ export default function DeliveryDispatchPage({
   const [searchQuery, setSearchQuery] = useState("");
   const [draftAssignments, setDraftAssignments] = useState({});
   const [draftSchedules, setDraftSchedules] = useState({});
+  const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
   const [error, setError] = useState("");
 
@@ -408,6 +428,17 @@ export default function DeliveryDispatchPage({
       [delivery.id]: nextAssignments,
     }));
     setError("");
+  }
+
+  function toggleDelivery(deliveryId) {
+    setOpenDeliveryKeys((currentOpenDeliveryKeys) => ({
+      ...currentOpenDeliveryKeys,
+      [deliveryId]: !currentOpenDeliveryKeys[deliveryId],
+    }));
+  }
+
+  function isDeliveryOpen(deliveryId) {
+    return Boolean(openDeliveryKeys[deliveryId]);
   }
 
   async function handleDispatchDelivery(delivery) {
@@ -584,31 +615,78 @@ export default function DeliveryDispatchPage({
               ? findScheduleConflict(scheduledDelivery, assignments, deliveries)
               : null;
             const scopeSummary = getDeliveryScopeSummary(delivery);
+            const dispatchPanelOpen = isDeliveryOpen(delivery.id);
 
             return (
               <article
                 key={delivery.id}
-                className="rounded-3xl border border-amber-200 bg-white p-4 shadow-sm sm:p-5"
+                className={`overflow-hidden rounded-3xl border bg-white shadow-sm transition ${
+                  dispatchPanelOpen
+                    ? "border-[#FC2C38]/30"
+                    : "border-slate-200 hover:border-amber-300"
+                }`}
               >
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-                          Order {delivery.orderNumber}
-                        </p>
+                <div className="p-4 sm:p-5">
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(220px,280px)_auto] xl:items-stretch">
+                    <div className="flex min-w-0 flex-col justify-center rounded-2xl bg-slate-50 px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                            Order {delivery.orderNumber}
+                          </p>
+
+                          <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800 sm:text-xs">
+                            Needs Dispatch
+                          </span>
+                        </div>
 
                         <h2 className="mt-1 truncate text-2xl font-black tracking-tight text-slate-900 sm:mt-2">
                           {formatCustomerName(delivery.customerName)}
                         </h2>
                       </div>
 
-                      <span className="shrink-0 rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800 sm:text-xs">
-                        Hold
-                      </span>
-                    </div>
+                    <div className="flex min-h-full flex-col justify-center rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-left">
+                        <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#FC2C38]">
+                          <Clock className="h-4 w-4" aria-hidden="true" />
+                          Delivery Date
+                        </p>
+                        <p className="mt-1 text-lg font-black text-slate-950">
+                          {formatDateLabel(schedule.deliveryDate)}
+                        </p>
+                        <p className="mt-0.5 text-sm font-black text-slate-600">
+                          {getDeliveryTimeRange(scheduledDelivery)}
+                        </p>
+                      </div>
 
-                    <div className="mt-3 flex flex-wrap gap-1.5 sm:gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row xl:flex-col xl:justify-center xl:shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => toggleDelivery(delivery.id)}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 sm:w-auto"
+                        aria-expanded={dispatchPanelOpen}
+                      >
+                        {dispatchPanelOpen ? "Close" : "Open / Assign"}
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${
+                            dispatchPanelOpen ? "rotate-180" : ""
+                          }`}
+                          aria-hidden="true"
+                        />
+                      </button>
+
+                      {canEditDeliveries ? (
+                        <button
+                          type="button"
+                          onClick={() => onEditDelivery(delivery.id)}
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
+                        >
+                          <Edit3 className="h-4 w-4" aria-hidden="true" />
+                          Edit
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5 sm:gap-2">
                       <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
                         <Truck className="h-4 w-4" aria-hidden="true" />
                         {delivery.unloadType}
@@ -666,12 +744,6 @@ export default function DeliveryDispatchPage({
                         {scopeSummary.shortLabel}
                       </span>
 
-                      <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
-                        <Clock className="h-4 w-4" aria-hidden="true" />
-                        {schedule.deliveryDate || "No date"} ·{" "}
-                        {getDeliveryTimeRange(scheduledDelivery)}
-                      </span>
-
                       <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700">
                         Site around{" "}
                         {getDeliverySiteArrivalLabel(scheduledDelivery)}
@@ -687,22 +759,11 @@ export default function DeliveryDispatchPage({
                           Added {formatCreatedAt(delivery.createdAt)}
                         </span>
                       ) : null}
-                    </div>
                   </div>
-
-                  {canEditDeliveries ? (
-                  <button
-                    type="button"
-                    onClick={() => onEditDelivery(delivery.id)}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
-                  >
-                    <Edit3 className="h-4 w-4" aria-hidden="true" />
-                    Edit
-                  </button>
-                  ) : null}
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:mt-5 sm:p-4">
+                {dispatchPanelOpen ? (
+                <div className="border-t border-slate-200 bg-slate-50 p-3 sm:p-4">
                   <section className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                       <div>
@@ -1079,8 +1140,6 @@ export default function DeliveryDispatchPage({
                     <Truck className="h-4 w-4" aria-hidden="true" />
                     {isSaving ? "Dispatching..." : "Dispatch Delivery"}
                   </button>
-                </div>
-
                 <div className="mt-5 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
                   <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
@@ -1239,6 +1298,8 @@ export default function DeliveryDispatchPage({
                     </ul>
                   ) : null}
                 </section>
+                </div>
+                ) : null}
               </article>
             );
           })}

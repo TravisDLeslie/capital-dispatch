@@ -22,6 +22,13 @@ export function getFirebaseErrorMessage(error) {
     return "Firebase requires sign-in for this action. Update Firestore rules or add authentication.";
   }
 
+  if (
+    errorMessage.toLowerCase().includes("maximum size") ||
+    errorMessage.toLowerCase().includes("entity too large")
+  ) {
+    return "That save has too many large photos for Firestore. Remove a couple photos or retake fewer wide photos, then try again.";
+  }
+
   return errorMessage
     ? `Firebase error: ${errorMessage}`
     : "Unable to reach Firebase. Check the Firebase project, Firestore database, and rules.";

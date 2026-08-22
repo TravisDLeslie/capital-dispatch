@@ -2,8 +2,10 @@ import {
   AlertTriangle,
   ArrowRight,
   Calculator,
+  CalendarDays,
   ClipboardCheck,
   DollarSign,
+  Package,
   Plus,
   Route,
   Search,
@@ -414,6 +416,7 @@ export default function DashboardPage({
   onTraceSearch,
 }) {
   const [dashboardSearch, setDashboardSearch] = useState("");
+  const [selectedFolderId, setSelectedFolderId] = useState("");
   const hasDashboardSearch = dashboardSearch.trim().length > 0;
   const dashboardSearchResults = useMemo(() => {
     if (!hasDashboardSearch) {
@@ -600,60 +603,148 @@ export default function DashboardPage({
     theirTruckPOs,
   ]);
 
-  const quickActions = [
+  const theirTruckOpenCount = theirTruckPOs.filter(
+    (theirTruckPO) => theirTruckPO.status !== "complete",
+  ).length;
+  const quickActionFolders = [
     {
-      id: "supplier-runs-add",
-      title: "Add PO to South",
-      description: "Create a pickup request for the South route.",
-      icon: Plus,
-      metric: "+",
-      metricLabel: "PO",
-      tone:
-        "bg-red-50 text-[#FC2C38] border-red-100 hover:border-red-200 hover:bg-red-100/70",
-    },
-    {
-      id: "supplier-runs-dispatch",
-      title: "South POs Need Dispatch",
-      description: "Assign drivers and trucks before they hit the route.",
+      id: "south-section",
+      title: "South",
+      description: "POs we are picking up from suppliers.",
       icon: Truck,
-      metric: operations.southNeedsDispatch || 0,
-      metricLabel: "Waiting",
-      tone:
-        operations.southNeedsDispatch > 0
-          ? "bg-amber-50 text-amber-800 border-amber-200 hover:border-amber-300 hover:bg-amber-100/60"
-          : "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-200 hover:bg-blue-100/70",
+      summary: `${operations.southNeedsDispatch || 0} need dispatch · ${
+        operations.southOpen || 0
+      } open`,
+      tone: "border-red-200 bg-red-50 text-[#FC2C38]",
+      accent: "from-red-500 to-[#FC2C38]",
+      actions: [
+        {
+          id: "supplier-runs-add",
+          title: "Add South PO",
+          description: "Create a pickup request.",
+          icon: Plus,
+          metric: "+",
+          metricLabel: "PO",
+        },
+        {
+          id: "supplier-runs-dispatch",
+          title: "Needs Dispatch",
+          description: "Assign driver and truck.",
+          icon: AlertTriangle,
+          metric: operations.southNeedsDispatch || 0,
+          metricLabel: "Waiting",
+        },
+        {
+          id: "supplier-runs-check",
+          title: "POs to Pick Up",
+          description: "Open route board.",
+          icon: ClipboardCheck,
+          metric: operations.southOpen || 0,
+          metricLabel: "Open",
+        },
+      ],
     },
     {
-      id: "supplier-runs-check",
-      title: "View POs to Pick Up",
-      description: "Open the active South route board.",
-      icon: ClipboardCheck,
-      metric: operations.southOpen || 0,
-      metricLabel: "Open",
-      tone:
-        "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-200 hover:bg-blue-100/70",
+      id: "deliveries-section",
+      title: "Deliveries",
+      description: "Orders going out to customers.",
+      icon: Package,
+      summary: `${operations.deliveryNeedsDispatch || 0} need dispatch · ${
+        operations.deliveryOpen || 0
+      } upcoming`,
+      tone: "border-blue-200 bg-blue-50 text-blue-700",
+      accent: "from-blue-500 to-blue-700",
+      actions: [
+        {
+          id: "deliveries-dispatch",
+          title: "Needs Dispatch",
+          description: "Schedule drivers and trucks.",
+          icon: Truck,
+          metric: operations.deliveryNeedsDispatch || 0,
+          metricLabel: "Waiting",
+        },
+        {
+          id: "deliveries-queue",
+          title: "Upcoming",
+          description: "View assigned deliveries.",
+          icon: ClipboardCheck,
+          metric: operations.deliveryOpen || 0,
+          metricLabel: "Open",
+        },
+        {
+          id: "deliveries-calendar",
+          title: "Calendar",
+          description: "See delivery blocks by driver.",
+          icon: CalendarDays,
+          metric: operations.deliveryOpen || 0,
+          metricLabel: "Live",
+        },
+      ],
     },
     {
-      id: "yard-tasks",
+      id: "yard-section",
       title: "Yard Tasks",
-      description: "Keep the top yard priorities visible and assigned.",
+      description: "Assigned yard priorities.",
       icon: ClipboardCheck,
-      metric: operations.yardTasksOpen || 0,
-      metricLabel: "Open",
-      tone:
-        "bg-emerald-50 text-emerald-700 border-emerald-100 hover:border-emerald-200 hover:bg-emerald-100/70",
+      summary: `${operations.yardTasksOpen || 0} open tasks`,
+      tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      accent: "from-emerald-500 to-emerald-700",
+      actions: [
+        {
+          id: "yard-tasks",
+          title: "Yard Tasks",
+          description: "View, assign, and complete work.",
+          icon: ClipboardCheck,
+          metric: operations.yardTasksOpen || 0,
+          metricLabel: "Open",
+        },
+      ],
     },
     {
-      id: "stocking-handbook",
-      title: "Stocking Handbook",
-      description: "Look up stocked items, lengths, and item numbers.",
+      id: "incoming-section",
+      title: "Incoming Deliveries",
+      description: "Their Truck vendor-delivered POs.",
       icon: Route,
-      metric: operations.stockingHandbookItems || 0,
-      metricLabel: "Items",
-      tone:
-        "bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100/70",
+      summary: `${theirTruckOpenCount} inbound POs`,
+      tone: "border-sky-200 bg-sky-50 text-sky-700",
+      accent: "from-sky-500 to-sky-700",
+      actions: [
+        {
+          id: "their-truck-pos",
+          title: "Their Truck POs",
+          description: "Add or review inbound POs.",
+          icon: Plus,
+          metric: theirTruckOpenCount,
+          metricLabel: "Open",
+        },
+        {
+          id: "their-truck-calendar",
+          title: "Calendar",
+          description: "Vendor delivery dates.",
+          icon: CalendarDays,
+          metric: theirTruckOpenCount,
+          metricLabel: "Inbound",
+        },
+        {
+          id: "their-truck-history",
+          title: "History",
+          description: "Completed inbound POs.",
+          icon: Route,
+          metric: theirTruckPOs.length,
+          metricLabel: "POs",
+        },
+      ],
     },
-  ].filter((action) => allowedPageIds.includes(action.id));
+  ]
+    .map((folder) => ({
+      ...folder,
+      actions: folder.actions.filter((action) => allowedPageIds.includes(action.id)),
+    }))
+    .filter((folder) => folder.actions.length > 0);
+  const activeQuickActionFolder =
+    quickActionFolders.find((folder) => folder.id === selectedFolderId) ||
+    quickActionFolders[0];
+  const ActiveQuickActionFolderIcon = activeQuickActionFolder?.icon || Package;
 
   function openTraceSearch() {
     if (onTraceSearch) {
@@ -825,7 +916,7 @@ export default function DashboardPage({
         </section>
       ) : null}
 
-      {quickActions.length > 0 ? (
+      {quickActionFolders.length > 0 ? (
         <section className="mb-5 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -838,19 +929,37 @@ export default function DashboardPage({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {quickActions.map((action) => {
-              const ActionIcon = action.icon;
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-2">
+            {quickActionFolders.map((section) => {
+              const SectionIcon = section.icon;
+              const isActive = activeQuickActionFolder?.id === section.id;
 
               return (
                 <button
-                  key={action.id}
+                  key={section.id}
                   type="button"
-                  onClick={() => onPageChange?.(action.id)}
-                  className={`group flex min-h-[92px] items-center gap-3 rounded-2xl border p-4 text-left shadow-sm transition ${action.tone}`}
+                  onClick={() => setSelectedFolderId(section.id)}
+                  className={`relative flex min-w-[190px] shrink-0 items-center gap-3 overflow-hidden rounded-3xl border px-4 py-3 text-left shadow-sm transition sm:min-w-[210px] ${
+                    isActive
+                      ? `${section.tone} ring-2 ring-white`
+                      : "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:bg-white"
+                  }`}
+                  aria-pressed={isActive}
                 >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm">
-                    <ActionIcon
+                  {isActive ? (
+                    <span
+                      className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${section.accent}`}
+                    />
+                  ) : null}
+
+                  <span
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl shadow-sm ${
+                      isActive
+                        ? `bg-gradient-to-br ${section.accent} text-white`
+                        : "bg-white text-slate-500"
+                    }`}
+                  >
+                    <SectionIcon
                       aria-hidden="true"
                       className="h-5 w-5"
                       strokeWidth={2.6}
@@ -858,26 +967,88 @@ export default function DashboardPage({
                   </span>
 
                   <span className="min-w-0 flex-1">
-                    <span className="block text-base font-black text-slate-950">
-                      {action.title}
+                    <span className="block truncate text-sm font-black text-slate-950">
+                      {section.title}
                     </span>
-                    <span className="mt-0.5 block text-xs font-bold leading-5 text-slate-500">
-                      {action.description}
-                    </span>
-                  </span>
-
-                  <span className="shrink-0 rounded-2xl bg-white px-4 py-3 text-center shadow-sm">
-                    <span className="block text-2xl font-black text-slate-950">
-                      {action.metric}
-                    </span>
-                    <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                      {action.metricLabel}
+                    <span className="mt-0.5 block truncate text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">
+                      {section.summary}
                     </span>
                   </span>
                 </button>
               );
             })}
           </div>
+
+          {activeQuickActionFolder ? (
+            <article className="overflow-hidden rounded-b-3xl rounded-tr-3xl border border-slate-200 bg-slate-50 shadow-sm">
+              <div className={`flex items-start gap-3 border-b px-4 py-4 ${activeQuickActionFolder.tone}`}>
+                <span className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm sm:flex">
+                  <ActiveQuickActionFolderIcon
+                    aria-hidden="true"
+                    className="h-6 w-6"
+                    strokeWidth={2.6}
+                  />
+                </span>
+
+                <span className="min-w-0 flex-1">
+                  <span className="text-xs font-black uppercase tracking-[0.16em] opacity-80">
+                    Focus Area
+                  </span>
+                  <span className="mt-1 block text-2xl font-black tracking-tight text-slate-950">
+                    {activeQuickActionFolder.title}
+                  </span>
+                  <span className="mt-1 block text-sm font-bold leading-5 text-slate-600">
+                    {activeQuickActionFolder.description}
+                  </span>
+                </span>
+
+                <span className="shrink-0 rounded-2xl bg-white px-3 py-2 text-right text-xs font-black uppercase tracking-[0.08em] text-slate-500 shadow-sm">
+                  {activeQuickActionFolder.summary}
+                </span>
+              </div>
+
+              <div className="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-3">
+                {activeQuickActionFolder.actions.map((action) => {
+                  const ActionIcon = action.icon;
+
+                  return (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => onPageChange?.(action.id)}
+                      className="group flex min-h-[92px] items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-red-200 hover:bg-white"
+                    >
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 transition group-hover:bg-red-50 group-hover:text-[#FC2C38]">
+                        <ActionIcon
+                          aria-hidden="true"
+                          className="h-5 w-5"
+                          strokeWidth={2.6}
+                        />
+                      </span>
+
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-black text-slate-950">
+                          {action.title}
+                        </span>
+                        <span className="mt-0.5 block text-xs font-bold leading-5 text-slate-500">
+                          {action.description}
+                        </span>
+                      </span>
+
+                      <span className="shrink-0 rounded-2xl bg-slate-50 px-3 py-2 text-center">
+                        <span className="block text-xl font-black text-slate-950">
+                          {action.metric}
+                        </span>
+                        <span className="block text-[9px] font-black uppercase tracking-[0.12em] text-slate-400">
+                          {action.metricLabel}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </article>
+          ) : null}
         </section>
       ) : null}
 

@@ -310,7 +310,7 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
                 <button
                   type="button"
                   onClick={() => toggleDelivery(delivery.id)}
-                  className="flex w-full flex-col gap-4 text-left transition hover:text-[#FC2C38] lg:flex-row lg:items-start lg:justify-between"
+                  className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-4 text-left transition hover:text-[#FC2C38] lg:grid-cols-[minmax(260px,0.42fr)_minmax(0,1fr)_auto] lg:items-start"
                   aria-expanded={deliveryIsOpen}
                 >
                   <div className="min-w-0">
@@ -327,7 +327,7 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-2 lg:col-span-1">
                     <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
                       <UserRound className="h-4 w-4" aria-hidden="true" />
                       {delivery.driver}
@@ -379,7 +379,9 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
                       </span>
                     ) : null}
 
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
+                  </div>
+
+                    <span className="col-start-2 row-start-1 flex h-9 w-9 items-center justify-center self-start justify-self-end rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm lg:col-start-auto lg:row-start-auto">
                       <ChevronDown
                         aria-hidden="true"
                         className={`h-5 w-5 transition-transform ${
@@ -388,7 +390,6 @@ export default function DeliveryHistoryPage({ deliveries, onPageChange }) {
                         strokeWidth={2.6}
                       />
                     </span>
-                  </div>
                 </button>
 
                 {deliveryIsOpen ? (

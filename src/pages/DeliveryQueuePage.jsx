@@ -19,6 +19,7 @@ import {
   Trash2,
   Truck,
   UserRound,
+  X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
@@ -197,32 +198,49 @@ function groupDeliveriesByDriver(deliveries) {
   }, []);
 }
 
-function PhotoPreview({ photo, label }) {
+function getUniqueOptions(options) {
+  const seenOptions = new Set();
+
+  return options
+    .map((option) => String(option || "").trim())
+    .filter(Boolean)
+    .filter((option) => {
+      const key = option.toLowerCase();
+
+      if (seenOptions.has(key)) {
+        return false;
+      }
+
+      seenOptions.add(key);
+      return true;
+    });
+}
+
+function PhotoPreview({ photo, label, onView }) {
   if (!photo?.dataUrl) {
     return null;
   }
 
   return (
-    <a
-      href={photo.dataUrl}
-      target="_blank"
-      rel="noreferrer"
-      className="block overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-red-200"
+    <button
+      type="button"
+      onClick={() => onView?.({ ...photo, label })}
+      className="block w-full overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:border-red-200"
     >
       <img
         src={photo.dataUrl}
         alt={label}
-        className="h-40 w-full object-cover"
+        className="h-56 w-full bg-slate-100 object-contain sm:h-72"
       />
 
       <span className="block px-3 py-2 text-sm font-black text-slate-700">
         View {label}
       </span>
-    </a>
+    </button>
   );
 }
 
-function PhotoPreviewGrid({ photos, label }) {
+function PhotoPreviewGrid({ photos, label, onView }) {
   if (!photos.length) {
     return null;
   }
@@ -234,6 +252,7 @@ function PhotoPreviewGrid({ photos, label }) {
           key={`${label}-${photo.dataUrl}-${photoIndex}`}
           photo={photo}
           label={`${label} ${photoIndex + 1}`}
+          onView={onView}
         />
       ))}
     </div>
@@ -752,7 +771,11 @@ function MobileDeliveryFlowCard({
               </label>
 
               <div className="mt-3">
-                <PhotoPreviewGrid photos={deliveryPhotos} label="delivery photo" />
+                <PhotoPreviewGrid
+                  photos={deliveryPhotos}
+                  label="delivery photo"
+                  onView={setViewingPhoto}
+                />
               </div>
             </div>
 
@@ -809,7 +832,11 @@ function MobileDeliveryFlowCard({
                 </label>
 
                 <div className="mt-3">
-                  <PhotoPreviewGrid photos={hardwarePhotos} label="hardware photo" />
+                  <PhotoPreviewGrid
+                    photos={hardwarePhotos}
+                    label="hardware photo"
+                    onView={setViewingPhoto}
+                  />
                 </div>
               </div>
             ) : null}
@@ -913,6 +940,7 @@ export default function DeliveryQueuePage({
   deliveries,
   onUpdateDelivery,
   canEditDeliveries = false,
+  employeeOptions = /** @type {string[]} */ ([]),
   onEditDelivery,
   onDeleteDelivery,
   onPageChange,
@@ -920,6 +948,8 @@ export default function DeliveryQueuePage({
 }) {
   const [error, setError] = useState("");
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
+  const [reassigningDeliveryId, setReassigningDeliveryId] = useState("");
+  const [viewingPhoto, setViewingPhoto] = useState(null);
   const [selectedDriver, setSelectedDriver] = useState("All");
   const [openDriverKeys, setOpenDriverKeys] = useState({});
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
@@ -940,6 +970,7 @@ export default function DeliveryQueuePage({
   ].sort((firstDriver, secondDriver) =>
     firstDriver.localeCompare(secondDriver),
   );
+  const driverOptions = getUniqueOptions([...employeeOptions, ...driverNames]);
   const filteredDeliveries =
     selectedDriver === "All"
       ? openDeliveries
@@ -1019,6 +1050,57 @@ export default function DeliveryQueuePage({
       });
     } finally {
       setUpdatingDeliveryId("");
+    }
+  }
+
+  async function handleReassignDriver(delivery, nextDriver) {
+    if (!nextDriver || nextDriver === delivery.driver) {
+      return;
+    }
+
+    const currentAssignments = Array.isArray(delivery.dispatchAssignments)
+      ? delivery.dispatchAssignments
+      : [];
+    const nextAssignments =
+      currentAssignments.length > 0
+        ? currentAssignments.map((assignment, assignmentIndex) =>
+            assignmentIndex === 0
+              ? { ...assignment, driver: nextDriver }
+              : assignment,
+          )
+        : [
+            {
+              id: "truck-1",
+              driver: nextDriver,
+              vehicleId: delivery.vehicleId || "",
+              vehicleTitle: delivery.vehicleTitle || "",
+              vehicleBadge: delivery.vehicleBadge || "",
+            },
+          ];
+
+    setReassigningDeliveryId(delivery.id);
+    setError("");
+
+    try {
+      await onUpdateDelivery(delivery.id, {
+        driver: nextDriver,
+        drivers: [
+          nextDriver,
+          ...(Array.isArray(delivery.drivers) ? delivery.drivers : []).filter(
+            (driverName) =>
+              driverName &&
+              driverName !== delivery.driver &&
+              driverName !== nextDriver,
+          ),
+        ],
+        dispatchAssignments: nextAssignments,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (updateError) {
+      console.error("Unable to change delivery driver:", updateError);
+      setError("Unable to change that delivery driver. Try again.");
+    } finally {
+      setReassigningDeliveryId("");
     }
   }
 
@@ -1527,6 +1609,46 @@ export default function DeliveryQueuePage({
 
                       {deliveryIsOpen ? (
                       <>
+                      {canEditDeliveries && driverOptions.length > 0 ? (
+                        <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                              <p className="text-sm font-black text-slate-900">
+                                Assigned Driver
+                              </p>
+                              <p className="mt-1 text-sm font-semibold text-slate-500">
+                                Change who sees this delivery in their driver view.
+                              </p>
+                            </div>
+
+                            <label className="block w-full lg:max-w-xs">
+                              <span className="sr-only">Change delivery driver</span>
+                              <select
+                                value={delivery.driver || ""}
+                                onChange={(event) =>
+                                  handleReassignDriver(
+                                    delivery,
+                                    event.target.value,
+                                  )
+                                }
+                                disabled={reassigningDeliveryId === delivery.id}
+                                className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
+                              >
+                                <option value="">Select driver...</option>
+                                {driverOptions.map((driverOption) => (
+                                  <option
+                                    key={driverOption}
+                                    value={driverOption}
+                                  >
+                                    {driverOption}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                        </section>
+                      ) : null}
+
                       <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
                         <div className="grid grid-cols-4 gap-2">
                           {DRIVER_DELIVERY_STEPS.map((stepLabel, stepIndex) => {
@@ -1801,6 +1923,7 @@ export default function DeliveryQueuePage({
                             <PhotoPreviewGrid
                               photos={hardwarePhotos}
                               label="hardware photo"
+                              onView={setViewingPhoto}
                             />
                           </div>
                         </section>
@@ -1924,6 +2047,7 @@ export default function DeliveryQueuePage({
                         <PhotoPreviewGrid
                           photos={deliveryPhotos}
                           label="delivery photo"
+                          onView={setViewingPhoto}
                         />
                         </div>
 
@@ -1996,11 +2120,13 @@ export default function DeliveryQueuePage({
                               <PhotoPreviewGrid
                                 photos={deliveryPhotos}
                                 label="delivery photo"
+                                onView={setViewingPhoto}
                               />
 
                               <PhotoPreviewGrid
                                 photos={hardwarePhotos}
                                 label="hardware photo"
+                                onView={setViewingPhoto}
                               />
                             </div>
                           ) : null}
@@ -2044,6 +2170,39 @@ export default function DeliveryQueuePage({
           ))}
         </div>
       )}
+
+      {viewingPhoto?.dataUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={viewingPhoto.label || "Delivery photo"}
+        >
+          <div className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <p className="truncate text-sm font-black uppercase tracking-[0.12em] text-slate-700">
+                {viewingPhoto.label || "Delivery Photo"}
+              </p>
+              <button
+                type="button"
+                onClick={() => setViewingPhoto(null)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100"
+                aria-label="Close photo"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-950 p-3">
+              <img
+                src={viewingPhoto.dataUrl}
+                alt={viewingPhoto.label || "Delivery photo"}
+                className="max-h-[78vh] w-auto max-w-full object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }

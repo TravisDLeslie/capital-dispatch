@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  CalendarDays,
   Check,
   Clock,
   CloudRain,
@@ -1159,37 +1160,61 @@ export default function DeliveryOrderForm({
           ) : null}
 
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <label
-              htmlFor="driver-target-arrival-time"
-              className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
-            >
-              <Clock className="h-4 w-4" aria-hidden="true" />
-              What time should the driver be there?
-              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                Optional
-              </span>
-            </label>
-
-            <div className="grid gap-3 sm:grid-cols-[minmax(180px,0.35fr)_1fr] sm:items-center">
-              <input
-                id="driver-target-arrival-time"
-                type="time"
-                value={driverTargetArrivalTime}
-                onChange={(event) => {
-                  setDriverTargetArrivalTime(event.target.value);
-                  clearError();
-                }}
-                disabled={isSubmitting}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-lg font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-              />
-
-              <p className="text-sm font-semibold text-slate-500">
-                {driverTargetArrivalTime
-                  ? `Drivers will see “be there around ${formatTimeLabel(
-                      driverTargetArrivalTime,
-                    )}.”`
-                  : "Leave blank if dispatch should control the timing later."}
+            <div className="mb-4">
+              <h4 className="flex items-center gap-2 text-sm font-black text-slate-900">
+                <CalendarDays className="h-4 w-4 text-[#FC2C38]" aria-hidden="true" />
+                Delivery Schedule
+              </h4>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                Pick the delivery date, then add when the driver should be at the job.
               </p>
+            </div>
+
+            <div className="grid gap-4">
+              <label className="block" htmlFor="delivery-date">
+                <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                  Delivery Date
+                </span>
+                <input
+                  id="delivery-date"
+                  type="date"
+                  value={deliveryDate}
+                  onChange={(event) => {
+                    setDeliveryDate(event.target.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-lg font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+              </label>
+
+              <label className="block" htmlFor="driver-target-arrival-time">
+                <span className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                  <Clock className="h-4 w-4" aria-hidden="true" />
+                  Driver needs to be there
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                    Optional
+                  </span>
+                </span>
+                <input
+                  id="driver-target-arrival-time"
+                  type="time"
+                  value={driverTargetArrivalTime}
+                  onChange={(event) => {
+                    setDriverTargetArrivalTime(event.target.value);
+                    clearError();
+                  }}
+                  disabled={isSubmitting}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-lg font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+                <span className="mt-2 block text-sm font-semibold text-slate-500">
+                  {driverTargetArrivalTime
+                    ? `Drivers will see “be there around ${formatTimeLabel(
+                        driverTargetArrivalTime,
+                      )}.”`
+                    : "Leave blank if dispatch should control the timing later."}
+                </span>
+              </label>
             </div>
           </div>
 

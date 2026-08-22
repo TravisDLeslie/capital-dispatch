@@ -12,6 +12,12 @@ export function loadGooglePlaces() {
     return Promise.resolve(null);
   }
 
+  if (window.google?.maps?.importLibrary) {
+    return window.google.maps
+      .importLibrary("places")
+      .then(() => window.google);
+  }
+
   if (window.google?.maps?.places) {
     return Promise.resolve(window.google);
   }
@@ -31,7 +37,17 @@ export function loadGooglePlaces() {
         return;
       }
 
-      existingScript.addEventListener("load", () => resolve(window.google));
+      existingScript.addEventListener("load", () => {
+        if (window.google?.maps?.importLibrary) {
+          window.google.maps
+            .importLibrary("places")
+            .then(() => resolve(window.google))
+            .catch(reject);
+          return;
+        }
+
+        resolve(window.google);
+      });
       existingScript.addEventListener("error", reject);
       return;
     }
@@ -41,6 +57,14 @@ export function loadGooglePlaces() {
     googlePlacesCallbackId += 1;
     window[callbackName] = () => {
       delete window[callbackName];
+      if (window.google?.maps?.importLibrary) {
+        window.google.maps
+          .importLibrary("places")
+          .then(() => resolve(window.google))
+          .catch(reject);
+        return;
+      }
+
       resolve(window.google);
     };
 

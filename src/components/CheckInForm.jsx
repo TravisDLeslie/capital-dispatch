@@ -415,23 +415,35 @@ function loadImage(dataUrl) {
 async function createLocationPhoto(file) {
   const originalDataUrl = await readFileAsDataUrl(file);
   const image = await loadImage(originalDataUrl);
-  const maxWidth = 720;
-  const scale = Math.min(maxWidth / image.width, 1);
-  const width = Math.round(image.width * scale);
-  const height = Math.round(image.height * scale);
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d");
+  const targetDataUrlLength = 90000;
+  const minQuality = 0.26;
+  let maxWidth = 720;
+  let dataUrl = "";
 
-  canvas.width = width;
-  canvas.height = height;
-  context.drawImage(image, 0, 0, width, height);
+  while (maxWidth >= 420) {
+    const scale = Math.min(maxWidth / image.width, 1);
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
 
-  let quality = 0.68;
-  let dataUrl = canvas.toDataURL("image/jpeg", quality);
+    canvas.width = width;
+    canvas.height = height;
+    context.drawImage(image, 0, 0, width, height);
 
-  while (dataUrl.length > 240000 && quality > 0.34) {
-    quality -= 0.08;
+    let quality = 0.62;
     dataUrl = canvas.toDataURL("image/jpeg", quality);
+
+    while (dataUrl.length > targetDataUrlLength && quality > minQuality) {
+      quality = Math.max(minQuality, quality - 0.08);
+      dataUrl = canvas.toDataURL("image/jpeg", quality);
+    }
+
+    if (dataUrl.length <= targetDataUrlLength || maxWidth <= 420) {
+      break;
+    }
+
+    maxWidth -= 120;
   }
 
   return {
@@ -1256,6 +1268,13 @@ export default function CheckInForm({
 
       checkedInAt: new Date().toISOString(),
     };
+
+    if (JSON.stringify(newCheckIn).length > 850000) {
+      setError(
+        "This check-in has too many photos to save at once. Remove a couple photos or retake fewer wide photos, then try again.",
+      );
+      return;
+    }
 
     setIsSubmitting(true);
 

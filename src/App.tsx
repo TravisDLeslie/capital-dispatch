@@ -5269,6 +5269,7 @@ export default function App() {
             deliveries={visibleDeliveries}
             onUpdateDelivery={handleUpdateDelivery}
             canEditDeliveries={canEditDeliveryDetails}
+            employeeOptions={approvedEmployeeNames}
             onEditDelivery={handleEditDelivery}
             onDeleteDelivery={handleDeleteDelivery}
             onPageChange={navigateToPage}
