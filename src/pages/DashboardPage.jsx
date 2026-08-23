@@ -682,6 +682,14 @@ export default function DashboardPage({
       accent: "from-blue-500 to-blue-700",
       actions: [
         {
+          id: "deliveries-add",
+          title: "Add Delivery",
+          description: "Create a delivery order.",
+          icon: Plus,
+          metric: "+",
+          metricLabel: "Delivery",
+        },
+        {
           id: "deliveries-dispatch",
           title: "Needs Dispatch",
           description: "Schedule drivers and trucks.",
