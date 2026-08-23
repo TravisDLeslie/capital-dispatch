@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowRight,
+  BookOpen,
   Calculator,
   CalendarDays,
   ClipboardCheck,
@@ -606,6 +607,15 @@ export default function DashboardPage({
   const theirTruckOpenCount = theirTruckPOs.filter(
     (theirTruckPO) => theirTruckPO.status !== "complete",
   ).length;
+  const theirTruckCompleteCount = theirTruckPOs.filter(
+    (theirTruckPO) => theirTruckPO.status === "complete",
+  ).length;
+  const southCompleteCount = supplierRuns.filter(
+    (supplierRun) => supplierRun.status === "complete",
+  ).length;
+  const deliveryCompleteCount = deliveries.filter(
+    (delivery) => delivery.status === "complete",
+  ).length;
   const quickActionFolders = [
     {
       id: "south-section",
@@ -641,6 +651,22 @@ export default function DashboardPage({
           icon: ClipboardCheck,
           metric: operations.southOpen || 0,
           metricLabel: "Open",
+        },
+        {
+          id: "supplier-runs-calendar",
+          title: "South Calendar",
+          description: "See scheduled pickup dates.",
+          icon: CalendarDays,
+          metric: (operations.southNeedsDispatch || 0) + (operations.southOpen || 0),
+          metricLabel: "POs",
+        },
+        {
+          id: "supplier-runs-history",
+          title: "South History",
+          description: "Review completed South runs.",
+          icon: Route,
+          metric: southCompleteCount,
+          metricLabel: "Done",
         },
       ],
     },
@@ -679,6 +705,14 @@ export default function DashboardPage({
           metric: operations.deliveryOpen || 0,
           metricLabel: "Live",
         },
+        {
+          id: "deliveries-history",
+          title: "Past History",
+          description: "Review completed deliveries.",
+          icon: Route,
+          metric: deliveryCompleteCount,
+          metricLabel: "Done",
+        },
       ],
     },
     {
@@ -712,7 +746,7 @@ export default function DashboardPage({
         {
           id: "their-truck-pos",
           title: "Their Truck POs",
-          description: "Add or review inbound POs.",
+          description: "Add inbound vendor truck POs.",
           icon: Plus,
           metric: theirTruckOpenCount,
           metricLabel: "Open",
@@ -730,8 +764,35 @@ export default function DashboardPage({
           title: "History",
           description: "Completed inbound POs.",
           icon: Route,
-          metric: theirTruckPOs.length,
+          metric: theirTruckCompleteCount,
           metricLabel: "POs",
+        },
+      ],
+    },
+    {
+      id: "sales-section",
+      title: "Sales",
+      description: "Pricing and stock lookup tools.",
+      icon: Calculator,
+      summary: "Handbook · Converter",
+      tone: "border-violet-200 bg-violet-50 text-violet-700",
+      accent: "from-violet-500 to-violet-700",
+      actions: [
+        {
+          id: "sales-converter",
+          title: "Price Converter",
+          description: "Convert sheet, board, and item pricing.",
+          icon: Calculator,
+          metric: "$",
+          metricLabel: "Tool",
+        },
+        {
+          id: "stocking-handbook",
+          title: "Stocking Handbook",
+          description: "Search item numbers, lengths, and stock details.",
+          icon: BookOpen,
+          metric: operations.stockingHandbookItems || 0,
+          metricLabel: "Items",
         },
       ],
     },
