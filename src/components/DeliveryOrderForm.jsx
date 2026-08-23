@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   CalendarDays,
   Check,
+  ChevronDown,
   Clock,
   CloudRain,
   Diamond,
@@ -24,8 +25,14 @@ import {
   deliveryUnloadTypes,
 } from "../data/options";
 import {
+  addMinutesToTime,
   defaultDeliveryScheduleSettings,
+  deliveryTimeSlotOptions,
+  deliveryLoadBufferMinutes,
+  getDeliveryBackAroundLabel,
+  getDeliveryBlockSummary,
   getDeliveryDurationMinutes,
+  getTimeSlotLabel,
 } from "../utils/deliverySchedule";
 import {
   deliveryScopeOptions,
@@ -110,6 +117,19 @@ function formatTimeLabel(value) {
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
+}
+
+function getCalculatedLeaveByTime(targetArrivalTime, driveMinutes) {
+  const numericDriveMinutes = Number(driveMinutes);
+
+  if (!targetArrivalTime || !Number.isFinite(numericDriveMinutes)) {
+    return "";
+  }
+
+  return addMinutesToTime(
+    targetArrivalTime,
+    -(deliveryLoadBufferMinutes + Math.max(0, numericDriveMinutes)),
+  );
 }
 
 function getOriginAddress(originName, originOptions = fallbackDeliveryOriginOptions) {
@@ -530,6 +550,30 @@ export default function DeliveryOrderForm({
     }
   }
 
+  useEffect(() => {
+    if (
+      currentStep !== 2 ||
+      !deliveryDate ||
+      !driverTargetArrivalTime ||
+      !deliveryOriginAddress.trim() ||
+      !address.trim()
+    ) {
+      return undefined;
+    }
+
+    const calculateTimer = window.setTimeout(() => {
+      void handleCalculateRouteEta();
+    }, 650);
+
+    return () => window.clearTimeout(calculateTimer);
+  }, [
+    address,
+    currentStep,
+    deliveryDate,
+    deliveryOriginAddress,
+    driverTargetArrivalTime,
+  ]);
+
   async function handleSubmit(event) {
     event?.preventDefault();
 
@@ -596,6 +640,10 @@ export default function DeliveryOrderForm({
       return;
     }
 
+    const calculatedLeaveByTime = getCalculatedLeaveByTime(
+      driverTargetArrivalTime,
+      oneWayDriveMinutes,
+    );
     const now = new Date().toISOString();
     const delivery = {
       id: initialDelivery?.id || createId(),
@@ -611,11 +659,13 @@ export default function DeliveryOrderForm({
       unloadType,
       forkliftType: unloadType === "Forklift" ? forkliftType : "",
       deliveryDate,
-      deliveryTimeSlot,
+      deliveryTimeSlot: calculatedLeaveByTime || deliveryTimeSlot,
       deliveryOriginName,
       deliveryOriginAddress,
       oneWayDriveMinutes: Number(oneWayDriveMinutes) || 0,
       driverTargetArrivalTime,
+      leaveByTime: calculatedLeaveByTime || deliveryTimeSlot,
+      loadingMinutes: deliveryLoadBufferMinutes,
       estimatedDurationMinutes: getDeliveryDurationMinutes(
         unloadType,
         null,
@@ -747,6 +797,24 @@ export default function DeliveryOrderForm({
     deliveryTypeOptions[0];
   const selectedForklift =
     forkliftOptions.find((option) => option.value === forkliftType) || null;
+  const calculatedLeaveByTime = getCalculatedLeaveByTime(
+    driverTargetArrivalTime,
+    oneWayDriveMinutes,
+  );
+  const schedulePreviewDelivery = {
+    deliveryTimeSlot: calculatedLeaveByTime || deliveryTimeSlot,
+    unloadType,
+    oneWayDriveMinutes: Number(oneWayDriveMinutes) || 0,
+    estimatedDurationMinutes: getDeliveryDurationMinutes(
+      unloadType,
+      null,
+      deliverySettings,
+    ),
+  };
+  const hasScheduleTarget = Boolean(driverTargetArrivalTime);
+  const canShowLeaveByTime = Boolean(
+    driverTargetArrivalTime && calculatedLeaveByTime,
+  );
 
   return (
     <form onSubmit={(event) => event.preventDefault()} className="space-y-5">
@@ -1196,27 +1264,130 @@ export default function DeliveryOrderForm({
                     Optional
                   </span>
                 </span>
-                <input
-                  id="driver-target-arrival-time"
-                  type="time"
-                  value={driverTargetArrivalTime}
-                  onChange={(event) => {
-                    setDriverTargetArrivalTime(event.target.value);
-                    clearError();
-                  }}
-                  disabled={isSubmitting}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-lg font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                />
-                <span className="mt-2 block text-sm font-semibold text-slate-500">
-                  {driverTargetArrivalTime
-                    ? `Drivers will see “be there around ${formatTimeLabel(
-                        driverTargetArrivalTime,
-                      )}.”`
-                    : "Leave blank if dispatch should control the timing later."}
-                </span>
-              </label>
-            </div>
-          </div>
+	                <div className="relative">
+	                  <Clock
+	                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500"
+	                    aria-hidden="true"
+	                  />
+	                  <select
+	                    id="driver-target-arrival-time"
+	                    value={driverTargetArrivalTime}
+	                    onChange={(event) => {
+	                      setDriverTargetArrivalTime(event.target.value);
+	                      setRouteEtaStatus("idle");
+	                      setRouteEtaMessage("");
+	                      clearError();
+	                    }}
+	                    disabled={isSubmitting}
+	                    className="block w-full appearance-none rounded-xl border border-slate-300 bg-white py-3 pl-12 pr-12 text-lg font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
+	                  >
+	                    <option value="">Select arrival time...</option>
+	                    {deliveryTimeSlotOptions.map((timeSlot) => (
+	                      <option key={timeSlot.value} value={timeSlot.value}>
+	                        {timeSlot.label}
+	                      </option>
+	                    ))}
+	                  </select>
+	                  <ChevronDown
+	                    className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500"
+	                    aria-hidden="true"
+	                  />
+	                </div>
+	                <span className="mt-2 block text-sm font-semibold text-slate-500">
+	                  {driverTargetArrivalTime
+	                    ? `Drivers will see “be there around ${formatTimeLabel(
+	                        driverTargetArrivalTime,
+	                      )}.”`
+	                    : "Leave blank if dispatch should control the timing later."}
+	                </span>
+	              </label>
+
+	              <div
+	                className={`rounded-2xl border p-4 ${
+	                  canShowLeaveByTime
+	                    ? "border-emerald-200 bg-emerald-50"
+	                    : "border-slate-200 bg-white"
+	                }`}
+	              >
+	                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+	                  <div>
+	                    <p
+	                      className={`text-xs font-black uppercase tracking-[0.14em] ${
+	                        canShowLeaveByTime
+	                          ? "text-emerald-700"
+	                          : "text-slate-500"
+	                      }`}
+	                    >
+	                      Truck Should Leave By
+	                    </p>
+	                    <p
+	                      className={`mt-1 text-3xl font-black ${
+	                        canShowLeaveByTime
+	                          ? "text-emerald-900"
+	                          : "text-slate-400"
+	                      }`}
+	                    >
+	                      {canShowLeaveByTime
+	                        ? getTimeSlotLabel(calculatedLeaveByTime)
+	                        : "Add time + ETA"}
+	                    </p>
+	                  </div>
+
+	                  <div className="rounded-2xl bg-white px-4 py-3 text-left shadow-sm sm:text-right">
+	                    <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+	                      Driver There
+	                    </p>
+	                    <p className="mt-1 text-lg font-black text-blue-900">
+	                      {hasScheduleTarget
+	                        ? formatTimeLabel(driverTargetArrivalTime)
+	                        : "Not set"}
+	                    </p>
+	                  </div>
+	                </div>
+
+	                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+	                  <div className="rounded-xl bg-white px-3 py-2">
+	                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+	                      Loading
+	                    </p>
+	                    <p className="mt-1 text-sm font-black text-slate-900">
+	                      {deliveryLoadBufferMinutes} min
+	                    </p>
+	                  </div>
+
+	                  <div className="rounded-xl bg-white px-3 py-2">
+	                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+	                      Drive
+	                    </p>
+	                    <p className="mt-1 text-sm font-black text-slate-900">
+	                      {Number(oneWayDriveMinutes) > 0
+	                        ? `${Number(oneWayDriveMinutes)} min`
+	                        : "Needs ETA"}
+	                    </p>
+	                  </div>
+
+	                  <div className="rounded-xl bg-white px-3 py-2">
+	                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+	                      Back Around
+	                    </p>
+	                    <p className="mt-1 text-sm font-black text-slate-900">
+	                      {canShowLeaveByTime
+	                        ? getDeliveryBackAroundLabel(schedulePreviewDelivery)
+	                        : "Not set"}
+	                    </p>
+	                  </div>
+	                </div>
+
+	                <p className="mt-3 text-xs font-bold text-slate-500">
+	                  {canShowLeaveByTime
+	                    ? `${getDeliveryBlockSummary(
+	                        schedulePreviewDelivery,
+	                      )}. Based on the current route ETA entered below.`
+	                    : "Calculate or enter the one-way ETA to get a live leave-by time."}
+	                </p>
+	              </div>
+	            </div>
+	          </div>
 
           <div className="mb-3 mt-6">
             <h4 className="text-sm font-bold text-slate-700">
@@ -1329,10 +1500,12 @@ export default function DeliveryOrderForm({
                 className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-[#FC2C38] transition hover:bg-red-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
               >
                 <MapPin className="h-4 w-4" aria-hidden="true" />
-                {routeEtaStatus === "loading"
-                  ? "Calculating..."
-                  : "Calculate ETA"}
-              </button>
+	                {routeEtaStatus === "loading"
+	                  ? "Calculating..."
+	                  : Number(oneWayDriveMinutes) > 0
+	                    ? "Recalculate ETA"
+	                    : "Calculate ETA"}
+	              </button>
 
               {routeEtaMessage ? (
                 <p
@@ -1711,13 +1884,19 @@ export default function DeliveryOrderForm({
                 <p className="mt-1 text-sm font-semibold text-slate-600">
                   From {deliveryOriginName}
                 </p>
-                <p className="mt-1 text-sm font-semibold text-slate-600">
-                  Driver there:{" "}
-                  {driverTargetArrivalTime
-                    ? formatTimeLabel(driverTargetArrivalTime)
-                    : "Dispatch decides"}
-                </p>
-              </div>
+	                <p className="mt-1 text-sm font-semibold text-slate-600">
+	                  Driver there:{" "}
+	                  {driverTargetArrivalTime
+	                    ? formatTimeLabel(driverTargetArrivalTime)
+	                    : "Dispatch decides"}
+	                </p>
+	                <p className="mt-1 text-sm font-black text-emerald-700">
+	                  Leave by:{" "}
+	                  {canShowLeaveByTime
+	                    ? getTimeSlotLabel(calculatedLeaveByTime)
+	                    : "Needs ETA"}
+	                </p>
+	              </div>
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">

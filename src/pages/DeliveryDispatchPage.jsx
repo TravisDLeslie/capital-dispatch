@@ -9,6 +9,7 @@ import {
   Package,
   Search,
   ShieldAlert,
+  StickyNote,
   Truck,
   UserRound,
 } from "lucide-react";
@@ -266,6 +267,56 @@ function assignmentsReady(assignments, vehicleOptions, driverOptions) {
   );
 }
 
+function DispatchDetailSection({
+  id,
+  title,
+  summary,
+  icon: Icon,
+  isOpen,
+  onToggle,
+  children,
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+        aria-expanded={isOpen}
+        aria-controls={id}
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+          <Icon className="h-5 w-5" aria-hidden="true" />
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-black text-slate-950">
+            {title}
+          </span>
+          {summary ? (
+            <span className="mt-0.5 block truncate text-sm font-semibold text-slate-500">
+              {summary}
+            </span>
+          ) : null}
+        </span>
+
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 text-slate-500 transition-transform ${
+            isOpen ? "rotate-180" : ""
+          }`}
+          aria-hidden="true"
+        />
+      </button>
+
+      {isOpen ? (
+        <div id={id} className="border-t border-slate-200 bg-slate-50 p-4">
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 /**
  * @param {{
  *   deliveries: Array<Record<string, any>>;
@@ -299,6 +350,7 @@ export default function DeliveryDispatchPage({
   const [draftAssignments, setDraftAssignments] = useState({});
   const [draftSchedules, setDraftSchedules] = useState({});
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
+  const [openDetailKeys, setOpenDetailKeys] = useState({});
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
   const [error, setError] = useState("");
 
@@ -439,6 +491,23 @@ export default function DeliveryDispatchPage({
 
   function isDeliveryOpen(deliveryId) {
     return Boolean(openDeliveryKeys[deliveryId]);
+  }
+
+  function getDetailKey(deliveryId, detailName) {
+    return `${deliveryId}:${detailName}`;
+  }
+
+  function toggleDetail(deliveryId, detailName) {
+    const detailKey = getDetailKey(deliveryId, detailName);
+
+    setOpenDetailKeys((currentOpenDetailKeys) => ({
+      ...currentOpenDetailKeys,
+      [detailKey]: !currentOpenDetailKeys[detailKey],
+    }));
+  }
+
+  function isDetailOpen(deliveryId, detailName) {
+    return Boolean(openDetailKeys[getDetailKey(deliveryId, detailName)]);
   }
 
   async function handleDispatchDelivery(delivery) {
@@ -804,9 +873,9 @@ export default function DeliveryDispatchPage({
                       </div>
                     </div>
 
-                    <div className="mt-3 grid gap-3 sm:mt-4">
-                      {assignments.map((assignment, assignmentIndex) => (
-                        <div
+	                    <div className="mt-3 grid gap-3 sm:mt-4">
+	                      {assignments.map((assignment, assignmentIndex) => (
+	                        <div
                           key={assignment.id}
                           className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[auto_1fr_1fr]"
                         >
@@ -886,10 +955,20 @@ export default function DeliveryDispatchPage({
                               ))}
                             </select>
                           </label>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
+	                        </div>
+	                      ))}
+	                    </div>
+
+	                    <button
+	                      type="button"
+	                      onClick={() => handleDispatchDelivery(delivery)}
+	                      disabled={isSaving}
+	                      className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
+	                    >
+	                      <Truck className="h-4 w-4" aria-hidden="true" />
+	                      {isSaving ? "Dispatching..." : "Dispatch Delivery"}
+	                    </button>
+	                  </section>
 
                   <section
                     className={`mt-5 rounded-2xl border p-4 transition ${
@@ -910,11 +989,37 @@ export default function DeliveryDispatchPage({
                         </p>
                       </div>
 
+                      {!canScheduleDelivery ? (
+                        <span className="inline-flex rounded-full bg-slate-200 px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                          Locked until assigned
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-3 lg:grid-cols-3">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                          Delivery Date
+                        </p>
+                        <p className="mt-1 text-lg font-black text-slate-900">
+                          {formatDateLabel(schedule.deliveryDate)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+                          Site Around
+                        </p>
+                        <p className="mt-1 text-lg font-black text-blue-900">
+                          {getDeliverySiteArrivalLabel(scheduledDelivery)}
+                        </p>
+                      </div>
+
                       <div
-                        className={`rounded-2xl px-4 py-3 text-left lg:text-right ${
+                        className={`rounded-2xl border px-4 py-3 ${
                           canScheduleDelivery
-                            ? "bg-emerald-50"
-                            : "bg-slate-200"
+                            ? "border-emerald-100 bg-emerald-50"
+                            : "border-slate-200 bg-slate-100"
                         }`}
                       >
                         <p
@@ -924,10 +1029,10 @@ export default function DeliveryDispatchPage({
                               : "text-slate-500"
                           }`}
                         >
-                          Driver Back Around
+                          Back Around
                         </p>
                         <p
-                          className={`mt-1 text-xl font-black ${
+                          className={`mt-1 text-lg font-black ${
                             canScheduleDelivery
                               ? "text-emerald-800"
                               : "text-slate-600"
@@ -935,372 +1040,401 @@ export default function DeliveryDispatchPage({
                         >
                           {getDeliveryBackAroundLabel(scheduledDelivery)}
                         </p>
-                        <p
-                          className={`mt-1 text-xs font-bold ${
-                            canScheduleDelivery
-                              ? "text-emerald-700"
-                              : "text-slate-500"
-                          }`}
-                        >
-                          Site around{" "}
-                          {getDeliverySiteArrivalLabel(scheduledDelivery)} ·{" "}
-                          {getDeliveryBlockSummary(scheduledDelivery)}
-                        </p>
                       </div>
                     </div>
 
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                          Delivery Date
-                        </span>
+                    <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="mb-3 flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-[#FC2C38]" aria-hidden="true" />
+                          <p className="text-sm font-black text-slate-900">
+                            When
+                          </p>
+                        </div>
 
-                        <input
-                          type="date"
-                          value={schedule.deliveryDate}
-                          onChange={(event) =>
-                            updateSchedule(
-                              delivery,
-                              "deliveryDate",
-                              event.target.value,
-                            )
-                          }
-                          disabled={isSaving || !canScheduleDelivery}
-                          className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                        />
-                      </label>
+                        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-1">
+                          <label className="block">
+                            <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                              Delivery Date
+                            </span>
 
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                          Time Slot
-                        </span>
-
-                        <select
-                          value={schedule.deliveryTimeSlot}
-                          onChange={(event) =>
-                            updateSchedule(
-                              delivery,
-                              "deliveryTimeSlot",
-                              event.target.value,
-                            )
-                          }
-                          disabled={isSaving || !canScheduleDelivery}
-                          className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                        >
-                          <option value="">
-                            {canScheduleDelivery
-                              ? "Choose time..."
-                              : "Assign driver/truck first..."}
-                          </option>
-
-                          {deliveryTimeSlotOptions.map((timeSlot) => {
-                            const candidateDelivery = {
-                              ...scheduledDelivery,
-                              deliveryTimeSlot: timeSlot.value,
-                            };
-                            const conflict = findScheduleConflict(
-                              candidateDelivery,
-                              assignments,
-                              deliveries,
-                            );
-                            const conflictingDrivers = conflict
-                              ? getConflictingDriverNames(conflict, assignments)
-                              : [];
-                            const conflictLabel = conflictingDrivers.length
-                              ? `${conflictingDrivers.join(", ")} busy until ${getDeliveryBackAroundLabel(
-                                  conflict,
-                                )}`
-                              : "Driver busy";
-
-                            return (
-                              <option
-                                key={timeSlot.value}
-                                value={timeSlot.value}
-                                disabled={Boolean(conflict)}
-                              >
-                                {conflict
-                                  ? `${timeSlot.label} - ${conflictLabel}`
-                                  : timeSlot.label}
-                              </option>
-                            );
-                          })}
-                        </select>
-
-                        {selectedScheduleConflict ? (
-                          <span className="mt-2 block rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
-                            {getConflictingDriverNames(
-                              selectedScheduleConflict,
-                              assignments,
-                            ).join(", ")}{" "}
-                            is already blocked until{" "}
-                            {getDeliveryBackAroundLabel(
-                              selectedScheduleConflict,
-                            )}
-                            .
-                          </span>
-                        ) : null}
-                      </label>
-                    </div>
-
-                    <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_160px]">
-                      <div>
-                        <label className="block">
-                          <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                            Where is the delivery leaving from?
-                          </span>
-
-                          <select
-                            value={schedule.deliveryOriginName}
-                            onChange={(event) =>
-                              updateSchedule(
-                                delivery,
-                                "deliveryOriginName",
-                                event.target.value,
-                              )
-                            }
-                            disabled={isSaving || !canScheduleDelivery}
-                            className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                          >
-                            {safeDeliveryOriginOptions.map((originOption) => (
-                              <option
-                                key={originOption.name}
-                                value={originOption.name}
-                              >
-                                {originOption.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <p className="mt-2 text-sm font-semibold text-slate-500">
-                          {schedule.deliveryOriginAddress}
-                        </p>
-
-                        {delivery.address ? (
-                          <a
-                            href={getRouteDirectionsUrl(
-                              schedule.deliveryOriginAddress,
-                              delivery.address,
-                            )}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-3 inline-flex items-center gap-2 text-sm font-black text-[#FC2C38] transition hover:text-red-700"
-                          >
-                            Open live route ETA
-                            <ExternalLink
-                              className="h-4 w-4"
-                              aria-hidden="true"
+                            <input
+                              type="date"
+                              value={schedule.deliveryDate}
+                              onChange={(event) =>
+                                updateSchedule(
+                                  delivery,
+                                  "deliveryDate",
+                                  event.target.value,
+                                )
+                              }
+                              disabled={isSaving || !canScheduleDelivery}
+                              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                             />
-                          </a>
-                        ) : null}
+                          </label>
+
+                          <label className="block">
+                            <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                              Truck Leaves
+                            </span>
+
+                            <select
+                              value={schedule.deliveryTimeSlot}
+                              onChange={(event) =>
+                                updateSchedule(
+                                  delivery,
+                                  "deliveryTimeSlot",
+                                  event.target.value,
+                                )
+                              }
+                              disabled={isSaving || !canScheduleDelivery}
+                              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                            >
+                              <option value="">
+                                {canScheduleDelivery
+                                  ? "Choose leave time..."
+                                  : "Assign driver/truck first..."}
+                              </option>
+
+                              {deliveryTimeSlotOptions.map((timeSlot) => {
+                                const candidateDelivery = {
+                                  ...scheduledDelivery,
+                                  deliveryTimeSlot: timeSlot.value,
+                                };
+                                const conflict = findScheduleConflict(
+                                  candidateDelivery,
+                                  assignments,
+                                  deliveries,
+                                );
+                                const conflictingDrivers = conflict
+                                  ? getConflictingDriverNames(conflict, assignments)
+                                  : [];
+                                const conflictLabel = conflictingDrivers.length
+                                  ? `${conflictingDrivers.join(", ")} busy until ${getDeliveryBackAroundLabel(
+                                      conflict,
+                                    )}`
+                                  : "Driver busy";
+
+                                return (
+                                  <option
+                                    key={timeSlot.value}
+                                    value={timeSlot.value}
+                                    disabled={Boolean(conflict)}
+                                  >
+                                    {conflict
+                                      ? `${timeSlot.label} - ${conflictLabel}`
+                                      : timeSlot.label}
+                                  </option>
+                                );
+                              })}
+                            </select>
+
+                            {selectedScheduleConflict ? (
+                              <span className="mt-2 block rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
+                                {getConflictingDriverNames(
+                                  selectedScheduleConflict,
+                                  assignments,
+                                ).join(", ")}{" "}
+                                is already blocked until{" "}
+                                {getDeliveryBackAroundLabel(
+                                  selectedScheduleConflict,
+                                )}
+                                .
+                              </span>
+                            ) : null}
+                          </label>
+                        </div>
                       </div>
 
-                      <label className="block">
-                        <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                          One-way ETA
-                        </span>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-[#FC2C38]" aria-hidden="true" />
+                            <p className="text-sm font-black text-slate-900">
+                              Route Timing
+                            </p>
+                          </div>
 
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max="240"
-                            step="1"
-                            value={schedule.oneWayDriveMinutes}
-                            onChange={(event) =>
-                              updateSchedule(
-                                delivery,
-                                "oneWayDriveMinutes",
-                                event.target.value,
-                              )
-                            }
-                            disabled={isSaving || !canScheduleDelivery}
-                            placeholder="18"
-                            className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                          />
-
-                          <span className="text-sm font-black text-slate-500">
-                            min
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600">
+                            {getDeliveryBlockSummary(scheduledDelivery)}
                           </span>
                         </div>
 
-                        <span className="mt-2 block text-xs font-bold text-slate-500">
-                          Counts there and back.
-                        </span>
-                      </label>
-                    </div>
-                  </section>
+                        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px]">
+                          <div>
+                            <label className="block">
+                              <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                                Leaving From
+                              </span>
 
-                  <button
-                    type="button"
-                    onClick={() => handleDispatchDelivery(delivery)}
-                    disabled={isSaving}
-                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
-                  >
-                    <Truck className="h-4 w-4" aria-hidden="true" />
-                    {isSaving ? "Dispatching..." : "Dispatch Delivery"}
-                  </button>
-                <div className="mt-5 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
-                      <Clock
-                        className="h-4 w-4 text-[#FC2C38]"
-                        aria-hidden="true"
-                      />
-                      Schedule & Route
-                    </p>
+                              <select
+                                value={schedule.deliveryOriginName}
+                                onChange={(event) =>
+                                  updateSchedule(
+                                    delivery,
+                                    "deliveryOriginName",
+                                    event.target.value,
+                                  )
+                                }
+                                disabled={isSaving || !canScheduleDelivery}
+                                className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                              >
+                                {safeDeliveryOriginOptions.map((originOption) => (
+                                  <option
+                                    key={originOption.name}
+                                    value={originOption.name}
+                                  >
+                                    {originOption.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl bg-white px-4 py-3">
-                        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                          Window
-                        </p>
-                        <p className="mt-1 text-sm font-black text-slate-900">
-                          {schedule.deliveryDate || "No date"} ·{" "}
-                          {getDeliveryTimeRange(scheduledDelivery)}
-                        </p>
-                      </div>
+                            <p className="mt-2 text-sm font-semibold text-slate-500">
+                              {schedule.deliveryOriginAddress}
+                            </p>
 
-                      <div className="rounded-xl bg-emerald-50 px-4 py-3">
-                        <p className="text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
-                          Driver Back Around
-                        </p>
-                        <p className="mt-1 text-lg font-black text-emerald-800">
-                          {getDeliveryBackAroundLabel(scheduledDelivery)}
-                        </p>
-                      </div>
-                    </div>
+                            {delivery.address ? (
+                              <a
+                                href={getRouteDirectionsUrl(
+                                  schedule.deliveryOriginAddress,
+                                  delivery.address,
+                                )}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-3 inline-flex items-center gap-2 text-sm font-black text-[#FC2C38] transition hover:text-red-700"
+                              >
+                                Open live route ETA
+                                <ExternalLink
+                                  className="h-4 w-4"
+                                  aria-hidden="true"
+                                />
+                              </a>
+                            ) : null}
+                          </div>
 
-                    <p className="mt-3 text-sm font-bold text-slate-500">
-                      Site arrival around{" "}
-                      {getDeliverySiteArrivalLabel(scheduledDelivery)}.
-                    </p>
-
-                    <p className="mt-2 text-sm font-bold text-slate-500">
-                      {getDeliveryBlockSummary(scheduledDelivery)}
-                    </p>
-
-                    <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-                      Leaving From
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-600">
-                      {schedule.deliveryOriginName || "Capital Lumber"}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-500">
-                      {schedule.deliveryOriginAddress ||
-                        "3105 W State St, Boise, ID 83703"}
-                    </p>
-                  </section>
-
-                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
-                      <MapPin
-                        className="h-4 w-4 text-[#FC2C38]"
-                        aria-hidden="true"
-                      />
-                      Delivery Address
-                    </p>
-
-                    <p className="text-sm font-semibold text-slate-600">
-                      {delivery.address}
-                    </p>
-
-                    <a
-                      href={getDirectionsUrl(delivery.address)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex items-center gap-2 text-sm font-black text-[#FC2C38] transition hover:text-red-700"
-                    >
-                      Directions
-                      <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                    </a>
-                  </section>
-                </div>
-
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
-                      <UserRound
-                        className="h-4 w-4 text-[#FC2C38]"
-                        aria-hidden="true"
-                      />
-                      Contact
-                    </p>
-
-                    <p className="text-sm font-semibold text-slate-600">
-                      {delivery.contactName || "No contact name added"}
-                    </p>
-
-                    <p className="mt-1 text-sm font-semibold text-slate-600">
-                      {contactPhone || "No contact phone added"}
-                    </p>
-                  </section>
-
-                  <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
-                      <Truck
-                        className="h-4 w-4 text-[#FC2C38]"
-                        aria-hidden="true"
-                      />
-                      Delivery Type
-                    </p>
-
-                    <p className="text-sm font-black text-slate-900">
-                      {delivery.unloadType}
-                    </p>
-
-                    {delivery.unloadType === "Forklift" &&
-                    delivery.forkliftType ? (
-                      <p className="mt-1 text-sm font-black text-orange-800">
-                        {formatForkliftLabel(delivery.forkliftType)}
-                      </p>
-                    ) : null}
-
-                    <p className="mt-1 text-sm font-semibold text-slate-600">
-                      {scopeSummary.shortLabel}
-                    </p>
-                  </section>
-                </div>
-
-                <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
-                    <Package className="h-4 w-4" aria-hidden="true" />
-                    Delivery Scope
-                  </p>
-
-                  <div className="rounded-xl bg-white px-4 py-3">
-                    <p className="text-sm font-black text-slate-900">
-                      {scopeSummary.label}
-                    </p>
-
-                    {scopeSummary.detail ? (
-                      <p className="mt-1 text-sm font-semibold text-slate-600">
-                        {scopeSummary.detail}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  {scopeSummary.usesItems ? (
-                    <ul className="mt-3 grid gap-2 lg:grid-cols-2">
-                      {items.map((item) => (
-                        <li
-                          key={item.id}
-                          className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-700"
-                        >
-                          {item.quantity ? (
-                            <span className="mr-2 font-black text-[#FC2C38]">
-                              {item.quantity}
+                          <label className="block">
+                            <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                              One-way ETA
                             </span>
-                          ) : null}
-                          {item.description}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </section>
-                </div>
-                ) : null}
-              </article>
+
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min="0"
+                                max="240"
+                                step="1"
+                                value={schedule.oneWayDriveMinutes}
+                                onChange={(event) =>
+                                  updateSchedule(
+                                    delivery,
+                                    "oneWayDriveMinutes",
+                                    event.target.value,
+                                  )
+                                }
+                                disabled={isSaving || !canScheduleDelivery}
+                                placeholder="18"
+                                className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                              />
+
+                              <span className="text-sm font-black text-slate-500">
+                                min
+                              </span>
+                            </div>
+
+                            <span className="mt-2 block text-xs font-bold text-slate-500">
+                              Counts there and back.
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+		                  <div className="mt-5 grid gap-3">
+	                    <DispatchDetailSection
+	                      id={`delivery-${delivery.id}-route`}
+	                      title="Route & Address"
+	                      summary={`${delivery.address || "No address"} · ${getDeliveryBlockSummary(
+	                        scheduledDelivery,
+	                      )}`}
+	                      icon={MapPin}
+	                      isOpen={isDetailOpen(delivery.id, "route")}
+	                      onToggle={() => toggleDetail(delivery.id, "route")}
+	                    >
+	                      <div className="grid gap-3 lg:grid-cols-2">
+	                        <div className="rounded-xl bg-white px-4 py-3">
+	                          <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+	                            Delivery Address
+	                          </p>
+	                          <p className="mt-1 text-sm font-semibold text-slate-700">
+	                            {delivery.address || "No address added"}
+	                          </p>
+	                          {delivery.address ? (
+	                            <a
+	                              href={getDirectionsUrl(delivery.address)}
+	                              target="_blank"
+	                              rel="noreferrer"
+	                              className="mt-3 inline-flex items-center gap-2 text-sm font-black text-[#FC2C38] transition hover:text-red-700"
+	                            >
+	                              Directions
+	                              <ExternalLink
+	                                className="h-4 w-4"
+	                                aria-hidden="true"
+	                              />
+	                            </a>
+	                          ) : null}
+	                        </div>
+	
+	                        <div className="rounded-xl bg-white px-4 py-3">
+	                          <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+	                            Leaving From
+	                          </p>
+	                          <p className="mt-1 text-sm font-black text-slate-900">
+	                            {schedule.deliveryOriginName || "Capital Lumber"}
+	                          </p>
+	                          <p className="mt-1 text-sm font-semibold text-slate-500">
+	                            {schedule.deliveryOriginAddress ||
+	                              "3105 W State St, Boise, ID 83703"}
+	                          </p>
+	                          {delivery.address ? (
+	                            <a
+	                              href={getRouteDirectionsUrl(
+	                                schedule.deliveryOriginAddress,
+	                                delivery.address,
+	                              )}
+	                              target="_blank"
+	                              rel="noreferrer"
+	                              className="mt-3 inline-flex items-center gap-2 text-sm font-black text-[#FC2C38] transition hover:text-red-700"
+	                            >
+	                              Open live route ETA
+	                              <ExternalLink
+	                                className="h-4 w-4"
+	                                aria-hidden="true"
+	                              />
+	                            </a>
+	                          ) : null}
+	                        </div>
+	                      </div>
+	                    </DispatchDetailSection>
+	
+	                    <DispatchDetailSection
+	                      id={`delivery-${delivery.id}-contact`}
+	                      title="Customer & Contact"
+	                      summary={`${delivery.contactName || "No contact"}${
+	                        contactPhone ? ` · ${contactPhone}` : ""
+	                      }`}
+	                      icon={UserRound}
+	                      isOpen={isDetailOpen(delivery.id, "contact")}
+	                      onToggle={() => toggleDetail(delivery.id, "contact")}
+	                    >
+	                      <div className="grid gap-3 sm:grid-cols-3">
+	                        <div className="rounded-xl bg-white px-4 py-3">
+	                          <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+	                            Customer
+	                          </p>
+	                          <p className="mt-1 text-sm font-black text-slate-900">
+	                            {formatCustomerName(delivery.customerName)}
+	                          </p>
+	                        </div>
+	                        <div className="rounded-xl bg-white px-4 py-3">
+	                          <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+	                            Contact
+	                          </p>
+	                          <p className="mt-1 text-sm font-semibold text-slate-700">
+	                            {delivery.contactName || "No contact name added"}
+	                          </p>
+	                        </div>
+	                        <div className="rounded-xl bg-white px-4 py-3">
+	                          <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+	                            Phone
+	                          </p>
+	                          <p className="mt-1 text-sm font-semibold text-slate-700">
+	                            {contactPhone || "No contact phone added"}
+	                          </p>
+	                        </div>
+	                      </div>
+	                    </DispatchDetailSection>
+	
+	                    <DispatchDetailSection
+	                      id={`delivery-${delivery.id}-scope`}
+	                      title="Items & Scope"
+	                      summary={`${scopeSummary.shortLabel} · ${items.length} ${
+	                        items.length === 1 ? "item" : "items"
+	                      }`}
+	                      icon={Package}
+	                      isOpen={isDetailOpen(delivery.id, "scope")}
+	                      onToggle={() => toggleDetail(delivery.id, "scope")}
+	                    >
+	                      <div className="rounded-xl bg-white px-4 py-3">
+	                        <p className="text-sm font-black text-slate-900">
+	                          {scopeSummary.label}
+	                        </p>
+	
+	                        {scopeSummary.detail ? (
+	                          <p className="mt-1 text-sm font-semibold text-slate-600">
+	                            {scopeSummary.detail}
+	                          </p>
+	                        ) : null}
+	                      </div>
+	
+	                      {scopeSummary.usesItems && items.length > 0 ? (
+	                        <ul className="mt-3 grid gap-2 lg:grid-cols-2">
+	                          {items.map((item) => (
+	                            <li
+	                              key={item.id}
+	                              className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-700"
+	                            >
+	                              {item.quantity ? (
+	                                <span className="mr-2 font-black text-[#FC2C38]">
+	                                  {item.quantity}
+	                                </span>
+	                              ) : null}
+	                              {item.description}
+	                            </li>
+	                          ))}
+	                        </ul>
+	                      ) : null}
+	                    </DispatchDetailSection>
+	
+	                    <DispatchDetailSection
+	                      id={`delivery-${delivery.id}-notes`}
+	                      title="Driver Notes"
+	                      summary={
+	                        delivery.deliveryLocationNotes ||
+	                        delivery.generalNotes ||
+	                        delivery.deliveryNotes ||
+	                        "No notes added"
+	                      }
+	                      icon={StickyNote}
+	                      isOpen={isDetailOpen(delivery.id, "notes")}
+	                      onToggle={() => toggleDetail(delivery.id, "notes")}
+	                    >
+	                      <div className="grid gap-3 lg:grid-cols-2">
+	                        <div className="rounded-xl bg-white px-4 py-3">
+	                          <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+	                            Delivery Location Notes
+	                          </p>
+	                          <p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-700">
+	                            {delivery.deliveryLocationNotes ||
+	                              delivery.deliveryNotes ||
+	                              "No location notes added"}
+	                          </p>
+	                        </div>
+	                        <div className="rounded-xl bg-white px-4 py-3">
+	                          <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+	                            General Notes
+	                          </p>
+	                          <p className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-700">
+	                            {delivery.generalNotes || "No general notes added"}
+	                          </p>
+	                        </div>
+	                      </div>
+	                    </DispatchDetailSection>
+	                  </div>
+	                </div>
+	                ) : null}
+	              </article>
             );
           })}
         </div>

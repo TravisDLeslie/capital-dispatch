@@ -35,7 +35,7 @@ function createTimeSlotOptions(startTime, endTime, incrementMinutes) {
 }
 
 export const deliveryTimeSlotOptions = createTimeSlotOptions(
-  "08:00",
+  "06:00",
   "16:00",
   15,
 );

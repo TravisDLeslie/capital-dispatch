@@ -18,6 +18,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
+import { isDeliveryComplete } from "../utils/deliveryStatus";
 import { formatCustomerName } from "../utils/textFormatters";
 
 function normalizeText(value) {
@@ -196,7 +197,7 @@ export default function DeliveryHistoryPage({
   const completedDeliveries = useMemo(
     () =>
       deliveries
-        .filter((delivery) => delivery.status === "complete")
+        .filter((delivery) => isDeliveryComplete(delivery))
         .sort(
           (firstDelivery, secondDelivery) =>
             new Date(

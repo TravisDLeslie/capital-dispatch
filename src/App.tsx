@@ -32,6 +32,7 @@ import CustomerPaymentLinksPage from "./pages/CustomerPaymentLinksPage";
 import DashboardPage from "./pages/DashboardPage";
 import DriverDashboardPage from "./pages/DriverDashboardPage";
 import DeliveryCalendarPage from "./pages/DeliveryCalendarPage";
+import DeliveryDashboardPage from "./pages/DeliveryDashboardPage";
 import DeliveryDispatchPage from "./pages/DeliveryDispatchPage";
 import DeliveryHistoryPage from "./pages/DeliveryHistoryPage";
 import DeliveryQueuePage from "./pages/DeliveryQueuePage";
@@ -65,6 +66,7 @@ import {
 } from "./utils/checkInStorage";
 import { getFirebaseErrorMessage } from "./utils/firebaseErrorMessages";
 import { auth, isFirebaseConfigured } from "./utils/firebase";
+import { isDeliveryComplete } from "./utils/deliveryStatus";
 import {
   addSupplierRun,
   deleteSupplierRun,
@@ -117,6 +119,7 @@ import {
   saveSalesReport,
   subscribeToSalesReports,
 } from "./utils/salesReportStorage";
+import { getDateInputValue } from "./utils/dateHelpers";
 import {
   deleteStockingHandbookItem,
   saveStockingHandbookItem,
@@ -1226,6 +1229,13 @@ function isSouthPickupRefreshWindow(date = new Date()) {
   return minutesSinceMidnight >= 8 * 60 + 30 && minutesSinceMidnight <= 15 * 60 + 30;
 }
 
+function isUnassignedSouthRun(supplierRun: SupplierRun) {
+  return (
+    supplierRun.status !== "complete" &&
+    (supplierRun.dispatchStatus === "needsDispatch" || !supplierRun.driver)
+  );
+}
+
 function refreshAndRestorePage(pageId: string) {
   try {
     sessionStorage.setItem(REFRESH_PAGE_STORAGE_KEY, pageId);
@@ -1612,6 +1622,8 @@ export default function App() {
   const canAssignSouthRoutes = effectiveAllowedPageIds.includes(
     "supplier-runs-dispatch",
   );
+  const canMaintainSouthSchedule =
+    isSuperAdmin || allowedPageIds.includes("supplier-runs-dispatch");
   const canReadDeliveries = effectiveAllowedPageIds.some((pageId) =>
     [
       "deliveries",
@@ -1831,10 +1843,7 @@ export default function App() {
       return checkedAt.slice(0, 10) === new Date().toISOString().slice(0, 10);
     }).length,
     southNeedsDispatch: supplierRuns.filter(
-      (supplierRun) =>
-        supplierRun.status !== "complete" &&
-        (supplierRun.dispatchStatus === "needsDispatch" ||
-          !supplierRun.driver),
+      (supplierRun) => isUnassignedSouthRun(supplierRun),
     ).length,
     southOpen: supplierRuns.filter(
       (supplierRun) =>
@@ -1844,18 +1853,18 @@ export default function App() {
     ).length,
     deliveryNeedsDispatch: deliveries.filter(
       (delivery) =>
-        delivery.status !== "complete" &&
+        !isDeliveryComplete(delivery) &&
         (delivery.dispatchStatus === "needsDispatch" || !delivery.driver),
     ).length,
     deliveryOpen: deliveries.filter(
       (delivery) =>
-        delivery.status !== "complete" &&
+        !isDeliveryComplete(delivery) &&
         delivery.dispatchStatus !== "needsDispatch" &&
         delivery.driver,
     ).length,
     hardwareOpen: deliveries.filter(
       (delivery) =>
-        delivery.status !== "complete" &&
+        !isDeliveryComplete(delivery) &&
         delivery.dispatchStatus !== "needsDispatch" &&
         delivery.driver &&
         delivery.hasHardware &&
@@ -2068,6 +2077,47 @@ export default function App() {
       },
     );
   }, [isApproved]);
+
+  useEffect(() => {
+    if (!isApproved || !canMaintainSouthSchedule || supplierRuns.length === 0) {
+      return;
+    }
+
+    const todayDateKey = getDateInputValue();
+    const staleUnassignedRuns = supplierRuns.filter((supplierRun) => {
+      const scheduledDate =
+        typeof supplierRun.scheduledDate === "string"
+          ? supplierRun.scheduledDate
+          : "";
+
+      return (
+        isUnassignedSouthRun(supplierRun) &&
+        scheduledDate &&
+        scheduledDate < todayDateKey
+      );
+    });
+
+    if (staleUnassignedRuns.length === 0) {
+      return;
+    }
+
+    updateSupplierRunsBulk(
+      staleUnassignedRuns.map((supplierRun) => ({
+        id: supplierRun.id,
+        scheduledDate: todayDateKey,
+        rolloverFromScheduledDate:
+          supplierRun.rolloverFromScheduledDate || supplierRun.scheduledDate,
+        rolledOverAt: new Date().toISOString(),
+      })),
+    )
+      .then((updatedSupplierRuns) => {
+        setSupplierRuns(updatedSupplierRuns);
+        setSyncError("");
+      })
+      .catch((error: Error) => {
+        console.error("Unable to roll unassigned South POs forward:", error);
+      });
+  }, [canMaintainSouthSchedule, isApproved, supplierRuns]);
 
   useEffect(() => {
     if (
@@ -4006,10 +4056,7 @@ export default function App() {
 
     if (dashboardWorkView === "south" && canReadSouth) {
       const needsDispatchRuns = visibleSupplierRuns.filter(
-        (supplierRun) =>
-          supplierRun.status !== "complete" &&
-          (supplierRun.dispatchStatus === "needsDispatch" ||
-            !supplierRun.driver),
+        (supplierRun) => isUnassignedSouthRun(supplierRun),
       );
       const openRuns = visibleSupplierRuns.filter(
         (supplierRun) =>
@@ -4115,110 +4162,11 @@ export default function App() {
     }
 
     if (dashboardWorkView === "delivery" && canReadDeliveries) {
-      const needsDispatchDeliveries = deliveries.filter(
-        (delivery) =>
-          delivery.status !== "complete" &&
-          (delivery.dispatchStatus === "needsDispatch" || !delivery.driver),
-      );
-      const openDeliveries = deliveries.filter(
-        (delivery) =>
-          delivery.status !== "complete" &&
-          delivery.dispatchStatus !== "needsDispatch" &&
-          delivery.driver,
-      );
-      const completedDeliveries = deliveries.filter(
-        (delivery) => delivery.status === "complete",
-      );
-      const hardwareOpen = openDeliveries.filter(
-        (delivery) => delivery.hasHardware && !delivery.hardwareChecked,
-      );
-      const scheduledTodayDeliveries = openDeliveries.filter(
-        (delivery) =>
-          delivery.deliveryDate === new Date().toISOString().slice(0, 10),
-      );
-
       return (
-        <SectionHubPage
-          title="Delivery Dashboard"
-          eyebrow="Deliveries"
-          description="Delivery work and completed order history."
-          icon={Truck}
-          stats={[
-            {
-              icon: PackageCheck,
-              label: "Open",
-              value: openDeliveries.length,
-              note: "To be delivered",
-            },
-            {
-              icon: Truck,
-              label: "Dispatch",
-              value: needsDispatchDeliveries.length,
-              note: "Need driver",
-            },
-            {
-              icon: CalendarDays,
-              label: "Today",
-              value: scheduledTodayDeliveries.length,
-              note: "Scheduled",
-            },
-            {
-              icon: History,
-              label: "Completed",
-              value: completedDeliveries.length,
-              note: "Delivery history",
-            },
-          ]}
-          actions={[
-            dashboardAllowedPageIds.includes("deliveries-dispatch")
-              ? {
-                  icon: Truck,
-                  label: "Hold",
-                  title: "Needs Dispatch",
-                  description: "Assign drivers before orders hit the delivery queue.",
-                  metric: needsDispatchDeliveries.length,
-                  metricLabel: "Waiting",
-                  tone: needsDispatchDeliveries.length > 0 ? "warning" : "dispatch",
-                  onClick: () => setCurrentPage("deliveries-dispatch"),
-                }
-              : null,
-            dashboardAllowedPageIds.includes("deliveries-queue")
-              ? {
-                  icon: PackageCheck,
-                  label: "Live Queue",
-                  title: "To Be Delivered",
-                  description: "Open assigned orders, photos, reminders, and directions.",
-                  metric: openDeliveries.length,
-                  metricLabel: "Open",
-                  tone: hardwareOpen.length > 0 ? "warning" : "success",
-                  onClick: () => setCurrentPage("deliveries-queue"),
-                }
-              : null,
-            dashboardAllowedPageIds.includes("deliveries-calendar")
-              ? {
-                  icon: CalendarDays,
-                  label: "Schedule",
-                  title: "Delivery Calendar",
-                  description: "View assigned deliveries by date, time slot, and unload duration.",
-                  metric: scheduledTodayDeliveries.length,
-                  metricLabel: "Today",
-                  tone: "dispatch",
-                  onClick: () => setCurrentPage("deliveries-calendar"),
-                }
-              : null,
-            dashboardAllowedPageIds.includes("deliveries-history")
-              ? {
-                  icon: History,
-                  label: "Archive",
-                  title: "Delivery History",
-                  description: "Search and review completed deliveries.",
-                  metric: completedDeliveries.length,
-                  metricLabel: "Done",
-                  tone: "archive",
-                  onClick: () => setCurrentPage("deliveries-history"),
-                }
-              : null,
-          ]}
+        <DeliveryDashboardPage
+          deliveries={visibleDeliveries}
+          allowedPageIds={dashboardAllowedPageIds}
+          onPageChange={navigateToPage}
         />
       );
     }
@@ -4408,128 +4356,11 @@ export default function App() {
     }
 
     if (currentPage === "deliveries" && canReadDeliveries) {
-      const needsDispatchDeliveries = visibleDeliveries.filter(
-        (delivery) =>
-          delivery.status !== "complete" &&
-          (delivery.dispatchStatus === "needsDispatch" || !delivery.driver),
-      );
-      const openDeliveries = visibleDeliveries.filter(
-        (delivery) =>
-          delivery.status !== "complete" &&
-          delivery.dispatchStatus !== "needsDispatch" &&
-          delivery.driver,
-      );
-      const completedDeliveries = visibleDeliveries.filter(
-        (delivery) => delivery.status === "complete",
-      );
-      const scheduledTodayDeliveries = openDeliveries.filter(
-        (delivery) =>
-          delivery.deliveryDate === new Date().toISOString().slice(0, 10),
-      );
-
       return (
-        <SectionHubPage
-          title="Deliveries"
-          description="Create delivery orders, track driver work, and review completed deliveries."
-          icon={Truck}
-          titleAction={
-            effectiveAllowedPageIds.includes("deliveries-calendar")
-              ? {
-                  label: "Open Delivery Calendar",
-                  icon: CalendarDays,
-                  onClick: () => setCurrentPage("deliveries-calendar"),
-                }
-              : null
-          }
-          primaryAction={
-            effectiveAllowedPageIds.includes("deliveries-add")
-              ? {
-                  label: "Add Delivery",
-                  icon: Plus,
-                  onClick: () => navigateToPage("deliveries-add"),
-                }
-              : null
-          }
-          stats={[
-            {
-              icon: PackageCheck,
-              label: "Open",
-              value: openDeliveries.length,
-              note: "To be delivered",
-            },
-            {
-              icon: Truck,
-              label: "Dispatch",
-              value: needsDispatchDeliveries.length,
-              note: "Need driver",
-            },
-            {
-              icon: CalendarDays,
-              label: "Today",
-              value: scheduledTodayDeliveries.length,
-              note: "Scheduled",
-            },
-            {
-              icon: History,
-              label: "Completed",
-              value: completedDeliveries.length,
-              note: "Delivery history",
-            },
-          ]}
-          actions={[
-            effectiveAllowedPageIds.includes("deliveries-dispatch")
-              ? {
-                  icon: Truck,
-                  label: "Hold",
-                  title: "Needs Dispatch",
-                  description: "Assign drivers before orders show on the delivery board.",
-                  metric: needsDispatchDeliveries.length,
-                  metricLabel: "Waiting",
-                  tone: "warning",
-                  variant: "alert",
-                  onClick: () => setCurrentPage("deliveries-dispatch"),
-                }
-              : null,
-            effectiveAllowedPageIds.includes("deliveries-queue")
-              ? {
-                  icon: PackageCheck,
-                  label: "Live Queue",
-                  title: "To Be Delivered",
-                  description: "Open assigned orders, photo capture, hardware reminders, and directions.",
-                  metric: openDeliveries.length,
-                  metricLabel: "Open",
-                  tone: "success",
-                  variant: "live",
-                  onClick: () => setCurrentPage("deliveries-queue"),
-                }
-              : null,
-            effectiveAllowedPageIds.includes("deliveries-calendar")
-              ? {
-                  icon: CalendarDays,
-                  label: "Schedule",
-                  title: "Delivery Calendar",
-                  description: "View assigned deliveries by date, time slot, and unload duration.",
-                  metric: scheduledTodayDeliveries.length,
-                  metricLabel: "Today",
-                  tone: "schedule",
-                  variant: "compact",
-                  onClick: () => setCurrentPage("deliveries-calendar"),
-                }
-              : null,
-            effectiveAllowedPageIds.includes("deliveries-history")
-              ? {
-                  icon: History,
-                  label: "Archive",
-                  title: "Delivery History",
-                  description: "Search and review completed delivery records.",
-                  metric: completedDeliveries.length,
-                  metricLabel: "Complete",
-                  tone: "archive",
-                  variant: "quiet",
-                  onClick: () => setCurrentPage("deliveries-history"),
-                }
-              : null,
-          ].filter(Boolean)}
+        <DeliveryDashboardPage
+          deliveries={visibleDeliveries}
+          allowedPageIds={effectiveAllowedPageIds}
+          onPageChange={navigateToPage}
         />
       );
     }

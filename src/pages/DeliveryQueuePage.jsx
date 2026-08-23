@@ -31,6 +31,7 @@ import {
   getDeliverySiteArrivalLabel,
   getDeliveryTimeRange,
 } from "../utils/deliverySchedule";
+import { isDeliveryComplete } from "../utils/deliveryStatus";
 import { formatCustomerName } from "../utils/textFormatters";
 
 function getDirectionsUrl(address) {
@@ -957,7 +958,7 @@ export default function DeliveryQueuePage({
 
   const openDeliveries = deliveries.filter(
     (delivery) =>
-      delivery.status !== "complete" &&
+      !isDeliveryComplete(delivery) &&
       delivery.dispatchStatus !== "needsDispatch" &&
       delivery.driver,
   );
