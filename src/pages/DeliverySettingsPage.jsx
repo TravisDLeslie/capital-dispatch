@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Save, Timer, Truck } from "lucide-react";
+import { Save, Timer, Truck, Undo2 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { deliveryUnloadTypes } from "../data/options";
@@ -17,6 +17,14 @@ export default function DeliverySettingsPage({
 
   useEffect(() => {
     setDraftDurations(deliverySettings?.unloadDurations || {});
+  }, [deliverySettings]);
+
+  const [returnDuration, setReturnDuration] = useState(
+    deliverySettings?.returnDurationMinutes || 60,
+  );
+
+  useEffect(() => {
+    setReturnDuration(deliverySettings?.returnDurationMinutes || 60);
   }, [deliverySettings]);
 
   async function handleSubmit(event) {
@@ -41,6 +49,7 @@ export default function DeliverySettingsPage({
       await onSaveDeliverySettings({
         ...deliverySettings,
         unloadDurations,
+        returnDurationMinutes: Math.max(5, Number(returnDuration) || 60),
       });
       setMessage("Delivery time defaults saved.");
     } catch (saveError) {
@@ -70,8 +79,8 @@ export default function DeliverySettingsPage({
         </h1>
 
         <p className="mt-2 max-w-3xl text-base font-semibold text-slate-500 sm:text-lg">
-          Set the default unloading time by delivery type. New deliveries will
-          auto-calculate their calendar block from these numbers.
+          Set the default time blocks for unloading and returns. New deliveries
+          will auto-calculate their calendar block from these numbers.
         </p>
       </div>
 
@@ -130,6 +139,38 @@ export default function DeliverySettingsPage({
               </div>
             </label>
           ))}
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <span className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
+            <Undo2 className="h-4 w-4 text-blue-700" aria-hidden="true" />
+            Return delivery type
+          </span>
+
+          <div className="flex items-center gap-3">
+            <input
+              type="number"
+              min="5"
+              max="240"
+              step="5"
+              value={returnDuration || ""}
+              onChange={(event) => {
+                setReturnDuration(event.target.value);
+                setMessage("");
+                setError("");
+              }}
+              disabled={isSaving}
+              className="w-full max-w-xs rounded-xl border border-blue-200 px-4 py-3 text-lg font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+            />
+
+            <span className="shrink-0 text-sm font-black text-slate-500">
+              min
+            </span>
+          </div>
+
+          <p className="mt-2 text-sm font-bold text-slate-500">
+            Default is 60 minutes. This is used when Delivery Type is Return.
+          </p>
         </div>
 
         {message ? (

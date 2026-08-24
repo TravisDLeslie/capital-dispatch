@@ -17,6 +17,7 @@ import {
   Truck,
   Trash2,
   UserRound,
+  Undo2,
   Zap,
 } from "lucide-react";
 import AddressAutocompleteInput from "./AddressAutocompleteInput";
@@ -191,6 +192,12 @@ const deliveryTypeOptions = [
     label: "Hot Shot",
     description: "Urgent delivery with maximum attention.",
     Icon: Diamond,
+  },
+  {
+    value: "return",
+    label: "Return",
+    description: "Return material back to the yard or vendor.",
+    Icon: Undo2,
   },
 ];
 
@@ -670,6 +677,7 @@ export default function DeliveryOrderForm({
         unloadType,
         null,
         deliverySettings,
+        deliveryType,
       ),
       deliveryScope: selectedScope.value,
       deliveryScopeNotes: deliveryScopeNotes.trim(),
@@ -809,6 +817,7 @@ export default function DeliveryOrderForm({
       unloadType,
       null,
       deliverySettings,
+      deliveryType,
     ),
   };
   const hasScheduleTarget = Boolean(driverTargetArrivalTime);
@@ -1080,7 +1089,7 @@ export default function DeliveryOrderForm({
             Delivery Type
           </h4>
 
-          <div className="mb-5 grid gap-3 sm:grid-cols-3">
+          <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {deliveryTypeOptions.map((typeOption) => {
               const TypeIcon = typeOption.Icon;
               const isSelected = deliveryType === typeOption.value;

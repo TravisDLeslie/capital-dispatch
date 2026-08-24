@@ -163,6 +163,7 @@ const legacyRolePermissionPresets = {
     "supplier-runs-calendar",
     "south-calendar",
     "deliveries",
+    "deliveries-calendar",
     "deliveries-queue",
   ],
   receiving: [
@@ -195,6 +196,7 @@ const legacyRolePermissionPresets = {
     "deliveries",
     "deliveries-add",
     "deliveries-dispatch",
+    "deliveries-calendar",
     "deliveries-queue",
     "deliveries-history",
   ],

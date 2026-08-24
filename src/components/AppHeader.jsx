@@ -143,6 +143,7 @@ function getCurrentPageLabel(currentPage) {
       "email-list",
       "delivery-settings",
       "vendor-settings",
+      "order-flow",
       "sales-report",
     ].includes(currentPage)
   ) {
@@ -222,6 +223,7 @@ function getCurrentPageGroup(currentPage) {
       "email-list",
       "delivery-settings",
       "vendor-settings",
+      "order-flow",
       "sales-report",
     ].includes(currentPage)
   ) {
@@ -528,6 +530,13 @@ export default function AppHeader({
             pageId: "deliveries-dispatch",
           }
         : null,
+      pageAllowed("deliveries-calendar")
+        ? {
+            id: "deliveries-calendar",
+            label: "Delivery Calendar",
+            pageId: "deliveries-calendar",
+          }
+        : null,
       pageAllowed("deliveries-queue")
         ? {
             id: "deliveries-upcoming",
@@ -605,6 +614,7 @@ export default function AppHeader({
                 "email-list",
                 "delivery-settings",
                 "vendor-settings",
+                "order-flow",
                 "sales-report",
               ].includes(pageId),
             )) ||

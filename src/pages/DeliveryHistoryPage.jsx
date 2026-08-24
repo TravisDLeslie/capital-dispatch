@@ -70,6 +70,10 @@ function formatDeliveryTypeLabel(value) {
     return "Hot Shot";
   }
 
+  if (value === "return") {
+    return "Return";
+  }
+
   return "Standard";
 }
 
@@ -416,7 +420,9 @@ export default function DeliveryHistoryPage({
 
                     <span
                       className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-black ${
-                        delivery.deliveryType === "hotShot"
+                        delivery.deliveryType === "return"
+                          ? "bg-blue-50 text-blue-700"
+                          : delivery.deliveryType === "hotShot"
                           ? "bg-red-50 text-[#FC2C38]"
                           : delivery.deliveryType === "priority"
                             ? "bg-amber-50 text-amber-800"

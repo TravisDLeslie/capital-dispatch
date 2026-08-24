@@ -15,6 +15,9 @@ function normalizeSettings(settings) {
       ...defaultDeliveryScheduleSettings.unloadDurations,
       ...(settings?.unloadDurations || {}),
     },
+    returnDurationMinutes:
+      Number(settings?.returnDurationMinutes) ||
+      defaultDeliveryScheduleSettings.returnDurationMinutes,
   };
 }
 

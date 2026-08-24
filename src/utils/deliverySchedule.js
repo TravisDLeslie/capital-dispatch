@@ -47,10 +47,12 @@ export const defaultUnloadDurationMinutes = {
 };
 
 export const deliveryLoadBufferMinutes = 20;
+export const defaultReturnDurationMinutes = 60;
 
 export const defaultDeliveryScheduleSettings = {
   id: "deliverySchedule",
   unloadDurations: defaultUnloadDurationMinutes,
+  returnDurationMinutes: defaultReturnDurationMinutes,
 };
 
 export function getTodayDateValue() {
@@ -61,11 +63,20 @@ export function getDeliveryDurationMinutes(
   unloadType,
   explicitDuration,
   settings = defaultDeliveryScheduleSettings,
+  deliveryType = "",
 ) {
   const numericDuration = Number(explicitDuration);
 
   if (Number.isFinite(numericDuration) && numericDuration > 0) {
     return numericDuration;
+  }
+
+  if (deliveryType === "return") {
+    const returnDuration = Number(settings?.returnDurationMinutes);
+
+    return Number.isFinite(returnDuration) && returnDuration > 0
+      ? returnDuration
+      : defaultReturnDurationMinutes;
   }
 
   return (
@@ -116,6 +127,8 @@ export function getDeliveryTotalBlockMinutes(delivery) {
   const unloadMinutes = getDeliveryDurationMinutes(
     delivery?.unloadType,
     delivery?.estimatedDurationMinutes,
+    defaultDeliveryScheduleSettings,
+    delivery?.deliveryType,
   );
   const driveMinutes = getDeliveryDriveMinutes(delivery);
 
@@ -208,6 +221,8 @@ export function getDeliveryBlockSummary(delivery) {
   const unloadMinutes = getDeliveryDurationMinutes(
     delivery?.unloadType,
     delivery?.estimatedDurationMinutes,
+    defaultDeliveryScheduleSettings,
+    delivery?.deliveryType,
   );
   const totalMinutes = getDeliveryTotalBlockMinutes(delivery);
 

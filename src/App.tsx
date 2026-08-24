@@ -41,6 +41,7 @@ import DeliveriesPage from "./pages/DeliveriesPage";
 import EmailListPage from "./pages/EmailListPage";
 import LoginPage from "./components/LoginPage";
 import POCalendarPage from "./pages/POCalendarPage";
+import OrderFlowPage from "./pages/OrderFlowPage";
 import SearchPage from "./pages/SearchPage";
 import SalesConverterPage from "./pages/SalesConverterPage";
 import SalesOrdersPage from "./pages/SalesOrdersPage";
@@ -543,6 +544,7 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "supplier-runs-calendar",
     "south-calendar",
     "deliveries",
+    "deliveries-calendar",
     "deliveries-queue",
   ],
   receiving: [
@@ -1040,6 +1042,7 @@ function getAllowedPageIdsForRole(role: string) {
       "email-list",
       "delivery-settings",
       "vendor-settings",
+      "order-flow",
       "sales-report",
       "bouncie",
     ];
@@ -1120,6 +1123,15 @@ function getAllowedPageIds(
           !["fleet", "bouncie"].includes(permission),
       ),
     ];
+
+    if (
+      pageIds.includes("deliveries") ||
+      pageIds.includes("deliveries-queue") ||
+      pageIds.includes("deliveries-calendar")
+    ) {
+      pageIds.push("deliveries");
+      pageIds.push("deliveries-queue", "deliveries-calendar");
+    }
 
     if (
       pageIds.includes("stocking-handbook") &&
@@ -1662,6 +1674,7 @@ export default function App() {
       "email-list",
       "delivery-settings",
       "vendor-settings",
+      "order-flow",
       "sales-report",
     ].includes(pageId),
   );
@@ -4166,6 +4179,7 @@ export default function App() {
         <DeliveryDashboardPage
           deliveries={visibleDeliveries}
           allowedPageIds={dashboardAllowedPageIds}
+          isDriverView={isDeliveryDriverScopedView}
           onPageChange={navigateToPage}
         />
       );
@@ -4360,6 +4374,7 @@ export default function App() {
         <DeliveryDashboardPage
           deliveries={visibleDeliveries}
           allowedPageIds={effectiveAllowedPageIds}
+          isDriverView={isDeliveryDriverScopedView}
           onPageChange={navigateToPage}
         />
       );
@@ -4661,6 +4676,19 @@ export default function App() {
                   onClick: () => setCurrentPage("vendor-settings"),
                 }
               : null,
+            effectiveAllowedPageIds.includes("order-flow") && isSuperAdmin
+              ? {
+                  icon: ClipboardList,
+                  label: "Workflow",
+                  title: "Order Flow",
+                  description:
+                    "Prototype the order-first flow and yard build handoff.",
+                  metric: "Lab",
+                  metricLabel: "Super",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("order-flow"),
+                }
+              : null,
             canReadSalesReport
               ? {
                   icon: DollarSign,
@@ -4746,7 +4774,7 @@ export default function App() {
         return (
           <DriverDashboardPage
             supplierRuns={driverDashboardSupplierRuns}
-            deliveries={deliveries}
+            deliveries={visibleDeliveries}
             users={users}
             employeeOptions={approvedEmployeeNames}
             driverName={driverName}
@@ -4793,6 +4821,9 @@ export default function App() {
             onPageChange={navigateToPage}
           />
         );
+
+      case "order-flow":
+        return isSuperAdmin ? <OrderFlowPage /> : null;
 
       case "bouncie":
         return <BounciePage onPageChange={setCurrentPage} />;

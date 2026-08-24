@@ -2,6 +2,8 @@ import { useState } from "react";
 import {
   ArrowRight,
   BookOpen,
+  CalendarDays,
+  Clock,
   MapPin,
   PhoneCall,
   Route,
@@ -60,7 +62,12 @@ function getSupplierItemStats(supplierRuns) {
 }
 
 function getDeliveryTimeLabel(delivery) {
-  const startTime = delivery?.scheduledStartTime || delivery?.timeSlot || "";
+  const startTime =
+    delivery?.driverTargetArrivalTime ||
+    delivery?.deliveryTimeSlot ||
+    delivery?.scheduledStartTime ||
+    delivery?.timeSlot ||
+    "";
   const date = delivery?.deliveryDate || "";
 
   if (startTime && date) {
@@ -84,7 +91,12 @@ function getSupplierDateLabel(supplierRun) {
 
 function getDeliverySortValue(delivery) {
   const date = delivery?.deliveryDate || "";
-  const time = delivery?.scheduledStartTime || delivery?.timeSlot || "";
+  const time =
+    delivery?.deliveryTimeSlot ||
+    delivery?.driverTargetArrivalTime ||
+    delivery?.scheduledStartTime ||
+    delivery?.timeSlot ||
+    "";
 
   return `${date} ${time}`.trim();
 }
@@ -198,22 +210,82 @@ function DriverQuickAction({ icon: Icon, label, detail, onClick, href }) {
   );
 }
 
-function DriverInfoTile({ label, value, detail, tone = "slate" }) {
+function DriverNextMoveCard({ nextSupplierRun, nextDelivery, onPageChange }) {
+  const hasDelivery = Boolean(nextDelivery);
+  const hasSouth = Boolean(nextSupplierRun);
+  const primaryAction = hasDelivery
+    ? {
+        eyebrow: "Next delivery",
+        title: nextDelivery.customerName || "Delivery stop",
+        detail: `${nextDelivery.orderNumber || "Order"} • ${getDeliveryTimeLabel(
+          nextDelivery,
+        )}`,
+        icon: MapPin,
+        buttonLabel: "Open Delivery",
+        onClick: () => onPageChange("deliveries-queue"),
+        tone: "blue",
+      }
+    : hasSouth
+      ? {
+          eyebrow: "Next South stop",
+          title: nextSupplierRun.vendor || "South stop",
+          detail: `${nextSupplierRun.poNumber || "PO"} • ${getSupplierDateLabel(
+            nextSupplierRun,
+          )}`,
+          icon: Route,
+          buttonLabel: "Open South Route",
+          onClick: () => onPageChange("supplier-runs-check"),
+          tone: "red",
+        }
+      : {
+          eyebrow: "All clear",
+          title: "Nothing assigned right now",
+          detail: "New work will show here when dispatch assigns it.",
+          icon: ShieldCheck,
+          buttonLabel: "View Schedule",
+          onClick: () => onPageChange("deliveries-calendar"),
+          tone: "green",
+        };
+  const Icon = primaryAction.icon;
   const toneClasses = {
-    red: "border-red-100 bg-red-50 text-red-700",
-    green: "border-emerald-100 bg-emerald-50 text-emerald-700",
-    blue: "border-blue-100 bg-blue-50 text-blue-700",
-    slate: "border-slate-200 bg-white text-slate-950",
+    blue: "border-blue-200 bg-blue-50 text-blue-700",
+    red: "border-red-200 bg-red-50 text-[#FC2C38]",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-700",
   };
 
   return (
-    <div className={`rounded-2xl border p-4 shadow-sm ${toneClasses[tone]}`}>
-      <p className="text-xs font-black uppercase tracking-[0.14em] opacity-70">
-        {label}
-      </p>
-      <p className="mt-2 text-3xl font-black">{value}</p>
-      <p className="mt-1 text-sm font-bold opacity-75">{detail}</p>
-    </div>
+    <section className="mb-5 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-4">
+          <span
+            className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl ${toneClasses[primaryAction.tone]}`}
+          >
+            <Icon className="h-8 w-8" aria-hidden="true" strokeWidth={2.4} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+              Do This Next
+            </p>
+            <h2 className="mt-1 truncate text-3xl font-black tracking-tight text-slate-950">
+              {primaryAction.title}
+            </h2>
+            <p className="mt-1 flex items-center gap-2 text-sm font-black text-slate-500">
+              <Clock className="h-4 w-4" aria-hidden="true" />
+              {primaryAction.eyebrow} • {primaryAction.detail}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={primaryAction.onClick}
+          className="flex min-h-[58px] w-full items-center justify-between gap-3 rounded-2xl bg-slate-950 px-5 text-base font-black text-white shadow-sm transition hover:bg-slate-800 lg:w-72"
+        >
+          {primaryAction.buttonLabel}
+          <ArrowRight className="h-5 w-5" aria-hidden="true" strokeWidth={2.6} />
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -273,10 +345,6 @@ export default function DriverDashboardPage({
     getDeliverySortValue(first).localeCompare(getDeliverySortValue(second)),
   );
   const nextDelivery = sortedDeliveries[0] || null;
-  const hardwareDeliveries = openDeliveries.filter(
-    (delivery) => delivery.hasHardware && !delivery.hardwareChecked,
-  ).length;
-
   return (
     <PageContainer>
       <div className="mb-6">
@@ -319,6 +387,12 @@ export default function DriverDashboardPage({
           ) : null)}
         </div>
       </div>
+
+      <DriverNextMoveCard
+        nextSupplierRun={nextSupplierRun}
+        nextDelivery={nextDelivery}
+        onPageChange={onPageChange}
+      />
 
       <section className="mb-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
@@ -433,6 +507,12 @@ export default function DriverDashboardPage({
           onClick={() => onPageChange("deliveries-queue")}
         />
         <DriverQuickAction
+          icon={CalendarDays}
+          label="Schedule"
+          detail="See your delivery day"
+          onClick={() => onPageChange("deliveries-calendar")}
+        />
+        <DriverQuickAction
           icon={BookOpen}
           label="Stocking Handbook"
           detail="Look up stocked items"
@@ -446,7 +526,7 @@ export default function DriverDashboardPage({
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid gap-4 lg:grid-cols-3">
         <DriverActionCard
           icon={Route}
           title="POs To Pick Up"
@@ -468,28 +548,15 @@ export default function DriverDashboardPage({
           buttonLabel="View Deliveries"
           onClick={() => onPageChange("deliveries-queue")}
         />
-      </section>
 
-      <section className="mt-5 grid gap-4 sm:grid-cols-3">
-        <DriverInfoTile
-          label="Pickup Items Left"
-          value={supplierItemStats.remainingItems}
-          detail={`${supplierItemStats.completeItems}/${supplierItemStats.totalItems} picked up`}
-          tone="slate"
-        />
-
-        <DriverInfoTile
-          label="Delivery Orders"
-          value={openDeliveries.length}
-          detail="Ready for delivery workflow"
-          tone="blue"
-        />
-
-        <DriverInfoTile
-          label="Hardware Reminders"
-          value={hardwareDeliveries}
-          detail="Still needs hardware checked"
-          tone={hardwareDeliveries > 0 ? "red" : "green"}
+        <DriverActionCard
+          icon={CalendarDays}
+          title="Delivery Schedule"
+          description="See the assigned delivery day in order so you know what is coming next."
+          stat={openDeliveries.length}
+          statLabel="Scheduled"
+          buttonLabel="View Schedule"
+          onClick={() => onPageChange("deliveries-calendar")}
         />
       </section>
 

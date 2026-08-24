@@ -15,6 +15,7 @@ import {
   Navigation,
   Package,
   Phone,
+  RotateCcw,
   ShieldAlert,
   Trash2,
   Truck,
@@ -30,6 +31,8 @@ import {
   getDeliveryBlockSummary,
   getDeliverySiteArrivalLabel,
   getDeliveryTimeRange,
+  getDeliveryTimeWindow,
+  scheduleWindowsOverlap,
 } from "../utils/deliverySchedule";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
 import { formatCustomerName } from "../utils/textFormatters";
@@ -73,6 +76,10 @@ function formatDeliveryTypeLabel(value) {
 
   if (value === "hotShot") {
     return "Hot Shot";
+  }
+
+  if (value === "return") {
+    return "Return";
   }
 
   return "Standard";
@@ -199,6 +206,34 @@ function groupDeliveriesByDriver(deliveries) {
   }, []);
 }
 
+function deliveryHasDriver(delivery, driverName) {
+  const drivers = Array.isArray(delivery.drivers)
+    ? delivery.drivers.filter(Boolean)
+    : [];
+
+  return [delivery.driver, ...drivers]
+    .filter(Boolean)
+    .includes(driverName);
+}
+
+function findDriverScheduleConflict(candidateDelivery, deliveries, nextDriver) {
+  const candidateWindow = getDeliveryTimeWindow(candidateDelivery);
+
+  if (!nextDriver || !candidateDelivery.deliveryDate || !candidateWindow) {
+    return null;
+  }
+
+  return deliveries.find(
+    (delivery) =>
+      delivery.id !== candidateDelivery.id &&
+      delivery.status !== "complete" &&
+      delivery.dispatchStatus !== "needsDispatch" &&
+      delivery.deliveryDate === candidateDelivery.deliveryDate &&
+      deliveryHasDriver(delivery, nextDriver) &&
+      scheduleWindowsOverlap(candidateWindow, getDeliveryTimeWindow(delivery)),
+  );
+}
+
 function getUniqueOptions(options) {
   const seenOptions = new Set();
 
@@ -258,6 +293,14 @@ function PhotoPreviewGrid({ photos, label, onView }) {
       ))}
     </div>
   );
+}
+
+function getDeliveryItemsLabel(items, scopeSummary) {
+  if (!scopeSummary.usesItems) {
+    return "All";
+  }
+
+  return `${items.length} ${items.length === 1 ? "item" : "items"}`;
 }
 
 function RoutePreviewCard({ delivery }) {
@@ -905,7 +948,7 @@ function MobileDeliveryFlowCard({
                 <div className="flex justify-between gap-4">
                   <span className="font-semibold text-slate-500">Items</span>
                   <span className="font-bold text-slate-900">
-                    {items.length} {scopeSummary.label}
+                    {getDeliveryItemsLabel(items, scopeSummary)}
                   </span>
                 </div>
                 <div className="flex justify-between gap-4">
@@ -955,6 +998,7 @@ export default function DeliveryQueuePage({
   const [openDriverKeys, setOpenDriverKeys] = useState({});
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
   const [deliveryStepKeys, setDeliveryStepKeys] = useState({});
+  const [pendingDriverSelections, setPendingDriverSelections] = useState({});
 
   const openDeliveries = deliveries.filter(
     (delivery) =>
@@ -1059,6 +1103,21 @@ export default function DeliveryQueuePage({
       return;
     }
 
+    const conflict = findDriverScheduleConflict(
+      delivery,
+      deliveries,
+      nextDriver,
+    );
+
+    if (conflict) {
+      setError(
+        `${nextDriver} already has order ${conflict.orderNumber} scheduled ${getDeliveryTimeRange(
+          conflict,
+        )}.`,
+      );
+      return;
+    }
+
     const currentAssignments = Array.isArray(delivery.dispatchAssignments)
       ? delivery.dispatchAssignments
       : [];
@@ -1097,11 +1156,43 @@ export default function DeliveryQueuePage({
         dispatchAssignments: nextAssignments,
         updatedAt: new Date().toISOString(),
       });
+      setPendingDriverSelections((currentSelections) => {
+        const nextSelections = { ...currentSelections };
+        delete nextSelections[delivery.id];
+        return nextSelections;
+      });
     } catch (updateError) {
       console.error("Unable to change delivery driver:", updateError);
       setError("Unable to change that delivery driver. Try again.");
     } finally {
       setReassigningDeliveryId("");
+    }
+  }
+
+  async function handleSendBackToDispatch(delivery) {
+    if (!canEditDeliveries || isDriverView) {
+      return;
+    }
+
+    setError("");
+    setUpdatingDeliveryId(delivery.id);
+
+    try {
+      await onUpdateDelivery(delivery.id, {
+        dispatchStatus: "needsDispatch",
+        driver: "",
+        drivers: [],
+        vehicleId: "",
+        vehicleTitle: "",
+        vehicleBadge: "",
+        dispatchAssignments: [],
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (updateError) {
+      console.error("Unable to send delivery back to dispatch:", updateError);
+      setError("Unable to send that delivery back to dispatch. Try again.");
+    } finally {
+      setUpdatingDeliveryId("");
     }
   }
 
@@ -1254,6 +1345,7 @@ export default function DeliveryQueuePage({
                     const items = Array.isArray(delivery.items)
                       ? delivery.items
                       : [];
+                    const upNextScopeSummary = getDeliveryScopeSummary(delivery);
 
                     return (
                       <article
@@ -1284,8 +1376,7 @@ export default function DeliveryQueuePage({
                             {getDeliveryTimeRange(delivery)}
                           </span>
                           <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">
-                            {items.length}{" "}
-                            {items.length === 1 ? "item" : "items"}
+                            {getDeliveryItemsLabel(items, upNextScopeSummary)}
                           </span>
                         </div>
                       </article>
@@ -1468,6 +1559,23 @@ export default function DeliveryQueuePage({
                         onCompleteDelivery={handleCompleteDelivery}
                       />
 
+                      {canEditDeliveries ? (
+                        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-3 lg:hidden">
+                          <button
+                            type="button"
+                            onClick={() => handleSendBackToDispatch(delivery)}
+                            disabled={isUpdating}
+                            className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-black text-amber-800 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <RotateCcw
+                              className="h-4 w-4"
+                              aria-hidden="true"
+                            />
+                            Send back to dispatch
+                          </button>
+                        </div>
+                      ) : null}
+
                     <article className="hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:block">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <button
@@ -1526,7 +1634,9 @@ export default function DeliveryQueuePage({
 
                             <span
                               className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-black ${
-                                delivery.deliveryType === "hotShot"
+                                delivery.deliveryType === "return"
+                                  ? "bg-blue-50 text-blue-700"
+                                  : delivery.deliveryType === "hotShot"
                                   ? "bg-red-50 text-[#FC2C38]"
                                   : delivery.deliveryType === "priority"
                                     ? "bg-amber-50 text-amber-800"
@@ -1577,6 +1687,19 @@ export default function DeliveryQueuePage({
                                 Edit
                               </button>
 
+                              <button
+                                type="button"
+                                onClick={() => handleSendBackToDispatch(delivery)}
+                                disabled={isUpdating}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-800 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <RotateCcw
+                                  className="h-4 w-4"
+                                  aria-hidden="true"
+                                />
+                                Send back to dispatch
+                              </button>
+
                               {onDeleteDelivery ? (
                                 <button
                                   type="button"
@@ -1622,30 +1745,95 @@ export default function DeliveryQueuePage({
                               </p>
                             </div>
 
-                            <label className="block w-full lg:max-w-xs">
-                              <span className="sr-only">Change delivery driver</span>
-                              <select
-                                value={delivery.driver || ""}
-                                onChange={(event) =>
-                                  handleReassignDriver(
-                                    delivery,
-                                    event.target.value,
-                                  )
-                                }
-                                disabled={reassigningDeliveryId === delivery.id}
-                                className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
-                              >
-                                <option value="">Select driver...</option>
-                                {driverOptions.map((driverOption) => (
-                                  <option
-                                    key={driverOption}
-                                    value={driverOption}
-                                  >
-                                    {driverOption}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                            {(() => {
+                              const selectedReassignDriver =
+                                pendingDriverSelections[delivery.id] ??
+                                delivery.driver ??
+                                "";
+                              const reassignConflict =
+                                selectedReassignDriver &&
+                                selectedReassignDriver !== delivery.driver
+                                  ? findDriverScheduleConflict(
+                                      delivery,
+                                      deliveries,
+                                      selectedReassignDriver,
+                                    )
+                                  : null;
+                              const canSaveReassign =
+                                Boolean(selectedReassignDriver) &&
+                                selectedReassignDriver !== delivery.driver &&
+                                !reassignConflict &&
+                                reassigningDeliveryId !== delivery.id;
+
+                              return (
+                                <div className="w-full space-y-2 lg:max-w-xl">
+                                  <div className="flex flex-col gap-2 sm:flex-row">
+                                    <label className="block flex-1">
+                                      <span className="sr-only">
+                                        Change delivery driver
+                                      </span>
+                                      <select
+                                        value={selectedReassignDriver}
+                                        onChange={(event) =>
+                                          setPendingDriverSelections(
+                                            (currentSelections) => ({
+                                              ...currentSelections,
+                                              [delivery.id]:
+                                                event.target.value,
+                                            }),
+                                          )
+                                        }
+                                        disabled={
+                                          reassigningDeliveryId === delivery.id
+                                        }
+                                        className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100 disabled:text-slate-400"
+                                      >
+                                        <option value="">
+                                          Select driver...
+                                        </option>
+                                        {driverOptions.map((driverOption) => (
+                                          <option
+                                            key={driverOption}
+                                            value={driverOption}
+                                          >
+                                            {driverOption}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleReassignDriver(
+                                          delivery,
+                                          selectedReassignDriver,
+                                        )
+                                      }
+                                      disabled={!canSaveReassign}
+                                      className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                                    >
+                                      {reassigningDeliveryId === delivery.id
+                                        ? "Saving..."
+                                        : "Save"}
+                                    </button>
+                                  </div>
+
+                                  {reassignConflict ? (
+                                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+                                      {selectedReassignDriver} already has order{" "}
+                                      {reassignConflict.orderNumber} scheduled{" "}
+                                      {getDeliveryTimeRange(reassignConflict)}.
+                                    </p>
+                                  ) : selectedReassignDriver !==
+                                    delivery.driver ? (
+                                    <p className="text-xs font-bold text-slate-500">
+                                      Click Save to confirm the driver change.
+                                    </p>
+                                  ) : null}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </section>
                       ) : null}

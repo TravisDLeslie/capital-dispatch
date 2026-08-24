@@ -205,12 +205,14 @@ function DriverScheduleColumn({ driver, deliveries, onOpenQueue }) {
  * @param {{
  *   deliveries?: any[];
  *   allowedPageIds?: string[];
+ *   isDriverView?: boolean;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
 export default function DeliveryDashboardPage({
   deliveries = [],
   allowedPageIds = [],
+  isDriverView = false,
   onPageChange,
 }) {
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
@@ -280,55 +282,57 @@ export default function DeliveryDashboardPage({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">
-            Needs Dispatch
-          </p>
-          <p className="mt-2 text-4xl font-black text-slate-950">
-            {needsDispatchDeliveries.length}
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-600">
-            Waiting for driver/truck
-          </p>
-        </div>
+      {!isDriverView ? (
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">
+              Needs Dispatch
+            </p>
+            <p className="mt-2 text-4xl font-black text-slate-950">
+              {needsDispatchDeliveries.length}
+            </p>
+            <p className="mt-1 text-sm font-bold text-slate-600">
+              Waiting for driver/truck
+            </p>
+          </div>
 
-        <div className="rounded-3xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
-            Scheduled
-          </p>
-          <p className="mt-2 text-4xl font-black text-slate-950">
-            {selectedDateDeliveries.length}
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-600">
-            {formatDateLabel(selectedDate)}
-          </p>
-        </div>
+          <div className="rounded-3xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+              Scheduled
+            </p>
+            <p className="mt-2 text-4xl font-black text-slate-950">
+              {selectedDateDeliveries.length}
+            </p>
+            <p className="mt-1 text-sm font-bold text-slate-600">
+              {formatDateLabel(selectedDate)}
+            </p>
+          </div>
 
-        <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">
-            Drivers
-          </p>
-          <p className="mt-2 text-4xl font-black text-slate-950">
-            {driverNames.length}
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-600">
-            On the board
-          </p>
-        </div>
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">
+              Drivers
+            </p>
+            <p className="mt-2 text-4xl font-black text-slate-950">
+              {driverNames.length}
+            </p>
+            <p className="mt-1 text-sm font-bold text-slate-600">
+              On the board
+            </p>
+          </div>
 
-        <div className="rounded-3xl border border-red-200 bg-red-50 p-4 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#FC2C38]">
-            Hardware
-          </p>
-          <p className="mt-2 text-4xl font-black text-slate-950">
-            {hardwareNeededCount}
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-600">
-            Reminders today
-          </p>
+          <div className="rounded-3xl border border-red-200 bg-red-50 p-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-[#FC2C38]">
+              Hardware
+            </p>
+            <p className="mt-2 text-4xl font-black text-slate-950">
+              {hardwareNeededCount}
+            </p>
+            <p className="mt-1 text-sm font-bold text-slate-600">
+              Reminders today
+            </p>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {allowedPageIds.includes("deliveries-add") ? (

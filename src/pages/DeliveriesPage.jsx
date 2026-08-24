@@ -22,6 +22,7 @@ export default function DeliveriesPage({
 
   async function handleSubmit(delivery) {
     await onAddDelivery(delivery);
+    onPageChange?.("deliveries-calendar");
   }
 
   async function handleUpdateSubmit(delivery) {

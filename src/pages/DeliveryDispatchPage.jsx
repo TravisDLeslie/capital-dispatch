@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  CalendarDays,
   ChevronDown,
   Clock,
   CloudRain,
@@ -26,9 +27,11 @@ import {
   getDeliverySiteArrivalLabel,
   getDeliveryTimeRange,
   getDeliveryTimeWindow,
+  getTimeSlotLabel,
   getTodayDateValue,
   deliveryTimeSlotOptions,
   scheduleWindowsOverlap,
+  timeToMinutes,
 } from "../utils/deliverySchedule";
 import { formatCustomerName } from "../utils/textFormatters";
 
@@ -102,6 +105,10 @@ function formatDeliveryTypeLabel(value) {
 
   if (value === "hotShot") {
     return "Hot Shot";
+  }
+
+  if (value === "return") {
+    return "Return";
   }
 
   return "Standard";
@@ -205,6 +212,30 @@ function deliveryIncludesDriver(delivery, driverName) {
   );
 }
 
+function deliveryIncludesVehicle(delivery, assignment) {
+  if (!assignment?.vehicleId && !assignment?.vehicleTitle) {
+    return false;
+  }
+
+  const dispatchAssignments = Array.isArray(delivery.dispatchAssignments)
+    ? delivery.dispatchAssignments
+    : [];
+
+  return (
+    (assignment.vehicleId && delivery.vehicleId === assignment.vehicleId) ||
+    (assignment.vehicleTitle &&
+      delivery.vehicleTitle &&
+      delivery.vehicleTitle === assignment.vehicleTitle) ||
+    dispatchAssignments.some(
+      (dispatchAssignment) =>
+        (assignment.vehicleId &&
+          dispatchAssignment.vehicleId === assignment.vehicleId) ||
+        (assignment.vehicleTitle &&
+          dispatchAssignment.vehicleTitle === assignment.vehicleTitle),
+    )
+  );
+}
+
 function getUniqueOptions(options) {
   const seenOptions = new Set();
 
@@ -223,40 +254,69 @@ function getUniqueOptions(options) {
     });
 }
 
-function findScheduleConflict(currentDelivery, assignments, deliveries) {
+function findScheduleConflictDetails(currentDelivery, assignments, deliveries) {
   const currentWindow = getDeliveryTimeWindow(currentDelivery);
 
   if (!currentDelivery.deliveryDate || !currentWindow) {
     return null;
   }
 
-  const assignedDrivers = assignments
-    .map((assignment) => assignment.driver)
-    .filter(Boolean);
-
-  return deliveries.find((delivery) => {
+  for (const delivery of deliveries) {
     if (
       delivery.id === currentDelivery.id ||
       delivery.status === "complete" ||
       delivery.dispatchStatus === "needsDispatch" ||
       delivery.deliveryDate !== currentDelivery.deliveryDate
     ) {
-      return false;
+      continue;
     }
 
-    return (
-      assignedDrivers.some((driverName) =>
+    if (!scheduleWindowsOverlap(currentWindow, getDeliveryTimeWindow(delivery))) {
+      continue;
+    }
+
+    const driverNames = assignments
+      .map((assignment) => assignment.driver)
+      .filter((driverName) =>
         deliveryIncludesDriver(delivery, driverName),
-      ) &&
-      scheduleWindowsOverlap(currentWindow, getDeliveryTimeWindow(delivery))
+      );
+    const vehicleAssignments = assignments.filter((assignment) =>
+      deliveryIncludesVehicle(delivery, assignment),
     );
-  });
+
+    if (driverNames.length > 0 || vehicleAssignments.length > 0) {
+      return {
+        delivery,
+        driverNames,
+        vehicleAssignments,
+        hasDriverConflict: driverNames.length > 0,
+        hasVehicleConflict: vehicleAssignments.length > 0,
+      };
+    }
+  }
+
+  return null;
 }
 
-function getConflictingDriverNames(delivery, assignments) {
-  return assignments
-    .map((assignment) => assignment.driver)
-    .filter((driverName) => deliveryIncludesDriver(delivery, driverName));
+function getConflictSummary(conflictDetails) {
+  if (!conflictDetails) {
+    return "";
+  }
+
+  const vehicleLabels = conflictDetails.vehicleAssignments
+    .map((assignment) => assignment.vehicleBadge || assignment.vehicleTitle)
+    .filter(Boolean);
+  const parts = [];
+
+  if (conflictDetails.driverNames.length > 0) {
+    parts.push(`driver ${conflictDetails.driverNames.join(", ")}`);
+  }
+
+  if (vehicleLabels.length > 0) {
+    parts.push(`truck ${vehicleLabels.join(", ")}`);
+  }
+
+  return parts.length > 0 ? parts.join(" and ") : "assignment";
 }
 
 function assignmentsReady(assignments, vehicleOptions, driverOptions) {
@@ -264,6 +324,275 @@ function assignmentsReady(assignments, vehicleOptions, driverOptions) {
     (assignment) =>
       driverOptions.includes(assignment.driver) &&
       (vehicleOptions.length === 0 || assignment.vehicleId),
+  );
+}
+
+function assignmentsReadyForSchedule(assignments, driverOptions) {
+  return assignments.every((assignment) =>
+    driverOptions.includes(assignment.driver),
+  );
+}
+
+function isDeliveryComplete(delivery) {
+  return Boolean(
+    delivery.status === "complete" || delivery.completedAt || delivery.deliveredAt,
+  );
+}
+
+function formatTimelineTime(totalMinutes) {
+  if (!Number.isFinite(totalMinutes)) {
+    return "";
+  }
+
+  const normalizedMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+  const hours = Math.floor(normalizedMinutes / 60);
+  const minutes = normalizedMinutes % 60;
+
+  return formatTimeLabel(
+    `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+  );
+}
+
+function getTimelineBlockStyle(window) {
+  const dayStartMinutes = 6 * 60;
+  const dayEndMinutes = 17 * 60;
+  const dayMinutes = dayEndMinutes - dayStartMinutes;
+
+  if (!window) {
+    return {
+      left: "0%",
+      width: "0%",
+    };
+  }
+
+  const start = Math.max(window.start, dayStartMinutes);
+  const end = Math.min(window.end, dayEndMinutes);
+  const left = ((start - dayStartMinutes) / dayMinutes) * 100;
+  const width = Math.max(5, ((Math.max(end, start + 15) - start) / dayMinutes) * 100);
+
+  return {
+    left: `${Math.min(Math.max(left, 0), 100)}%`,
+    width: `${Math.min(width, 100 - Math.min(Math.max(left, 0), 100))}%`,
+  };
+}
+
+function getAssignmentScheduledDeliveries({
+  deliveries,
+  assignment,
+  deliveryDate,
+  currentDeliveryId,
+}) {
+  if (!assignment?.driver || !deliveryDate) {
+    return [];
+  }
+
+  return deliveries
+    .filter(
+      (delivery) =>
+        delivery.id !== currentDeliveryId &&
+        delivery.deliveryDate === deliveryDate &&
+        delivery.dispatchStatus !== "needsDispatch" &&
+        !isDeliveryComplete(delivery) &&
+        (deliveryIncludesDriver(delivery, assignment.driver) ||
+          deliveryIncludesVehicle(delivery, assignment)) &&
+        getDeliveryTimeWindow(delivery),
+    )
+    .sort(
+      (firstDelivery, secondDelivery) =>
+        (timeToMinutes(firstDelivery.deliveryTimeSlot) || 0) -
+        (timeToMinutes(secondDelivery.deliveryTimeSlot) || 0),
+    );
+}
+
+function ScheduleAvailabilityPreview({
+  delivery,
+  assignments,
+  deliveries,
+  schedule,
+  canPreviewSchedule,
+  onOpenCalendar,
+}) {
+  const previewAssignments = assignments.filter((assignment) => assignment.driver);
+  const candidateWindow = getDeliveryTimeWindow(delivery);
+  const hasPreviewInputs =
+    canPreviewSchedule &&
+    previewAssignments.length > 0 &&
+    schedule.deliveryDate &&
+    schedule.deliveryTimeSlot;
+
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-black text-slate-950">
+            <CalendarDays className="h-4 w-4 text-[#FC2C38]" aria-hidden="true" />
+            Driver Availability
+          </p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            Preview this driver&apos;s day before sending the order to the board.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onOpenCalendar}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+        >
+          Open calendar
+        </button>
+      </div>
+
+      {!hasPreviewInputs ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500">
+          Select a driver, delivery date, and leave time to preview schedule
+          conflicts. Add the truck to check truck overlap too.
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-3">
+          {previewAssignments.map((assignment, assignmentIndex) => {
+            const scheduledDeliveries = getAssignmentScheduledDeliveries({
+              deliveries,
+              assignment,
+              deliveryDate: schedule.deliveryDate,
+              currentDeliveryId: delivery.id,
+            });
+            const conflictDetails = findScheduleConflictDetails(
+              delivery,
+              [assignment],
+              deliveries,
+            );
+            const hasConflict = Boolean(conflictDetails);
+            const conflictSummary = getConflictSummary(conflictDetails);
+
+            return (
+              <div
+                key={`${assignment.id}-${assignmentIndex}`}
+                className={`rounded-2xl border p-3 ${
+                  hasConflict
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-emerald-100 bg-emerald-50/70"
+                }`}
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                      Driver
+                    </p>
+                    <p className="text-lg font-black text-slate-950">
+                      {assignment.driver}
+                    </p>
+                    <p className="text-xs font-bold text-slate-500">
+                      {assignment.vehicleBadge || assignment.vehicleTitle
+                        ? `Truck ${assignment.vehicleBadge || assignment.vehicleTitle}`
+                        : "Truck not selected yet"}
+                    </p>
+                  </div>
+
+                  <span
+                    className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${
+                      hasConflict
+                        ? "bg-amber-100 text-amber-900"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {hasConflict ? "Conflict" : "Available"}
+                  </span>
+                </div>
+
+                <div className="mt-3 rounded-2xl border border-white/80 bg-white p-3">
+                  <div className="mb-2 flex items-center justify-between text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
+                    <span>6 AM</span>
+                    <span>Noon</span>
+                    <span>5 PM</span>
+                  </div>
+
+                  <div className="relative h-12 overflow-hidden rounded-xl bg-slate-100">
+                    <div className="absolute left-1/2 top-0 h-full w-px bg-white" />
+
+                    {scheduledDeliveries.map((scheduledItem) => (
+                      <div
+                        key={scheduledItem.id}
+                        className="absolute top-2 h-8 rounded-lg bg-slate-300"
+                        style={getTimelineBlockStyle(
+                          getDeliveryTimeWindow(scheduledItem),
+                        )}
+                        title={`${scheduledItem.orderNumber} ${getDeliveryTimeRange(
+                          scheduledItem,
+                        )}`}
+                      />
+                    ))}
+
+                    <div
+                      className={`absolute top-2 h-8 rounded-lg shadow-sm ${
+                        hasConflict ? "bg-amber-500" : "bg-[#FC2C38]"
+                      }`}
+                      style={getTimelineBlockStyle(candidateWindow)}
+                      title={`This order ${getDeliveryTimeRange(delivery)}`}
+                    />
+                  </div>
+
+                  <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                    <div className="rounded-xl bg-slate-50 px-3 py-2">
+                      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">
+                        This Delivery
+                      </p>
+                      <p className="mt-1 text-sm font-black text-slate-900">
+                        {getDeliveryTimeRange(delivery)}
+                      </p>
+                      {candidateWindow ? (
+                        <p className="text-xs font-bold text-slate-500">
+                          {formatTimelineTime(candidateWindow.start)} to{" "}
+                          {formatTimelineTime(candidateWindow.end)}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-xl bg-slate-50 px-3 py-2">
+                      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">
+                        Day Load
+                      </p>
+                      <p className="mt-1 text-sm font-black text-slate-900">
+                        {scheduledDeliveries.length} other{" "}
+                        {scheduledDeliveries.length === 1 ? "delivery" : "deliveries"}
+                      </p>
+                      {hasConflict ? (
+                        <p className="text-xs font-bold text-amber-800">
+                          {conflictSummary} overlaps order{" "}
+                          {conflictDetails.delivery.orderNumber}
+                        </p>
+                      ) : (
+                        <p className="text-xs font-bold text-emerald-700">
+                          No driver or truck overlap found
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {scheduledDeliveries.length > 0 ? (
+                    <div className="mt-2 grid gap-2">
+                      {scheduledDeliveries.slice(0, 3).map((scheduledItem) => (
+                        <div
+                          key={scheduledItem.id}
+                          className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600"
+                        >
+                          <span className="truncate">
+                            Order {scheduledItem.orderNumber} ·{" "}
+                            {formatCustomerName(scheduledItem.customerName)}
+                          </span>
+                          <span className="shrink-0 text-slate-900">
+                            {getDeliveryTimeRange(scheduledItem)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -539,23 +868,18 @@ export default function DeliveryDispatchPage({
     }
 
     const deliveryWithSchedule = getDeliveryWithDraftSchedule(delivery);
-    const scheduleConflict = findScheduleConflict(
+    const scheduleConflictDetails = findScheduleConflictDetails(
       deliveryWithSchedule,
       assignments,
       deliveries,
     );
 
-    if (scheduleConflict) {
-      const conflictingDrivers = assignments
-        .map((assignment) => assignment.driver)
-        .filter((driverName) =>
-          deliveryIncludesDriver(scheduleConflict, driverName),
-        )
-        .join(", ");
+    if (scheduleConflictDetails) {
+      const conflictSummary = getConflictSummary(scheduleConflictDetails);
 
       setError(
-        `${conflictingDrivers} already has order ${scheduleConflict.orderNumber} scheduled ${getDeliveryTimeRange(
-          scheduleConflict,
+        `${conflictSummary} already has order ${scheduleConflictDetails.delivery.orderNumber} scheduled ${getDeliveryTimeRange(
+          scheduleConflictDetails.delivery,
         )}. Adjust the delivery time before dispatching.`,
       );
       return;
@@ -678,13 +1002,27 @@ export default function DeliveryDispatchPage({
               vehicleOptions,
               driverOptions,
             );
+            const canPreviewSchedule = assignmentsReadyForSchedule(
+              assignments,
+              driverOptions,
+            );
             const schedule = getSchedule(delivery);
             const scheduledDelivery = getDeliveryWithDraftSchedule(delivery);
-            const selectedScheduleConflict = schedule.deliveryTimeSlot
-              ? findScheduleConflict(scheduledDelivery, assignments, deliveries)
+            const selectedScheduleConflictDetails = schedule.deliveryTimeSlot
+              ? findScheduleConflictDetails(
+                  scheduledDelivery,
+                  assignments,
+                  deliveries,
+                )
               : null;
             const scopeSummary = getDeliveryScopeSummary(delivery);
             const dispatchPanelOpen = isDeliveryOpen(delivery.id);
+            const driverThereLabel = delivery.driverTargetArrivalTime
+              ? formatTimeLabel(delivery.driverTargetArrivalTime)
+              : getDeliverySiteArrivalLabel(scheduledDelivery);
+            const leaveByLabel = schedule.deliveryTimeSlot
+              ? getTimeSlotLabel(schedule.deliveryTimeSlot)
+              : "Not scheduled";
 
             return (
               <article
@@ -696,7 +1034,7 @@ export default function DeliveryDispatchPage({
                 }`}
               >
                 <div className="p-4 sm:p-5">
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(220px,280px)_auto] xl:items-stretch">
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(210px,260px)_minmax(220px,280px)_auto] xl:items-stretch">
                     <div className="flex min-w-0 flex-col justify-center rounded-2xl bg-slate-50 px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
@@ -712,6 +1050,18 @@ export default function DeliveryDispatchPage({
                           {formatCustomerName(delivery.customerName)}
                         </h2>
                       </div>
+
+                    <div className="flex min-h-full flex-col justify-center rounded-2xl bg-slate-50 px-4 py-3 text-left">
+                      <p className="text-sm font-black text-violet-700">
+                        Driver there {driverThereLabel}
+                      </p>
+                      <p className="mt-1 text-sm font-black text-blue-700">
+                        Leave By {leaveByLabel}
+                      </p>
+                      <p className="mt-1 text-sm font-black text-emerald-700">
+                        Back around {getDeliveryBackAroundLabel(scheduledDelivery)}
+                      </p>
+                    </div>
 
                     <div className="flex min-h-full flex-col justify-center rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-left">
                         <p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-[#FC2C38]">
@@ -770,7 +1120,9 @@ export default function DeliveryDispatchPage({
 
                       <span
                         className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-black ${
-                          delivery.deliveryType === "hotShot"
+                          delivery.deliveryType === "return"
+                            ? "bg-blue-50 text-blue-700"
+                            : delivery.deliveryType === "hotShot"
                             ? "bg-red-50 text-[#FC2C38]"
                             : delivery.deliveryType === "priority"
                               ? "bg-amber-50 text-amber-800"
@@ -800,27 +1152,9 @@ export default function DeliveryDispatchPage({
                         </span>
                       ) : null}
 
-                      {delivery.driverTargetArrivalTime ? (
-                        <span className="inline-flex items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-sm font-black text-violet-700">
-                          <Clock className="h-4 w-4" aria-hidden="true" />
-                          Driver there{" "}
-                          {formatTimeLabel(delivery.driverTargetArrivalTime)}
-                        </span>
-                      ) : null}
-
                       <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
                         <Package className="h-4 w-4" aria-hidden="true" />
                         {scopeSummary.shortLabel}
-                      </span>
-
-                      <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700">
-                        Site around{" "}
-                        {getDeliverySiteArrivalLabel(scheduledDelivery)}
-                      </span>
-
-                      <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-sm font-black text-emerald-700">
-                        Back around{" "}
-                        {getDeliveryBackAroundLabel(scheduledDelivery)}
                       </span>
 
                       {delivery.createdAt ? (
@@ -959,20 +1293,36 @@ export default function DeliveryDispatchPage({
 	                      ))}
 	                    </div>
 
-	                    <button
-	                      type="button"
-	                      onClick={() => handleDispatchDelivery(delivery)}
-	                      disabled={isSaving}
-	                      className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
-	                    >
-	                      <Truck className="h-4 w-4" aria-hidden="true" />
-	                      {isSaving ? "Dispatching..." : "Dispatch Delivery"}
-	                    </button>
 	                  </section>
+
+                  <ScheduleAvailabilityPreview
+                    delivery={scheduledDelivery}
+                    assignments={assignments}
+                    deliveries={deliveries}
+                    schedule={schedule}
+                    canPreviewSchedule={canPreviewSchedule}
+                    onOpenCalendar={() => onPageChange?.("deliveries-calendar")}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => handleDispatchDelivery(delivery)}
+                    disabled={
+                      isSaving ||
+                      !canScheduleDelivery ||
+                      !schedule.deliveryDate ||
+                      !schedule.deliveryTimeSlot ||
+                      Boolean(selectedScheduleConflictDetails)
+                    }
+                    className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
+                  >
+                    <Truck className="h-4 w-4" aria-hidden="true" />
+                    {isSaving ? "Dispatching..." : "Dispatch Delivery"}
+                  </button>
 
                   <section
                     className={`mt-5 rounded-2xl border p-4 transition ${
-                      canScheduleDelivery
+                      canPreviewSchedule
                         ? "border-slate-200 bg-white"
                         : "border-slate-200 bg-slate-100 opacity-80"
                     }`}
@@ -983,15 +1333,15 @@ export default function DeliveryDispatchPage({
                           Delivery Schedule
                         </p>
                         <p className="mt-1 text-sm font-semibold text-slate-500">
-                          {canScheduleDelivery
-                            ? "Pick a time slot after choosing the driver so conflicts are easier to catch."
-                            : "Assign the driver and truck first, then schedule the delivery."}
+                          {canPreviewSchedule
+                            ? "Pick a time slot after choosing the driver so conflicts are easier to catch. Add the truck to check truck overlap too."
+                            : "Assign a driver first, then schedule the delivery."}
                         </p>
                       </div>
 
-                      {!canScheduleDelivery ? (
+                      {!canPreviewSchedule ? (
                         <span className="inline-flex rounded-full bg-slate-200 px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                          Locked until assigned
+                          Locked until driver selected
                         </span>
                       ) : null}
                     </div>
@@ -1017,14 +1367,14 @@ export default function DeliveryDispatchPage({
 
                       <div
                         className={`rounded-2xl border px-4 py-3 ${
-                          canScheduleDelivery
+                          canPreviewSchedule
                             ? "border-emerald-100 bg-emerald-50"
                             : "border-slate-200 bg-slate-100"
                         }`}
                       >
                         <p
                           className={`text-xs font-black uppercase tracking-[0.12em] ${
-                            canScheduleDelivery
+                            canPreviewSchedule
                               ? "text-emerald-700"
                               : "text-slate-500"
                           }`}
@@ -1033,7 +1383,7 @@ export default function DeliveryDispatchPage({
                         </p>
                         <p
                           className={`mt-1 text-lg font-black ${
-                            canScheduleDelivery
+                            canPreviewSchedule
                               ? "text-emerald-800"
                               : "text-slate-600"
                           }`}
@@ -1068,7 +1418,7 @@ export default function DeliveryDispatchPage({
                                   event.target.value,
                                 )
                               }
-                              disabled={isSaving || !canScheduleDelivery}
+                              disabled={isSaving || !canPreviewSchedule}
                               className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                             />
                           </label>
@@ -1087,13 +1437,13 @@ export default function DeliveryDispatchPage({
                                   event.target.value,
                                 )
                               }
-                              disabled={isSaving || !canScheduleDelivery}
+                              disabled={isSaving || !canPreviewSchedule}
                               className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                             >
                               <option value="">
-                                {canScheduleDelivery
+                                {canPreviewSchedule
                                   ? "Choose leave time..."
-                                  : "Assign driver/truck first..."}
+                                  : "Assign driver first..."}
                               </option>
 
                               {deliveryTimeSlotOptions.map((timeSlot) => {
@@ -1101,27 +1451,26 @@ export default function DeliveryDispatchPage({
                                   ...scheduledDelivery,
                                   deliveryTimeSlot: timeSlot.value,
                                 };
-                                const conflict = findScheduleConflict(
+                                const conflictDetails = findScheduleConflictDetails(
                                   candidateDelivery,
                                   assignments,
                                   deliveries,
                                 );
-                                const conflictingDrivers = conflict
-                                  ? getConflictingDriverNames(conflict, assignments)
-                                  : [];
-                                const conflictLabel = conflictingDrivers.length
-                                  ? `${conflictingDrivers.join(", ")} busy until ${getDeliveryBackAroundLabel(
-                                      conflict,
+                                const conflictLabel = conflictDetails
+                                  ? `${getConflictSummary(
+                                      conflictDetails,
+                                    )} busy until ${getDeliveryBackAroundLabel(
+                                      conflictDetails.delivery,
                                     )}`
-                                  : "Driver busy";
+                                  : "";
 
                                 return (
                                   <option
                                     key={timeSlot.value}
                                     value={timeSlot.value}
-                                    disabled={Boolean(conflict)}
+                                    disabled={Boolean(conflictDetails)}
                                   >
-                                    {conflict
+                                    {conflictDetails
                                       ? `${timeSlot.label} - ${conflictLabel}`
                                       : timeSlot.label}
                                   </option>
@@ -1129,15 +1478,19 @@ export default function DeliveryDispatchPage({
                               })}
                             </select>
 
-                            {selectedScheduleConflict ? (
+                            {selectedScheduleConflictDetails ? (
                               <span className="mt-2 block rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
-                                {getConflictingDriverNames(
-                                  selectedScheduleConflict,
-                                  assignments,
-                                ).join(", ")}{" "}
-                                is already blocked until{" "}
+                                {getConflictSummary(
+                                  selectedScheduleConflictDetails,
+                                )}{" "}
+                                is already blocked by order{" "}
+                                {
+                                  selectedScheduleConflictDetails.delivery
+                                    .orderNumber
+                                }{" "}
+                                until{" "}
                                 {getDeliveryBackAroundLabel(
-                                  selectedScheduleConflict,
+                                  selectedScheduleConflictDetails.delivery,
                                 )}
                                 .
                               </span>
@@ -1176,7 +1529,7 @@ export default function DeliveryDispatchPage({
                                     event.target.value,
                                   )
                                 }
-                                disabled={isSaving || !canScheduleDelivery}
+                                disabled={isSaving || !canPreviewSchedule}
                                 className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                               >
                                 {safeDeliveryOriginOptions.map((originOption) => (
@@ -1232,7 +1585,7 @@ export default function DeliveryDispatchPage({
                                     event.target.value,
                                   )
                                 }
-                                disabled={isSaving || !canScheduleDelivery}
+                                disabled={isSaving || !canPreviewSchedule}
                                 placeholder="18"
                                 className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition disabled:bg-slate-200 disabled:text-slate-500 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                               />
