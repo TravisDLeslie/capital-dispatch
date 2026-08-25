@@ -11,6 +11,7 @@ import {
   Truck,
 } from "lucide-react";
 import PageContainer from "../components/PageContainer";
+import { isDeliveryComplete } from "../utils/deliveryStatus";
 
 const UNASSIGNED_DRIVER = "Unassigned Driver";
 
@@ -41,11 +42,25 @@ function getSupplierRunSortValue(supplierRun) {
 }
 
 function getOpenDeliveries(deliveries, driverName) {
-  return deliveries.filter(
-    (delivery) =>
-      delivery.status !== "complete" &&
-      getDriverName(delivery.driver) === driverName,
+  return sortDeliveriesBySchedule(
+    deliveries.filter(
+      (delivery) =>
+        !isDeliveryComplete(delivery) &&
+        delivery.dispatchStatus !== "needsDispatch" &&
+        getDriverName(delivery.driver) === driverName &&
+        isTodayOrFutureDelivery(delivery),
+    ),
   );
+}
+
+function getTodayDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isTodayOrFutureDelivery(delivery) {
+  const deliveryDate = String(delivery?.deliveryDate || "").slice(0, 10);
+
+  return !deliveryDate || deliveryDate >= getTodayDateKey();
 }
 
 function getSupplierItemStats(supplierRuns) {
@@ -99,6 +114,14 @@ function getDeliverySortValue(delivery) {
     "";
 
   return `${date} ${time}`.trim();
+}
+
+function sortDeliveriesBySchedule(deliveries) {
+  return [...deliveries].sort((firstDelivery, secondDelivery) =>
+    getDeliverySortValue(firstDelivery).localeCompare(
+      getDeliverySortValue(secondDelivery),
+    ),
+  );
 }
 
 function getRouteCompletionPercent({ completeItems, totalItems }) {

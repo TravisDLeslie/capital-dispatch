@@ -164,7 +164,8 @@ function loadImage(dataUrl) {
 async function createPhotoFromFile(file) {
   const originalDataUrl = await readFileAsDataUrl(file);
   const image = await loadImage(originalDataUrl);
-  const maxWidth = 720;
+  const targetDataUrlLength = 140000;
+  const maxWidth = 640;
   const scale = Math.min(maxWidth / image.width, 1);
   const width = Math.round(image.width * scale);
   const height = Math.round(image.height * scale);
@@ -178,7 +179,7 @@ async function createPhotoFromFile(file) {
   let quality = 0.68;
   let dataUrl = canvas.toDataURL("image/jpeg", quality);
 
-  while (dataUrl.length > 240000 && quality > 0.34) {
+  while (dataUrl.length > targetDataUrlLength && quality > 0.26) {
     quality -= 0.08;
     dataUrl = canvas.toDataURL("image/jpeg", quality);
   }
@@ -225,6 +226,48 @@ function groupDeliveriesByDriver(deliveries) {
       },
     ];
   }, []);
+}
+
+function getTodayDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isTodayOrFutureDelivery(delivery) {
+  const deliveryDate = String(delivery?.deliveryDate || "").slice(0, 10);
+
+  return !deliveryDate || deliveryDate >= getTodayDateKey();
+}
+
+function sortDeliveriesBySchedule(deliveries) {
+  return [...deliveries].sort((firstDelivery, secondDelivery) => {
+    const firstDate = firstDelivery.deliveryDate || "9999-99-99";
+    const secondDate = secondDelivery.deliveryDate || "9999-99-99";
+    const dateComparison = firstDate.localeCompare(secondDate);
+
+    if (dateComparison !== 0) {
+      return dateComparison;
+    }
+
+    const firstTime =
+      firstDelivery.deliveryTimeSlot ||
+      firstDelivery.driverTargetArrivalTime ||
+      firstDelivery.scheduledStartTime ||
+      "99:99";
+    const secondTime =
+      secondDelivery.deliveryTimeSlot ||
+      secondDelivery.driverTargetArrivalTime ||
+      secondDelivery.scheduledStartTime ||
+      "99:99";
+    const timeComparison = String(firstTime).localeCompare(String(secondTime));
+
+    if (timeComparison !== 0) {
+      return timeComparison;
+    }
+
+    return String(firstDelivery.orderNumber || "").localeCompare(
+      String(secondDelivery.orderNumber || ""),
+    );
+  });
 }
 
 function deliveryHasDriver(delivery, driverName) {
@@ -502,6 +545,7 @@ function MobileDeliveryFlowCard({
   deliveryLocationNotes,
   generalNotes,
   onPhotoChange,
+  onPhotosChange,
   onHardwareChecked,
   onCompleteDelivery,
   onViewPhoto,
@@ -843,12 +887,13 @@ function MobileDeliveryFlowCard({
                   <input
                     type="file"
                     accept="image/*"
+                    multiple
                     disabled={isUpdating}
                     onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      onPhotoChange(
+                      const files = Array.from(event.target.files || []);
+                      onPhotosChange(
                         delivery,
-                        file,
+                        files,
                         "deliveryPhoto",
                         "deliveryPhotos",
                       );
@@ -914,12 +959,13 @@ function MobileDeliveryFlowCard({
                     <input
                       type="file"
                       accept="image/*"
+                      multiple
                       disabled={isUpdating}
                       onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        onPhotoChange(
+                        const files = Array.from(event.target.files || []);
+                        onPhotosChange(
                           delivery,
-                          file,
+                          files,
                           "hardwarePhoto",
                           "hardwarePhotos",
                         );
@@ -1071,11 +1117,14 @@ export default function DeliveryQueuePage({
   const [pendingDriverSelections, setPendingDriverSelections] = useState({});
   const [activeDriverDeliveryId, setActiveDriverDeliveryId] = useState("");
 
-  const openDeliveries = deliveries.filter(
-    (delivery) =>
-      !isDeliveryComplete(delivery) &&
-      delivery.dispatchStatus !== "needsDispatch" &&
-      delivery.driver,
+  const openDeliveries = sortDeliveriesBySchedule(
+    deliveries.filter(
+      (delivery) =>
+        !isDeliveryComplete(delivery) &&
+        delivery.dispatchStatus !== "needsDispatch" &&
+        delivery.driver &&
+        isTodayOrFutureDelivery(delivery),
+    ),
   );
   const driverNames = [
     ...new Set(
@@ -1162,17 +1211,34 @@ export default function DeliveryQueuePage({
       return;
     }
 
+    await handlePhotosChange(delivery, [file], photoField, photosField);
+  }
+
+  async function handlePhotosChange(delivery, files, photoField, photosField) {
+    const selectedFiles = Array.from(files || []).filter(Boolean);
+
+    if (selectedFiles.length === 0) {
+      return;
+    }
+
     setError("");
     setUpdatingDeliveryId(delivery.id);
     setActiveDriverDeliveryId(delivery.id);
+    setDeliveryStep(delivery.id, 2);
 
     try {
-      const photo = await createPhotoFromFile(file);
+      const photos = [];
+
+      for (const file of selectedFiles) {
+        photos.push(await createPhotoFromFile(file));
+      }
+
       const currentPhotos = getPhotoList(delivery, photoField, photosField);
-      const nextPhotos = [...currentPhotos, photo];
+      const nextPhotos = [...currentPhotos, ...photos];
+      const latestPhoto = photos[photos.length - 1];
 
       await onUpdateDelivery(delivery.id, {
-        [photoField]: photo,
+        [photoField]: latestPhoto,
         [photosField]: nextPhotos,
       });
     } catch (photoError) {
@@ -1419,6 +1485,7 @@ export default function DeliveryQueuePage({
                 }
                 generalNotes={currentDriverDelivery.generalNotes || ""}
                 onPhotoChange={handlePhotoChange}
+                onPhotosChange={handlePhotosChange}
                 onHardwareChecked={handleHardwareChecked}
                 onCompleteDelivery={handleCompleteDelivery}
                 onViewPhoto={setViewingPhoto}
@@ -1652,6 +1719,7 @@ export default function DeliveryQueuePage({
                         deliveryLocationNotes={deliveryLocationNotes}
                         generalNotes={generalNotes}
                         onPhotoChange={handlePhotoChange}
+                        onPhotosChange={handlePhotosChange}
                         onHardwareChecked={handleHardwareChecked}
                         onCompleteDelivery={handleCompleteDelivery}
                         onViewPhoto={setViewingPhoto}
@@ -2247,12 +2315,15 @@ export default function DeliveryQueuePage({
                                 <input
                                   type="file"
                                   accept="image/*"
+                                  multiple
                                   disabled={isUpdating}
                                   onChange={(event) => {
-                                    const file = event.target.files?.[0];
-                                    handlePhotoChange(
+                                    const files = Array.from(
+                                      event.target.files || [],
+                                    );
+                                    handlePhotosChange(
                                       delivery,
-                                      file,
+                                      files,
                                       "hardwarePhoto",
                                       "hardwarePhotos",
                                     );
@@ -2395,12 +2466,15 @@ export default function DeliveryQueuePage({
                               <input
                                 type="file"
                                 accept="image/*"
+                                multiple
                                 disabled={isUpdating}
                                 onChange={(event) => {
-                                  const file = event.target.files?.[0];
-                                  handlePhotoChange(
+                                  const files = Array.from(
+                                    event.target.files || [],
+                                  );
+                                  handlePhotosChange(
                                     delivery,
-                                    file,
+                                    files,
                                     "deliveryPhoto",
                                     "deliveryPhotos",
                                   );
