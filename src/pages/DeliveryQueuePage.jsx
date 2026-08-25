@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Camera,
+  CalendarDays,
   CheckCircle2,
   ChevronDown,
   Clock,
@@ -13,6 +14,7 @@ import {
   Images,
   MapPin,
   MessageSquare,
+  MoreHorizontal,
   Navigation,
   Package,
   Phone,
@@ -67,6 +69,24 @@ function formatTimeLabel(value) {
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
+  }).format(date);
+}
+
+function formatDeliveryDateLabel(value) {
+  if (!value) {
+    return "No date";
+  }
+
+  const date = new Date(`${value}T12:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
   }).format(date);
 }
 
@@ -1045,8 +1065,11 @@ export default function DeliveryQueuePage({
   const [selectedDriver, setSelectedDriver] = useState("All");
   const [openDriverKeys, setOpenDriverKeys] = useState({});
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
+  const [openDeliveryActionMenuId, setOpenDeliveryActionMenuId] =
+    useState("");
   const [deliveryStepKeys, setDeliveryStepKeys] = useState({});
   const [pendingDriverSelections, setPendingDriverSelections] = useState({});
+  const [activeDriverDeliveryId, setActiveDriverDeliveryId] = useState("");
 
   const openDeliveries = deliveries.filter(
     (delivery) =>
@@ -1072,8 +1095,33 @@ export default function DeliveryQueuePage({
             (delivery.driver || "Unassigned Driver") === selectedDriver,
         );
   const driverGroups = groupDeliveriesByDriver(filteredDeliveries);
-  const currentDriverDelivery = isDriverView ? openDeliveries[0] : null;
-  const upNextDriverDeliveries = isDriverView ? openDeliveries.slice(1) : [];
+  const activeDriverDelivery = activeDriverDeliveryId
+    ? openDeliveries.find((delivery) => delivery.id === activeDriverDeliveryId)
+    : null;
+  const currentDriverDelivery = isDriverView
+    ? activeDriverDelivery || openDeliveries[0] || null
+    : null;
+  const upNextDriverDeliveries =
+    isDriverView && currentDriverDelivery
+      ? openDeliveries.filter(
+          (delivery) => delivery.id !== currentDriverDelivery.id,
+        )
+      : [];
+
+  useEffect(() => {
+    if (!isDriverView) {
+      return;
+    }
+
+    if (!currentDriverDelivery) {
+      setActiveDriverDeliveryId("");
+      return;
+    }
+
+    if (activeDriverDeliveryId !== currentDriverDelivery.id) {
+      setActiveDriverDeliveryId(currentDriverDelivery.id);
+    }
+  }, [activeDriverDeliveryId, currentDriverDelivery, isDriverView]);
 
   function toggleDriver(driver) {
     setOpenDriverKeys((currentOpenDriverKeys) => ({
@@ -1091,6 +1139,7 @@ export default function DeliveryQueuePage({
       ...currentOpenDeliveryKeys,
       [deliveryId]: !currentOpenDeliveryKeys[deliveryId],
     }));
+    setOpenDeliveryActionMenuId("");
   }
 
   function isDeliveryOpen(deliveryId, deliveryIndex) {
@@ -1115,6 +1164,7 @@ export default function DeliveryQueuePage({
 
     setError("");
     setUpdatingDeliveryId(delivery.id);
+    setActiveDriverDeliveryId(delivery.id);
 
     try {
       const photo = await createPhotoFromFile(file);
@@ -1136,6 +1186,7 @@ export default function DeliveryQueuePage({
   async function handleHardwareChecked(delivery, isChecked) {
     setError("");
     setUpdatingDeliveryId(delivery.id);
+    setActiveDriverDeliveryId(delivery.id);
 
     try {
       await onUpdateDelivery(delivery.id, {
@@ -1291,9 +1342,6 @@ export default function DeliveryQueuePage({
   }
 
   if (isDriverView) {
-    const currentDeliveryItems = Array.isArray(currentDriverDelivery?.items)
-      ? currentDriverDelivery.items
-      : [];
     const currentDeliveryPhotos = currentDriverDelivery
       ? getPhotoList(
           currentDriverDelivery,
@@ -1644,6 +1692,14 @@ export default function DeliveryQueuePage({
                           </span>
 
                           <span className="mt-3 flex flex-wrap gap-2">
+                            <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm font-black text-[#FC2C38]">
+                              <CalendarDays
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                              />
+                              {formatDeliveryDateLabel(delivery.deliveryDate)}
+                            </span>
+
                             <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-bold text-slate-700">
                               <Clock className="h-4 w-4" aria-hidden="true" />
                               {getDeliveryTimeRange(delivery)}
@@ -1724,46 +1780,87 @@ export default function DeliveryQueuePage({
                           </button>
 
                           {canEditDeliveries ? (
-                            <>
+                            <div className="relative">
                               <button
                                 type="button"
-                                onClick={() => onEditDelivery(delivery.id)}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100"
+                                onClick={() =>
+                                  setOpenDeliveryActionMenuId(
+                                    openDeliveryActionMenuId === delivery.id
+                                      ? ""
+                                      : delivery.id,
+                                  )
+                                }
+                                className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+                                aria-label={`More actions for order ${delivery.orderNumber}`}
+                                aria-haspopup="menu"
+                                aria-expanded={
+                                  openDeliveryActionMenuId === delivery.id
+                                }
                               >
-                                <Edit3
-                                  className="h-4 w-4"
+                                <MoreHorizontal
+                                  className="h-5 w-5"
                                   aria-hidden="true"
                                 />
-                                Edit
                               </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleSendBackToDispatch(delivery)}
-                                disabled={isUpdating}
-                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-800 shadow-sm transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                <RotateCcw
-                                  className="h-4 w-4"
-                                  aria-hidden="true"
-                                />
-                                Send back to dispatch
-                              </button>
-
-                              {onDeleteDelivery ? (
-                                <button
-                                  type="button"
-                                  onClick={() => onDeleteDelivery(delivery.id)}
-                                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-[#FC2C38] shadow-sm transition hover:bg-red-50"
+                              {openDeliveryActionMenuId === delivery.id ? (
+                                <div
+                                  className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+                                  role="menu"
                                 >
-                                  <Trash2
-                                    className="h-4 w-4"
-                                    aria-hidden="true"
-                                  />
-                                  Delete
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenDeliveryActionMenuId("");
+                                      onEditDelivery(delivery.id);
+                                    }}
+                                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                                    role="menuitem"
+                                  >
+                                    <Edit3
+                                      className="h-4 w-4"
+                                      aria-hidden="true"
+                                    />
+                                    Edit delivery
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenDeliveryActionMenuId("");
+                                      handleSendBackToDispatch(delivery);
+                                    }}
+                                    disabled={isUpdating}
+                                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-black text-amber-800 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    role="menuitem"
+                                  >
+                                    <RotateCcw
+                                      className="h-4 w-4"
+                                      aria-hidden="true"
+                                    />
+                                    Send back to dispatch
+                                  </button>
+
+                                  {onDeleteDelivery ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenDeliveryActionMenuId("");
+                                        onDeleteDelivery(delivery.id);
+                                      }}
+                                      className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-black text-[#FC2C38] transition hover:bg-red-50"
+                                      role="menuitem"
+                                    >
+                                      <Trash2
+                                        className="h-4 w-4"
+                                        aria-hidden="true"
+                                      />
+                                      Delete delivery
+                                    </button>
+                                  ) : null}
+                                </div>
                               ) : null}
-                            </>
+                            </div>
                           ) : null}
 
                           <a

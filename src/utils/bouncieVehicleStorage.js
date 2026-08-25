@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -94,6 +95,23 @@ export async function saveBouncieVehicleSetting(vehicleSetting) {
 
   if (db) {
     await setDoc(doc(db, VEHICLE_SETTINGS_COLLECTION, setting.id), setting);
+  }
+
+  saveLocalVehicleSettings(updatedSettings);
+
+  return updatedSettings;
+}
+
+export async function deleteBouncieVehicleSetting(vehicleSettingId) {
+  const currentSettings = getLocalVehicleSettings();
+  const updatedSettings = sortVehicleSettings(
+    currentSettings.filter(
+      (savedSetting) => savedSetting.id !== vehicleSettingId,
+    ),
+  );
+
+  if (db) {
+    await deleteDoc(doc(db, VEHICLE_SETTINGS_COLLECTION, vehicleSettingId));
   }
 
   saveLocalVehicleSettings(updatedSettings);
