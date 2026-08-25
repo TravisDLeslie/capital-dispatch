@@ -34,6 +34,15 @@ import {
   getUniqueVehicleBadgeTexts,
 } from "../utils/bouncieVehicleFormatters";
 
+function createEmptyServiceDraft() {
+  return {
+    id: `service-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    serviceDate: "",
+    serviceDescription: "",
+    serviceProvider: "",
+  };
+}
+
 function createEmptyVehicleDraft() {
   return {
     id: "",
@@ -47,6 +56,7 @@ function createEmptyVehicleDraft() {
     lastServiceDate: "",
     lastServiceDescription: "",
     lastServiceProvider: "",
+    serviceItems: [createEmptyServiceDraft()],
   };
 }
 
@@ -67,6 +77,53 @@ function getManualVehicleYearMakeModel(vehicleSetting) {
     [vehicleSetting?.year, vehicleSetting?.make, vehicleSetting?.model]
       .filter(Boolean)
       .join(" ")
+  );
+}
+
+function getVehicleServiceItems(vehicleSetting) {
+  if (Array.isArray(vehicleSetting?.serviceItems)) {
+    const serviceItems = vehicleSetting.serviceItems
+      .filter(
+        (serviceItem) =>
+          serviceItem?.serviceDate ||
+          serviceItem?.serviceDescription ||
+          serviceItem?.serviceProvider,
+      )
+      .map((serviceItem, index) => ({
+        id: serviceItem.id || `service-${index}`,
+        serviceDate: serviceItem.serviceDate || "",
+        serviceDescription: serviceItem.serviceDescription || "",
+        serviceProvider: serviceItem.serviceProvider || "",
+      }));
+
+    if (serviceItems.length > 0) {
+      return serviceItems;
+    }
+  }
+
+  if (
+    vehicleSetting?.lastServiceDate ||
+    vehicleSetting?.lastServiceDescription ||
+    vehicleSetting?.lastServiceProvider
+  ) {
+    return [
+      {
+        id: "legacy-last-service",
+        serviceDate: vehicleSetting.lastServiceDate || "",
+        serviceDescription: vehicleSetting.lastServiceDescription || "",
+        serviceProvider: vehicleSetting.lastServiceProvider || "",
+      },
+    ];
+  }
+
+  return [];
+}
+
+function sortServiceItems(serviceItems) {
+  return [...serviceItems].sort((firstService, secondService) =>
+    String(secondService.serviceDate || "").localeCompare(
+      String(firstService.serviceDate || ""),
+    ),
   );
 }
 
@@ -249,6 +306,8 @@ export default function BounciePage({ onPageChange }) {
   }
 
   function startEditingVehicleDetails(vehicleSetting) {
+    const serviceItems = getVehicleServiceItems(vehicleSetting);
+
     setVehicleDraft({
       id: vehicleSetting.id || "",
       nickname:
@@ -265,6 +324,8 @@ export default function BounciePage({ onPageChange }) {
       lastServiceDate: vehicleSetting.lastServiceDate || "",
       lastServiceDescription: vehicleSetting.lastServiceDescription || "",
       lastServiceProvider: vehicleSetting.lastServiceProvider || "",
+      serviceItems:
+        serviceItems.length > 0 ? serviceItems : [createEmptyServiceDraft()],
     });
     setIsVehicleFormOpen(true);
     setEditingVehicleId("");
@@ -275,6 +336,43 @@ export default function BounciePage({ onPageChange }) {
       ...currentDraft,
       [field]: value,
     }));
+  }
+
+  function updateVehicleServiceItem(serviceItemId, field, value) {
+    setVehicleDraft((currentDraft) => ({
+      ...currentDraft,
+      serviceItems: currentDraft.serviceItems.map((serviceItem) =>
+        serviceItem.id === serviceItemId
+          ? {
+              ...serviceItem,
+              [field]: value,
+            }
+          : serviceItem,
+      ),
+    }));
+  }
+
+  function addVehicleServiceItem() {
+    setVehicleDraft((currentDraft) => ({
+      ...currentDraft,
+      serviceItems: [...currentDraft.serviceItems, createEmptyServiceDraft()],
+    }));
+  }
+
+  function removeVehicleServiceItem(serviceItemId) {
+    setVehicleDraft((currentDraft) => {
+      const nextServiceItems = currentDraft.serviceItems.filter(
+        (serviceItem) => serviceItem.id !== serviceItemId,
+      );
+
+      return {
+        ...currentDraft,
+        serviceItems:
+          nextServiceItems.length > 0
+            ? nextServiceItems
+            : [createEmptyServiceDraft()],
+      };
+    });
   }
 
   async function handleVehiclePhotoChange(file) {
@@ -313,6 +411,28 @@ export default function BounciePage({ onPageChange }) {
     const vehicleId =
       vehicleDraft.id ||
       `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const serviceItems = sortServiceItems(
+      vehicleDraft.serviceItems
+        .map((serviceItem) => ({
+          id: serviceItem.id,
+          serviceDate: String(serviceItem.serviceDate || "").trim(),
+          serviceDescription: String(
+            serviceItem.serviceDescription || "",
+          ).trim(),
+          serviceProvider: String(serviceItem.serviceProvider || "").trim(),
+        }))
+        .filter(
+          (serviceItem) =>
+            serviceItem.serviceDate ||
+            serviceItem.serviceDescription ||
+            serviceItem.serviceProvider,
+        ),
+    );
+    const latestService = serviceItems[0] || {
+      serviceDate: "",
+      serviceDescription: "",
+      serviceProvider: "",
+    };
 
     setSavingVehicleId(vehicleId);
     setError("");
@@ -330,9 +450,10 @@ export default function BounciePage({ onPageChange }) {
         yearMakeModel,
         vin: vehicleDraft.vin.trim(),
         photoDataUrl: vehicleDraft.photoDataUrl,
-        lastServiceDate: vehicleDraft.lastServiceDate,
-        lastServiceDescription: vehicleDraft.lastServiceDescription.trim(),
-        lastServiceProvider: vehicleDraft.lastServiceProvider.trim(),
+        serviceItems,
+        lastServiceDate: latestService.serviceDate,
+        lastServiceDescription: latestService.serviceDescription,
+        lastServiceProvider: latestService.serviceProvider,
       });
 
       setVehicleSettings(updatedSettings);
@@ -566,54 +687,112 @@ export default function BounciePage({ onPageChange }) {
                   />
                 </label>
 
-                <label className="block">
-                  <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                    Last Service
-                  </span>
-                  <input
-                    type="date"
-                    value={vehicleDraft.lastServiceDate}
-                    onChange={(event) =>
-                      updateVehicleDraft("lastServiceDate", event.target.value)
-                    }
-                    className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                    Service For
-                  </span>
-                  <input
-                    type="text"
-                    value={vehicleDraft.lastServiceDescription}
-                    onChange={(event) =>
-                      updateVehicleDraft(
-                        "lastServiceDescription",
-                        event.target.value,
-                      )
-                    }
-                    className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                    placeholder="Oil, brakes, DOT..."
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                    Service Shop
-                  </span>
-                  <input
-                    type="text"
-                    value={vehicleDraft.lastServiceProvider}
-                    onChange={(event) =>
-                      updateVehicleDraft("lastServiceProvider", event.target.value)
-                    }
-                    className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                    placeholder="Shop or mechanic"
-                  />
-                </label>
               </div>
             </div>
+
+            <section className="mt-5 rounded-[22px] border border-slate-200 bg-white p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                    Service History
+                  </p>
+                  <h4 className="mt-1 text-lg font-black text-slate-950">
+                    Service Items
+                  </h4>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={addVehicleServiceItem}
+                  className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  Add Service
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {vehicleDraft.serviceItems.map((serviceItem, serviceIndex) => (
+                  <div
+                    key={serviceItem.id}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
+                  >
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-sm font-black text-slate-950">
+                        Service {serviceIndex + 1}
+                      </p>
+
+                      <button
+                        type="button"
+                        onClick={() => removeVehicleServiceItem(serviceItem.id)}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-xs font-black text-[#FC2C38] shadow-sm transition hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        Remove
+                      </button>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                          Service Date
+                        </span>
+                        <input
+                          type="date"
+                          value={serviceItem.serviceDate}
+                          onChange={(event) =>
+                            updateVehicleServiceItem(
+                              serviceItem.id,
+                              "serviceDate",
+                              event.target.value,
+                            )
+                          }
+                          className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                          Service For
+                        </span>
+                        <input
+                          type="text"
+                          value={serviceItem.serviceDescription}
+                          onChange={(event) =>
+                            updateVehicleServiceItem(
+                              serviceItem.id,
+                              "serviceDescription",
+                              event.target.value,
+                            )
+                          }
+                          className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                          placeholder="Oil, brakes, DOT..."
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                          Service Location
+                        </span>
+                        <input
+                          type="text"
+                          value={serviceItem.serviceProvider}
+                          onChange={(event) =>
+                            updateVehicleServiceItem(
+                              serviceItem.id,
+                              "serviceProvider",
+                              event.target.value,
+                            )
+                          }
+                          className="min-h-[48px] w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                          placeholder="Shop or mechanic"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
@@ -644,6 +823,10 @@ export default function BounciePage({ onPageChange }) {
               const vehicleTitle = getManualVehicleTitle(vehicleSetting);
               const yearMakeModel =
                 getManualVehicleYearMakeModel(vehicleSetting);
+              const serviceItems = sortServiceItems(
+                getVehicleServiceItems(vehicleSetting),
+              );
+              const latestService = serviceItems[0];
               const isDeletingVehicle = deletingVehicleId === vehicleSetting.id;
 
               return (
@@ -717,7 +900,7 @@ export default function BounciePage({ onPageChange }) {
                             {vehicleSetting.vin || "Not entered"}
                           </p>
                         </div>
-                        <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                        <div className="rounded-2xl bg-slate-50 px-3 py-3 sm:col-span-2">
                           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
                             <CalendarDays
                               className="h-3.5 w-3.5"
@@ -726,31 +909,55 @@ export default function BounciePage({ onPageChange }) {
                             Last Service
                           </p>
                           <p className="mt-1 text-sm font-black text-slate-800">
-                            {vehicleSetting.lastServiceDate || "Not entered"}
+                            {latestService?.serviceDate || "Not entered"}
                           </p>
                         </div>
-                        <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex items-center justify-between gap-3">
                           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
                             <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
-                            Service For
+                            Service History
                           </p>
-                          <p className="mt-1 text-sm font-black text-slate-800">
-                            {vehicleSetting.lastServiceDescription ||
-                              "Not entered"}
-                          </p>
+                          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-500">
+                            {serviceItems.length}{" "}
+                            {serviceItems.length === 1 ? "item" : "items"}
+                          </span>
                         </div>
-                        <div className="rounded-2xl bg-slate-50 px-3 py-3">
-                          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
-                            <Building2
-                              className="h-3.5 w-3.5"
-                              aria-hidden="true"
-                            />
-                            Service Shop
+
+                        {serviceItems.length > 0 ? (
+                          <div className="mt-3 space-y-2">
+                            {serviceItems.map((serviceItem) => (
+                              <div
+                                key={serviceItem.id}
+                                className="rounded-xl bg-white px-3 py-3"
+                              >
+                                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                  <p className="text-sm font-black text-slate-950">
+                                    {serviceItem.serviceDescription ||
+                                      "Service"}
+                                  </p>
+                                  <p className="text-xs font-black uppercase tracking-[0.1em] text-[#FC2C38]">
+                                    {serviceItem.serviceDate || "No date"}
+                                  </p>
+                                </div>
+                                <p className="mt-1 flex items-center gap-2 text-sm font-bold text-slate-500">
+                                  <Building2
+                                    className="h-3.5 w-3.5"
+                                    aria-hidden="true"
+                                  />
+                                  {serviceItem.serviceProvider ||
+                                    "Service location not entered"}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-sm font-bold text-slate-500">
+                            No service history entered yet.
                           </p>
-                          <p className="mt-1 text-sm font-black text-slate-800">
-                            {vehicleSetting.lastServiceProvider || "Not entered"}
-                          </p>
-                        </div>
+                        )}
                       </div>
                     </div>
                   </div>
