@@ -483,6 +483,7 @@ function MobileDeliveryFlowCard({
   onPhotoChange,
   onHardwareChecked,
   onCompleteDelivery,
+  onViewPhoto,
   isFocusedDriverView = false,
 }) {
   const [loadedDeliveryKeys, setLoadedDeliveryKeys] = useState({});
@@ -818,7 +819,7 @@ function MobileDeliveryFlowCard({
                 <PhotoPreviewGrid
                   photos={deliveryPhotos}
                   label="delivery photo"
-                  onView={setViewingPhoto}
+                  onView={onViewPhoto}
                 />
               </div>
             </div>
@@ -879,7 +880,7 @@ function MobileDeliveryFlowCard({
                   <PhotoPreviewGrid
                     photos={hardwarePhotos}
                     label="hardware photo"
-                    onView={setViewingPhoto}
+                    onView={onViewPhoto}
                   />
                 </div>
               </div>
@@ -1325,6 +1326,7 @@ export default function DeliveryQueuePage({
                 onPhotoChange={handlePhotoChange}
                 onHardwareChecked={handleHardwareChecked}
                 onCompleteDelivery={handleCompleteDelivery}
+                onViewPhoto={setViewingPhoto}
                 isFocusedDriverView
               />
             </section>
@@ -1557,6 +1559,7 @@ export default function DeliveryQueuePage({
                         onPhotoChange={handlePhotoChange}
                         onHardwareChecked={handleHardwareChecked}
                         onCompleteDelivery={handleCompleteDelivery}
+                        onViewPhoto={setViewingPhoto}
                       />
 
                       {canEditDeliveries ? (
