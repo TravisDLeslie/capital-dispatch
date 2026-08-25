@@ -246,6 +246,7 @@ function ActionRow({
  *   actions: Array<Record<string, unknown> | null>;
  *   headerAccessory?: import("react").ReactNode;
  *   statsClassName?: string;
+ *   actionsClassName?: string;
  *   children?: import("react").ReactNode;
  * }} props
  */
@@ -260,6 +261,7 @@ export default function SectionHubPage({
   actions,
   headerAccessory = null,
   statsClassName = "",
+  actionsClassName = "grid gap-3",
   children = null,
 }) {
   const PrimaryActionIcon = primaryAction?.icon;
@@ -340,7 +342,7 @@ export default function SectionHubPage({
 
       {children}
 
-      <section className="grid gap-3">
+      <section className={actionsClassName}>
         {actions.filter(Boolean).map((action) => (
           <ActionRow key={action.title} {...action} />
         ))}

@@ -3637,6 +3637,7 @@ export default function App() {
             },
           ]}
           statsClassName="hidden sm:grid"
+          actionsClassName="grid gap-4 xl:grid-cols-2"
           actions={[
             dashboardAllowedPageIds.includes("check-in")
               ? {
@@ -3664,6 +3665,34 @@ export default function App() {
                   tone: "success",
                   variant: "default",
                   onClick: () => setCurrentPage("today"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("search")
+              ? {
+                  icon: History,
+                  label: "History",
+                  title: "Receiving History",
+                  description:
+                    "Search and review every checked-in PO by date, vendor, item, customer, or yard location.",
+                  metric: checkIns.length,
+                  metricLabel: "POs",
+                  tone: "archive",
+                  variant: "default",
+                  onClick: () => setCurrentPage("search"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("trace")
+              ? {
+                  icon: Search,
+                  label: "Trace",
+                  title: "Find PO Chain",
+                  description:
+                    "Follow a PO or order across South, Their Truck, receiving, and deliveries.",
+                  metric: "→",
+                  metricLabel: "Trace",
+                  tone: "dispatch",
+                  variant: "default",
+                  onClick: () => setCurrentPage("trace"),
                 }
               : null,
             dashboardAllowedPageIds.includes("supplier-runs-check") ||

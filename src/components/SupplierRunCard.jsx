@@ -1008,6 +1008,7 @@ export default function SupplierRunCard({
           {items.map((item) => {
             const isEditing = editingItemId === item.id;
             const pickupPhotoInputId = `pickup-photo-${supplierRun.id}-${item.id}`;
+            const uploadPhotoInputId = `pickup-upload-photo-${supplierRun.id}-${item.id}`;
             const materialUseClasses = getMaterialUseClasses(
               item.materialUse,
               item.pickedUp,
@@ -1170,6 +1171,32 @@ export default function SupplierRunCard({
                           disabled={Boolean(processingPhotoItemId)}
                           className="sr-only"
                         />
+                      ) : null}
+
+                      {!item.pickedUp ? (
+                        <input
+                          id={uploadPhotoInputId}
+                          type="file"
+                          accept="image/*"
+                          onChange={(event) =>
+                            handlePickupPhotoChange(item.id, event)
+                          }
+                          disabled={Boolean(processingPhotoItemId)}
+                          className="sr-only"
+                        />
+                      ) : null}
+
+                      {!item.pickedUp ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            document.getElementById(uploadPhotoInputId)?.click();
+                          }}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                        >
+                          Upload Photo
+                        </button>
                       ) : null}
 
                       {!item.pickedUp ? (

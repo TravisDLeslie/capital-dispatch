@@ -10,6 +10,7 @@ import {
   CloudRain,
   Edit3,
   ExternalLink,
+  Images,
   MapPin,
   MessageSquare,
   Navigation,
@@ -793,27 +794,50 @@ function MobileDeliveryFlowCard({
                 Take a photo of the delivered material.
               </p>
 
-              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm font-black text-[#FC2C38]">
-                <Camera className="h-5 w-5" aria-hidden="true" />
-                Take Photo
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  disabled={isUpdating}
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    onPhotoChange(
-                      delivery,
-                      file,
-                      "deliveryPhoto",
-                      "deliveryPhotos",
-                    );
-                    event.target.value = "";
-                  }}
-                  className="sr-only"
-                />
-              </label>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white px-4 py-4 text-sm font-black text-[#FC2C38]">
+                  <Camera className="h-5 w-5" aria-hidden="true" />
+                  Take Photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    disabled={isUpdating}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      onPhotoChange(
+                        delivery,
+                        file,
+                        "deliveryPhoto",
+                        "deliveryPhotos",
+                      );
+                      event.target.value = "";
+                    }}
+                    className="sr-only"
+                  />
+                </label>
+
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-4 text-sm font-black text-slate-700">
+                  <Images className="h-5 w-5" aria-hidden="true" />
+                  Upload Photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isUpdating}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      onPhotoChange(
+                        delivery,
+                        file,
+                        "deliveryPhoto",
+                        "deliveryPhotos",
+                      );
+                      event.target.value = "";
+                    }}
+                    className="sr-only"
+                  />
+                </label>
+              </div>
 
               <div className="mt-3">
                 <PhotoPreviewGrid
@@ -841,27 +865,50 @@ function MobileDeliveryFlowCard({
                   Take a photo showing the hardware was delivered.
                 </p>
 
-                <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-red-200 bg-white px-4 py-4 text-sm font-black text-[#FC2C38]">
-                  <Camera className="h-5 w-5" aria-hidden="true" />
-                  Take Hardware Photo
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    disabled={isUpdating}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      onPhotoChange(
-                        delivery,
-                        file,
-                        "hardwarePhoto",
-                        "hardwarePhotos",
-                      );
-                      event.target.value = "";
-                    }}
-                    className="sr-only"
-                  />
-                </label>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-red-200 bg-white px-4 py-4 text-sm font-black text-[#FC2C38]">
+                    <Camera className="h-5 w-5" aria-hidden="true" />
+                    Take Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      disabled={isUpdating}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        onPhotoChange(
+                          delivery,
+                          file,
+                          "hardwarePhoto",
+                          "hardwarePhotos",
+                        );
+                        event.target.value = "";
+                      }}
+                      className="sr-only"
+                    />
+                  </label>
+
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-4 text-sm font-black text-slate-700">
+                    <Images className="h-5 w-5" aria-hidden="true" />
+                    Upload Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUpdating}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        onPhotoChange(
+                          delivery,
+                          file,
+                          "hardwarePhoto",
+                          "hardwarePhotos",
+                        );
+                        event.target.value = "";
+                      }}
+                      className="sr-only"
+                    />
+                  </label>
+                </div>
 
                 <label className="mt-3 flex items-center gap-3 text-sm font-black text-slate-900">
                   <input
@@ -2065,7 +2112,7 @@ export default function DeliveryQueuePage({
                             </label>
                           </div>
 
-                          <label className="mt-4 flex min-w-0 cursor-pointer flex-col gap-3 rounded-2xl border border-red-200 bg-white p-4 transition hover:bg-red-50">
+                          <div className="mt-4 flex min-w-0 flex-col gap-3 rounded-2xl border border-red-200 bg-white p-4">
                             <span className="flex items-center gap-2 text-sm font-black text-slate-900">
                               <Camera
                                 className="h-4 w-4 text-[#FC2C38]"
@@ -2074,27 +2121,50 @@ export default function DeliveryQueuePage({
                               Hardware photo
                             </span>
 
-                            <input
-                              type="file"
-                              accept="image/*"
-                              capture="environment"
-                              disabled={isUpdating}
-                              onChange={(event) => {
-                                const file = event.target.files?.[0];
-                                handlePhotoChange(
-                                  delivery,
-                                  file,
-                                  "hardwarePhoto",
-                                  "hardwarePhotos",
-                                );
-                                event.target.value = "";
-                              }}
-                              className="sr-only"
-                            />
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-2.5 text-sm font-black text-white">
+                                <Camera className="h-4 w-4" aria-hidden="true" />
+                                Take Photo
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  disabled={isUpdating}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    handlePhotoChange(
+                                      delivery,
+                                      file,
+                                      "hardwarePhoto",
+                                      "hardwarePhotos",
+                                    );
+                                    event.target.value = "";
+                                  }}
+                                  className="sr-only"
+                                />
+                              </label>
 
-                            <span className="inline-flex w-full items-center justify-center rounded-xl bg-[#FC2C38] px-4 py-2.5 text-sm font-black text-white">
-                              Take / Upload Hardware Photo
-                            </span>
+                              <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700">
+                                <Images className="h-4 w-4" aria-hidden="true" />
+                                Upload Photo
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  disabled={isUpdating}
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    handlePhotoChange(
+                                      delivery,
+                                      file,
+                                      "hardwarePhoto",
+                                      "hardwarePhotos",
+                                    );
+                                    event.target.value = "";
+                                  }}
+                                  className="sr-only"
+                                />
+                              </label>
+                            </div>
 
                             {hardwarePhotos.length > 0 ? (
                               <span className="text-sm font-bold text-emerald-700">
@@ -2109,7 +2179,7 @@ export default function DeliveryQueuePage({
                                 Required when hardware is on the delivery.
                               </span>
                             )}
-                          </label>
+                          </div>
 
                           <div className="mt-4">
                             <PhotoPreviewGrid
@@ -2190,7 +2260,7 @@ export default function DeliveryQueuePage({
                         </p>
 
                         <div className="grid gap-3 lg:grid-cols-2">
-                        <label className="flex min-w-0 cursor-pointer flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-red-200 hover:bg-red-50">
+                        <div className="flex min-w-0 flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4">
                           <span className="flex items-center gap-2 text-sm font-black text-slate-900">
                             <Camera
                               className="h-4 w-4 text-[#FC2C38]"
@@ -2199,27 +2269,50 @@ export default function DeliveryQueuePage({
                             Delivery photo
                           </span>
 
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            disabled={isUpdating}
-                            onChange={(event) => {
-                              const file = event.target.files?.[0];
-                              handlePhotoChange(
-                                delivery,
-                                file,
-                                "deliveryPhoto",
-                                "deliveryPhotos",
-                              );
-                              event.target.value = "";
-                            }}
-                            className="sr-only"
-                          />
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-black text-white">
+                              <Camera className="h-4 w-4" aria-hidden="true" />
+                              Take Photo
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                disabled={isUpdating}
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0];
+                                  handlePhotoChange(
+                                    delivery,
+                                    file,
+                                    "deliveryPhoto",
+                                    "deliveryPhotos",
+                                  );
+                                  event.target.value = "";
+                                }}
+                                className="sr-only"
+                              />
+                            </label>
 
-                          <span className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-black text-white">
-                            Take / Upload Delivery Photo
-                          </span>
+                            <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700">
+                              <Images className="h-4 w-4" aria-hidden="true" />
+                              Upload Photo
+                              <input
+                                type="file"
+                                accept="image/*"
+                                disabled={isUpdating}
+                                onChange={(event) => {
+                                  const file = event.target.files?.[0];
+                                  handlePhotoChange(
+                                    delivery,
+                                    file,
+                                    "deliveryPhoto",
+                                    "deliveryPhotos",
+                                  );
+                                  event.target.value = "";
+                                }}
+                                className="sr-only"
+                              />
+                            </label>
+                          </div>
 
                           {deliveryPhotos.length > 0 ? (
                             <span className="text-sm font-bold text-emerald-700">
@@ -2234,7 +2327,7 @@ export default function DeliveryQueuePage({
                               Take a clear photo after drop-off.
                             </span>
                           )}
-                        </label>
+                        </div>
 
                         <PhotoPreviewGrid
                           photos={deliveryPhotos}
