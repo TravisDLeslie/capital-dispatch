@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -551,6 +551,7 @@ function MobileDeliveryFlowCard({
   onViewPhoto,
   isFocusedDriverView = false,
 }) {
+  const deliveryCardRef = useRef(null);
   const [loadedDeliveryKeys, setLoadedDeliveryKeys] = useState({});
   const items = Array.isArray(delivery.items) ? delivery.items : [];
   const originAddress =
@@ -567,16 +568,38 @@ function MobileDeliveryFlowCard({
           ? "DELIVERY COMPLETE"
           : "TODAY'S DELIVERY";
 
+  function scrollDeliveryCardIntoView() {
+    window.requestAnimationFrame(() => {
+      const deliveryCard = deliveryCardRef.current;
+
+      if (!deliveryCard) {
+        return;
+      }
+
+      const topOffset = 16;
+      const nextScrollTop =
+        deliveryCard.getBoundingClientRect().top + window.scrollY - topOffset;
+
+      window.scrollTo({
+        top: Math.max(0, nextScrollTop),
+        behavior: "smooth",
+      });
+    });
+  }
+
   function goToNextStep() {
     setDeliveryStep(delivery.id, deliveryStep + 1);
+    scrollDeliveryCardIntoView();
   }
 
   function goToPreviousStep() {
     setDeliveryStep(delivery.id, deliveryStep - 1);
+    scrollDeliveryCardIntoView();
   }
 
   return (
     <article
+      ref={deliveryCardRef}
       className={`rounded-[28px] border border-slate-200 bg-white shadow-sm ${
         isFocusedDriverView ? "" : "lg:hidden"
       }`}
