@@ -7,12 +7,14 @@ import {
   Edit3,
   ExternalLink,
   MapPin,
+  Maximize2,
   Package,
   Search,
   ShieldAlert,
   StickyNote,
   Truck,
   UserRound,
+  X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
@@ -667,6 +669,8 @@ function DeliveryRouteMapPlanner({
   onOpenDelivery,
 }) {
   const googleMapsApiKey = getGoogleMapsApiKey();
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const [highlightedDeliveryId, setHighlightedDeliveryId] = useState("");
   const deliveriesWithAddress = deliveries.filter((delivery) =>
     String(delivery.address || "").trim(),
   );
@@ -677,7 +681,7 @@ function DeliveryRouteMapPlanner({
 
     const params = new URLSearchParams({
       key: googleMapsApiKey,
-      size: "900x420",
+      size: "1200x640",
       scale: "2",
       maptype: "roadmap",
     });
@@ -691,6 +695,78 @@ function DeliveryRouteMapPlanner({
 
     return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
   }, [deliveriesWithAddress, googleMapsApiKey]);
+  const highlightedDelivery =
+    deliveries.find((delivery) => delivery.id === highlightedDeliveryId) ||
+    deliveries[0] ||
+    null;
+
+  function renderDeliveryInfo(delivery, index, isLarge = false) {
+    const scheduleLabel = delivery.deliveryTimeSlot
+      ? getDeliveryTimeRange(delivery)
+      : "Needs time";
+    const driverLabel =
+      delivery.driver ||
+      (Array.isArray(delivery.drivers)
+        ? delivery.drivers.filter(Boolean).join(", ")
+        : "") ||
+      "Needs driver";
+    const markerLabel = getRouteMarkerLabel(index);
+
+    return (
+      <button
+        key={delivery.id}
+        type="button"
+        onClick={() => onOpenDelivery(delivery.id)}
+        onMouseEnter={() => setHighlightedDeliveryId(delivery.id)}
+        onFocus={() => setHighlightedDeliveryId(delivery.id)}
+        className={`flex w-full items-start gap-3 rounded-2xl border text-left transition ${
+          highlightedDeliveryId === delivery.id
+            ? "border-[#FC2C38] bg-red-50 shadow-sm"
+            : "border-slate-200 bg-slate-50 hover:border-[#FC2C38]/40 hover:bg-red-50"
+        } ${isLarge ? "px-4 py-4" : "px-3 py-3"}`}
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#FC2C38] text-sm font-black text-white shadow-sm">
+          {markerLabel}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+              Order {delivery.orderNumber}
+            </span>
+            {delivery.dispatchStatus === "needsDispatch" || !delivery.driver ? (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800">
+                Dispatch
+              </span>
+            ) : (
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                Assigned
+              </span>
+            )}
+          </span>
+          <span className="mt-1 block truncate text-base font-black text-slate-950">
+            {formatCustomerName(delivery.customerName)}
+          </span>
+          <span className="mt-1 block text-xs font-bold text-slate-500">
+            {delivery.address || "No address"}
+          </span>
+          <span className="mt-2 flex flex-wrap gap-1.5">
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-700">
+              {scheduleLabel}
+            </span>
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-700">
+              {driverLabel}
+            </span>
+          </span>
+        </span>
+      </button>
+    );
+  }
+
+  function getDeliveryIndex(delivery) {
+    return deliveries.findIndex(
+      (currentDelivery) => currentDelivery.id === delivery?.id,
+    );
+  }
 
   return (
     <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -723,11 +799,45 @@ function DeliveryRouteMapPlanner({
           </div>
 
           {staticMapUrl ? (
-            <img
-              src={staticMapUrl}
-              alt={`Delivery route map for ${formatDateLabel(selectedDate)}`}
-              className="h-[280px] w-full rounded-2xl border border-slate-200 object-cover sm:h-[360px]"
-            />
+            <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+              <img
+                src={staticMapUrl}
+                alt={`Delivery route map for ${formatDateLabel(selectedDate)}`}
+                className="h-[360px] w-full object-cover sm:h-[480px] xl:h-[540px]"
+              />
+
+              {highlightedDelivery ? (
+                <div className="absolute bottom-4 left-4 right-4 max-w-xl rounded-2xl border border-white/70 bg-white/95 p-4 shadow-lg backdrop-blur">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#FC2C38] text-sm font-black text-white shadow-sm">
+                      {getRouteMarkerLabel(
+                        Math.max(getDeliveryIndex(highlightedDelivery), 0),
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                        Order {highlightedDelivery.orderNumber}
+                      </p>
+                      <p className="truncate text-lg font-black text-slate-950">
+                        {formatCustomerName(highlightedDelivery.customerName)}
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-slate-500">
+                        {highlightedDelivery.address}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => setIsMapOpen(true)}
+                className="absolute right-4 top-4 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black uppercase tracking-[0.12em] text-white shadow-lg transition hover:bg-slate-800"
+              >
+                <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                Full map
+              </button>
+            </div>
           ) : (
             <div className="flex h-[280px] w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center sm:h-[360px]">
               <div>
@@ -763,61 +873,9 @@ function DeliveryRouteMapPlanner({
 
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {deliveries.length > 0 ? (
-              deliveries.map((delivery, index) => {
-                const scheduleLabel = delivery.deliveryTimeSlot
-                  ? getDeliveryTimeRange(delivery)
-                  : "Needs time";
-                const driverLabel =
-                  delivery.driver ||
-                  (Array.isArray(delivery.drivers)
-                    ? delivery.drivers.filter(Boolean).join(", ")
-                    : "") ||
-                  "Needs driver";
-
-                return (
-                  <button
-                    key={delivery.id}
-                    type="button"
-                    onClick={() => onOpenDelivery(delivery.id)}
-                    className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:border-[#FC2C38]/40 hover:bg-red-50"
-                  >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#FC2C38] text-sm font-black text-white shadow-sm">
-                      {getRouteMarkerLabel(index)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                          Order {delivery.orderNumber}
-                        </span>
-                        {delivery.dispatchStatus === "needsDispatch" ||
-                        !delivery.driver ? (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800">
-                            Dispatch
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
-                            Assigned
-                          </span>
-                        )}
-                      </span>
-                      <span className="mt-1 block truncate text-base font-black text-slate-950">
-                        {formatCustomerName(delivery.customerName)}
-                      </span>
-                      <span className="mt-1 block truncate text-xs font-bold text-slate-500">
-                        {delivery.address || "No address"}
-                      </span>
-                      <span className="mt-2 flex flex-wrap gap-1.5">
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-700">
-                          {scheduleLabel}
-                        </span>
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-700">
-                          {driverLabel}
-                        </span>
-                      </span>
-                    </span>
-                  </button>
-                );
-              })
+              deliveries.map((delivery, index) =>
+                renderDeliveryInfo(delivery, index),
+              )
             ) : (
               <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-500">
                 Nothing scheduled on this date yet.
@@ -826,6 +884,99 @@ function DeliveryRouteMapPlanner({
           </div>
         </div>
       </div>
+
+      {isMapOpen ? (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/80 p-3 backdrop-blur-sm sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Full delivery route map for ${formatDateLabel(
+            selectedDate,
+          )}`}
+        >
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-6">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                  Route Map
+                </p>
+                <h3 className="text-xl font-black text-slate-950">
+                  {formatDateLabel(selectedDate)} Deliveries
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsMapOpen(false)}
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+                aria-label="Close full map"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_380px]">
+              <div className="relative min-h-[420px] bg-slate-100 lg:min-h-0">
+                {staticMapUrl ? (
+                  <img
+                    src={staticMapUrl}
+                    alt={`Large delivery route map for ${formatDateLabel(
+                      selectedDate,
+                    )}`}
+                    className="h-full w-full object-cover"
+                  />
+                ) : null}
+
+                {highlightedDelivery ? (
+                  <div className="absolute bottom-5 left-5 right-5 max-w-2xl rounded-2xl border border-white/70 bg-white/95 p-4 shadow-xl backdrop-blur">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FC2C38] text-base font-black text-white shadow-sm">
+                        {getRouteMarkerLabel(
+                          Math.max(getDeliveryIndex(highlightedDelivery), 0),
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                          Order {highlightedDelivery.orderNumber}
+                        </p>
+                        <p className="truncate text-2xl font-black text-slate-950">
+                          {formatCustomerName(highlightedDelivery.customerName)}
+                        </p>
+                        <p className="mt-1 text-sm font-bold text-slate-500">
+                          {highlightedDelivery.address}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onOpenDelivery(highlightedDelivery.id)}
+                        className="rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white transition hover:bg-slate-800"
+                      >
+                        Open
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="min-h-0 border-t border-slate-200 bg-white p-4 lg:border-l lg:border-t-0">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                    Hover A/B/C
+                  </p>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                    {deliveries.length} stops
+                  </span>
+                </div>
+                <div className="max-h-[38vh] space-y-2 overflow-y-auto pr-1 lg:max-h-full">
+                  {deliveries.map((delivery, index) =>
+                    renderDeliveryInfo(delivery, index, true),
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
