@@ -1416,6 +1416,7 @@ export default function DeliveryDispatchPage({
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
   const [error, setError] = useState("");
   const [routeMapDate, setRouteMapDate] = useState(getTodayDateValue());
+  const [draftRouteOrders, setDraftRouteOrders] = useState({});
 
   const needsDispatchDeliveries = useMemo(
     () =>
@@ -1459,41 +1460,38 @@ export default function DeliveryDispatchPage({
   const routeMapDeliveries = useMemo(
     () =>
       deliveries
-        .filter((delivery) => {
+        .map((delivery) => {
           const schedule =
             draftSchedules[delivery.id] ||
             getInitialSchedule(delivery, safeDeliveryOriginOptions);
+          const draftRouteOrder = Number(
+            draftRouteOrders[routeMapDate]?.[delivery.id],
+          );
 
-          return (
+          return {
+            ...delivery,
+            ...schedule,
+            deliveryRouteOrder:
+              Number.isFinite(draftRouteOrder) && draftRouteOrder > 0
+                ? draftRouteOrder
+                : delivery.deliveryRouteOrder,
+          };
+        })
+        .filter(
+          (delivery) =>
             delivery.status !== "complete" &&
-            schedule.deliveryDate === routeMapDate
-          );
-        })
+            delivery.deliveryDate === routeMapDate,
+        )
         .sort((firstDelivery, secondDelivery) => {
-          const firstSchedule =
-            draftSchedules[firstDelivery.id] ||
-            getInitialSchedule(firstDelivery, safeDeliveryOriginOptions);
-          const secondSchedule =
-            draftSchedules[secondDelivery.id] ||
-            getInitialSchedule(secondDelivery, safeDeliveryOriginOptions);
-
-          return compareDeliveriesByRouteOrder(
-            {
-              ...firstDelivery,
-              ...firstSchedule,
-            },
-            {
-              ...secondDelivery,
-              ...secondSchedule,
-            },
-          );
-        })
-        .map((delivery) => ({
-          ...delivery,
-          ...(draftSchedules[delivery.id] ||
-            getInitialSchedule(delivery, safeDeliveryOriginOptions)),
-        })),
-    [deliveries, draftSchedules, routeMapDate, safeDeliveryOriginOptions],
+          return compareDeliveriesByRouteOrder(firstDelivery, secondDelivery);
+        }),
+    [
+      deliveries,
+      draftRouteOrders,
+      draftSchedules,
+      routeMapDate,
+      safeDeliveryOriginOptions,
+    ],
   );
 
   function getAssignments(delivery) {
@@ -1643,17 +1641,27 @@ export default function DeliveryDispatchPage({
     const reorderedDeliveries = [...routeMapDeliveries];
     const [movedDelivery] = reorderedDeliveries.splice(currentIndex, 1);
     reorderedDeliveries.splice(nextIndex, 0, movedDelivery);
+    const nextRouteOrderById = reorderedDeliveries.reduce(
+      (routeOrders, delivery, index) => ({
+        ...routeOrders,
+        [delivery.id]: index + 1,
+      }),
+      {},
+    );
+
+    setDraftRouteOrders((currentDraftRouteOrders) => ({
+      ...currentDraftRouteOrders,
+      [routeMapDate]: nextRouteOrderById,
+    }));
     setError("");
 
     try {
-      await Promise.all(
-        reorderedDeliveries.map((delivery, index) =>
-          onUpdateDelivery(delivery.id, {
-            deliveryRouteOrder: index + 1,
-            updatedAt: new Date().toISOString(),
-          }),
-        ),
-      );
+      for (const delivery of reorderedDeliveries) {
+        await onUpdateDelivery(delivery.id, {
+          deliveryRouteOrder: nextRouteOrderById[delivery.id],
+          updatedAt: new Date().toISOString(),
+        });
+      }
     } catch (routeOrderError) {
       console.error("Unable to save delivery route order:", routeOrderError);
       setError("Unable to save delivery route order. Try again.");
