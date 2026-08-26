@@ -567,6 +567,7 @@ export default function SupplierRunForm({
     const supplierRun = {
       ...(initialSupplierRun || {}),
       id: initialSupplierRun?.id || createId(),
+      ...(!initialSupplierRun ? { stopWorkflowVersion: 1 } : {}),
       poNumber,
       scheduledDate,
       orderedBy,

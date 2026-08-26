@@ -466,6 +466,10 @@ function getDateKeyFromValue(value) {
   return getDateKeyFromDate(new Date(value));
 }
 
+function usesSouthStopWorkflow(supplierRun) {
+  return Number(supplierRun?.stopWorkflowVersion || 0) >= 1;
+}
+
 function getDateKeyDayGap(startDateKey, endDateKey) {
   if (!startDateKey || !endDateKey) {
     return 0;
@@ -1334,6 +1338,11 @@ export default function SupplierRunsPage({
         .filter(Boolean)
         .sort()
         .at(-1) || "";
+    const usesStopWorkflow =
+      vendorGroup.runs.length > 0 &&
+      vendorGroup.runs.some((supplierRun) =>
+        usesSouthStopWorkflow(supplierRun),
+      );
     const completedAt = savedCompletedAt;
     const strapUpUntil =
       vendorGroup.runs
@@ -1341,13 +1350,16 @@ export default function SupplierRunsPage({
         .filter(Boolean)
         .sort()
         .at(-1) || "";
-    const isConfirmedComplete = Boolean(completedAt);
+    const isConfirmedComplete = usesStopWorkflow
+      ? Boolean(completedAt)
+      : allItemsPickedUp;
 
     return {
       arrivedAt,
       completedAt,
       strapUpUntil,
       allItemsPickedUp,
+      usesStopWorkflow,
       isConfirmedComplete,
       stopDuration: formatDurationMinutes(
         arrivedAt,
@@ -1362,6 +1374,7 @@ export default function SupplierRunsPage({
         items.some((item) => !item.pickedUp),
       canComplete:
         Boolean(onCompleteSupplierStop) &&
+        usesStopWorkflow &&
         Boolean(arrivedAt) &&
         allItemsPickedUp &&
         !isConfirmedComplete,
@@ -3535,7 +3548,7 @@ export default function SupplierRunsPage({
                           driverGroup.driver,
                           vendorGroup.vendor,
                           "open",
-                          !isCompleteStop,
+                          isDriverView ? isCurrentStop : !isCompleteStop,
                         );
                         const inactiveArrivalKey = `arrival::${driverGroup.driver}::${vendorGroup.vendor}`;
                         const showInactiveArrivalNotice =
@@ -3923,11 +3936,16 @@ export default function SupplierRunsPage({
                                       canViewSouthCustomerName
                                     }
                                     defaultItemsOpen={
-                                      vendorGroup.runs.length === 1
+                                      isDriverView
+                                        ? isCurrentStop
+                                        : vendorGroup.runs.length === 1
                                     }
                                     compactWhenClosed={
-                                      vendorGroup.runs.length > 1
+                                      isDriverView
+                                        ? !isCurrentStop
+                                        : vendorGroup.runs.length > 1
                                     }
+                                    driverFocused={isDriverView}
                                   />
                                 ))}
 

@@ -692,6 +692,7 @@ type SupplierRun = {
   dispatchStatus?: string;
   items?: SupplierRunItem[];
   status?: string;
+  stopWorkflowVersion?: number;
   stopArrivedAt?: string | null;
   stopCompletedAt?: string | null;
   stopStrapUpUntil?: string | null;
@@ -3286,6 +3287,8 @@ export default function App() {
         id: supplierRun.id,
         stopCompletedAt: completedAt,
         stopStrapUpUntil: strapUpUntil,
+        status: "complete",
+        completedAt,
       }));
 
     if (updates.length === 0) {
