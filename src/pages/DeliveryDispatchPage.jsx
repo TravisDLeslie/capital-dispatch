@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   ChevronDown,
@@ -9,6 +9,8 @@ import {
   MapPin,
   Maximize2,
   Package,
+  Minus,
+  Plus,
   Search,
   ShieldAlert,
   StickyNote,
@@ -671,19 +673,41 @@ function DeliveryRouteMapPlanner({
   const googleMapsApiKey = getGoogleMapsApiKey();
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [highlightedDeliveryId, setHighlightedDeliveryId] = useState("");
-  const deliveriesWithAddress = deliveries.filter((delivery) =>
-    String(delivery.address || "").trim(),
+  const [mapZoom, setMapZoom] = useState(11);
+  const [segmentRoutes, setSegmentRoutes] = useState({});
+  const deliveriesWithAddress = useMemo(
+    () =>
+      deliveries.filter((delivery) => String(delivery.address || "").trim()),
+    [deliveries],
+  );
+  const routeSegments = useMemo(
+    () =>
+      deliveriesWithAddress.slice(0, -1).map((delivery, index) => ({
+        id: `${delivery.id}-${deliveriesWithAddress[index + 1]?.id}`,
+        from: delivery,
+        to: deliveriesWithAddress[index + 1],
+        fromLabel: getRouteMarkerLabel(index),
+        toLabel: getRouteMarkerLabel(index + 1),
+      })),
+    [deliveriesWithAddress],
   );
   const staticMapUrl = useMemo(() => {
     if (!googleMapsApiKey || deliveriesWithAddress.length === 0) {
       return "";
     }
 
+    const mapCenter =
+      deliveriesWithAddress.find(
+        (delivery) => delivery.id === highlightedDeliveryId,
+      )?.address || deliveriesWithAddress[0].address;
+
     const params = new URLSearchParams({
       key: googleMapsApiKey,
       size: "1200x640",
       scale: "2",
       maptype: "roadmap",
+      zoom: String(mapZoom),
+      center: mapCenter,
     });
 
     deliveriesWithAddress.slice(0, 24).forEach((delivery, index) => {
@@ -694,11 +718,128 @@ function DeliveryRouteMapPlanner({
     });
 
     return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
-  }, [deliveriesWithAddress, googleMapsApiKey]);
+  }, [
+    deliveriesWithAddress,
+    googleMapsApiKey,
+    highlightedDeliveryId,
+    mapZoom,
+  ]);
   const highlightedDelivery =
     deliveries.find((delivery) => delivery.id === highlightedDeliveryId) ||
     deliveries[0] ||
     null;
+
+  useEffect(() => {
+    if (routeSegments.length === 0) {
+      setSegmentRoutes({});
+      return;
+    }
+
+    let isCurrent = true;
+    const controller = new AbortController();
+
+    setSegmentRoutes((currentRoutes) => {
+      const nextRoutes = {};
+      routeSegments.forEach((segment) => {
+        if (currentRoutes[segment.id]) {
+          nextRoutes[segment.id] = currentRoutes[segment.id];
+        }
+      });
+      return nextRoutes;
+    });
+
+    routeSegments.forEach((segment) => {
+      const params = new URLSearchParams({
+        origin: segment.from.address,
+        destination: segment.to.address,
+      });
+
+      fetch(`/api/maps/route?${params.toString()}`, {
+        signal: controller.signal,
+      })
+        .then((response) =>
+          response
+            .json()
+            .catch(() => ({}))
+            .then((data) => {
+              if (!response.ok) {
+                throw new Error(data?.error || "Route unavailable");
+              }
+              return data;
+            }),
+        )
+        .then((data) => {
+          if (!isCurrent) {
+            return;
+          }
+
+          setSegmentRoutes((currentRoutes) => ({
+            ...currentRoutes,
+            [segment.id]: {
+              status: "ready",
+              durationText: data.durationText || "",
+              distanceText: data.distanceText || "",
+            },
+          }));
+        })
+        .catch((error) => {
+          if (!isCurrent || error.name === "AbortError") {
+            return;
+          }
+
+          setSegmentRoutes((currentRoutes) => ({
+            ...currentRoutes,
+            [segment.id]: {
+              status: "error",
+              durationText: "",
+              distanceText: "",
+            },
+          }));
+        });
+    });
+
+    return () => {
+      isCurrent = false;
+      controller.abort();
+    };
+  }, [routeSegments]);
+
+  function updateMapZoom(direction) {
+    setMapZoom((currentZoom) => {
+      const nextZoom = direction === "in" ? currentZoom + 1 : currentZoom - 1;
+      return Math.min(17, Math.max(7, nextZoom));
+    });
+  }
+
+  function renderZoomControls(positionClassName = "") {
+    return (
+      <div
+        className={`absolute z-10 flex overflow-hidden rounded-full border border-slate-200 bg-white shadow-lg ${positionClassName}`}
+      >
+        <button
+          type="button"
+          onClick={() => updateMapZoom("out")}
+          className="flex h-11 w-11 items-center justify-center text-slate-700 transition hover:bg-slate-50 disabled:text-slate-300"
+          disabled={mapZoom <= 7}
+          aria-label="Zoom map out"
+        >
+          <Minus className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <span className="flex min-w-11 items-center justify-center border-x border-slate-200 px-3 text-xs font-black text-slate-600">
+          {mapZoom}x
+        </span>
+        <button
+          type="button"
+          onClick={() => updateMapZoom("in")}
+          className="flex h-11 w-11 items-center justify-center text-slate-700 transition hover:bg-slate-50 disabled:text-slate-300"
+          disabled={mapZoom >= 17}
+          aria-label="Zoom map in"
+        >
+          <Plus className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
 
   function renderDeliveryInfo(delivery, index, isLarge = false) {
     const scheduleLabel = delivery.deliveryTimeSlot
@@ -762,6 +903,43 @@ function DeliveryRouteMapPlanner({
     );
   }
 
+  function renderSegmentTiming(segment) {
+    const route = segmentRoutes[segment.id];
+    const isLoading = !route;
+    const isReady = route?.status === "ready";
+
+    return (
+      <div
+        key={segment.id}
+        className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+              {segment.fromLabel} to {segment.toLabel}
+            </p>
+            <p className="mt-1 truncate text-sm font-black text-slate-950">
+              {formatCustomerName(segment.from.customerName)} to{" "}
+              {formatCustomerName(segment.to.customerName)}
+            </p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-sm font-black text-[#FC2C38]">
+              {isLoading
+                ? "..."
+                : isReady
+                  ? route.durationText
+                  : "No ETA"}
+            </p>
+            <p className="text-xs font-bold text-slate-500">
+              {isReady ? route.distanceText : "between stops"}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function getDeliveryIndex(delivery) {
     return deliveries.findIndex(
       (currentDelivery) => currentDelivery.id === delivery?.id,
@@ -770,7 +948,7 @@ function DeliveryRouteMapPlanner({
 
   return (
     <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="grid gap-0 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+      <div className="grid gap-0 xl:grid-cols-[minmax(0,1.45fr)_340px]">
         <div className="border-b border-slate-200 p-4 sm:p-5 xl:border-b-0 xl:border-r">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -785,25 +963,40 @@ function DeliveryRouteMapPlanner({
               </p>
             </div>
 
-            <label className="block sm:min-w-52">
-              <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                Delivery Date
-              </span>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(event) => onSelectedDateChange(event.target.value)}
-                className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-              />
-            </label>
+            <div className="flex flex-col gap-2 sm:min-w-52">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  Delivery Date
+                </span>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => onSelectedDateChange(event.target.value)}
+                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+              </label>
+
+              {staticMapUrl ? (
+                <button
+                  type="button"
+                  onClick={() => setIsMapOpen(true)}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-xs font-black uppercase tracking-[0.12em] text-white shadow-sm transition hover:bg-slate-800"
+                >
+                  <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                  View Full Map
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {staticMapUrl ? (
             <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+              {renderZoomControls("left-4 top-4")}
+
               <img
                 src={staticMapUrl}
                 alt={`Delivery route map for ${formatDateLabel(selectedDate)}`}
-                className="h-[360px] w-full object-cover sm:h-[480px] xl:h-[540px]"
+                className="h-[420px] w-full object-contain sm:h-[560px] xl:h-[680px]"
               />
 
               {highlightedDelivery ? (
@@ -832,10 +1025,10 @@ function DeliveryRouteMapPlanner({
               <button
                 type="button"
                 onClick={() => setIsMapOpen(true)}
-                className="absolute right-4 top-4 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-black uppercase tracking-[0.12em] text-white shadow-lg transition hover:bg-slate-800"
+                className="absolute right-4 top-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-950 text-white shadow-lg transition hover:bg-slate-800"
+                aria-label="View full map"
               >
-                <Maximize2 className="h-4 w-4" aria-hidden="true" />
-                Full map
+                <Maximize2 className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
           ) : (
@@ -882,6 +1075,22 @@ function DeliveryRouteMapPlanner({
               </div>
             )}
           </div>
+
+          {routeSegments.length > 0 ? (
+            <div className="mt-4 border-t border-slate-200 pt-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                  Time Between Stops
+                </p>
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                  Live ETA
+                </span>
+              </div>
+              <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                {routeSegments.map(renderSegmentTiming)}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -918,13 +1127,16 @@ function DeliveryRouteMapPlanner({
             <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_380px]">
               <div className="relative min-h-[420px] bg-slate-100 lg:min-h-0">
                 {staticMapUrl ? (
-                  <img
-                    src={staticMapUrl}
-                    alt={`Large delivery route map for ${formatDateLabel(
-                      selectedDate,
-                    )}`}
-                    className="h-full w-full object-cover"
-                  />
+                  <>
+                    {renderZoomControls("left-5 top-5")}
+                    <img
+                      src={staticMapUrl}
+                      alt={`Large delivery route map for ${formatDateLabel(
+                        selectedDate,
+                      )}`}
+                      className="h-full w-full object-contain"
+                    />
+                  </>
                 ) : null}
 
                 {highlightedDelivery ? (
@@ -972,6 +1184,22 @@ function DeliveryRouteMapPlanner({
                     renderDeliveryInfo(delivery, index, true),
                   )}
                 </div>
+
+                {routeSegments.length > 0 ? (
+                  <div className="mt-4 border-t border-slate-200 pt-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                        Time Between Stops
+                      </p>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                        A to B
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {routeSegments.map(renderSegmentTiming)}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
