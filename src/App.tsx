@@ -3160,6 +3160,11 @@ export default function App() {
       await updateSupplierRunItems(
         supplierRunId,
         updatedItems,
+        {
+          status: "open",
+          completedAt: null,
+          stopWorkflowVersion: supplierRun.stopWorkflowVersion || 1,
+        },
       );
 
     setSupplierRuns(updatedSupplierRuns);
@@ -3242,6 +3247,11 @@ export default function App() {
       await updateSupplierRunItems(
         supplierRunId,
         updatedItems,
+        {
+          status: "open",
+          completedAt: null,
+          stopWorkflowVersion: supplierRun.stopWorkflowVersion || 1,
+        },
       );
 
     setSupplierRuns(updatedSupplierRuns);
