@@ -42,10 +42,15 @@ export default function AddressAutocompleteInput({
   autoComplete = "street-address",
 }) {
   const inputRef = useRef(null);
+  const valueRef = useRef(value);
   const hasGooglePlacesKey = Boolean(getGoogleMapsApiKey());
   const [placesStatus, setPlacesStatus] = useState(
     hasGooglePlacesKey ? "loading" : "missing-key",
   );
+
+  useEffect(() => {
+    valueRef.current = value;
+  }, [value]);
 
   useEffect(() => {
     let listener = null;
@@ -89,6 +94,11 @@ export default function AddressAutocompleteInput({
             inputRef.current?.value || "",
           );
 
+          if (inputRef.current) {
+            inputRef.current.value = nextAddress;
+          }
+
+          valueRef.current = nextAddress;
           onChange(nextAddress);
           onPlaceSelected?.(place, nextAddress);
         });
@@ -108,6 +118,17 @@ export default function AddressAutocompleteInput({
     };
   }, [hasGooglePlacesKey, onChange, onPlaceSelected]);
 
+  function commitCurrentInputValue() {
+    window.setTimeout(() => {
+      const currentInputValue = inputRef.current?.value || "";
+
+      if (currentInputValue !== valueRef.current) {
+        valueRef.current = currentInputValue;
+        onChange(currentInputValue);
+      }
+    }, 150);
+  }
+
   return (
     <>
       <input
@@ -117,6 +138,7 @@ export default function AddressAutocompleteInput({
         autoComplete={autoComplete}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={commitCurrentInputValue}
         disabled={disabled}
         placeholder={placeholder}
         className={className}
