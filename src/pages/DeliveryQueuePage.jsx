@@ -1248,6 +1248,10 @@ export default function DeliveryQueuePage({
     setUpdatingDeliveryId(delivery.id);
     setActiveDriverDeliveryId(delivery.id);
     setDeliveryStep(delivery.id, 2);
+    setOpenDeliveryKeys((currentOpenDeliveryKeys) => ({
+      ...currentOpenDeliveryKeys,
+      [delivery.id]: true,
+    }));
 
     try {
       const photos = [];

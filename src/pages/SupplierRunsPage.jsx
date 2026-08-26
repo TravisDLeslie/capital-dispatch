@@ -865,6 +865,7 @@ function groupHistoryRunsByPickupDate(
  *   supplierRuns: any[];
  *   onAddSupplierRun?: Function;
  *   onToggleSupplierRunItem?: Function;
+ *   onSaveSupplierRunItemPickupPhoto?: Function;
  *   onUpdateSupplierRunItemDescription?: Function;
  *   onUpdateSupplierRun?: Function;
  *   onDeleteSupplierRun?: Function;
@@ -893,6 +894,7 @@ export default function SupplierRunsPage({
   supplierRuns,
   onAddSupplierRun,
   onToggleSupplierRunItem,
+  onSaveSupplierRunItemPickupPhoto,
   onUpdateSupplierRunItemDescription,
   onUpdateSupplierRun,
   onDeleteSupplierRun,
@@ -2726,6 +2728,9 @@ export default function SupplierRunsPage({
                                               onToggleItem={
                                                 onToggleSupplierRunItem
                                               }
+                                              onSavePickupPhoto={
+                                                onSaveSupplierRunItemPickupPhoto
+                                              }
                                               onUpdateItemDescription={
                                                 onUpdateSupplierRunItemDescription
                                               }
@@ -3707,6 +3712,9 @@ export default function SupplierRunsPage({
                                     onToggleItem={
                                       onToggleSupplierRunItem
                                     }
+                                    onSavePickupPhoto={
+                                      onSaveSupplierRunItemPickupPhoto
+                                    }
                                     onUpdateItemDescription={
                                       onUpdateSupplierRunItemDescription
                                     }
@@ -3933,6 +3941,9 @@ export default function SupplierRunsPage({
                                       supplierRun,
                                     )}
                                     onToggleItem={onToggleSupplierRunItem}
+                                    onSavePickupPhoto={
+                                      onSaveSupplierRunItemPickupPhoto
+                                    }
                                     onUpdateItemDescription={
                                       onUpdateSupplierRunItemDescription
                                     }

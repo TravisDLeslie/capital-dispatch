@@ -671,6 +671,7 @@ type SupplierRunItem = {
   pickedUp: boolean;
   pickedUpAt?: string | null;
   pickupPhoto?: unknown | null;
+  pickupPhotos?: unknown[] | null;
 };
 
 type SupplierRun = {
@@ -3127,7 +3128,6 @@ export default function App() {
   async function handleToggleSupplierRunItem(
     supplierRunId: string,
     itemId: string,
-    pickupPhoto?: unknown,
   ) {
     const supplierRun = supplierRuns.find(
       (currentSupplierRun) =>
@@ -3146,7 +3146,6 @@ export default function App() {
             ...item,
             pickedUp: !item.pickedUp,
             pickedUpAt: !item.pickedUp ? checkedAt : null,
-            pickupPhoto: !item.pickedUp ? pickupPhoto : null,
           }
         : item,
     );
@@ -3195,6 +3194,48 @@ export default function App() {
       setSupplierRuns(completedStopRuns);
       setSyncError("");
     }
+  }
+
+  async function handleSaveSupplierRunItemPickupPhoto(
+    supplierRunId: string,
+    itemId: string,
+    pickupPhoto: unknown,
+  ) {
+    const supplierRun = supplierRuns.find(
+      (currentSupplierRun) =>
+        currentSupplierRun.id === supplierRunId,
+    );
+
+    if (!supplierRun || !Array.isArray(supplierRun.items)) {
+      return;
+    }
+
+    const updatedItems = supplierRun.items.map((item) => {
+      if (item.id !== itemId) {
+        return item;
+      }
+
+      const existingPhotos = Array.isArray(item.pickupPhotos)
+        ? item.pickupPhotos.filter(Boolean)
+        : item.pickupPhoto
+          ? [item.pickupPhoto]
+          : [];
+
+      return {
+        ...item,
+        pickupPhoto,
+        pickupPhotos: [...existingPhotos, pickupPhoto],
+      };
+    });
+
+    const updatedSupplierRuns =
+      await updateSupplierRunItems(
+        supplierRunId,
+        updatedItems,
+      );
+
+    setSupplierRuns(updatedSupplierRuns);
+    setSyncError("");
   }
 
   async function handleArriveSupplierStop(supplierRunIds: string[]) {
@@ -4356,6 +4397,9 @@ export default function App() {
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
             onToggleSupplierRunItem={handleToggleSupplierRunItem}
+            onSaveSupplierRunItemPickupPhoto={
+              handleSaveSupplierRunItemPickupPhoto
+            }
             onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
@@ -4932,6 +4976,9 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onSaveSupplierRunItemPickupPhoto={
+              handleSaveSupplierRunItemPickupPhoto
+            }
             onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
@@ -4961,6 +5008,9 @@ export default function App() {
             onUpdateSupplierRun={handleUpdateSupplierRun}
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
+            }
+            onSaveSupplierRunItemPickupPhoto={
+              handleSaveSupplierRunItemPickupPhoto
             }
             onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={
@@ -4998,6 +5048,9 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onSaveSupplierRunItemPickupPhoto={
+              handleSaveSupplierRunItemPickupPhoto
+            }
             onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
@@ -5033,6 +5086,9 @@ export default function App() {
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
             }
+            onSaveSupplierRunItemPickupPhoto={
+              handleSaveSupplierRunItemPickupPhoto
+            }
             onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
@@ -5063,6 +5119,9 @@ export default function App() {
             onUpdateSupplierRun={handleUpdateSupplierRun}
             onToggleSupplierRunItem={
               handleToggleSupplierRunItem
+            }
+            onSaveSupplierRunItemPickupPhoto={
+              handleSaveSupplierRunItemPickupPhoto
             }
             onArriveSupplierStop={handleArriveSupplierStop}
             onUpdateSupplierRunItemDescription={

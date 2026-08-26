@@ -568,9 +568,26 @@ async function createPickupPhoto(file) {
   };
 }
 
+function getPickupPhotoList(item) {
+  const photos = Array.isArray(item?.pickupPhotos)
+    ? item.pickupPhotos.filter((photo) => photo?.dataUrl)
+    : [];
+  const legacyPhoto = item?.pickupPhoto?.dataUrl ? item.pickupPhoto : null;
+
+  if (
+    legacyPhoto &&
+    !photos.some((photo) => photo.dataUrl === legacyPhoto.dataUrl)
+  ) {
+    return [...photos, legacyPhoto];
+  }
+
+  return photos;
+}
+
 export default function SupplierRunCard({
   supplierRun,
   onToggleItem,
+  onSavePickupPhoto,
   onUpdateItemDescription,
   onEdit,
   onDelete,
@@ -764,8 +781,12 @@ export default function SupplierRunCard({
     setPhotoError("");
 
     try {
+      if (typeof onSavePickupPhoto !== "function") {
+        throw new Error("Pickup photo saving is not configured.");
+      }
+
       const pickupPhoto = await createPickupPhoto(file);
-      await onToggleItem(supplierRun.id, itemId, pickupPhoto);
+      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto);
     } catch (photoError) {
       console.error("Unable to save pickup photo:", photoError);
       setPhotoError("Unable to save that photo. Try taking it again.");
@@ -1016,6 +1037,9 @@ export default function SupplierRunCard({
             const photoReminder = getMaterialPhotoReminder(
               item.materialUse,
             );
+            const pickupPhotos = getPickupPhotoList(item);
+            const latestPickupPhoto =
+              pickupPhotos[pickupPhotos.length - 1] || null;
 
             return (
               <div
@@ -1103,7 +1127,15 @@ export default function SupplierRunCard({
                           {photoReminder}
                         </span>
                       ) : null}
-                      <span className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onToggleItem(supplierRun.id, item.id);
+                        }}
+                        disabled={Boolean(processingPhotoItemId)}
+                        className="mt-3 flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
                         <span
                           className={`text-xs font-black uppercase tracking-[0.08em] ${
                             item.pickedUp
@@ -1130,29 +1162,34 @@ export default function SupplierRunCard({
                             </span>
                           ) : null}
                         </span>
-                      </span>
+                      </button>
 
-                      {item.pickupPhoto?.dataUrl ? (
+                      {latestPickupPhoto?.dataUrl ? (
                         <button
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
                             setViewingPhoto({
-                              dataUrl: item.pickupPhoto.dataUrl,
+                              dataUrl: latestPickupPhoto.dataUrl,
                               title: "Pickup Photo",
-                              subtitle: item.description,
+                              subtitle:
+                                pickupPhotos.length > 1
+                                  ? `${item.description} • ${pickupPhotos.length} photos`
+                                  : item.description,
                             });
                           }}
                           className="mt-3 block overflow-hidden rounded-xl border border-emerald-200 bg-white text-left"
                         >
                           <img
-                            src={item.pickupPhoto.dataUrl}
+                            src={latestPickupPhoto.dataUrl}
                             alt={`Pickup for ${item.description}`}
                             className="h-24 w-40 object-cover"
                           />
 
                           <span className="block px-3 py-2 text-xs font-black text-emerald-700">
-                            View pickup photo
+                            {pickupPhotos.length > 1
+                              ? `${pickupPhotos.length} pickup photos`
+                              : "View pickup photo"}
                           </span>
                         </button>
                       ) : null}
