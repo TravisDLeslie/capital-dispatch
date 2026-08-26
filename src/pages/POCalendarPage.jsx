@@ -50,8 +50,38 @@ function getMonthLabel(monthDate) {
   });
 }
 
+function getDateKeyDayGap(startDateKey, endDateKey) {
+  if (!startDateKey || !endDateKey) {
+    return 0;
+  }
+
+  const startDate = new Date(`${startDateKey}T00:00:00`);
+  const endDate = new Date(`${endDateKey}T00:00:00`);
+
+  if (
+    Number.isNaN(startDate.getTime()) ||
+    Number.isNaN(endDate.getTime())
+  ) {
+    return 0;
+  }
+
+  return Math.round((endDate - startDate) / 86400000);
+}
+
 function getSupplierRunDateKey(supplierRun) {
   if (supplierRun.scheduledDate) {
+    const rolloverFromScheduledDate =
+      typeof supplierRun.rolloverFromScheduledDate === "string"
+        ? supplierRun.rolloverFromScheduledDate
+        : "";
+
+    if (
+      rolloverFromScheduledDate &&
+      getDateKeyDayGap(rolloverFromScheduledDate, supplierRun.scheduledDate) > 1
+    ) {
+      return rolloverFromScheduledDate;
+    }
+
     return supplierRun.scheduledDate;
   }
 
