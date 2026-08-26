@@ -43,6 +43,8 @@ export default function AddressAutocompleteInput({
 }) {
   const inputRef = useRef(null);
   const valueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  const onPlaceSelectedRef = useRef(onPlaceSelected);
   const hasGooglePlacesKey = Boolean(getGoogleMapsApiKey());
   const [placesStatus, setPlacesStatus] = useState(
     hasGooglePlacesKey ? "loading" : "missing-key",
@@ -51,6 +53,14 @@ export default function AddressAutocompleteInput({
   useEffect(() => {
     valueRef.current = value;
   }, [value]);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    onPlaceSelectedRef.current = onPlaceSelected;
+  }, [onPlaceSelected]);
 
   useEffect(() => {
     let listener = null;
@@ -99,8 +109,8 @@ export default function AddressAutocompleteInput({
           }
 
           valueRef.current = nextAddress;
-          onChange(nextAddress);
-          onPlaceSelected?.(place, nextAddress);
+          onChangeRef.current(nextAddress);
+          onPlaceSelectedRef.current?.(place, nextAddress);
         });
 
         setPlacesStatus("ready");
@@ -116,15 +126,15 @@ export default function AddressAutocompleteInput({
         listener.remove();
       }
     };
-  }, [hasGooglePlacesKey, onChange, onPlaceSelected]);
+  }, [hasGooglePlacesKey]);
 
   function commitCurrentInputValue() {
-    window.setTimeout(() => {
+    globalThis.setTimeout(() => {
       const currentInputValue = inputRef.current?.value || "";
 
       if (currentInputValue !== valueRef.current) {
         valueRef.current = currentInputValue;
-        onChange(currentInputValue);
+        onChangeRef.current(currentInputValue);
       }
     }, 150);
   }
