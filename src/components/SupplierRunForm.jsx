@@ -484,14 +484,13 @@ export default function SupplierRunForm({
       return;
     }
 
-    if (!isEditing && canAssignRoute && !safeEmployeeOptions.includes(driver)) {
+    if (canAssignRoute && !safeEmployeeOptions.includes(driver)) {
       setError("Select the driver for this South PO.");
       return;
     }
 
     if (
       canAssignRoute &&
-      !isEditing &&
       safeVehicleOptions.length > 0 &&
       !selectedVehicle
     ) {
@@ -564,7 +563,6 @@ export default function SupplierRunForm({
       : "";
     const shouldAssignRouteFromForm =
       canAssignRoute &&
-      !isEditing &&
       driver;
     const supplierRun = {
       ...(initialSupplierRun || {}),
