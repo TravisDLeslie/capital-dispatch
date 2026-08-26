@@ -193,19 +193,7 @@ async function createPhotoFromFile(file) {
 }
 
 function groupDeliveriesByDriver(deliveries) {
-  const sortedDeliveries = [...deliveries].sort((firstDelivery, secondDelivery) => {
-    const firstDate = firstDelivery.deliveryDate || "9999-99-99";
-    const secondDate = secondDelivery.deliveryDate || "9999-99-99";
-    const dateComparison = firstDate.localeCompare(secondDate);
-
-    if (dateComparison !== 0) {
-      return dateComparison;
-    }
-
-    return String(firstDelivery.deliveryTimeSlot || "99:99").localeCompare(
-      String(secondDelivery.deliveryTimeSlot || "99:99"),
-    );
-  });
+  const sortedDeliveries = sortDeliveriesBySchedule(deliveries);
 
   return sortedDeliveries.reduce((groups, delivery) => {
     const driver = delivery.driver || "Unassigned Driver";
@@ -246,6 +234,23 @@ function sortDeliveriesBySchedule(deliveries) {
 
     if (dateComparison !== 0) {
       return dateComparison;
+    }
+
+    const firstRouteOrder = Number(firstDelivery.deliveryRouteOrder);
+    const secondRouteOrder = Number(secondDelivery.deliveryRouteOrder);
+    const firstHasRouteOrder =
+      Number.isFinite(firstRouteOrder) && firstRouteOrder > 0;
+    const secondHasRouteOrder =
+      Number.isFinite(secondRouteOrder) && secondRouteOrder > 0;
+
+    if (firstHasRouteOrder || secondHasRouteOrder) {
+      const routeOrderComparison =
+        (firstHasRouteOrder ? firstRouteOrder : Number.POSITIVE_INFINITY) -
+        (secondHasRouteOrder ? secondRouteOrder : Number.POSITIVE_INFINITY);
+
+      if (routeOrderComparison !== 0) {
+        return routeOrderComparison;
+      }
     }
 
     const firstTime =

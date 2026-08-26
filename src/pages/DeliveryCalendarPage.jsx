@@ -90,11 +90,35 @@ function getScheduledDeliveries(deliveries, selectedDate) {
         getDeliveryDrivers(delivery).length > 0 &&
         delivery.deliveryDate === selectedDate,
     )
-    .sort((firstDelivery, secondDelivery) =>
-      String(firstDelivery.deliveryTimeSlot || "99:99").localeCompare(
-        String(secondDelivery.deliveryTimeSlot || "99:99"),
-      ),
-    );
+    .sort(compareDeliveriesByRouteOrder);
+}
+
+function compareDeliveriesByRouteOrder(firstDelivery, secondDelivery) {
+  const firstRouteOrder = Number(firstDelivery.deliveryRouteOrder);
+  const secondRouteOrder = Number(secondDelivery.deliveryRouteOrder);
+  const firstHasRouteOrder =
+    Number.isFinite(firstRouteOrder) && firstRouteOrder > 0;
+  const secondHasRouteOrder =
+    Number.isFinite(secondRouteOrder) && secondRouteOrder > 0;
+
+  if (firstHasRouteOrder || secondHasRouteOrder) {
+    const routeOrderComparison =
+      (firstHasRouteOrder ? firstRouteOrder : Number.POSITIVE_INFINITY) -
+      (secondHasRouteOrder ? secondRouteOrder : Number.POSITIVE_INFINITY);
+
+    if (routeOrderComparison !== 0) {
+      return routeOrderComparison;
+    }
+  }
+
+  return (
+    String(firstDelivery.deliveryTimeSlot || "99:99").localeCompare(
+      String(secondDelivery.deliveryTimeSlot || "99:99"),
+    ) ||
+    String(firstDelivery.orderNumber || "").localeCompare(
+      String(secondDelivery.orderNumber || ""),
+    )
+  );
 }
 
 function getFirstScheduledDeliveryDate(deliveries) {

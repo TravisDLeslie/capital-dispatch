@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   CalendarDays,
   ChevronDown,
   Clock,
@@ -130,6 +132,35 @@ function getRouteMarkerLabel(index) {
   }
 
   return String((index % 10) + 1);
+}
+
+function getDeliveryRouteOrder(delivery) {
+  const routeOrder = Number(delivery?.deliveryRouteOrder);
+
+  return Number.isFinite(routeOrder) && routeOrder > 0
+    ? routeOrder
+    : Number.POSITIVE_INFINITY;
+}
+
+function compareDeliveriesByRouteOrder(firstDelivery, secondDelivery) {
+  const routeOrderComparison =
+    getDeliveryRouteOrder(firstDelivery) - getDeliveryRouteOrder(secondDelivery);
+
+  if (routeOrderComparison !== 0) {
+    return routeOrderComparison;
+  }
+
+  return (
+    String(firstDelivery.deliveryTimeSlot || "99:99").localeCompare(
+      String(secondDelivery.deliveryTimeSlot || "99:99"),
+    ) ||
+    String(firstDelivery.createdAt || "").localeCompare(
+      String(secondDelivery.createdAt || ""),
+    ) ||
+    String(firstDelivery.orderNumber || "").localeCompare(
+      String(secondDelivery.orderNumber || ""),
+    )
+  );
 }
 
 function formatForkliftLabel(value) {
@@ -669,6 +700,7 @@ function DeliveryRouteMapPlanner({
   selectedDate,
   onSelectedDateChange,
   onOpenDelivery,
+  onMoveDelivery,
 }) {
   const googleMapsApiKey = getGoogleMapsApiKey();
   const [isMapOpen, setIsMapOpen] = useState(false);
@@ -925,22 +957,54 @@ function DeliveryRouteMapPlanner({
     const markerLabel = getRouteMarkerLabel(index);
 
     return (
-      <button
+      <div
         key={delivery.id}
-        type="button"
-        onClick={() => onOpenDelivery(delivery.id)}
         onMouseEnter={() => setHighlightedDeliveryId(delivery.id)}
-        onFocus={() => setHighlightedDeliveryId(delivery.id)}
         className={`flex w-full items-start gap-3 rounded-2xl border text-left transition ${
           highlightedDeliveryId === delivery.id
             ? "border-[#FC2C38] bg-red-50 shadow-sm"
             : "border-slate-200 bg-slate-50 hover:border-[#FC2C38]/40 hover:bg-red-50"
         } ${isLarge ? "px-4 py-4" : "px-3 py-3"}`}
       >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#FC2C38] text-sm font-black text-white shadow-sm">
-          {markerLabel}
+        <span className="flex shrink-0 flex-col items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onOpenDelivery(delivery.id)}
+            onFocus={() => setHighlightedDeliveryId(delivery.id)}
+            className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FC2C38] text-sm font-black text-white shadow-sm"
+            aria-label={`Open order ${delivery.orderNumber}`}
+          >
+            {markerLabel}
+          </button>
+          {deliveries.length > 1 && onMoveDelivery ? (
+            <span className="flex overflow-hidden rounded-full border border-slate-200 bg-white shadow-sm">
+              <button
+                type="button"
+                onClick={() => onMoveDelivery(delivery.id, "up")}
+                disabled={index === 0}
+                className="flex h-7 w-7 items-center justify-center text-slate-600 transition hover:bg-slate-50 disabled:text-slate-300"
+                aria-label={`Move ${delivery.orderNumber} earlier`}
+              >
+                <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onMoveDelivery(delivery.id, "down")}
+                disabled={index === deliveries.length - 1}
+                className="flex h-7 w-7 items-center justify-center border-l border-slate-200 text-slate-600 transition hover:bg-slate-50 disabled:text-slate-300"
+                aria-label={`Move ${delivery.orderNumber} later`}
+              >
+                <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </span>
+          ) : null}
         </span>
-        <span className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => onOpenDelivery(delivery.id)}
+          onFocus={() => setHighlightedDeliveryId(delivery.id)}
+          className="min-w-0 flex-1 text-left"
+        >
           <span className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
               Order {delivery.orderNumber}
@@ -969,8 +1033,8 @@ function DeliveryRouteMapPlanner({
               {driverLabel}
             </span>
           </span>
-        </span>
-      </button>
+        </button>
+      </div>
     );
   }
 
@@ -1413,13 +1477,15 @@ export default function DeliveryDispatchPage({
             draftSchedules[secondDelivery.id] ||
             getInitialSchedule(secondDelivery, safeDeliveryOriginOptions);
 
-          return (
-            String(firstSchedule.deliveryTimeSlot || "99:99").localeCompare(
-              String(secondSchedule.deliveryTimeSlot || "99:99"),
-            ) ||
-            String(firstDelivery.createdAt || "").localeCompare(
-              String(secondDelivery.createdAt || ""),
-            )
+          return compareDeliveriesByRouteOrder(
+            {
+              ...firstDelivery,
+              ...firstSchedule,
+            },
+            {
+              ...secondDelivery,
+              ...secondSchedule,
+            },
           );
         })
         .map((delivery) => ({
@@ -1559,6 +1625,41 @@ export default function DeliveryDispatchPage({
     return Boolean(openDetailKeys[getDetailKey(deliveryId, detailName)]);
   }
 
+  async function handleMoveRouteDelivery(deliveryId, direction) {
+    const currentIndex = routeMapDeliveries.findIndex(
+      (delivery) => delivery.id === deliveryId,
+    );
+
+    if (currentIndex === -1) {
+      return;
+    }
+
+    const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+    if (nextIndex < 0 || nextIndex >= routeMapDeliveries.length) {
+      return;
+    }
+
+    const reorderedDeliveries = [...routeMapDeliveries];
+    const [movedDelivery] = reorderedDeliveries.splice(currentIndex, 1);
+    reorderedDeliveries.splice(nextIndex, 0, movedDelivery);
+    setError("");
+
+    try {
+      await Promise.all(
+        reorderedDeliveries.map((delivery, index) =>
+          onUpdateDelivery(delivery.id, {
+            deliveryRouteOrder: index + 1,
+            updatedAt: new Date().toISOString(),
+          }),
+        ),
+      );
+    } catch (routeOrderError) {
+      console.error("Unable to save delivery route order:", routeOrderError);
+      setError("Unable to save delivery route order. Try again.");
+    }
+  }
+
   async function handleDispatchDelivery(delivery) {
     const assignments = getAssignments(delivery).map((assignment, index) =>
       createAssignment(index, assignment),
@@ -1623,6 +1724,15 @@ export default function DeliveryDispatchPage({
         deliveryOriginName: schedule.deliveryOriginName,
         deliveryOriginAddress: schedule.deliveryOriginAddress,
         oneWayDriveMinutes: Number(schedule.oneWayDriveMinutes) || 0,
+        deliveryRouteOrder:
+          getDeliveryRouteOrder(delivery) === Number.POSITIVE_INFINITY
+            ? Math.max(
+                1,
+                routeMapDeliveries.findIndex(
+                  (routeDelivery) => routeDelivery.id === delivery.id,
+                ) + 1,
+              )
+            : getDeliveryRouteOrder(delivery),
         dispatchStatus: "assigned",
         status: delivery.status || "open",
         updatedAt: new Date().toISOString(),
@@ -1681,6 +1791,7 @@ export default function DeliveryDispatchPage({
         selectedDate={routeMapDate}
         onSelectedDateChange={setRouteMapDate}
         onOpenDelivery={openDeliveryForDispatch}
+        onMoveDelivery={handleMoveRouteDelivery}
       />
 
       <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
