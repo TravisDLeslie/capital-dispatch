@@ -907,6 +907,7 @@ export default function DeliveryDispatchPage({
         status: delivery.status || "open",
         updatedAt: new Date().toISOString(),
       });
+      onPageChange?.("deliveries-calendar");
     } catch (updateError) {
       console.error("Unable to dispatch delivery:", updateError);
       setError("Unable to dispatch that delivery. Try again.");

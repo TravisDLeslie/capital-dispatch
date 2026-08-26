@@ -1644,6 +1644,7 @@ export default function SupplierRunsPage({
           selectedRuns.length === 1 ? "PO was" : "POs were"
         } assigned to ${bulkDispatchDraft.driver}.`,
       );
+      onPageChange?.("supplier-runs-check");
     } catch (assignError) {
       console.error("Unable to bulk assign South POs:", assignError);
       setRouteOrderError(
@@ -1696,6 +1697,7 @@ export default function SupplierRunsPage({
           `PO ${supplierRun.poNumber} was assigned to ${draft.driver}.`,
         );
       }
+      onPageChange?.("supplier-runs-check");
     } catch (assignError) {
       console.error("Unable to assign South PO:", assignError);
       setRouteOrderError("Unable to assign that PO. Check Firebase rules.");
