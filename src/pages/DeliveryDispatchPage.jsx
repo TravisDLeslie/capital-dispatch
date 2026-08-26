@@ -699,18 +699,13 @@ function DeliveryRouteMapPlanner({
       return "";
     }
 
-    const mapCenter =
-      deliveriesWithAddress.find(
-        (delivery) => delivery.id === highlightedDeliveryId,
-      )?.address || deliveriesWithAddress[0].address;
-
     const params = new URLSearchParams({
       key: googleMapsApiKey,
       size: "1200x640",
       scale: "2",
       maptype: "roadmap",
       zoom: String(mapZoom),
-      center: mapCenter,
+      center: deliveriesWithAddress[0].address,
     });
 
     const visibleMapDeliveries = deliveriesWithAddress.slice(0, 24);
