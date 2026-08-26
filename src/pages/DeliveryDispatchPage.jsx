@@ -51,6 +51,10 @@ function getRouteDirectionsUrl(originAddress, destinationAddress) {
   )}&destination=${encodeURIComponent(destinationAddress || "")}`;
 }
 
+function getGoogleMapsApiKey() {
+  return import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+}
+
 function formatCreatedAt(value) {
   if (!value) {
     return "";
@@ -112,6 +116,16 @@ function formatDeliveryTypeLabel(value) {
   }
 
   return "Standard";
+}
+
+function getRouteMarkerLabel(index) {
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  if (index < letters.length) {
+    return letters[index];
+  }
+
+  return String((index % 10) + 1);
 }
 
 function formatForkliftLabel(value) {
@@ -646,6 +660,176 @@ function DispatchDetailSection({
   );
 }
 
+function DeliveryRouteMapPlanner({
+  deliveries,
+  selectedDate,
+  onSelectedDateChange,
+  onOpenDelivery,
+}) {
+  const googleMapsApiKey = getGoogleMapsApiKey();
+  const deliveriesWithAddress = deliveries.filter((delivery) =>
+    String(delivery.address || "").trim(),
+  );
+  const staticMapUrl = useMemo(() => {
+    if (!googleMapsApiKey || deliveriesWithAddress.length === 0) {
+      return "";
+    }
+
+    const params = new URLSearchParams({
+      key: googleMapsApiKey,
+      size: "900x420",
+      scale: "2",
+      maptype: "roadmap",
+    });
+
+    deliveriesWithAddress.slice(0, 24).forEach((delivery, index) => {
+      params.append(
+        "markers",
+        `color:red|label:${getRouteMarkerLabel(index)}|${delivery.address}`,
+      );
+    });
+
+    return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
+  }, [deliveriesWithAddress, googleMapsApiKey]);
+
+  return (
+    <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="grid gap-0 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+        <div className="border-b border-slate-200 p-4 sm:p-5 xl:border-b-0 xl:border-r">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
+                Route Map
+              </p>
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+                Dispatch map for the day
+              </h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                Use the letter markers to spot close deliveries before assigning drivers and trucks.
+              </p>
+            </div>
+
+            <label className="block sm:min-w-52">
+              <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                Delivery Date
+              </span>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) => onSelectedDateChange(event.target.value)}
+                className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              />
+            </label>
+          </div>
+
+          {staticMapUrl ? (
+            <img
+              src={staticMapUrl}
+              alt={`Delivery route map for ${formatDateLabel(selectedDate)}`}
+              className="h-[280px] w-full rounded-2xl border border-slate-200 object-cover sm:h-[360px]"
+            />
+          ) : (
+            <div className="flex h-[280px] w-full items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center sm:h-[360px]">
+              <div>
+                <MapPin
+                  className="mx-auto h-8 w-8 text-slate-400"
+                  aria-hidden="true"
+                />
+                <p className="mt-3 text-sm font-black text-slate-700">
+                  {deliveries.length === 0
+                    ? "No deliveries scheduled for this date yet."
+                    : "Map preview appears when Google Maps is configured and addresses are entered."}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex max-h-[560px] flex-col p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                Route Labels
+              </p>
+              <p className="text-lg font-black text-slate-950">
+                {deliveries.length}{" "}
+                {deliveries.length === 1 ? "delivery" : "deliveries"}
+              </p>
+            </div>
+            <span className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+              A, B, C
+            </span>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+            {deliveries.length > 0 ? (
+              deliveries.map((delivery, index) => {
+                const scheduleLabel = delivery.deliveryTimeSlot
+                  ? getDeliveryTimeRange(delivery)
+                  : "Needs time";
+                const driverLabel =
+                  delivery.driver ||
+                  (Array.isArray(delivery.drivers)
+                    ? delivery.drivers.filter(Boolean).join(", ")
+                    : "") ||
+                  "Needs driver";
+
+                return (
+                  <button
+                    key={delivery.id}
+                    type="button"
+                    onClick={() => onOpenDelivery(delivery.id)}
+                    className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:border-[#FC2C38]/40 hover:bg-red-50"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#FC2C38] text-sm font-black text-white shadow-sm">
+                      {getRouteMarkerLabel(index)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                          Order {delivery.orderNumber}
+                        </span>
+                        {delivery.dispatchStatus === "needsDispatch" ||
+                        !delivery.driver ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800">
+                            Dispatch
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                            Assigned
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-1 block truncate text-base font-black text-slate-950">
+                        {formatCustomerName(delivery.customerName)}
+                      </span>
+                      <span className="mt-1 block truncate text-xs font-bold text-slate-500">
+                        {delivery.address || "No address"}
+                      </span>
+                      <span className="mt-2 flex flex-wrap gap-1.5">
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-700">
+                          {scheduleLabel}
+                        </span>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-slate-700">
+                          {driverLabel}
+                        </span>
+                      </span>
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-500">
+                Nothing scheduled on this date yet.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /**
  * @param {{
  *   deliveries: Array<Record<string, any>>;
@@ -682,6 +866,7 @@ export default function DeliveryDispatchPage({
   const [openDetailKeys, setOpenDetailKeys] = useState({});
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
   const [error, setError] = useState("");
+  const [routeMapDate, setRouteMapDate] = useState(getTodayDateValue());
 
   const needsDispatchDeliveries = useMemo(
     () =>
@@ -722,6 +907,43 @@ export default function DeliveryDispatchPage({
         );
       })
     : needsDispatchDeliveries;
+  const routeMapDeliveries = useMemo(
+    () =>
+      deliveries
+        .filter((delivery) => {
+          const schedule =
+            draftSchedules[delivery.id] ||
+            getInitialSchedule(delivery, safeDeliveryOriginOptions);
+
+          return (
+            delivery.status !== "complete" &&
+            schedule.deliveryDate === routeMapDate
+          );
+        })
+        .sort((firstDelivery, secondDelivery) => {
+          const firstSchedule =
+            draftSchedules[firstDelivery.id] ||
+            getInitialSchedule(firstDelivery, safeDeliveryOriginOptions);
+          const secondSchedule =
+            draftSchedules[secondDelivery.id] ||
+            getInitialSchedule(secondDelivery, safeDeliveryOriginOptions);
+
+          return (
+            String(firstSchedule.deliveryTimeSlot || "99:99").localeCompare(
+              String(secondSchedule.deliveryTimeSlot || "99:99"),
+            ) ||
+            String(firstDelivery.createdAt || "").localeCompare(
+              String(secondDelivery.createdAt || ""),
+            )
+          );
+        })
+        .map((delivery) => ({
+          ...delivery,
+          ...(draftSchedules[delivery.id] ||
+            getInitialSchedule(delivery, safeDeliveryOriginOptions)),
+        })),
+    [deliveries, draftSchedules, routeMapDate, safeDeliveryOriginOptions],
+  );
 
   function getAssignments(delivery) {
     return draftAssignments[delivery.id] || getInitialAssignments(delivery);
@@ -820,6 +1042,19 @@ export default function DeliveryDispatchPage({
 
   function isDeliveryOpen(deliveryId) {
     return Boolean(openDeliveryKeys[deliveryId]);
+  }
+
+  function openDeliveryForDispatch(deliveryId) {
+    setOpenDeliveryKeys((currentOpenDeliveryKeys) => ({
+      ...currentOpenDeliveryKeys,
+      [deliveryId]: true,
+    }));
+
+    window.setTimeout(() => {
+      document
+        .getElementById(`delivery-dispatch-${deliveryId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   }
 
   function getDetailKey(deliveryId, detailName) {
@@ -956,6 +1191,13 @@ export default function DeliveryDispatchPage({
         </div>
       ) : null}
 
+      <DeliveryRouteMapPlanner
+        deliveries={routeMapDeliveries}
+        selectedDate={routeMapDate}
+        onSelectedDateChange={setRouteMapDate}
+        onOpenDelivery={openDeliveryForDispatch}
+      />
+
       <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <label
           htmlFor="delivery-dispatch-search"
@@ -1028,6 +1270,7 @@ export default function DeliveryDispatchPage({
             return (
               <article
                 key={delivery.id}
+                id={`delivery-dispatch-${delivery.id}`}
                 className={`overflow-hidden rounded-3xl border bg-white shadow-sm transition ${
                   dispatchPanelOpen
                     ? "border-[#FC2C38]/30"
