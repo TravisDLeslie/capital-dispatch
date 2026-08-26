@@ -34,7 +34,6 @@ import {
   formatTime,
   getDateInputValue,
   getTodayHeading,
-  isToday,
 } from "../utils/dateHelpers";
 import {
   getSouthRouteOrderId,
@@ -288,9 +287,9 @@ function getVendorGroupStatsFromRuns(runs) {
 
 function MobileRouteProgress({ vendorGroups }) {
   const stops = vendorGroups.map((vendorGroup, stopIndex) => {
-    const stats = getVendorGroupStatsFromRuns(vendorGroup.runs);
-    const isComplete =
-      stats.itemCount > 0 && stats.remainingItems === 0;
+    const isComplete = vendorGroup.runs.some(
+      (supplierRun) => supplierRun.stopCompletedAt,
+    );
 
     return {
       vendor: vendorGroup.vendor,
@@ -448,11 +447,23 @@ function getSupplierRunMaterialSummary(supplierRun) {
 }
 
 function getDateKeyFromDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return "";
+  }
+
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+function getDateKeyFromValue(value) {
+  if (!value) {
+    return "";
+  }
+
+  return getDateKeyFromDate(new Date(value));
 }
 
 function getSupplierRunDateKey(supplierRun) {
@@ -465,6 +476,38 @@ function getSupplierRunDateKey(supplierRun) {
   }
 
   return "";
+}
+
+function getLatestItemPickedUpAt(supplierRun) {
+  if (!Array.isArray(supplierRun?.items)) {
+    return "";
+  }
+
+  return supplierRun.items
+    .map((item) => item.pickedUpAt)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || "";
+}
+
+function getSupplierRunPickupDateKey(supplierRun) {
+  return (
+    getDateKeyFromValue(
+      supplierRun.stopStrapUpUntil ||
+        supplierRun.stopCompletedAt ||
+        supplierRun.completedAt ||
+        getLatestItemPickedUpAt(supplierRun) ||
+        supplierRun.updatedAt,
+    ) || getSupplierRunDateKey(supplierRun)
+  );
+}
+
+function getSupplierRunBoardDateKey(supplierRun) {
+  if (supplierRun.status === "complete") {
+    return getSupplierRunPickupDateKey(supplierRun);
+  }
+
+  return getSupplierRunDateKey(supplierRun);
 }
 
 function hasPickedUpItems(supplierRun) {
@@ -831,7 +874,7 @@ function groupHistoryRunsByPickupDate(
   vendorDisplayNameMap = {},
 ) {
   const groupsByDate = supplierRuns.reduce((groups, supplierRun) => {
-    const dateKey = getSupplierRunDateKey(supplierRun) || "no-date";
+    const dateKey = getSupplierRunPickupDateKey(supplierRun) || "no-date";
 
     return {
       ...groups,
@@ -870,6 +913,7 @@ function groupHistoryRunsByPickupDate(
  *   onUpdateSupplierRun?: Function;
  *   onDeleteSupplierRun?: Function;
  *   onArriveSupplierStop?: Function;
+ *   onCompleteSupplierStop?: Function;
  *   createdBy?: Record<string, unknown>;
  *   vehicleOptions?: any[];
  *   employeeOptions?: string[];
@@ -899,6 +943,7 @@ export default function SupplierRunsPage({
   onUpdateSupplierRun,
   onDeleteSupplierRun,
   onArriveSupplierStop,
+  onCompleteSupplierStop,
   createdBy = {},
   vehicleOptions,
   employeeOptions = [],
@@ -964,6 +1009,8 @@ export default function SupplierRunsPage({
   const [dateMoveDraft, setDateMoveDraft] = useState(todayKey);
   const [dateMoveError, setDateMoveError] = useState("");
   const [savingDateMove, setSavingDateMove] = useState(false);
+  const [celebratedRouteKey, setCelebratedRouteKey] = useState("");
+  const [completingStopKey, setCompletingStopKey] = useState("");
 
   useEffect(() => {
     if (!successMessage) {
@@ -1257,26 +1304,21 @@ export default function SupplierRunsPage({
         .filter(Boolean)
         .sort()
         .at(-1) || "";
-    const completedAt =
-      savedCompletedAt ||
-      (allItemsPickedUp
-        ? items
-            .map((item) => item.pickedUpAt)
-            .filter(Boolean)
-            .sort()
-            .at(-1) || ""
-        : "");
+    const completedAt = savedCompletedAt;
     const strapUpUntil =
       vendorGroup.runs
         .map((supplierRun) => supplierRun.stopStrapUpUntil)
         .filter(Boolean)
         .sort()
-        .at(-1) || (completedAt ? addMinutes(completedAt, 5) : "");
+        .at(-1) || "";
+    const isConfirmedComplete = Boolean(completedAt);
 
     return {
       arrivedAt,
       completedAt,
       strapUpUntil,
+      allItemsPickedUp,
+      isConfirmedComplete,
       stopDuration: formatDurationMinutes(
         arrivedAt,
         strapUpUntil || completedAt,
@@ -1286,7 +1328,13 @@ export default function SupplierRunsPage({
         Boolean(onArriveSupplierStop) &&
         !arrivedAt &&
         vendorGroup.runs.length > 0 &&
+        !isConfirmedComplete &&
         items.some((item) => !item.pickedUp),
+      canComplete:
+        Boolean(onCompleteSupplierStop) &&
+        Boolean(arrivedAt) &&
+        allItemsPickedUp &&
+        !isConfirmedComplete,
     };
   }
 
@@ -1315,6 +1363,57 @@ export default function SupplierRunsPage({
 
   function handleInactiveStopArrivalClick(stopKey) {
     setInactiveArrivalStopKey(stopKey);
+  }
+
+  async function handleArriveStopClick(timing, isCurrentStop, inactiveArrivalKey) {
+    if (!isCurrentStop) {
+      handleInactiveStopArrivalClick(inactiveArrivalKey);
+      return;
+    }
+
+    if (typeof onArriveSupplierStop !== "function") {
+      setRouteOrderError("Unable to mark arrival for this stop.");
+      return;
+    }
+
+    setRouteOrderError("");
+
+    try {
+      await onArriveSupplierStop(timing.runIds);
+    } catch (arrivalError) {
+      console.error("Unable to mark South stop arrival:", arrivalError);
+      setRouteOrderError("Unable to mark arrival. Check connection and try again.");
+    }
+  }
+
+  async function handleCompleteStopClick(driver, vendor, timing) {
+    const stopKey = `open::${driver}::${vendor}`;
+
+    if (!timing?.allItemsPickedUp) {
+      setRouteOrderError("Pick up every item at this stop before closing it.");
+      return;
+    }
+
+    if (typeof onCompleteSupplierStop !== "function") {
+      setRouteOrderError("Unable to complete this vendor stop.");
+      return;
+    }
+
+    setCompletingStopKey(stopKey);
+    setRouteOrderError("");
+
+    try {
+      await onCompleteSupplierStop(timing.runIds);
+      setOpenStopKeys((currentOpenStopKeys) => ({
+        ...currentOpenStopKeys,
+        [stopKey]: false,
+      }));
+    } catch (completeError) {
+      console.error("Unable to complete South vendor stop:", completeError);
+      setRouteOrderError("Unable to close this vendor. Check connection and try again.");
+    } finally {
+      setCompletingStopKey("");
+    }
   }
 
   function getVendorGroupStats(vendorGroup) {
@@ -1574,7 +1673,7 @@ export default function SupplierRunsPage({
   }
 
   const runsByDate = supplierRuns.reduce((groups, supplierRun) => {
-    const dateKey = getSupplierRunDateKey(supplierRun);
+    const dateKey = getSupplierRunBoardDateKey(supplierRun);
 
     if (!dateKey) {
       return groups;
@@ -1670,18 +1769,18 @@ export default function SupplierRunsPage({
     }
   }
 
-  const dailyRuns = supplierRuns.filter(
-    (supplierRun) => {
-      if (supplierRun.status === "complete") {
-        return (
-          getSupplierRunDateKey(supplierRun) === selectedScheduleDate &&
-          isToday(supplierRun.completedAt || supplierRun.updatedAt)
-        );
-      }
+  const dailyRuns = supplierRuns.filter((supplierRun) => {
+    const scheduledDateKey = getSupplierRunDateKey(supplierRun);
 
-      return getSupplierRunDateKey(supplierRun) === selectedScheduleDate;
-    },
-  );
+    if (scheduledDateKey === selectedScheduleDate) {
+      return true;
+    }
+
+    return (
+      supplierRun.status === "complete" &&
+      getSupplierRunPickupDateKey(supplierRun) === selectedScheduleDate
+    );
+  });
 
   const historyRuns = supplierRuns.filter(
     (supplierRun) => supplierRun.status === "complete",
@@ -1701,8 +1800,32 @@ export default function SupplierRunsPage({
             routeOrderDriverName,
             safeEmployeeAliasMap,
           ),
-        )
+      )
       : visibleRuns;
+  const driverRouteIsComplete =
+    isDriverView &&
+    mode === "check" &&
+    driverScopedRuns.length > 0 &&
+    driverScopedRuns.every((supplierRun) => supplierRun.stopCompletedAt);
+  const routeCompletionKey = [
+    selectedScheduleDate,
+    routeOrderDriverName,
+    driverScopedRuns.map((supplierRun) => supplierRun.id).sort().join("|"),
+  ].join("::");
+  const showRouteCompleteCelebration =
+    driverRouteIsComplete && celebratedRouteKey === routeCompletionKey;
+
+  useEffect(() => {
+    if (!driverRouteIsComplete || !routeCompletionKey) {
+      return;
+    }
+
+    setCelebratedRouteKey((currentRouteKey) =>
+      currentRouteKey === routeCompletionKey
+        ? currentRouteKey
+        : routeCompletionKey,
+    );
+  }, [driverRouteIsComplete, routeCompletionKey]);
   const canViewSouthCustomerName = canEditSupplierRuns;
   const pickupSearchTerm = normalizeSearchText(pickupSearch);
   const filteredVisibleRuns =
@@ -1894,6 +2017,43 @@ export default function SupplierRunsPage({
           <p className="font-bold text-red-700">
             ✓ {successMessage}
           </p>
+        </div>
+      ) : null}
+
+      {showRouteCompleteCelebration ? (
+        <div className="relative mb-5 overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 shadow-sm">
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-around opacity-80">
+            {["bg-[#FC2C38]", "bg-blue-500", "bg-amber-400", "bg-emerald-500", "bg-violet-500"].map(
+              (colorClass, index) => (
+                <span
+                  key={colorClass}
+                  className={`h-8 w-2 rounded-full ${colorClass}`}
+                  style={{
+                    transform: `translateY(${index % 2 === 0 ? "-10px" : "-2px"}) rotate(${index * 18}deg)`,
+                  }}
+                  aria-hidden="true"
+                />
+              ),
+            )}
+          </div>
+
+          <div className="relative flex items-center gap-3">
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white"
+              aria-hidden="true"
+            >
+              <Check className="h-6 w-6" strokeWidth={3} />
+            </span>
+
+            <div className="min-w-0">
+              <p className="text-lg font-black text-emerald-900">
+                South route complete
+              </p>
+              <p className="text-sm font-bold text-emerald-700">
+                Everything assigned for this route has been picked up.
+              </p>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -3095,13 +3255,9 @@ export default function SupplierRunsPage({
                   const driverStopCount =
                     driverGroup.vendorGroups.length;
                   const completedStopCount =
-                    driverGroup.vendorGroups.filter((vendorGroup) => {
-                      const stats = getVendorGroupStats(vendorGroup);
-                      return (
-                        stats.itemCount > 0 &&
-                        stats.remainingItems === 0
-                      );
-                    }).length;
+                    driverGroup.vendorGroups.filter((vendorGroup) =>
+                      getVendorGroupTiming(vendorGroup).isConfirmedComplete,
+                    ).length;
                   const stopProgressPercent =
                     driverStopCount > 0
                       ? Math.round(
@@ -3320,13 +3476,15 @@ export default function SupplierRunsPage({
                         const supplierAddress =
                           getVendorGroupAddress(vendorGroup);
                         const timing = getVendorGroupTiming(vendorGroup);
-                        const nextStopIndex = driverGroup.vendorGroups.findIndex(
-                          (group) =>
-                            getVendorGroupStats(group).remainingItems > 0,
-                        );
+                        const nextStopIndex =
+                          driverGroup.vendorGroups.findIndex(
+                            (group) =>
+                              !getVendorGroupTiming(group)
+                                .isConfirmedComplete,
+                          );
                         const isCurrentStop = vendorIndex === nextStopIndex;
                         const isCompleteStop =
-                          stats.itemCount > 0 && stats.remainingItems === 0;
+                          timing.isConfirmedComplete;
                         const isNextStop =
                           !isCurrentStop &&
                           !isCompleteStop &&
@@ -3669,11 +3827,11 @@ export default function SupplierRunsPage({
                                     <button
                                       type="button"
                                       onClick={() =>
-                                        isCurrentStop
-                                          ? onArriveSupplierStop(timing.runIds)
-                                          : handleInactiveStopArrivalClick(
-                                              inactiveArrivalKey,
-                                            )
+                                        handleArriveStopClick(
+                                          timing,
+                                          isCurrentStop,
+                                          inactiveArrivalKey,
+                                        )
                                       }
                                       aria-disabled={!isCurrentStop}
                                       className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black shadow-sm transition ${
@@ -3728,6 +3886,9 @@ export default function SupplierRunsPage({
                                         ? onDeleteSupplierRun
                                         : undefined
                                     }
+                                    canPickUpItems={Boolean(
+                                      timing.arrivedAt,
+                                    )}
                                     showCustomerName={
                                       canViewSouthCustomerName
                                     }
@@ -3739,6 +3900,44 @@ export default function SupplierRunsPage({
                                     }
                                   />
                                 ))}
+
+                                {timing.canComplete ? (
+                                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 shadow-sm">
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                      <div>
+                                        <p className="text-base font-black text-emerald-950">
+                                          Are these POs for{" "}
+                                          {vendorGroup.vendor} complete?
+                                        </p>
+                                        <p className="mt-1 text-sm font-bold text-emerald-700">
+                                          This closes the vendor stop and moves
+                                          the route to the next supplier.
+                                        </p>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleCompleteStopClick(
+                                            driverGroup.driver,
+                                            vendorGroup.vendor,
+                                            timing,
+                                          )
+                                        }
+                                        disabled={
+                                          completingStopKey ===
+                                          `open::${driverGroup.driver}::${vendorGroup.vendor}`
+                                        }
+                                        className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-emerald-700 px-5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                                      >
+                                        {completingStopKey ===
+                                        `open::${driverGroup.driver}::${vendorGroup.vendor}`
+                                          ? "Closing..."
+                                          : "Yes, complete stop"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>

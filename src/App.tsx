@@ -692,6 +692,9 @@ type SupplierRun = {
   dispatchStatus?: string;
   items?: SupplierRunItem[];
   status?: string;
+  stopArrivedAt?: string | null;
+  stopCompletedAt?: string | null;
+  stopStrapUpUntil?: string | null;
   [key: string]: unknown;
 };
 
@@ -2098,6 +2101,9 @@ export default function App() {
     }
 
     const todayDateKey = getDateInputValue();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayDateKey = getDateInputValue(yesterday);
     const staleUnassignedRuns = supplierRuns.filter((supplierRun) => {
       const scheduledDate =
         typeof supplierRun.scheduledDate === "string"
@@ -2107,7 +2113,7 @@ export default function App() {
       return (
         isUnassignedSouthRun(supplierRun) &&
         scheduledDate &&
-        scheduledDate < todayDateKey
+        scheduledDate === yesterdayDateKey
       );
     });
 
@@ -3172,26 +3178,22 @@ export default function App() {
     const stopIsComplete =
       sameStopItems.length > 0 &&
       sameStopItems.every((item) => item.pickedUp);
-    const stopNeedsCompletionStamp =
-      stopIsComplete &&
+    const stopNeedsCompletionClear =
+      !stopIsComplete &&
       sameStopRuns.some(
-        (currentSupplierRun) => !currentSupplierRun.stopCompletedAt,
+        (currentSupplierRun) => currentSupplierRun.stopCompletedAt,
       );
 
-    if (stopNeedsCompletionStamp) {
-      const stopCompletedAt = checkedAt;
-      const stopStrapUpUntil = new Date(
-        new Date(checkedAt).getTime() + 5 * 60000,
-      ).toISOString();
-      const completedStopRuns = await updateSupplierRunsBulk(
+    if (stopNeedsCompletionClear) {
+      const reopenedStopRuns = await updateSupplierRunsBulk(
         sameStopRuns.map((currentSupplierRun) => ({
           id: currentSupplierRun.id,
-          stopCompletedAt,
-          stopStrapUpUntil,
+          stopCompletedAt: null,
+          stopStrapUpUntil: null,
         })),
       );
 
-      setSupplierRuns(completedStopRuns);
+      setSupplierRuns(reopenedStopRuns);
       setSyncError("");
     }
   }
@@ -3253,6 +3255,37 @@ export default function App() {
       .map((supplierRun) => ({
         id: supplierRun.id,
         stopArrivedAt: arrivedAt,
+      }));
+
+    if (updates.length === 0) {
+      return;
+    }
+
+    const updatedSupplierRuns = await updateSupplierRunsBulk(updates);
+
+    setSupplierRuns(updatedSupplierRuns);
+    setSyncError("");
+  }
+
+  async function handleCompleteSupplierStop(supplierRunIds: string[]) {
+    const completedAt = new Date().toISOString();
+    const strapUpUntil = new Date(
+      new Date(completedAt).getTime() + 5 * 60000,
+    ).toISOString();
+    const updates = supplierRunIds
+      .map((supplierRunId) =>
+        supplierRuns.find(
+          (supplierRun) => supplierRun.id === supplierRunId,
+        ),
+      )
+      .filter(
+        (supplierRun): supplierRun is SupplierRun =>
+          Boolean(supplierRun) && !supplierRun?.stopCompletedAt,
+      )
+      .map((supplierRun) => ({
+        id: supplierRun.id,
+        stopCompletedAt: completedAt,
+        stopStrapUpUntil: strapUpUntil,
       }));
 
     if (updates.length === 0) {
@@ -4401,6 +4434,7 @@ export default function App() {
               handleSaveSupplierRunItemPickupPhoto
             }
             onArriveSupplierStop={handleArriveSupplierStop}
+            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -4980,6 +5014,7 @@ export default function App() {
               handleSaveSupplierRunItemPickupPhoto
             }
             onArriveSupplierStop={handleArriveSupplierStop}
+            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -5013,6 +5048,7 @@ export default function App() {
               handleSaveSupplierRunItemPickupPhoto
             }
             onArriveSupplierStop={handleArriveSupplierStop}
+            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -5052,6 +5088,7 @@ export default function App() {
               handleSaveSupplierRunItemPickupPhoto
             }
             onArriveSupplierStop={handleArriveSupplierStop}
+            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -5090,6 +5127,7 @@ export default function App() {
               handleSaveSupplierRunItemPickupPhoto
             }
             onArriveSupplierStop={handleArriveSupplierStop}
+            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -5124,6 +5162,7 @@ export default function App() {
               handleSaveSupplierRunItemPickupPhoto
             }
             onArriveSupplierStop={handleArriveSupplierStop}
+            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }

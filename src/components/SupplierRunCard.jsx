@@ -596,6 +596,7 @@ export default function SupplierRunCard({
   compactWhenClosed = true,
   showCustomerName = false,
   customerNameTruncate = true,
+  canPickUpItems = true,
 }) {
   const items = Array.isArray(supplierRun.items)
     ? supplierRun.items
@@ -787,6 +788,8 @@ export default function SupplierRunCard({
 
       const pickupPhoto = await createPickupPhoto(file);
       await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto);
+      await onToggleItem(supplierRun.id, itemId);
+      setIsItemsOpen(true);
     } catch (photoError) {
       console.error("Unable to save pickup photo:", photoError);
       setPhotoError("Unable to save that photo. Try taking it again.");
@@ -794,6 +797,33 @@ export default function SupplierRunCard({
       setProcessingPhotoItemId("");
       event.target.value = "";
     }
+  }
+
+  async function startPickupPhoto(item, inputId) {
+    if (item.pickedUp) {
+      setPhotoError("");
+      setProcessingPhotoItemId(item.id);
+
+      try {
+        await onToggleItem(supplierRun.id, item.id);
+        setIsItemsOpen(true);
+      } catch (toggleError) {
+        console.error("Unable to update pickup item:", toggleError);
+        setPhotoError("Unable to update that item. Try again.");
+      } finally {
+        setProcessingPhotoItemId("");
+      }
+
+      return;
+    }
+
+    if (!canPickUpItems) {
+      setPhotoError("Tap I've arrived before picking up items at this stop.");
+      return;
+    }
+
+    setPhotoError("");
+    document.getElementById(inputId)?.click();
   }
 
   function openPickupSheet() {
@@ -1029,7 +1059,6 @@ export default function SupplierRunCard({
           {items.map((item) => {
             const isEditing = editingItemId === item.id;
             const pickupPhotoInputId = `pickup-photo-${supplierRun.id}-${item.id}`;
-            const uploadPhotoInputId = `pickup-upload-photo-${supplierRun.id}-${item.id}`;
             const materialUseClasses = getMaterialUseClasses(
               item.materialUse,
               item.pickedUp,
@@ -1044,15 +1073,6 @@ export default function SupplierRunCard({
             return (
               <div
                 key={item.id}
-                onClick={() => {
-                  if (
-                    !isEditing &&
-                    !item.pickedUp &&
-                    !processingPhotoItemId
-                  ) {
-                    document.getElementById(pickupPhotoInputId)?.click();
-                  }
-                }}
                 className={`rounded-xl border px-4 py-3 transition ${materialUseClasses.card}`}
               >
                 {!isEditing ? (
@@ -1130,8 +1150,9 @@ export default function SupplierRunCard({
                       <button
                         type="button"
                         onClick={(event) => {
+                          event.preventDefault();
                           event.stopPropagation();
-                          onToggleItem(supplierRun.id, item.id);
+                          void startPickupPhoto(item, pickupPhotoInputId);
                         }}
                         disabled={Boolean(processingPhotoItemId)}
                         className="mt-3 flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
@@ -1208,32 +1229,6 @@ export default function SupplierRunCard({
                           disabled={Boolean(processingPhotoItemId)}
                           className="sr-only"
                         />
-                      ) : null}
-
-                      {!item.pickedUp ? (
-                        <input
-                          id={uploadPhotoInputId}
-                          type="file"
-                          accept="image/*"
-                          onChange={(event) =>
-                            handlePickupPhotoChange(item.id, event)
-                          }
-                          disabled={Boolean(processingPhotoItemId)}
-                          className="sr-only"
-                        />
-                      ) : null}
-
-                      {!item.pickedUp ? (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            document.getElementById(uploadPhotoInputId)?.click();
-                          }}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
-                        >
-                          Upload Photo
-                        </button>
                       ) : null}
 
                       {!item.pickedUp ? (

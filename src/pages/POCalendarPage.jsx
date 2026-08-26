@@ -62,6 +62,46 @@ function getSupplierRunDateKey(supplierRun) {
   return "";
 }
 
+function getDateKeyFromValue(value) {
+  if (!value) {
+    return "";
+  }
+
+  return getDateKeyFromDate(new Date(value));
+}
+
+function getLatestItemPickedUpAt(supplierRun) {
+  if (!Array.isArray(supplierRun?.items)) {
+    return "";
+  }
+
+  return supplierRun.items
+    .map((item) => item.pickedUpAt)
+    .filter(Boolean)
+    .sort()
+    .at(-1) || "";
+}
+
+function getSupplierRunPickupDateKey(supplierRun) {
+  return (
+    getDateKeyFromValue(
+      supplierRun.stopStrapUpUntil ||
+        supplierRun.stopCompletedAt ||
+        supplierRun.completedAt ||
+        getLatestItemPickedUpAt(supplierRun) ||
+        supplierRun.updatedAt,
+    ) || getSupplierRunDateKey(supplierRun)
+  );
+}
+
+function getSupplierRunBoardDateKey(supplierRun) {
+  if (supplierRun.status === "complete") {
+    return getSupplierRunPickupDateKey(supplierRun);
+  }
+
+  return getSupplierRunDateKey(supplierRun);
+}
+
 function getSupplierRunCustomerName(supplierRun) {
   return (
     supplierRun.customerName ||
@@ -82,7 +122,7 @@ function getSouthCalendarItem(supplierRun) {
     sourceId: supplierRun.id,
     source: supplierRun,
     type: "south",
-    date: getSupplierRunDateKey(supplierRun),
+    date: getSupplierRunBoardDateKey(supplierRun),
     poNumber: supplierRun.poNumber || "No PO #",
     orderNumber:
       supplierRun.orderNumber ||
