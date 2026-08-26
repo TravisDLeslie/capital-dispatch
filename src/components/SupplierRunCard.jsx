@@ -796,8 +796,9 @@ export default function SupplierRunCard({
       }
 
       const pickupPhoto = await createPickupPhoto(file);
-      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto);
-      await onToggleItem(supplierRun.id, itemId);
+      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto, {
+        markPickedUp: true,
+      });
       setIsItemsOpen(true);
     } catch (photoError) {
       console.error("Unable to save pickup photo:", photoError);
@@ -1145,6 +1146,7 @@ export default function SupplierRunCard({
                       type="file"
                       accept="image/*"
                       capture="environment"
+                      onClick={(event) => event.stopPropagation()}
                       onChange={(event) =>
                         handlePickupPhotoChange(item.id, event)
                       }
@@ -1436,6 +1438,7 @@ export default function SupplierRunCard({
                           type="file"
                           accept="image/*"
                           capture="environment"
+                          onClick={(event) => event.stopPropagation()}
                           onChange={(event) =>
                             handlePickupPhotoChange(item.id, event)
                           }

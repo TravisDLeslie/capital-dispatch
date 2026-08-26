@@ -3203,6 +3203,7 @@ export default function App() {
     supplierRunId: string,
     itemId: string,
     pickupPhoto: unknown,
+    options: { markPickedUp?: boolean } = {},
   ) {
     const supplierRun = supplierRuns.find(
       (currentSupplierRun) =>
@@ -3223,11 +3224,17 @@ export default function App() {
         : item.pickupPhoto
           ? [item.pickupPhoto]
           : [];
+      const shouldMarkPickedUp =
+        options.markPickedUp && !item.pickedUp;
 
       return {
         ...item,
         pickupPhoto,
         pickupPhotos: [...existingPhotos, pickupPhoto],
+        pickedUp: shouldMarkPickedUp ? true : item.pickedUp,
+        pickedUpAt: shouldMarkPickedUp
+          ? new Date().toISOString()
+          : item.pickedUpAt,
       };
     });
 

@@ -1909,7 +1909,7 @@ export default function SupplierRunsPage({
     );
 
   const openRunGroups = groupRunsByDriverAndVendor(
-    filteredVisibleRuns,
+    openRuns,
     mode === "check" ? routeOrdersByDriver : {},
     safeVendorRouteOrder,
     safeVendorDisplayNameMap,
