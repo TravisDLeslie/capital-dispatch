@@ -367,6 +367,162 @@ function getDeliveryItemsLabel(items, scopeSummary) {
   return `${items.length} ${items.length === 1 ? "item" : "items"}`;
 }
 
+function getDeliveryLocationPreview(delivery) {
+  const address = String(delivery?.address || "").trim();
+
+  if (!address) {
+    return "No address";
+  }
+
+  const addressParts = address
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (addressParts.length >= 2) {
+    return addressParts[1];
+  }
+
+  return addressParts[0] || address;
+}
+
+function getRouteOverviewTimeLabel(delivery) {
+  if (delivery?.driverTargetArrivalTime) {
+    return `Be there ${formatTimeLabel(delivery.driverTargetArrivalTime)}`;
+  }
+
+  const deliveryRange = getDeliveryTimeRange(delivery);
+
+  if (deliveryRange && deliveryRange !== "Unscheduled") {
+    return deliveryRange;
+  }
+
+  return formatDeliveryDateLabel(delivery?.deliveryDate);
+}
+
+function getRouteOverviewStatus(delivery, deliveryIndex, activeIndex) {
+  if (isDeliveryComplete(delivery)) {
+    return "Complete";
+  }
+
+  if (deliveryIndex === activeIndex) {
+    return "Current";
+  }
+
+  if (activeIndex >= 0 && deliveryIndex === activeIndex + 1) {
+    return "Next";
+  }
+
+  return "Scheduled";
+}
+
+function DeliveryRouteOverview({
+  deliveries,
+  activeDeliveryId,
+  onSelectDelivery,
+}) {
+  if (deliveries.length === 0) {
+    return null;
+  }
+
+  const activeIndex = Math.max(
+    deliveries.findIndex((delivery) => delivery.id === activeDeliveryId),
+    0,
+  );
+
+  return (
+    <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+            Daily Route
+          </p>
+          <p className="mt-1 text-sm font-bold text-slate-500">
+            Tap a stop to bring it into focus.
+          </p>
+        </div>
+
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+          {deliveries.length} {deliveries.length === 1 ? "stop" : "stops"}
+        </span>
+      </div>
+
+      <div className="-mx-4 mt-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+        {deliveries.map((delivery, deliveryIndex) => {
+          const isActive = delivery.id === activeDeliveryId;
+          const status = getRouteOverviewStatus(
+            delivery,
+            deliveryIndex,
+            activeIndex,
+          );
+          const isComplete = status === "Complete";
+          const isNext = status === "Next";
+
+          return (
+            <button
+              key={delivery.id}
+              type="button"
+              onClick={() => onSelectDelivery(delivery.id)}
+              className={`min-w-[190px] rounded-2xl border p-4 text-left transition ${
+                isActive
+                  ? "border-[#FC2C38] bg-red-50 shadow-sm"
+                  : isComplete
+                    ? "border-emerald-200 bg-emerald-50"
+                    : isNext
+                      ? "border-slate-300 bg-white shadow-sm"
+                      : "border-slate-200 bg-slate-50"
+              }`}
+              aria-current={isActive ? "true" : undefined}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black ${
+                    isActive
+                      ? "bg-[#FC2C38] text-white"
+                      : isComplete
+                        ? "bg-emerald-700 text-white"
+                        : "bg-white text-slate-700"
+                  }`}
+                >
+                  {isComplete ? (
+                    <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+                  ) : (
+                    String(deliveryIndex + 1).padStart(2, "0")
+                  )}
+                </span>
+
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${
+                    isActive
+                      ? "bg-white text-[#FC2C38]"
+                      : isComplete
+                        ? "bg-white text-emerald-700"
+                        : "bg-white text-slate-500"
+                  }`}
+                >
+                  {status}
+                </span>
+              </div>
+
+              <p className="mt-3 truncate text-lg font-black text-slate-950">
+                {formatCustomerName(delivery.customerName)}
+              </p>
+
+              <p className="mt-1 truncate text-sm font-bold text-slate-500">
+                {getDeliveryLocationPreview(delivery)}
+              </p>
+
+              <p className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">
+                {getRouteOverviewTimeLabel(delivery)}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function RoutePreviewCard({ delivery }) {
   const originAddress =
     delivery.deliveryOriginAddress || "3105 W State St, Boise, ID 83703";
@@ -1218,6 +1374,30 @@ export default function DeliveryQueuePage({
     return openDeliveryKeys[deliveryId] ?? deliveryIndex === 0;
   }
 
+  function handleSelectDriverDelivery(deliveryId) {
+    setActiveDriverDeliveryId(deliveryId);
+    setOpenDeliveryKeys((currentOpenDeliveryKeys) => ({
+      ...currentOpenDeliveryKeys,
+      [deliveryId]: true,
+    }));
+    setOpenDeliveryActionMenuId("");
+
+    window.requestAnimationFrame(() => {
+      const driverDeliveryCard = document.getElementById(
+        `driver-delivery-${deliveryId}`,
+      );
+
+      if (!driverDeliveryCard) {
+        return;
+      }
+
+      driverDeliveryCard.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+
   function getDeliveryStep(deliveryId) {
     return deliveryStepKeys[deliveryId] ?? 0;
   }
@@ -1485,39 +1665,53 @@ export default function DeliveryQueuePage({
           />
         ) : (
           <div className="space-y-5">
+            <DeliveryRouteOverview
+              deliveries={openDeliveries}
+              activeDeliveryId={currentDriverDelivery.id}
+              onSelectDelivery={handleSelectDriverDelivery}
+            />
+
             <section>
               <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
                 Current Delivery
               </p>
 
-              <MobileDeliveryFlowCard
-                delivery={currentDriverDelivery}
-                deliveryIndex={0}
-                deliveryCount={openDeliveries.length}
-                deliveryStep={currentDeliveryStep}
-                setDeliveryStep={setDeliveryStep}
-                isUpdating={updatingDeliveryId === currentDriverDelivery.id}
-                deliveryPhotos={currentDeliveryPhotos}
-                hardwarePhotos={currentHardwarePhotos}
-                scopeSummary={currentScopeSummary}
-                contactPhone={
-                  currentDriverDelivery.contactPhone ||
-                  currentDriverDelivery.phoneNumber ||
-                  ""
-                }
-                deliveryLocationNotes={
-                  currentDriverDelivery.deliveryLocationNotes ||
-                  currentDriverDelivery.deliveryNotes ||
-                  ""
-                }
-                generalNotes={currentDriverDelivery.generalNotes || ""}
-                onPhotoChange={handlePhotoChange}
-                onPhotosChange={handlePhotosChange}
-                onHardwareChecked={handleHardwareChecked}
-                onCompleteDelivery={handleCompleteDelivery}
-                onViewPhoto={setViewingPhoto}
-                isFocusedDriverView
-              />
+              <div id={`driver-delivery-${currentDriverDelivery.id}`}>
+                <MobileDeliveryFlowCard
+                  delivery={currentDriverDelivery}
+                  deliveryIndex={Math.max(
+                    openDeliveries.findIndex(
+                      (delivery) =>
+                        delivery.id === currentDriverDelivery.id,
+                    ),
+                    0,
+                  )}
+                  deliveryCount={openDeliveries.length}
+                  deliveryStep={currentDeliveryStep}
+                  setDeliveryStep={setDeliveryStep}
+                  isUpdating={updatingDeliveryId === currentDriverDelivery.id}
+                  deliveryPhotos={currentDeliveryPhotos}
+                  hardwarePhotos={currentHardwarePhotos}
+                  scopeSummary={currentScopeSummary}
+                  contactPhone={
+                    currentDriverDelivery.contactPhone ||
+                    currentDriverDelivery.phoneNumber ||
+                    ""
+                  }
+                  deliveryLocationNotes={
+                    currentDriverDelivery.deliveryLocationNotes ||
+                    currentDriverDelivery.deliveryNotes ||
+                    ""
+                  }
+                  generalNotes={currentDriverDelivery.generalNotes || ""}
+                  onPhotoChange={handlePhotoChange}
+                  onPhotosChange={handlePhotosChange}
+                  onHardwareChecked={handleHardwareChecked}
+                  onCompleteDelivery={handleCompleteDelivery}
+                  onViewPhoto={setViewingPhoto}
+                  isFocusedDriverView
+                />
+              </div>
             </section>
 
             {upNextDriverDeliveries.length > 0 ? (
@@ -1543,7 +1737,11 @@ export default function DeliveryQueuePage({
                         key={delivery.id}
                         className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectDriverDelivery(delivery.id)}
+                          className="flex w-full items-start justify-between gap-3 text-left"
+                        >
                           <div className="min-w-0">
                             <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
                               Delivery {index + 2} of {openDeliveries.length}
@@ -1560,7 +1758,7 @@ export default function DeliveryQueuePage({
                             className="mt-2 h-5 w-5 shrink-0 text-slate-400"
                             aria-hidden="true"
                           />
-                        </div>
+                        </button>
 
                         <div className="mt-3 flex flex-wrap gap-2">
                           <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">
