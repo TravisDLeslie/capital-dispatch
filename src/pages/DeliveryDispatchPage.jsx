@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronDown,
@@ -675,6 +675,9 @@ function DeliveryRouteMapPlanner({
   const [highlightedDeliveryId, setHighlightedDeliveryId] = useState("");
   const [mapZoom, setMapZoom] = useState(11);
   const [segmentRoutes, setSegmentRoutes] = useState({});
+  const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
+  const [isDraggingMap, setIsDraggingMap] = useState(false);
+  const mapDragRef = useRef(null);
   const deliveriesWithAddress = useMemo(
     () =>
       deliveries.filter((delivery) => String(delivery.address || "").trim()),
@@ -830,6 +833,58 @@ function DeliveryRouteMapPlanner({
       const nextZoom = direction === "in" ? currentZoom + 1 : currentZoom - 1;
       return Math.min(17, Math.max(7, nextZoom));
     });
+    setMapPan({ x: 0, y: 0 });
+  }
+
+  function getMapPointerPosition(event) {
+    const pointer = event.touches?.[0] || event.changedTouches?.[0] || event;
+
+    return {
+      x: pointer.clientX || 0,
+      y: pointer.clientY || 0,
+    };
+  }
+
+  function startMapDrag(event) {
+    if (!isMapOpen || !staticMapUrl) {
+      return;
+    }
+
+    if (event.target?.closest?.("button, a")) {
+      return;
+    }
+
+    const pointer = getMapPointerPosition(event);
+    mapDragRef.current = {
+      startX: pointer.x,
+      startY: pointer.y,
+      startPanX: mapPan.x,
+      startPanY: mapPan.y,
+    };
+    setIsDraggingMap(true);
+  }
+
+  function moveMapDrag(event) {
+    if (!mapDragRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    const pointer = getMapPointerPosition(event);
+    const nextX =
+      mapDragRef.current.startPanX + pointer.x - mapDragRef.current.startX;
+    const nextY =
+      mapDragRef.current.startPanY + pointer.y - mapDragRef.current.startY;
+
+    setMapPan({
+      x: Math.max(-700, Math.min(700, nextX)),
+      y: Math.max(-500, Math.min(500, nextY)),
+    });
+  }
+
+  function endMapDrag() {
+    mapDragRef.current = null;
+    setIsDraggingMap(false);
   }
 
   function renderZoomControls(positionClassName = "") {
@@ -1146,16 +1201,51 @@ function DeliveryRouteMapPlanner({
             </div>
 
             <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_380px]">
-              <div className="relative min-h-[420px] bg-slate-100 lg:min-h-0">
+              <div
+                className={`relative min-h-[420px] overflow-hidden bg-slate-100 lg:min-h-0 ${
+                  isDraggingMap ? "cursor-grabbing" : "cursor-grab"
+                }`}
+                onMouseDown={startMapDrag}
+                onMouseMove={moveMapDrag}
+                onMouseUp={endMapDrag}
+                onMouseLeave={endMapDrag}
+                onTouchStart={startMapDrag}
+                onTouchMove={moveMapDrag}
+                onTouchEnd={endMapDrag}
+              >
                 {staticMapUrl ? (
                   <>
                     {renderZoomControls("left-5 top-5")}
+                    <div className="absolute left-5 top-20 z-10 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
+                        Drag map to move around
+                      </span>
+                      {(mapPan.x !== 0 || mapPan.y !== 0) ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setMapPan({ x: 0, y: 0 });
+                          }}
+                          className="rounded-full bg-slate-950 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-slate-800"
+                        >
+                          Reset
+                        </button>
+                      ) : null}
+                    </div>
                     <img
                       src={staticMapUrl}
                       alt={`Large delivery route map for ${formatDateLabel(
                         selectedDate,
                       )}`}
-                      className="h-full w-full object-contain"
+                      draggable="false"
+                      className="h-full w-full select-none object-cover"
+                      style={{
+                        transform: `translate(${mapPan.x}px, ${mapPan.y}px) scale(1.35)`,
+                        transition: isDraggingMap
+                          ? "none"
+                          : "transform 160ms ease",
+                      }}
                     />
                   </>
                 ) : null}
