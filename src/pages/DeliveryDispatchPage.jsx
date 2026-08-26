@@ -710,12 +710,33 @@ function DeliveryRouteMapPlanner({
       center: mapCenter,
     });
 
-    deliveriesWithAddress.slice(0, 24).forEach((delivery, index) => {
+    const visibleMapDeliveries = deliveriesWithAddress.slice(0, 24);
+    const highlightedMapIndex = highlightedDeliveryId
+      ? visibleMapDeliveries.findIndex(
+          (delivery) => delivery.id === highlightedDeliveryId,
+        )
+      : -1;
+
+    visibleMapDeliveries.forEach((delivery, index) => {
+      if (index === highlightedMapIndex) {
+        return;
+      }
+
       params.append(
         "markers",
         `color:red|label:${getRouteMarkerLabel(index)}|${delivery.address}`,
       );
     });
+
+    if (highlightedMapIndex >= 0) {
+      const highlightedMapDelivery = visibleMapDeliveries[highlightedMapIndex];
+      params.append(
+        "markers",
+        `color:blue|label:${getRouteMarkerLabel(highlightedMapIndex)}|${
+          highlightedMapDelivery.address
+        }`,
+      );
+    }
 
     return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
   }, [
