@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -26,6 +26,8 @@ import { createId } from "../utils/idHelpers";
 import { formatCustomerName } from "../utils/textFormatters";
 import SearchableSelect from "./SearchableSelect";
 
+const CHECK_IN_DRAFTS_STORAGE_KEY = "dispatch-cl-check-in-item-drafts-v1";
+
 function createEmptyMaterial() {
   return {
     id: createId(),
@@ -39,6 +41,65 @@ function createEmptyMaterial() {
     damagePhotos: [],
     saved: false,
   };
+}
+
+function getCheckInDrafts() {
+  try {
+    const savedDrafts = localStorage.getItem(CHECK_IN_DRAFTS_STORAGE_KEY);
+
+    if (!savedDrafts) {
+      return {};
+    }
+
+    const parsedDrafts = JSON.parse(savedDrafts);
+
+    return parsedDrafts && typeof parsedDrafts === "object"
+      ? parsedDrafts
+      : {};
+  } catch (error) {
+    console.error("Unable to load check-in drafts:", error);
+    return {};
+  }
+}
+
+function getCheckInDraft(draftKey) {
+  if (!draftKey) {
+    return null;
+  }
+
+  return getCheckInDrafts()[draftKey] || null;
+}
+
+function saveCheckInDraft(draftKey, draft) {
+  if (!draftKey) {
+    return;
+  }
+
+  try {
+    localStorage.setItem(
+      CHECK_IN_DRAFTS_STORAGE_KEY,
+      JSON.stringify({
+        ...getCheckInDrafts(),
+        [draftKey]: draft,
+      }),
+    );
+  } catch (error) {
+    console.error("Unable to save check-in draft:", error);
+  }
+}
+
+function deleteCheckInDraft(draftKey) {
+  if (!draftKey) {
+    return;
+  }
+
+  try {
+    const drafts = getCheckInDrafts();
+    delete drafts[draftKey];
+    localStorage.setItem(CHECK_IN_DRAFTS_STORAGE_KEY, JSON.stringify(drafts));
+  } catch (error) {
+    console.error("Unable to delete check-in draft:", error);
+  }
 }
 
 function formatPoNumber(value) {
@@ -117,6 +178,83 @@ function getMaterialDamagePhotos(material) {
   }
 
   return material.damagePhoto ? [material.damagePhoto] : [];
+}
+
+function getMaterialStatus(material) {
+  const hasDescription = Boolean(String(material.description || "").trim());
+  const hasLocation = Boolean(String(material.location || "").trim());
+  const hasLocationPhotos = getMaterialLocationPhotos(material).length > 0;
+  const needsDamagePhotos = material.conditionGood === false;
+  const hasDamagePhotos = getMaterialDamagePhotos(material).length > 0;
+
+  if (
+    material.saved &&
+    hasDescription &&
+    hasLocation &&
+    hasLocationPhotos &&
+    (!needsDamagePhotos || hasDamagePhotos)
+  ) {
+    return "ready";
+  }
+
+  if (
+    hasDescription ||
+    hasLocation ||
+    material.notes?.trim() ||
+    hasLocationPhotos ||
+    hasDamagePhotos
+  ) {
+    return "inProgress";
+  }
+
+  return "notStarted";
+}
+
+function getMaterialStatusLabel(status) {
+  if (status === "ready") {
+    return "Ready";
+  }
+
+  if (status === "inProgress") {
+    return "In Progress";
+  }
+
+  return "Not Started";
+}
+
+function getMaterialStatusClass(status) {
+  if (status === "ready") {
+    return "bg-emerald-100 text-emerald-700";
+  }
+
+  if (status === "inProgress") {
+    return "bg-amber-100 text-amber-700";
+  }
+
+  return "bg-slate-100 text-slate-500";
+}
+
+function getCheckInDraftKey({
+  poNumber,
+  receivingTruckType,
+  linkedSouthRunId,
+  linkedTheirTruckPOId,
+}) {
+  const normalizedPoNumber = normalizePoNumber(poNumber);
+
+  if (!normalizedPoNumber) {
+    return "";
+  }
+
+  if (linkedSouthRunId) {
+    return `south:${linkedSouthRunId}:${normalizedPoNumber}`;
+  }
+
+  if (linkedTheirTruckPOId) {
+    return `theirTruck:${linkedTheirTruckPOId}:${normalizedPoNumber}`;
+  }
+
+  return `${receivingTruckType || "manual"}:${normalizedPoNumber}`;
 }
 
 function findMatchingTeamMember(value, teamMemberOptions) {
@@ -493,9 +631,27 @@ export default function CheckInForm({
     createEmptyMaterial(),
   ]);
   const [openMaterialId, setOpenMaterialId] = useState("");
+  const hydratedDraftKeyRef = useRef("");
+  const lastSavedDraftJsonRef = useRef("");
 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const activeDraftKey = useMemo(
+    () =>
+      getCheckInDraftKey({
+        poNumber,
+        receivingTruckType,
+        linkedSouthRunId,
+        linkedTheirTruckPOId,
+      }),
+    [
+      linkedSouthRunId,
+      linkedTheirTruckPOId,
+      poNumber,
+      receivingTruckType,
+    ],
+  );
 
   useEffect(() => {
     if (checkedInBy) {
@@ -568,6 +724,78 @@ export default function CheckInForm({
     poNumber,
     supplierRuns,
     theirTruckPOs,
+  ]);
+
+  useEffect(() => {
+    if (!activeDraftKey || hydratedDraftKeyRef.current === activeDraftKey) {
+      return;
+    }
+
+    hydratedDraftKeyRef.current = activeDraftKey;
+
+    const draft = getCheckInDraft(activeDraftKey);
+
+    if (!draft) {
+      lastSavedDraftJsonRef.current = "";
+      return;
+    }
+
+    if (draft.vendor) {
+      setVendor(draft.vendor);
+    }
+
+    if (draft.checkedInBy) {
+      setCheckedInBy(draft.checkedInBy);
+    }
+
+    if (Array.isArray(draft.materials) && draft.materials.length > 0) {
+      setMaterials(draft.materials);
+      setOpenMaterialId(
+        draft.openMaterialId ||
+          draft.materials.find(
+            (material) => getMaterialStatus(material) !== "ready",
+          )?.id ||
+          "",
+      );
+    }
+
+    if (draft.currentStep) {
+      setCurrentStep(Math.max(1, Math.min(Number(draft.currentStep) || 1, 3)));
+    }
+
+    lastSavedDraftJsonRef.current = JSON.stringify(draft);
+  }, [activeDraftKey]);
+
+  useEffect(() => {
+    if (!activeDraftKey || hydratedDraftKeyRef.current !== activeDraftKey) {
+      return;
+    }
+
+    const draft = {
+      poNumber,
+      vendor,
+      checkedInBy,
+      materials,
+      currentStep,
+      openMaterialId,
+      updatedAt: new Date().toISOString(),
+    };
+    const draftJson = JSON.stringify(draft);
+
+    if (draftJson === lastSavedDraftJsonRef.current) {
+      return;
+    }
+
+    saveCheckInDraft(activeDraftKey, draft);
+    lastSavedDraftJsonRef.current = draftJson;
+  }, [
+    activeDraftKey,
+    checkedInBy,
+    currentStep,
+    materials,
+    openMaterialId,
+    poNumber,
+    vendor,
   ]);
 
   function clearError() {
@@ -869,6 +1097,39 @@ export default function CheckInForm({
     clearError();
   }
 
+  function saveItemProgress(materialId) {
+    const material = materials.find((item) => item.id === materialId);
+
+    if (!material?.description.trim()) {
+      setError("Enter a material description before saving progress.");
+      setOpenMaterialId(materialId);
+      return;
+    }
+
+    if (!findMatchingOption(material.location, locations)) {
+      setError("Select a location for this material before saving progress.");
+      setOpenMaterialId(materialId);
+      return;
+    }
+
+    setMaterials((currentMaterials) =>
+      currentMaterials.map((item) =>
+        item.id === materialId
+          ? {
+              ...item,
+              description: item.description.trim(),
+              location: findMatchingOption(item.location, locations),
+              notes: item.notes.trim(),
+              saved: true,
+              savedAt: new Date().toISOString(),
+            }
+          : item,
+      ),
+    );
+
+    clearError();
+  }
+
   function editMaterial(materialId) {
     setMaterials((currentMaterials) =>
       currentMaterials.map((material) =>
@@ -927,6 +1188,8 @@ export default function CheckInForm({
     setCurrentStep(1);
     setMaterials([newMaterial]);
     setOpenMaterialId("");
+    hydratedDraftKeyRef.current = "";
+    lastSavedDraftJsonRef.current = "";
     setError("");
   }
 
@@ -1077,6 +1340,24 @@ export default function CheckInForm({
   const savedMaterials = enteredMaterials.filter(
     (material) => material.saved,
   );
+  const readyMaterials = enteredMaterials.filter(
+    (material) => getMaterialStatus(material) === "ready",
+  );
+  const materialStatusCounts = enteredMaterials.reduce(
+    (counts, material) => {
+      const status = getMaterialStatus(material);
+
+      return {
+        ...counts,
+        [status]: (counts[status] || 0) + 1,
+      };
+    },
+    {
+      notStarted: 0,
+      inProgress: 0,
+      ready: 0,
+    },
+  );
   const hasLinkedPo = Boolean(linkedSouthRun || linkedTheirTruckPO);
   const activeSourceRecord = linkedSouthRun || linkedTheirTruckPO;
   const sourceLabel = linkedSouthRun
@@ -1125,13 +1406,11 @@ export default function CheckInForm({
       return false;
     }
 
-    const unsavedMaterial = enteredMaterials.find(
-      (material) => !material.saved,
-    );
+    if (savedMaterials.length === 0) {
+      const firstEnteredMaterial = enteredMaterials[0];
 
-    if (unsavedMaterial) {
-      setError("Save each material before continuing to photos.");
-      setOpenMaterialId(unsavedMaterial.id);
+      setError("Save at least one material before continuing to photos.");
+      setOpenMaterialId(firstEnteredMaterial.id);
       return false;
     }
 
@@ -1142,6 +1421,17 @@ export default function CheckInForm({
   function validateStepThree() {
     if (processingPhotoMaterialId) {
       setError("Wait for the material photo to finish preparing.");
+      return false;
+    }
+
+    const notReadyMaterial = enteredMaterials.find(
+      (material) => getMaterialStatus(material) !== "ready",
+    );
+
+    if (notReadyMaterial) {
+      setError(
+        `${notReadyMaterial.description || "A material"} still needs saved details and required photos before final check-in.`,
+      );
       return false;
     }
 
@@ -1194,6 +1484,10 @@ export default function CheckInForm({
       damagePhoto: getMaterialDamagePhotos(material)[0] || null,
       damagePhotos: getMaterialDamagePhotos(material),
       notes: material.notes.trim(),
+      status: getMaterialStatus(material),
+      sourceItemId: material.sourceItemId || "",
+      sourceType: material.sourceType || "",
+      savedAt: material.savedAt || "",
     }));
 
     const materialLocations = [
@@ -1280,6 +1574,7 @@ export default function CheckInForm({
 
     try {
       await onSubmit(newCheckIn);
+      deleteCheckInDraft(activeDraftKey);
       resetForm();
     } catch (submitError) {
       console.error("Unable to save check-in:", submitError);
@@ -1665,6 +1960,40 @@ export default function CheckInForm({
               </button>
             </div>
 
+            {enteredMaterials.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  {
+                    label: "Ready",
+                    value: materialStatusCounts.ready,
+                    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+                  },
+                  {
+                    label: "In Progress",
+                    value: materialStatusCounts.inProgress,
+                    className: "border-amber-200 bg-amber-50 text-amber-700",
+                  },
+                  {
+                    label: "Not Started",
+                    value: materialStatusCounts.notStarted,
+                    className: "border-slate-200 bg-slate-50 text-slate-600",
+                  },
+                ].map((statusSummary) => (
+                  <div
+                    key={statusSummary.label}
+                    className={`rounded-2xl border px-4 py-3 ${statusSummary.className}`}
+                  >
+                    <p className="text-2xl font-black">
+                      {statusSummary.value}
+                    </p>
+                    <p className="text-xs font-black uppercase tracking-[0.14em]">
+                      {statusSummary.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <datalist id="location-options">
               {locations.map((location) => (
                 <option key={location} value={location} />
@@ -1674,6 +2003,7 @@ export default function CheckInForm({
             <div className="space-y-3">
               {materials.map((material, index) => {
                 const isMaterialOpen = openMaterialId === material.id;
+                const materialStatus = getMaterialStatus(material);
                 const materialTitle =
                   material.description.trim() || `Material ${index + 1}`;
 
@@ -1681,8 +2011,10 @@ export default function CheckInForm({
                   <div
                     key={material.id}
                     className={`overflow-hidden rounded-2xl border ${
-                      material.saved
+                      materialStatus === "ready"
                         ? "border-emerald-200 bg-white"
+                        : materialStatus === "inProgress"
+                          ? "border-amber-200 bg-white"
                         : "border-slate-200 bg-slate-50"
                     }`}
                   >
@@ -1701,13 +2033,11 @@ export default function CheckInForm({
                             </span>
                           ) : null}
                           <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] ${
-                              material.saved
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-amber-100 text-amber-700"
-                            }`}
+                            className={`rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] ${getMaterialStatusClass(
+                              materialStatus,
+                            )}`}
                           >
-                            {material.saved ? "Saved" : "Needs Details"}
+                            {getMaterialStatusLabel(materialStatus)}
                           </span>
                         </div>
                         <p className="mt-1 text-sm font-semibold text-slate-500">
@@ -1878,6 +2208,93 @@ export default function CheckInForm({
               </p>
             </div>
 
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                    Item Progress
+                  </p>
+                  <p className="mt-1 text-lg font-black text-slate-950">
+                    {readyMaterials.length} of {enteredMaterials.length} ready
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
+                    {materialStatusCounts.ready} Ready
+                  </span>
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-amber-700">
+                    {materialStatusCounts.inProgress} In Progress
+                  </span>
+                  {materialStatusCounts.notStarted > 0 ? (
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                      {materialStatusCounts.notStarted} Not Started
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-emerald-600 transition-all"
+                  style={{
+                    width: `${
+                      enteredMaterials.length > 0
+                        ? Math.round(
+                            (readyMaterials.length / enteredMaterials.length) *
+                              100,
+                          )
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+
+              <div className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-slate-50">
+                {enteredMaterials.map((material, index) => {
+                  const materialStatus = getMaterialStatus(material);
+
+                  return (
+                    <button
+                      key={`review-${material.id}`}
+                      type="button"
+                      onClick={() => {
+                        setOpenMaterialId(material.id);
+                        setCurrentStep(2);
+                      }}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left first:rounded-t-2xl last:rounded-b-2xl hover:bg-white"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-black text-slate-900">
+                          {material.description || `Material ${index + 1}`}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
+                          {[
+                            material.location || "No location",
+                            getMaterialLocationPhotos(material).length > 0
+                              ? `${getMaterialLocationPhotos(material).length} photo${
+                                  getMaterialLocationPhotos(material).length === 1
+                                    ? ""
+                                    : "s"
+                                }`
+                              : "No photos",
+                          ].join(" • ")}
+                        </span>
+                      </span>
+
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] ${getMaterialStatusClass(
+                          materialStatus,
+                        )}`}
+                      >
+                        {getMaterialStatusLabel(materialStatus)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
               <div className="divide-y divide-blue-100">
                 {[
@@ -1947,6 +2364,7 @@ export default function CheckInForm({
                   getMaterialLocationPhotos(material);
                 const materialDamagePhotos =
                   getMaterialDamagePhotos(material);
+                const materialStatus = getMaterialStatus(material);
 
                 return (
                 <section
@@ -1961,9 +2379,18 @@ export default function CheckInForm({
                       <h4 className="font-black text-slate-950">
                         {material.description || `Material ${index + 1}`}
                       </h4>
-                      <p className="mt-1 text-sm font-semibold text-slate-500">
-                        {material.location || "No location selected"}
-                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-500">
+                          {material.location || "No location selected"}
+                        </p>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-[0.12em] ${getMaterialStatusClass(
+                            materialStatus,
+                          )}`}
+                        >
+                          {getMaterialStatusLabel(materialStatus)}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -2200,6 +2627,23 @@ export default function CheckInForm({
                       />
                     </div>
                   ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => saveItemProgress(material.id)}
+                    disabled={
+                      isSubmitting || Boolean(processingPhotoMaterialId)
+                    }
+                    className={`mt-4 w-full rounded-xl px-5 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                      materialStatus === "ready"
+                        ? "bg-emerald-700 text-white hover:bg-emerald-800"
+                        : "bg-slate-950 text-white hover:bg-slate-800"
+                    }`}
+                  >
+                    {materialStatus === "ready"
+                      ? "Item Ready"
+                      : "Save Item Progress"}
+                  </button>
                 </section>
                 );
               })}
