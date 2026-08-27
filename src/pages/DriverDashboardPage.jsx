@@ -1,9 +1,6 @@
 import { useState } from "react";
 import {
   ArrowRight,
-  BookOpen,
-  CalendarDays,
-  PhoneCall,
   Route,
   ShieldCheck,
   Truck,
@@ -67,10 +64,49 @@ function sortDeliveriesBySchedule(deliveries) {
   );
 }
 
-function getProfileDisplayName(user) {
-  const emailName = String(user?.email || "").split("@")[0] || "";
+function getSupplierRunSortValue(supplierRun) {
+  return `${supplierRun?.pickupDate || ""} ${supplierRun?.vendor || ""} ${
+    supplierRun?.poNumber || ""
+  }`;
+}
 
-  return user?.displayName || user?.driverName || emailName || "";
+function sortSupplierRuns(supplierRuns) {
+  return [...supplierRuns].sort((firstRun, secondRun) =>
+    getSupplierRunSortValue(firstRun).localeCompare(
+      getSupplierRunSortValue(secondRun),
+    ),
+  );
+}
+
+function getSupplierStopCount(supplierRuns) {
+  return new Set(
+    supplierRuns.map((supplierRun) => supplierRun.vendor || "Supplier"),
+  ).size;
+}
+
+function getItemCountFromRuns(supplierRuns) {
+  return supplierRuns.reduce(
+    (total, supplierRun) =>
+      total + (Array.isArray(supplierRun.items) ? supplierRun.items.length : 0),
+    0,
+  );
+}
+
+function getDeliveryTimeLabel(delivery) {
+  return (
+    delivery?.driverTargetArrivalTime ||
+    delivery?.deliveryTimeSlot ||
+    delivery?.scheduledStartTime ||
+    delivery?.timeSlot ||
+    "Scheduled"
+  );
+}
+
+function getDeliveryLocationLabel(delivery) {
+  const address = delivery?.deliveryAddress || delivery?.address || "";
+  const cityMatch = String(address).match(/,\s*([^,]+),?\s+[A-Z]{2}\s+\d{5}/);
+
+  return cityMatch?.[1] || address || "Delivery stop";
 }
 
 function getDriverOptions({ supplierRuns, deliveries, users, employeeOptions }) {
@@ -85,86 +121,119 @@ function getDriverOptions({ supplierRuns, deliveries, users, employeeOptions }) 
   );
 }
 
-function DriverActionCard({
-  icon: Icon,
+function DriverRouteCard({
   title,
-  description,
-  stat,
-  statLabel,
-  buttonLabel,
+  eyebrow,
+  primary,
+  secondary,
+  meta,
+  icon: Icon,
   onClick,
 }) {
   return (
-    <article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex items-start justify-between gap-4">
-        <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex min-h-[150px] w-full items-stretch overflow-hidden rounded-3xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-red-100 hover:shadow-md"
+    >
+      <span className="flex w-2 shrink-0 bg-[#FC2C38]" aria-hidden="true" />
+      <span className="flex flex-1 items-center gap-4 p-5 sm:p-6">
+        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
           <Icon aria-hidden="true" className="h-7 w-7" strokeWidth={2.4} />
         </span>
-
-        <span className="rounded-2xl bg-slate-50 px-4 py-2 text-right">
-          <span className="block text-2xl font-black text-slate-950">
-            {stat}
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+            {eyebrow}
           </span>
-          <span className="block text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-            {statLabel}
+          <span className="mt-1 block text-2xl font-black text-slate-950 sm:text-3xl">
+            {title}
+          </span>
+          <span className="mt-2 block text-sm font-black text-slate-700">
+            {primary}
+          </span>
+          <span className="mt-1 block text-sm font-semibold text-slate-500">
+            {secondary}
+          </span>
+          <span className="mt-3 inline-flex rounded-2xl bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-slate-600">
+            {meta}
           </span>
         </span>
-      </div>
-
-      <h2 className="mt-5 text-2xl font-black text-slate-950">
-        {title}
-      </h2>
-      <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-        {description}
-      </p>
-
-      <button
-        type="button"
-        onClick={onClick}
-        className="mt-5 flex min-h-[58px] w-full items-center justify-between gap-3 rounded-2xl bg-[#FC2C38] px-5 text-left text-base font-black text-white shadow-sm transition hover:bg-red-600"
-      >
-        {buttonLabel}
-        <ArrowRight
-          aria-hidden="true"
-          className="h-5 w-5"
-          strokeWidth={2.6}
-        />
-      </button>
-    </article>
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white transition group-hover:bg-[#FC2C38]">
+          <ArrowRight aria-hidden="true" className="h-5 w-5" strokeWidth={2.6} />
+        </span>
+      </span>
+    </button>
   );
 }
 
-function DriverQuickAction({ icon: Icon, label, detail, onClick, href }) {
-  const className =
-    "flex min-h-[76px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-red-100 hover:shadow-md";
-  const content = (
-    <>
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
-        <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-base font-black text-slate-950">
-          {label}
-        </span>
-        <span className="block truncate text-xs font-bold text-slate-500">
-          {detail}
-        </span>
-      </span>
-    </>
-  );
+function DriverRouteOverview({
+  openSupplierRuns,
+  openDeliveries,
+  onPageChange,
+}) {
+  const sortedSupplierRuns = sortSupplierRuns(openSupplierRuns);
+  const nextSupplierRun = sortedSupplierRuns[0];
+  const nextDelivery = openDeliveries[0];
+  const supplierStopCount = getSupplierStopCount(sortedSupplierRuns);
+  const supplierItemCount = getItemCountFromRuns(sortedSupplierRuns);
 
-  if (href) {
-    return (
-      <a href={href} className={className}>
-        {content}
-      </a>
-    );
+  if (openSupplierRuns.length === 0 && openDeliveries.length === 0) {
+    return null;
   }
 
   return (
-    <button type="button" onClick={onClick} className={className}>
-      {content}
-    </button>
+    <section className="mb-5 grid gap-4 lg:grid-cols-2">
+      {openSupplierRuns.length > 0 ? (
+        <DriverRouteCard
+          icon={Route}
+          eyebrow="South Route"
+          title={nextSupplierRun?.vendor || "South pickups"}
+          primary={`${supplierStopCount} ${
+            supplierStopCount === 1 ? "stop" : "stops"
+          } ready`}
+          secondary={`${openSupplierRuns.length} ${
+            openSupplierRuns.length === 1 ? "PO" : "POs"
+          } • ${supplierItemCount || 0} ${
+            supplierItemCount === 1 ? "item" : "items"
+          }`}
+          meta="Open South Route"
+          onClick={() => onPageChange("supplier-runs-check")}
+        />
+      ) : null}
+
+      {openDeliveries.length > 0 ? (
+        <DriverRouteCard
+          icon={Truck}
+          eyebrow="Driver Route"
+          title={nextDelivery?.customerName || "Deliveries"}
+          primary={`${openDeliveries.length} ${
+            openDeliveries.length === 1 ? "delivery" : "deliveries"
+          } assigned`}
+          secondary={`${getDeliveryTimeLabel(nextDelivery)} • ${getDeliveryLocationLabel(
+            nextDelivery,
+          )}`}
+          meta="Open Delivery Route"
+          onClick={() => onPageChange("deliveries-queue")}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function EmptyDriverRouteCard() {
+  return (
+    <section className="rounded-3xl border border-dashed border-slate-300 bg-white p-6 text-center shadow-sm">
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+        No Route Assigned
+      </p>
+      <h2 className="mt-2 text-2xl font-black text-slate-950">
+        Nothing active right now
+      </h2>
+      <p className="mt-2 text-sm font-semibold text-slate-500">
+        South pickups and driver deliveries will show here when dispatch assigns
+        them.
+      </p>
+    </section>
   );
 }
 
@@ -251,72 +320,15 @@ export default function DriverDashboardPage({
         </div>
       </div>
 
-      <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <DriverQuickAction
-          icon={Route}
-          label="South POs"
-          detail="Stops, photos, and pickup checks"
-          onClick={() => onPageChange("supplier-runs-check")}
-        />
-        <DriverQuickAction
-          icon={Truck}
-          label="Deliveries"
-          detail="Drop-off photos and hardware"
-          onClick={() => onPageChange("deliveries-queue")}
-        />
-        <DriverQuickAction
-          icon={CalendarDays}
-          label="Schedule"
-          detail="See your delivery day"
-          onClick={() => onPageChange("deliveries-calendar")}
-        />
-        <DriverQuickAction
-          icon={BookOpen}
-          label="Stocking Handbook"
-          detail="Look up stocked items"
-          onClick={() => onPageChange("stocking-handbook")}
-        />
-        <DriverQuickAction
-          icon={PhoneCall}
-          label="Call Yard"
-          detail="Capital Lumber main line"
-          href="tel:2083435481"
-        />
-      </section>
+      <DriverRouteOverview
+        openSupplierRuns={openSupplierRuns}
+        openDeliveries={openDeliveries}
+        onPageChange={onPageChange}
+      />
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        <DriverActionCard
-          icon={Route}
-          title="POs To Pick Up"
-          description="Open South stops, supplier directions, and pickup item photos."
-          stat={openSupplierRuns.length}
-          statLabel={openSupplierRuns.length === 1 ? "PO" : "POs"}
-          buttonLabel="View South POs"
-          onClick={() => onPageChange("supplier-runs-check")}
-        />
-
-        <DriverActionCard
-          icon={Truck}
-          title="Deliveries"
-          description="Assigned delivery orders, drop-off photos, hardware reminders, and directions."
-          stat={openDeliveries.length}
-          statLabel={
-            openDeliveries.length === 1 ? "Order" : "Orders"
-          }
-          buttonLabel="View Deliveries"
-          onClick={() => onPageChange("deliveries-queue")}
-        />
-
-        <DriverActionCard
-          icon={CalendarDays}
-          title="Delivery Schedule"
-          description="See the assigned delivery day in order so you know what is coming next."
-          stat={openDeliveries.length}
-          statLabel="Scheduled"
-          buttonLabel="View Schedule"
-          onClick={() => onPageChange("deliveries-calendar")}
-        />
-      </section>
+      {openSupplierRuns.length === 0 && openDeliveries.length === 0 ? (
+        <EmptyDriverRouteCard />
+      ) : null}
 
     </PageContainer>
   );
