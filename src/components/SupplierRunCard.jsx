@@ -760,10 +760,17 @@ export default function SupplierRunCard({
     cancelEditingItem();
   }
 
-  async function handlePickupPhotoChange(itemId, event) {
+  async function handlePickupPhotoChange(item, event) {
     const file = event.target.files?.[0];
+    const itemId = item?.id;
 
     if (!file) {
+      return;
+    }
+
+    if (!itemId) {
+      setPhotoError("Unable to find that pickup item. Try reopening the PO.");
+      event.target.value = "";
       return;
     }
 
@@ -786,7 +793,9 @@ export default function SupplierRunCard({
         itemId,
         file,
       });
-      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto);
+      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto, {
+        markPickedUp: !item.pickedUp,
+      });
       setIsItemsOpen(true);
     } catch (photoError) {
       console.error("Unable to save pickup photo:", photoError);
@@ -1140,7 +1149,7 @@ export default function SupplierRunCard({
                       capture="environment"
                       onClick={(event) => event.stopPropagation()}
                       onChange={(event) =>
-                        handlePickupPhotoChange(item.id, event)
+                        handlePickupPhotoChange(item, event)
                       }
                       disabled={Boolean(processingPhotoItemId)}
                       className="sr-only"
@@ -1160,7 +1169,7 @@ export default function SupplierRunCard({
                         ? "Saving photo..."
                         : latestPickupPhoto
                           ? "Add another pickup photo"
-                          : "Take pickup photo"}
+                          : `${getMaterialActionLabel(item.materialUse)} with photo`}
                     </button>
 
                     {getPhotoUrl(latestPickupPhoto) ? (
@@ -1467,7 +1476,7 @@ export default function SupplierRunCard({
                           capture="environment"
                           onClick={(event) => event.stopPropagation()}
                           onChange={(event) =>
-                            handlePickupPhotoChange(item.id, event)
+                            handlePickupPhotoChange(item, event)
                           }
                           disabled={Boolean(processingPhotoItemId)}
                           className="sr-only"
