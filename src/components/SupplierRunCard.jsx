@@ -541,7 +541,8 @@ function loadImage(dataUrl) {
 async function createPickupPhoto(file) {
   const originalDataUrl = await readFileAsDataUrl(file);
   const image = await loadImage(originalDataUrl);
-  const maxWidth = 720;
+  const maxWidth = 560;
+  const targetDataUrlLength = 120000;
   const scale = Math.min(maxWidth / image.width, 1);
   const width = Math.round(image.width * scale);
   const height = Math.round(image.height * scale);
@@ -552,10 +553,10 @@ async function createPickupPhoto(file) {
   canvas.height = height;
   context.drawImage(image, 0, 0, width, height);
 
-  let quality = 0.68;
+  let quality = 0.62;
   let dataUrl = canvas.toDataURL("image/jpeg", quality);
 
-  while (dataUrl.length > 240000 && quality > 0.34) {
+  while (dataUrl.length > targetDataUrlLength && quality > 0.26) {
     quality -= 0.08;
     dataUrl = canvas.toDataURL("image/jpeg", quality);
   }

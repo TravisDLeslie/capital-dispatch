@@ -187,6 +187,37 @@ export async function updateSupplierRunItems(
   return updatedSupplierRuns;
 }
 
+export async function updateSupplierRunItemPhotos(
+  supplierRunId,
+  items,
+) {
+  const currentSupplierRuns = getLocalSupplierRuns();
+  const updatedAt = new Date().toISOString();
+  const updatedSupplierRuns = currentSupplierRuns.map((supplierRun) =>
+    supplierRun.id === supplierRunId
+      ? {
+          ...supplierRun,
+          items,
+          updatedAt,
+        }
+      : supplierRun,
+  );
+
+  if (db) {
+    await updateDoc(
+      doc(db, SUPPLIER_RUNS_COLLECTION, supplierRunId),
+      {
+        items,
+        updatedAt,
+      },
+    );
+  }
+
+  saveLocalSupplierRuns(updatedSupplierRuns);
+
+  return updatedSupplierRuns;
+}
+
 export async function updateSupplierRun(
   supplierRunId,
   supplierRunUpdates,

@@ -73,6 +73,7 @@ import {
   deleteSupplierRun,
   subscribeToSupplierRuns,
   updateSupplierRun,
+  updateSupplierRunItemPhotos,
   updateSupplierRunItems,
   updateSupplierRunsBulk,
 } from "./utils/supplierRunStorage";
@@ -3280,16 +3281,20 @@ export default function App() {
       };
     });
 
-    const updatedSupplierRuns =
-      await updateSupplierRunItems(
-        supplierRunId,
-        updatedItems,
-        {
-          status: "open",
-          completedAt: null,
-          stopWorkflowVersion: supplierRun.stopWorkflowVersion || 1,
-        },
-      );
+    const updatedSupplierRuns = options.markPickedUp
+      ? await updateSupplierRunItems(
+          supplierRunId,
+          updatedItems,
+          {
+            status: "open",
+            completedAt: null,
+            stopWorkflowVersion: supplierRun.stopWorkflowVersion || 1,
+          },
+        )
+      : await updateSupplierRunItemPhotos(
+          supplierRunId,
+          updatedItems,
+        );
 
     setSupplierRuns(updatedSupplierRuns);
     setSyncError("");
