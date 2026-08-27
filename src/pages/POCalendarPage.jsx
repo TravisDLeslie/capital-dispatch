@@ -183,7 +183,7 @@ function getTheirTruckCalendarItem(theirTruckPO) {
     vendor: theirTruckPO.vendor || "Unknown vendor",
     driver: "Vendor truck",
     itemCount: items.length,
-    status: "Inbound PO",
+    status: "Fulfillment",
     cadence: theirTruckPO.vendorDeliveryNotes || "",
   };
 }
@@ -737,7 +737,7 @@ export default function POCalendarPage({
     <PageContainer>
       <Breadcrumbs
         items={[
-          { label: "Inbound POs", onClick: () => onPageChange?.("south") },
+          { label: "Fulfillment", onClick: () => onPageChange?.("south") },
           { label: pageTitle },
         ]}
       />
@@ -757,7 +757,7 @@ export default function POCalendarPage({
           </h1>
           <p className="mt-2 max-w-3xl text-lg font-semibold text-slate-500">
             {mode === "theirTruck"
-              ? "Inbound POs arriving on vendor trucks or outside carriers."
+              ? "Fulfillment POs arriving on vendor trucks or outside carriers."
               : "South pickups and Their Truck inbound POs in one calendar, with each type styled differently."}
           </p>
         </div>

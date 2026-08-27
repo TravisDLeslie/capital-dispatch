@@ -105,7 +105,7 @@ export default function TheirTruckOverviewPage({
     <PageContainer>
       <Breadcrumbs
         items={[
-          { label: "Inbound POs", onClick: () => onPageChange?.("south") },
+          { label: "Fulfillment", onClick: () => onPageChange?.("south") },
           { label: "Their Truck" },
         ]}
       />

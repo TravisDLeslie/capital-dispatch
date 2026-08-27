@@ -42,7 +42,7 @@ const navigationItems = [
   {
     group: "South",
     id: "south",
-    label: "Inbound POs",
+    label: "Fulfillment",
   },
   {
     group: "Deliveries",
@@ -107,7 +107,7 @@ function getCurrentPageLabel(currentPage) {
     currentPage === "their-truck-history" ||
     currentPage === "po-calendar"
   ) {
-    return "Inbound POs";
+    return "Fulfillment";
   }
 
   if (["check-in", "today", "search", "trace"].includes(currentPage)) {
@@ -347,7 +347,7 @@ export default function AppHeader({
     .trim()
     .charAt(0)
     .toUpperCase();
-  const southGroupLabel = isDriverView ? "South" : "Inbound POs";
+  const southGroupLabel = isDriverView ? "South" : "Fulfillment";
 
   useEffect(() => {
     const currentGroup = getCurrentPageGroup(currentPage);

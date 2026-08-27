@@ -335,7 +335,7 @@ export default function SouthHubPage({
   ].filter(Boolean);
   const actionCards =
     activeActionTab === "theirTruck" ? theirTruckActionCards : southActionCards;
-  const pageTitle = isDriverView ? "South" : "Inbound POs";
+  const pageTitle = isDriverView ? "South" : "Fulfillment";
   const pageEyebrow = isDriverView ? "South" : "PO Routing";
   const southLandingPage =
     (canOpen("supplier-runs-add") && "supplier-runs-add") ||
@@ -432,7 +432,7 @@ export default function SouthHubPage({
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-                Inbound PO
+                Fulfillment
               </p>
               <h2 className="mt-1 text-2xl font-black text-slate-950">
                 Choose how material is arriving
