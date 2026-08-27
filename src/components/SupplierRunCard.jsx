@@ -8,6 +8,7 @@ import {
   formatShortDate,
   formatTime,
 } from "../utils/dateHelpers";
+import { uploadSupplierRunPickupPhoto } from "../utils/photoStorage";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const capitalLumberInfo = {
@@ -518,71 +519,39 @@ function createPickupSheetHtml(supplierRun, items, showCustomerName = false) {
   `;
 }
 
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadImage(dataUrl) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = dataUrl;
-  });
-}
-
-async function createPickupPhoto(file) {
-  const originalDataUrl = await readFileAsDataUrl(file);
-  const image = await loadImage(originalDataUrl);
-  const maxWidth = 560;
-  const targetDataUrlLength = 120000;
-  const scale = Math.min(maxWidth / image.width, 1);
-  const width = Math.round(image.width * scale);
-  const height = Math.round(image.height * scale);
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  canvas.width = width;
-  canvas.height = height;
-  context.drawImage(image, 0, 0, width, height);
-
-  let quality = 0.62;
-  let dataUrl = canvas.toDataURL("image/jpeg", quality);
-
-  while (dataUrl.length > targetDataUrlLength && quality > 0.26) {
-    quality -= 0.08;
-    dataUrl = canvas.toDataURL("image/jpeg", quality);
-  }
-
-  return {
-    dataUrl,
-    name: file.name,
-    type: "image/jpeg",
-    capturedAt: new Date().toISOString(),
-  };
-}
-
 function getPickupPhotoList(item) {
   const photos = Array.isArray(item?.pickupPhotos)
-    ? item.pickupPhotos.filter((photo) => photo?.dataUrl)
+    ? item.pickupPhotos.filter((photo) => getPhotoUrl(photo))
     : [];
-  const legacyPhoto = item?.pickupPhoto?.dataUrl ? item.pickupPhoto : null;
+  const legacyPhoto = getPhotoUrl(item?.pickupPhoto) ? item.pickupPhoto : null;
 
   if (
     legacyPhoto &&
-    !photos.some((photo) => photo.dataUrl === legacyPhoto.dataUrl)
+    !photos.some((photo) => getPhotoUrl(photo) === getPhotoUrl(legacyPhoto))
   ) {
     return [...photos, legacyPhoto];
   }
 
   return photos;
+}
+
+function getPhotoUrl(photo) {
+  return String(photo?.url || photo?.dataUrl || "").trim();
+}
+
+function getPhotoSaveErrorMessage(error) {
+  const message = String(error?.message || "");
+  const code = String(error?.code || "");
+
+  if (code.includes("storage/unauthorized") || code.includes("permission-denied")) {
+    return "Firebase denied the photo upload. Publish Storage rules that allow South pickup photos.";
+  }
+
+  if (message.toLowerCase().includes("larger than maximum") || message.includes("1048487")) {
+    return "That PO already has too much photo data in Firestore. South pickup photos now need Firebase Storage.";
+  }
+
+  return "Unable to save that photo. Try taking it again.";
 }
 
 export default function SupplierRunCard({
@@ -795,12 +764,16 @@ export default function SupplierRunCard({
         throw new Error("Pickup photo saving is not configured.");
       }
 
-      const pickupPhoto = await createPickupPhoto(file);
+      const pickupPhoto = await uploadSupplierRunPickupPhoto({
+        supplierRunId: supplierRun.id,
+        itemId,
+        file,
+      });
       await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto);
       setIsItemsOpen(true);
     } catch (photoError) {
       console.error("Unable to save pickup photo:", photoError);
-      setPhotoError("Unable to save that photo. Try taking it again.");
+      setPhotoError(getPhotoSaveErrorMessage(photoError));
     } finally {
       setProcessingPhotoItemId("");
       event.target.value = "";
@@ -1173,13 +1146,13 @@ export default function SupplierRunCard({
                           : "Take pickup photo"}
                     </button>
 
-                    {latestPickupPhoto?.dataUrl ? (
+                    {getPhotoUrl(latestPickupPhoto) ? (
                       <button
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           setViewingPhoto({
-                            dataUrl: latestPickupPhoto.dataUrl,
+                            dataUrl: getPhotoUrl(latestPickupPhoto),
                             title: "Pickup Photo",
                             subtitle:
                               pickupPhotos.length > 1
@@ -1190,7 +1163,7 @@ export default function SupplierRunCard({
                         className="mt-3 flex w-full items-center gap-3 rounded-xl border border-emerald-200 bg-white p-2 text-left"
                       >
                         <img
-                          src={latestPickupPhoto.dataUrl}
+                          src={getPhotoUrl(latestPickupPhoto)}
                           alt={`Pickup for ${item.description}`}
                           className="h-16 w-20 rounded-lg object-cover"
                         />
@@ -1437,13 +1410,13 @@ export default function SupplierRunCard({
                         </span>
                       </button>
 
-                      {latestPickupPhoto?.dataUrl ? (
+                      {getPhotoUrl(latestPickupPhoto) ? (
                         <button
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
                             setViewingPhoto({
-                              dataUrl: latestPickupPhoto.dataUrl,
+                              dataUrl: getPhotoUrl(latestPickupPhoto),
                               title: "Pickup Photo",
                               subtitle:
                                 pickupPhotos.length > 1
@@ -1454,7 +1427,7 @@ export default function SupplierRunCard({
                           className="mt-3 block overflow-hidden rounded-xl border border-emerald-200 bg-white text-left"
                         >
                           <img
-                            src={latestPickupPhoto.dataUrl}
+                            src={getPhotoUrl(latestPickupPhoto)}
                             alt={`Pickup for ${item.description}`}
                             className="h-24 w-40 object-cover"
                           />
