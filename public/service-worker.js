@@ -1,4 +1,4 @@
-const CACHE_NAME = "capital-dispatch-v5";
+const CACHE_NAME = "capital-dispatch-v6";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",

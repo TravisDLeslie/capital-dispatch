@@ -15,7 +15,31 @@ createRoot(rootElement).render(
   </StrictMode>,
 );
 
-if ("serviceWorker" in navigator) {
+if (import.meta.env.DEV && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((registrations) =>
+        Promise.all(registrations.map((registration) => registration.unregister())),
+      )
+      .catch((error) => {
+        console.error("Unable to clear dev service workers:", error);
+      });
+
+    if ("caches" in window) {
+      caches
+        .keys()
+        .then((cacheNames) =>
+          Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName))),
+        )
+        .catch((error) => {
+          console.error("Unable to clear dev caches:", error);
+        });
+    }
+  });
+}
+
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register("/service-worker.js")
