@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   BookOpen,
   ChevronDown,
+  ClipboardCheck,
   ClipboardList,
   DollarSign,
   LogOut,
@@ -32,6 +33,11 @@ const navigationItems = [
     group: "Yard Tasks",
     id: "yard-tasks",
     label: "Yard Tasks",
+  },
+  {
+    group: "Dispatch",
+    id: "dispatch",
+    label: "Dispatch",
   },
   {
     group: "South",
@@ -112,6 +118,10 @@ function getCurrentPageLabel(currentPage) {
     return "Yard Tasks";
   }
 
+  if (currentPage === "dispatch") {
+    return "Dispatch";
+  }
+
   if (String(currentPage || "").startsWith("deliveries-")) {
     return "Deliveries";
   }
@@ -187,6 +197,10 @@ function getCurrentPageGroup(currentPage) {
     return "Yard Tasks";
   }
 
+  if (currentPage === "dispatch") {
+    return "Dispatch";
+  }
+
   if (
     currentPage === "deliveries" ||
     String(currentPage || "").startsWith("deliveries-")
@@ -258,6 +272,10 @@ function getNavGroupIcon(group) {
     return ClipboardList;
   }
 
+  if (group === "Dispatch") {
+    return ClipboardCheck;
+  }
+
   if (group === "Documents") {
     return BookOpen;
   }
@@ -312,6 +330,7 @@ export default function AppHeader({
     Dashboard: true,
     Receiving: true,
     "Yard Tasks": false,
+    Dispatch: false,
     South: false,
     Deliveries: false,
     Sales: false,
@@ -341,6 +360,7 @@ export default function AppHeader({
       Dashboard: false,
       Receiving: false,
       "Yard Tasks": false,
+      Dispatch: false,
       South: false,
       Deliveries: false,
       Sales: false,
@@ -375,6 +395,7 @@ export default function AppHeader({
         Dashboard: false,
         Receiving: false,
         "Yard Tasks": false,
+        Dispatch: false,
         South: false,
         Deliveries: false,
         Sales: false,
@@ -560,7 +581,7 @@ export default function AppHeader({
   }
 
   function renderNavigation(isMobile = false) {
-    return ["Dashboard", "Receiving", "Yard Tasks", "South", "Deliveries", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
+    return ["Dashboard", "Receiving", "Yard Tasks", "Dispatch", "South", "Deliveries", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||
@@ -582,6 +603,8 @@ export default function AppHeader({
             )) ||
           (item.id === "yard-tasks" &&
             allowedPageIds.includes("yard-tasks")) ||
+          (item.id === "dispatch" &&
+            allowedPageIds.includes("dispatch")) ||
           (item.id === "deliveries" &&
             allowedPageIds.some((pageId) =>
               String(pageId).startsWith("deliveries-"),
@@ -654,6 +677,7 @@ export default function AppHeader({
         "Dashboard",
         "Receiving",
         "Yard Tasks",
+        "Dispatch",
         "South",
         "Deliveries",
         "Sales",

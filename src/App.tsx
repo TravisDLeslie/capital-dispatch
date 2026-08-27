@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type FormEvent,
 } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
@@ -138,6 +139,12 @@ const DeliveryDashboardPage = lazy(
   () => import("./pages/DeliveryDashboardPage"),
 );
 const DeliveryDispatchPage = lazy(() => import("./pages/DeliveryDispatchPage"));
+const DispatchPage = lazy(
+  () =>
+    import("./pages/DispatchPage") as Promise<{
+      default: ComponentType<any>;
+    }>,
+);
 const DeliveryHistoryPage = lazy(() => import("./pages/DeliveryHistoryPage"));
 const DeliveryQueuePage = lazy(() => import("./pages/DeliveryQueuePage"));
 const DeliverySettingsPage = lazy(() => import("./pages/DeliverySettingsPage"));
@@ -1057,6 +1064,7 @@ function getAllowedPageIdsForRole(role: string) {
       "trace",
       "yard-tasks",
       "documents",
+      "dispatch",
       "south",
       "south-overview",
       "supplier-runs-add",
@@ -1110,6 +1118,7 @@ function getAllowedPageIdsForRole(role: string) {
       "trace",
       "yard-tasks",
       "documents",
+      "dispatch",
       "south",
       "south-overview",
       "supplier-runs-add",
@@ -1695,6 +1704,7 @@ export default function App() {
   const canManageYardTasks = ["superAdmin", "admin"].includes(
     effectiveUserRole,
   );
+  const canReadDispatch = effectiveAllowedPageIds.includes("dispatch");
   const canReadSouth = effectiveAllowedPageIds.some((pageId) =>
     [
       "south",
@@ -4968,6 +4978,16 @@ export default function App() {
             onUpdateTask={handleUpdateYardTask}
             onDeleteTask={handleDeleteYardTask}
             onPageChange={setCurrentPage}
+          />
+        ) : null;
+
+      case "dispatch":
+        return canReadDispatch ? (
+          <DispatchPage
+            supplierRuns={supplierRuns}
+            deliveries={deliveries}
+            allowedPageIds={effectiveAllowedPageIds}
+            onPageChange={navigateToPage}
           />
         ) : null;
 

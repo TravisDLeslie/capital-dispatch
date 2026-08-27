@@ -44,6 +44,12 @@ const permissionGroups = [
     ],
   },
   {
+    title: "Dispatch",
+    permissions: [
+      { id: "dispatch", label: "Dispatch Hub" },
+    ],
+  },
+  {
     title: "Inbound POs",
     permissions: [
       { id: "south", label: "Inbound POs" },
@@ -177,6 +183,7 @@ const legacyRolePermissionPresets = {
   "yard-tasks": ["dashboard", "yard-tasks"],
   south: [
     "dashboard",
+    "dispatch",
     "south",
     "south-overview",
     "supplier-runs-add",
@@ -193,6 +200,7 @@ const legacyRolePermissionPresets = {
   ],
   delivery: [
     "dashboard",
+    "dispatch",
     "deliveries",
     "deliveries-add",
     "deliveries-dispatch",
