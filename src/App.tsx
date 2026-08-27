@@ -512,6 +512,35 @@ function createEmployeeAliasMap(users: Partial<UserProfile>[]) {
   return aliasMap;
 }
 
+function getEmployeeNameAliases(
+  user: Partial<UserProfile> | null | undefined,
+) {
+  const displayName = getProfileDisplayName(user);
+  const emailPrefix = String(user?.email || "").split("@")[0] || "";
+  const candidateNames = [
+    user?.driverName || "",
+    user?.displayName || "",
+    displayName,
+    emailPrefix,
+    displayName.split(/\s+/)[0] || "",
+    String(user?.driverName || "").split(/\s+/)[0] || "",
+  ];
+  const seenAliases = new Set<string>();
+
+  return candidateNames
+    .map((name) => String(name || "").trim())
+    .filter((name) => {
+      const key = normalizeEmployeeName(name);
+
+      if (!key || seenAliases.has(key)) {
+        return false;
+      }
+
+      seenAliases.add(key);
+      return true;
+    });
+}
+
 function getCanonicalEmployeeName(
   name: string,
   aliasMap: Record<string, string>,
@@ -1607,6 +1636,13 @@ export default function App() {
   const driverName = isSuperAdmin
     ? selectedPreviewProfile?.driverName || ""
     : userProfile?.driverName || "";
+  const driverNameAliases = useMemo(
+    () =>
+      getEmployeeNameAliases(
+        isSuperAdmin ? selectedPreviewProfile : userProfile,
+      ),
+    [isSuperAdmin, selectedPreviewProfile, userProfile],
+  );
   const canReadReceiving = effectiveAllowedPageIds.some((pageId) =>
     [
       "receiving",
@@ -2293,7 +2329,7 @@ export default function App() {
               setIsLoading(false);
             }
           },
-          isSouthDriverScopedView ? driverName : "",
+          isSouthDriverScopedView ? driverNameAliases : "",
         );
       } else {
         setSupplierRuns([]);
@@ -2569,7 +2605,7 @@ export default function App() {
           (error: Error) => {
             console.error("Unable to load supplier runs:", error);
           },
-          isSouthDriverScopedView ? driverName : "",
+          isSouthDriverScopedView ? driverNameAliases : "",
         );
       } else {
         setSupplierRuns([]);
@@ -2773,6 +2809,7 @@ export default function App() {
     canReadYardTasks,
     canReadSouth,
     driverName,
+    driverNameAliases,
     isApproved,
     isAuthLoading,
     isProfileLoading,

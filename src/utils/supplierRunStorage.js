@@ -53,6 +53,11 @@ function sortSupplierRuns(supplierRuns) {
   );
 }
 
+/**
+ * @param {(supplierRuns: any[]) => void} onSupplierRuns
+ * @param {(error: Error) => void} onError
+ * @param {string | string[]} [driverName]
+ */
 export function subscribeToSupplierRuns(
   onSupplierRuns,
   onError,
@@ -63,10 +68,20 @@ export function subscribeToSupplierRuns(
     return () => {};
   }
 
-  const supplierRunsQuery = driverName
+  const driverNames = Array.isArray(driverName)
+    ? [...new Set(driverName.filter(Boolean))]
+    : driverName
+      ? [driverName]
+      : [];
+  const supplierRunsQuery = driverNames.length > 1
     ? query(
         collection(db, SUPPLIER_RUNS_COLLECTION),
-        where("driver", "==", driverName),
+        where("driver", "in", driverNames.slice(0, 10)),
+      )
+    : driverNames.length === 1
+    ? query(
+        collection(db, SUPPLIER_RUNS_COLLECTION),
+        where("driver", "==", driverNames[0]),
       )
     : query(
         collection(db, SUPPLIER_RUNS_COLLECTION),
