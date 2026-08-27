@@ -1739,9 +1739,7 @@ export default function App() {
   const hasDriverName = Boolean(driverName);
   const hasSouthManagementAccess = effectiveAllowedPageIds.some((pageId) =>
     [
-      "south-overview",
       "supplier-runs-add",
-      "their-truck-overview",
       "their-truck-pos",
       "supplier-runs-dispatch",
       "supplier-runs-history",

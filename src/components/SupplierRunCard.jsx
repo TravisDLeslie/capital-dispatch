@@ -794,7 +794,7 @@ export default function SupplierRunCard({
         file,
       });
       await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto, {
-        markPickedUp: false,
+        markPickedUp: true,
       });
       setIsItemsOpen(true);
     } catch (photoError) {
@@ -814,27 +814,6 @@ export default function SupplierRunCard({
 
     setPhotoError("");
     document.getElementById(inputId)?.click();
-  }
-
-  async function markPickupItemComplete(item, inputId) {
-    if (!item.pickedUp && getPickupPhotoList(item).length === 0) {
-      setPhotoError("Take a pickup photo before marking this item complete.");
-      document.getElementById(inputId)?.click();
-      return;
-    }
-
-    setPhotoError("");
-    setProcessingPhotoItemId(item.id);
-
-    try {
-      await onToggleItem(supplierRun.id, item.id);
-      setIsItemsOpen(true);
-    } catch (toggleError) {
-      console.error("Unable to update pickup item:", toggleError);
-      setPhotoError("Unable to update that item. Try again.");
-    } finally {
-      setProcessingPhotoItemId("");
-    }
   }
 
   function openPickupSheet() {
@@ -1202,22 +1181,10 @@ export default function SupplierRunCard({
                       </button>
                     ) : null}
 
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void markPickupItemComplete(
-                          item,
-                          pickupPhotoInputId,
-                        );
-                      }}
-                      disabled={Boolean(processingPhotoItemId)}
-                      className="mt-3 flex min-h-[54px] w-full items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm font-black uppercase tracking-[0.08em] text-emerald-800 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                      <span>{getMaterialActionLabel(item.materialUse)}</span>
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 border-emerald-500 bg-white" />
-                    </button>
+                    <div className="mt-3 flex min-h-[54px] w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-black uppercase tracking-[0.08em] text-slate-500 shadow-sm">
+                      <span>Photo required to mark picked up</span>
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 border-slate-300 bg-white" />
+                    </div>
                   </div>
                 );
               })() : (
@@ -1382,31 +1349,12 @@ export default function SupplierRunCard({
                           {photoReminder}
                         </span>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          if (item.pickedUp) {
-                            void markPickupItemComplete(
-                              item,
-                              pickupPhotoInputId,
-                            );
-                            return;
-                          }
-
-                          if (pickupPhotos.length === 0) {
-                            void startPickupPhoto(item, pickupPhotoInputId);
-                            return;
-                          }
-
-                          void markPickupItemComplete(
-                            item,
-                            pickupPhotoInputId,
-                          );
-                        }}
-                        disabled={Boolean(processingPhotoItemId)}
-                        className="mt-3 flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
+                      <div
+                        className={`mt-3 flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left ${
+                          item.pickedUp
+                            ? "border-emerald-200 bg-emerald-50"
+                            : "border-slate-200 bg-white"
+                        }`}
                       >
                         <span
                           className={`text-xs font-black uppercase tracking-[0.08em] ${
@@ -1417,7 +1365,9 @@ export default function SupplierRunCard({
                         >
                           {processingPhotoItemId === item.id
                             ? "Saving photo..."
-                            : getMaterialActionLabel(item.materialUse)}
+                            : item.pickedUp
+                              ? "Picked up"
+                              : "Photo required"}
                         </span>
 
                         <span
@@ -1434,7 +1384,7 @@ export default function SupplierRunCard({
                             </span>
                           ) : null}
                         </span>
-                      </button>
+                      </div>
 
                       {getPhotoUrl(latestPickupPhoto) ? (
                         <button

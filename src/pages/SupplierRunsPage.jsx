@@ -1790,14 +1790,16 @@ export default function SupplierRunsPage({
   const visibleRuns =
     mode === "history" ? historyRuns : dailyRuns;
   const driverScopedRuns =
-    isDriverView && routeOrderDriverName
-      ? visibleRuns.filter((supplierRun) =>
-          driverNamesMatch(
-            supplierRun.driver,
-            routeOrderDriverName,
-            safeEmployeeAliasMap,
-          ),
-      )
+    isDriverView
+      ? routeOrderDriverName
+        ? visibleRuns.filter((supplierRun) =>
+            driverNamesMatch(
+              supplierRun.driver,
+              routeOrderDriverName,
+              safeEmployeeAliasMap,
+            ),
+          )
+        : []
       : visibleRuns;
   const driverRouteIsComplete =
     isDriverView &&
