@@ -159,16 +159,7 @@ export async function updateSupplierRunItems(
     (supplierRun) => supplierRun.id === supplierRunId,
   );
   const updatedAt = new Date().toISOString();
-  const usesStopWorkflow =
-    Number(currentSupplierRun?.stopWorkflowVersion || 0) >= 1;
-  const allItemsPickedUp = items.every((item) => item.pickedUp);
-  const status = usesStopWorkflow
-    ? currentSupplierRun?.stopCompletedAt
-      ? "complete"
-      : "open"
-    : allItemsPickedUp
-      ? "complete"
-      : "open";
+  const status = currentSupplierRun?.stopCompletedAt ? "complete" : "open";
   const completedAt =
     status === "complete"
       ? currentSupplierRun?.completedAt || updatedAt

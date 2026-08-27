@@ -940,7 +940,6 @@ function groupHistoryRunsByPickupDate(
  *   mode?: string;
  *   supplierRuns: any[];
  *   onAddSupplierRun?: Function;
- *   onToggleSupplierRunItem?: Function;
  *   onSaveSupplierRunItemPickupPhoto?: Function;
  *   onUpdateSupplierRunItemDescription?: Function;
  *   onUpdateSupplierRun?: Function;
@@ -970,7 +969,6 @@ export default function SupplierRunsPage({
   mode = "add",
   supplierRuns,
   onAddSupplierRun,
-  onToggleSupplierRunItem,
   onSaveSupplierRunItemPickupPhoto,
   onUpdateSupplierRunItemDescription,
   onUpdateSupplierRun,
@@ -1323,10 +1321,11 @@ export default function SupplierRunsPage({
         .sort()
         .at(-1) || "";
     const usesStopWorkflow =
-      vendorGroup.runs.length > 0 &&
-      vendorGroup.runs.some((supplierRun) =>
-        usesSouthStopWorkflow(supplierRun),
-      );
+      mode === "check" ||
+      (vendorGroup.runs.length > 0 &&
+        vendorGroup.runs.some((supplierRun) =>
+          usesSouthStopWorkflow(supplierRun),
+        ));
     const completedAt = savedCompletedAt;
     const strapUpUntil =
       vendorGroup.runs
@@ -1840,7 +1839,6 @@ export default function SupplierRunsPage({
 
   const shouldKeepCompletedRunInActiveStop = (supplierRun) =>
     mode === "check" &&
-    usesSouthStopWorkflow(supplierRun) &&
     supplierRun.status === "complete" &&
     !supplierRun.stopCompletedAt;
 
@@ -2894,9 +2892,6 @@ export default function SupplierRunsPage({
                                               supplierRun={getDisplaySupplierRun(
                                                 supplierRun,
                                               )}
-                                              onToggleItem={
-                                                onToggleSupplierRunItem
-                                              }
                                               onSavePickupPhoto={
                                                 onSaveSupplierRunItemPickupPhoto
                                               }
@@ -3822,9 +3817,6 @@ export default function SupplierRunsPage({
                                     supplierRun={getDisplaySupplierRun(
                                       supplierRun,
                                     )}
-                                    onToggleItem={
-                                      onToggleSupplierRunItem
-                                    }
                                     onSavePickupPhoto={
                                       onSaveSupplierRunItemPickupPhoto
                                     }
@@ -4105,7 +4097,6 @@ export default function SupplierRunsPage({
                                     supplierRun={getDisplaySupplierRun(
                                       supplierRun,
                                     )}
-                                    onToggleItem={onToggleSupplierRunItem}
                                     onSavePickupPhoto={
                                       onSaveSupplierRunItemPickupPhoto
                                     }

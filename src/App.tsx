@@ -1746,17 +1746,19 @@ export default function App() {
       "their-truck-history",
     ].includes(pageId),
   );
+  const isDriverWorkView = effectiveWorkView === "driver";
   const isSouthDriverScopedView =
     hasDriverName &&
-    !["superAdmin", "admin"].includes(effectiveUserRole) &&
     canReadSouth &&
-    !hasSouthManagementAccess;
+    (isDriverWorkView ||
+      (!["superAdmin", "admin"].includes(effectiveUserRole) &&
+        !hasSouthManagementAccess));
   const isDeliveryDriverScopedView =
     hasDriverName &&
     !["superAdmin", "admin"].includes(effectiveUserRole) &&
     canReadDeliveries;
   const shouldShowDriverDashboard =
-    effectiveWorkView === "driver" ||
+    isDriverWorkView ||
     (hasDriverName &&
       !["superAdmin", "admin"].includes(effectiveUserRole) &&
       (isSouthDriverScopedView || isDeliveryDriverScopedView));
@@ -3168,78 +3170,6 @@ export default function App() {
     }
   }
 
-  async function handleToggleSupplierRunItem(
-    supplierRunId: string,
-    itemId: string,
-  ) {
-    const supplierRun = supplierRuns.find(
-      (currentSupplierRun) =>
-        currentSupplierRun.id === supplierRunId,
-    );
-
-    if (!supplierRun || !Array.isArray(supplierRun.items)) {
-      return;
-    }
-
-    const checkedAt = new Date().toISOString();
-
-    const updatedItems = supplierRun.items.map((item) =>
-      item.id === itemId
-        ? {
-            ...item,
-            pickedUp: !item.pickedUp,
-            pickedUpAt: !item.pickedUp ? checkedAt : null,
-          }
-        : item,
-    );
-    const updatedSupplierRuns =
-      await updateSupplierRunItems(
-        supplierRunId,
-        updatedItems,
-        {
-          status: "open",
-          completedAt: null,
-          stopWorkflowVersion: supplierRun.stopWorkflowVersion || 1,
-        },
-      );
-
-    setSupplierRuns(updatedSupplierRuns);
-    setSyncError("");
-
-    const sameStopRuns = updatedSupplierRuns.filter(
-      (currentSupplierRun) =>
-        currentSupplierRun.driver === supplierRun.driver &&
-        currentSupplierRun.vendor === supplierRun.vendor &&
-        currentSupplierRun.scheduledDate === supplierRun.scheduledDate,
-    );
-    const sameStopItems = sameStopRuns.flatMap((currentSupplierRun) =>
-      Array.isArray(currentSupplierRun.items)
-        ? currentSupplierRun.items
-        : [],
-    );
-    const stopIsComplete =
-      sameStopItems.length > 0 &&
-      sameStopItems.every((item) => item.pickedUp);
-    const stopNeedsCompletionClear =
-      !stopIsComplete &&
-      sameStopRuns.some(
-        (currentSupplierRun) => currentSupplierRun.stopCompletedAt,
-      );
-
-    if (stopNeedsCompletionClear) {
-      const reopenedStopRuns = await updateSupplierRunsBulk(
-        sameStopRuns.map((currentSupplierRun) => ({
-          id: currentSupplierRun.id,
-          stopCompletedAt: null,
-          stopStrapUpUntil: null,
-        })),
-      );
-
-      setSupplierRuns(reopenedStopRuns);
-      setSyncError("");
-    }
-  }
-
   async function handleSaveSupplierRunItemPickupPhoto(
     supplierRunId: string,
     itemId: string,
@@ -4489,7 +4419,6 @@ export default function App() {
             routeOrderDriverName={driverName}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
-            onToggleSupplierRunItem={handleToggleSupplierRunItem}
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
@@ -5067,9 +4996,6 @@ export default function App() {
             canAssignRoute={false}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
-            onToggleSupplierRunItem={
-              handleToggleSupplierRunItem
-            }
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
@@ -5101,9 +5027,6 @@ export default function App() {
             canReorderRoute={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
-            onToggleSupplierRunItem={
-              handleToggleSupplierRunItem
-            }
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
@@ -5141,9 +5064,6 @@ export default function App() {
             routeOrderDriverName={driverName}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
-            onToggleSupplierRunItem={
-              handleToggleSupplierRunItem
-            }
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
@@ -5180,9 +5100,6 @@ export default function App() {
             initialCheckViewMode="calendar"
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
-            onToggleSupplierRunItem={
-              handleToggleSupplierRunItem
-            }
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
@@ -5215,9 +5132,6 @@ export default function App() {
             canEditSupplierRuns={canAssignSouthRoutes}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
-            onToggleSupplierRunItem={
-              handleToggleSupplierRunItem
-            }
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }

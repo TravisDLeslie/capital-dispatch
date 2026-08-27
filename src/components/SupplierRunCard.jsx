@@ -573,7 +573,6 @@ function getPhotoSaveErrorMessage(error) {
 
 export default function SupplierRunCard({
   supplierRun,
-  onToggleItem,
   onSavePickupPhoto,
   onUpdateItemDescription,
   onEdit,
