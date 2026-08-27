@@ -544,13 +544,6 @@ export default function AppHeader({
       !allowedPageIds || allowedPageIds.includes(pageId);
 
     return [
-      pageAllowed("deliveries-dispatch")
-        ? {
-            id: "deliveries-needs-dispatch",
-            label: "Needs Dispatch",
-            pageId: "deliveries-dispatch",
-          }
-        : null,
       pageAllowed("deliveries-calendar")
         ? {
             id: "deliveries-calendar",

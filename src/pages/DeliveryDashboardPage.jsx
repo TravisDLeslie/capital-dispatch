@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  AlertTriangle,
   CalendarDays,
   Clock,
   History,
@@ -217,16 +216,6 @@ export default function DeliveryDashboardPage({
 }) {
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
   const openDeliveries = useMemo(() => getOpenDeliveryList(deliveries), [deliveries]);
-  const needsDispatchDeliveries = useMemo(
-    () =>
-      deliveries.filter(
-        (delivery) =>
-          !isDeliveryComplete(delivery) &&
-          (delivery.dispatchStatus === "needsDispatch" ||
-            getDeliveryDrivers(delivery).length === 0),
-      ),
-    [deliveries],
-  );
   const selectedDateDeliveries = useMemo(
     () =>
       openDeliveries
@@ -283,19 +272,7 @@ export default function DeliveryDashboardPage({
       </div>
 
       {!isDriverView ? (
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">
-              Needs Dispatch
-            </p>
-            <p className="mt-2 text-4xl font-black text-slate-950">
-              {needsDispatchDeliveries.length}
-            </p>
-            <p className="mt-1 text-sm font-bold text-slate-600">
-              Waiting for driver/truck
-            </p>
-          </div>
-
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <div className="rounded-3xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
               Scheduled
@@ -342,15 +319,6 @@ export default function DeliveryDashboardPage({
             detail="Create a new order"
             tone="red"
             onClick={() => onPageChange?.("deliveries-add")}
-          />
-        ) : null}
-        {allowedPageIds.includes("deliveries-dispatch") ? (
-          <ActionButton
-            icon={AlertTriangle}
-            title="Needs Dispatch"
-            detail={`${needsDispatchDeliveries.length} waiting`}
-            tone="amber"
-            onClick={() => onPageChange?.("deliveries-dispatch")}
           />
         ) : null}
         {allowedPageIds.includes("deliveries-queue") ? (
