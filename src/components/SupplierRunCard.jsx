@@ -794,7 +794,7 @@ export default function SupplierRunCard({
         file,
       });
       await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto, {
-        markPickedUp: !item.pickedUp,
+        markPickedUp: false,
       });
       setIsItemsOpen(true);
     } catch (photoError) {
