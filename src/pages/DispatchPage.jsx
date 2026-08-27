@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -67,6 +68,48 @@ function sortByDateThenCreated(a, b) {
   return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
 }
 
+function getRelativeDateTone(value) {
+  const dateValue = getDateValue(value);
+  const today = getTodayValue();
+
+  if (!dateValue) {
+    return "muted";
+  }
+
+  if (dateValue < today) {
+    return "late";
+  }
+
+  if (dateValue === today) {
+    return "today";
+  }
+
+  return "future";
+}
+
+function getRelativeDateLabel(value) {
+  const dateValue = getDateValue(value);
+  const today = getTodayValue();
+
+  if (!dateValue) {
+    return "No date";
+  }
+
+  if (dateValue < today) {
+    return "Past due";
+  }
+
+  if (dateValue === today) {
+    return "Today";
+  }
+
+  return formatDateLabel(value);
+}
+
+function getItemCount(items) {
+  return Array.isArray(items) ? items.length : 0;
+}
+
 function MetricPill({ value, label, tone = "slate" }) {
   const toneClass =
     tone === "red"
@@ -85,14 +128,94 @@ function MetricPill({ value, label, tone = "slate" }) {
   );
 }
 
-function DispatchActionCard({
+function SummaryTile({ icon: Icon, label, value, detail, tone = "slate" }) {
+  const toneClass =
+    tone === "red"
+      ? "border-red-100 bg-red-50/60 text-[#FC2C38]"
+      : tone === "blue"
+        ? "border-blue-100 bg-blue-50/70 text-blue-700"
+        : tone === "amber"
+          ? "border-amber-100 bg-amber-50/80 text-amber-700"
+          : "border-slate-200 bg-white text-slate-700";
+
+  return (
+    <div className={`rounded-3xl border p-4 shadow-sm ${toneClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] opacity-75">
+            {label}
+          </p>
+          <p className="mt-2 text-3xl font-black leading-none text-slate-950">
+            {value}
+          </p>
+        </div>
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
+          <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
+        </span>
+      </div>
+      <p className="mt-3 text-sm font-bold leading-snug text-slate-500">
+        {detail}
+      </p>
+    </div>
+  );
+}
+
+function QueueRow({ label, title, meta, date, tone, onClick }) {
+  const dateTone = getRelativeDateTone(date);
+  const dateClass =
+    dateTone === "late"
+      ? "bg-red-50 text-red-700"
+      : dateTone === "today"
+        ? "bg-emerald-50 text-emerald-700"
+        : dateTone === "future"
+          ? "bg-blue-50 text-blue-700"
+          : "bg-slate-100 text-slate-500";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:shadow-sm"
+    >
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-black ${
+          tone === "delivery"
+            ? "bg-blue-50 text-blue-700"
+            : "bg-red-50 text-[#FC2C38]"
+        }`}
+      >
+        {label}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-base font-black text-slate-950">
+          {title}
+        </span>
+        <span className="mt-0.5 block truncate text-sm font-bold text-slate-500">
+          {meta}
+        </span>
+      </span>
+      <span
+        className={`shrink-0 rounded-full px-3 py-1 text-[0.68rem] font-black uppercase tracking-[0.12em] ${dateClass}`}
+      >
+        {getRelativeDateLabel(date)}
+      </span>
+      <ArrowRight
+        aria-hidden="true"
+        className="h-5 w-5 shrink-0 text-slate-300 transition group-hover:translate-x-1 group-hover:text-slate-700"
+        strokeWidth={2.5}
+      />
+    </button>
+  );
+}
+
+function QueuePanel({
   icon: Icon,
   eyebrow,
   title,
   description,
   count,
   todayCount,
-  nextLabel,
+  rows,
   tone,
   disabled = false,
   onClick,
@@ -115,52 +238,94 @@ function DispatchActionCard({
         };
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`group relative flex w-full items-center gap-4 overflow-hidden rounded-[1.75rem] border p-5 text-left shadow-sm transition sm:p-6 ${
+    <section
+      className={`relative overflow-hidden rounded-[1.75rem] border p-5 shadow-sm transition sm:p-6 ${
         toneStyles.card
-      } ${disabled ? "cursor-not-allowed opacity-50" : "hover:-translate-y-0.5"}`}
+      } ${disabled ? "opacity-50" : ""}`}
     >
-      <div
-        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${toneStyles.icon}`}
-      >
-        <Icon aria-hidden="true" className="h-7 w-7" strokeWidth={2.4} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p
-          className={`text-xs font-black uppercase tracking-[0.22em] ${toneStyles.eyebrow}`}
+      <div className="flex items-start gap-4">
+        <div
+          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${toneStyles.icon}`}
         >
-          {eyebrow}
-        </p>
-        <h2 className="mt-1 text-2xl font-black text-slate-950 sm:text-3xl">
-          {title}
-        </h2>
-        <p className="mt-2 text-base font-bold leading-relaxed text-slate-600">
-          {description}
-        </p>
-        <p className="mt-3 text-sm font-black text-slate-500">
-          {nextLabel || "Nothing waiting right now."}
-        </p>
+          <Icon aria-hidden="true" className="h-7 w-7" strokeWidth={2.4} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p
+            className={`text-xs font-black uppercase tracking-[0.22em] ${toneStyles.eyebrow}`}
+          >
+            {eyebrow}
+          </p>
+          <h2 className="mt-1 text-2xl font-black text-slate-950 sm:text-3xl">
+            {title}
+          </h2>
+          <p className="mt-2 text-base font-bold leading-relaxed text-slate-600">
+            {description}
+          </p>
+        </div>
+        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+          <MetricPill
+            value={count}
+            label="waiting"
+            tone={toneStyles.metricTone}
+          />
+          <MetricPill
+            value={todayCount}
+            label="today"
+            tone={toneStyles.metricTone}
+          />
+        </div>
       </div>
-      <div className="hidden shrink-0 items-center gap-4 sm:flex">
-        <MetricPill value={count} label="waiting" tone={toneStyles.metricTone} />
-        <MetricPill
-          value={todayCount}
-          label="today"
-          tone={toneStyles.metricTone}
-        />
-        <ArrowRight
-          aria-hidden="true"
-          className={`h-7 w-7 transition group-hover:translate-x-1 ${toneStyles.arrow}`}
-          strokeWidth={2.5}
-        />
+
+      <div className="mt-5 grid gap-2">
+        {rows.length > 0 ? (
+          rows
+            .slice(0, 4)
+            .map((row) => (
+              <QueueRow
+                key={row.id}
+                label={row.label}
+                title={row.title}
+                meta={row.meta}
+                date={row.date}
+                tone={tone}
+                onClick={onClick}
+              />
+            ))
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm font-bold text-slate-500">
+            Nothing waiting right now.
+          </div>
+        )}
       </div>
-      <div className="sm:hidden">
-        <MetricPill value={count} label="waiting" tone={toneStyles.metricTone} />
+
+      <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
+        <div className="flex gap-2 sm:hidden">
+          <MetricPill
+            value={count}
+            label="waiting"
+            tone={toneStyles.metricTone}
+          />
+          <MetricPill
+            value={todayCount}
+            label="today"
+            tone={toneStyles.metricTone}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={disabled}
+          className={`ml-auto inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black text-white shadow-sm transition ${
+            tone === "delivery"
+              ? "bg-blue-700 hover:bg-blue-800"
+              : "bg-[#FC2C38] hover:bg-red-600"
+          } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+        >
+          Open Queue
+          <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2.6} />
+        </button>
       </div>
-    </button>
+    </section>
   );
 }
 
@@ -170,6 +335,7 @@ export default function DispatchPage({
   allowedPageIds = [],
   onPageChange,
 }) {
+  const [activeMobileQueue, setActiveMobileQueue] = useState("south");
   const today = getTodayValue();
   const southQueue = supplierRuns.filter(needsSouthDispatch).sort(sortByDateThenCreated);
   const deliveryQueue = deliveries
@@ -183,8 +349,50 @@ export default function DispatchPage({
   ).length;
   const canDispatchSouth = allowedPageIds.includes("supplier-runs-dispatch");
   const canDispatchDeliveries = allowedPageIds.includes("deliveries-dispatch");
-  const nextSouth = southQueue[0];
-  const nextDelivery = deliveryQueue[0];
+  const oldestWaitingDate = [southQueue[0], deliveryQueue[0]]
+    .map((item) => item?.pickupDate || item?.scheduledDate || item?.deliveryDate)
+    .filter(Boolean)
+    .sort()[0];
+  const southRows = southQueue.map((run) => ({
+    id: run.id,
+    label: "PO",
+    title: run.poNumber ? `PO ${run.poNumber}` : "PO missing number",
+    meta: `${run.vendor || "No vendor"} · ${getItemCount(run.items)} ${
+      getItemCount(run.items) === 1 ? "item" : "items"
+    }`,
+    date: run.pickupDate || run.scheduledDate,
+  }));
+  const deliveryRows = deliveryQueue.map((delivery) => ({
+    id: delivery.id,
+    label: "DEL",
+    title: delivery.orderNumber
+      ? `Order ${delivery.orderNumber}`
+      : "Order missing number",
+    meta: `${delivery.customerName || "No customer"} · ${
+      delivery.deliveryAddress || "No address"
+    }`,
+    date: delivery.deliveryDate,
+  }));
+  const mobilePanels = [
+    canDispatchSouth
+      ? {
+          id: "south",
+          label: "South",
+          count: southQueue.length,
+        }
+      : null,
+    canDispatchDeliveries
+      ? {
+          id: "deliveries",
+          label: "Deliveries",
+          count: deliveryQueue.length,
+        }
+      : null,
+  ].filter(Boolean);
+  const activePanelId =
+    mobilePanels.some((panel) => panel.id === activeMobileQueue)
+      ? activeMobileQueue
+      : mobilePanels[0]?.id || "south";
 
   return (
     <PageContainer>
@@ -208,41 +416,92 @@ export default function DispatchPage({
         </div>
       </div>
 
-      <div className="mt-8 grid gap-5 xl:grid-cols-2">
+      <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryTile
+          icon={ClipboardCheck}
+          label="Total Waiting"
+          value={southQueue.length + deliveryQueue.length}
+          detail="Items that still need dispatch attention."
+          tone="slate"
+        />
+        <SummaryTile
+          icon={Truck}
+          label="South"
+          value={southQueue.length}
+          detail={`${southToday} waiting for today.`}
+          tone="red"
+        />
+        <SummaryTile
+          icon={PackageCheck}
+          label="Deliveries"
+          value={deliveryQueue.length}
+          detail={`${deliveryToday} waiting for today.`}
+          tone="blue"
+        />
+        <SummaryTile
+          icon={CalendarDays}
+          label="Oldest"
+          value={oldestWaitingDate ? getRelativeDateLabel(oldestWaitingDate) : "Clear"}
+          detail={
+            oldestWaitingDate
+              ? "Oldest request needing assignment."
+              : "Nothing is waiting right now."
+          }
+          tone={getRelativeDateTone(oldestWaitingDate) === "late" ? "amber" : "slate"}
+        />
+      </div>
+
+      {mobilePanels.length > 1 ? (
+        <div className="mt-6 grid grid-cols-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm xl:hidden">
+          {mobilePanels.map((panel) => (
+            <button
+              key={panel.id}
+              type="button"
+              onClick={() => setActiveMobileQueue(panel.id)}
+              className={`rounded-xl px-4 py-3 text-sm font-black transition ${
+                activePanelId === panel.id
+                  ? "bg-slate-950 text-white"
+                  : "text-slate-500"
+              }`}
+            >
+              {panel.label}
+              <span className="ml-2 opacity-70">{panel.count}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-5 grid gap-5 xl:mt-8 xl:grid-cols-2">
         {canDispatchSouth ? (
-          <DispatchActionCard
+          <div className={activePanelId === "south" ? "" : "hidden xl:block"}>
+          <QueuePanel
             icon={Truck}
             eyebrow="South"
             title="South Needs Dispatch"
             description="Assign a driver and truck before these pickups show cleanly on the driver board."
             count={southQueue.length}
             todayCount={southToday}
-            nextLabel={
-              nextSouth
-                ? `Next: PO ${nextSouth.poNumber || "unknown"} · ${nextSouth.vendor || "No vendor"} · ${formatDateLabel(nextSouth.pickupDate || nextSouth.scheduledDate)}`
-                : ""
-            }
+            rows={southRows}
             tone="south"
             onClick={() => onPageChange?.("supplier-runs-dispatch")}
           />
+          </div>
         ) : null}
 
         {canDispatchDeliveries ? (
-          <DispatchActionCard
+          <div className={activePanelId === "deliveries" ? "" : "hidden xl:block"}>
+          <QueuePanel
             icon={PackageCheck}
             eyebrow="Deliveries"
             title="Delivery Needs Dispatch"
             description="Put delivery orders onto the board with the right driver, truck, and schedule."
             count={deliveryQueue.length}
             todayCount={deliveryToday}
-            nextLabel={
-              nextDelivery
-                ? `Next: Order ${nextDelivery.orderNumber || "unknown"} · ${nextDelivery.customerName || "No customer"} · ${formatDateLabel(nextDelivery.deliveryDate)}`
-                : ""
-            }
+            rows={deliveryRows}
             tone="delivery"
             onClick={() => onPageChange?.("deliveries-dispatch")}
           />
+          </div>
         ) : null}
       </div>
 
@@ -262,43 +521,6 @@ export default function DispatchPage({
           </div>
         </div>
       ) : null}
-
-      <div className="mt-8 grid gap-4 lg:grid-cols-3">
-        <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-            <CalendarDays aria-hidden="true" className="h-4 w-4" />
-            Today
-          </p>
-          <p className="mt-3 text-4xl font-black text-slate-950">
-            {southToday + deliveryToday}
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-500">
-            items waiting for today
-          </p>
-        </div>
-        <div className="rounded-[1.5rem] border border-red-100 bg-red-50/40 p-5 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
-            South
-          </p>
-          <p className="mt-3 text-4xl font-black text-slate-950">
-            {southQueue.length}
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-500">
-            pickups missing assignment
-          </p>
-        </div>
-        <div className="rounded-[1.5rem] border border-blue-100 bg-blue-50/50 p-5 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">
-            Deliveries
-          </p>
-          <p className="mt-3 text-4xl font-black text-slate-950">
-            {deliveryQueue.length}
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-500">
-            orders missing driver or truck
-          </p>
-        </div>
-      </div>
     </PageContainer>
   );
 }
