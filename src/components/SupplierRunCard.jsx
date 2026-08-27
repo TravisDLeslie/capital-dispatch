@@ -565,8 +565,9 @@ function getPhotoSaveErrorMessage(error) {
     return "That PO already has too much photo data in Firestore. South pickup photos now need Firebase Storage.";
   }
 
+  const detail = [code, message].filter(Boolean).join(" - ");
   return `Unable to save that photo. Firebase error: ${
-    code || message || "unknown"
+    detail || "unknown"
   }`;
 }
 

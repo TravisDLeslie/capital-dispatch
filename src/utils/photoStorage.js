@@ -3,7 +3,7 @@ import {
   ref,
   uploadBytes,
 } from "firebase/storage";
-import { storage } from "./firebase";
+import { firebaseStorageBucket, storage } from "./firebase";
 
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -50,6 +50,19 @@ function safeFileName(value) {
     .slice(0, 80);
 }
 
+function safePathSegment(value, label) {
+  const text = String(value || "").trim();
+
+  if (!text || text === "[object Object]") {
+    throw new Error(`Missing ${label} for photo upload.`);
+  }
+
+  return text
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+}
+
 export async function compressImageFile(file, options = {}) {
   const originalDataUrl = await readFileAsDataUrl(file);
   const image = await loadImage(originalDataUrl);
@@ -83,22 +96,26 @@ export async function uploadSupplierRunPickupPhoto({
   }
 
   const capturedAt = new Date().toISOString();
+  const safeSupplierRunId = safePathSegment(
+    supplierRunId,
+    "South PO ID",
+  );
+  const safeItemId = safePathSegment(itemId, "item ID");
   const { blob, width, height } = await compressImageFile(file);
   const fileName = `${Date.now()}-${safeFileName(file.name || "pickup")}.jpg`;
-  const path = `supplierRuns/${supplierRunId}/items/${itemId}/${fileName}`;
+  const path = `supplierRuns/${safeSupplierRunId}/items/${safeItemId}/${fileName}`;
   const photoRef = ref(storage, path);
 
   try {
     await uploadBytes(photoRef, blob, {
       contentType: "image/jpeg",
-      customMetadata: {
-        supplierRunId,
-        itemId,
-        capturedAt,
-      },
     });
   } catch (error) {
-    error.message = `${error.message || "Upload failed"} Path: ${path}`;
+    error.message = `${
+      error.message || "Upload failed"
+    } Bucket: ${firebaseStorageBucket || "missing"} Path: ${path} Blob: ${
+      blob.type || "unknown"
+    }/${blob.size || 0}`;
     throw error;
   }
 
@@ -107,7 +124,7 @@ export async function uploadSupplierRunPickupPhoto({
   return {
     url,
     path,
-    name: file.name,
+    name: file.name || fileName,
     type: "image/jpeg",
     size: blob.size,
     width,

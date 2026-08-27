@@ -48,5 +48,7 @@ export const storage = firebaseApp && storageBucket
   ? getStorage(firebaseApp)
   : null;
 
+export const firebaseStorageBucket = storageBucket;
+
 export const isFirebaseConfigured =
   hasRequiredFirebaseConfig;

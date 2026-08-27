@@ -53,6 +53,25 @@ function sortSupplierRuns(supplierRuns) {
   );
 }
 
+function removeUndefinedValues(value) {
+  if (Array.isArray(value)) {
+    return value.map(removeUndefinedValues);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, entryValue]) => entryValue !== undefined)
+        .map(([key, entryValue]) => [
+          key,
+          removeUndefinedValues(entryValue),
+        ]),
+    );
+  }
+
+  return value;
+}
+
 /**
  * @param {(supplierRuns: any[]) => void} onSupplierRuns
  * @param {(error: Error) => void} onError
@@ -154,6 +173,8 @@ export async function updateSupplierRunItems(
     status === "complete"
       ? currentSupplierRun?.completedAt || updatedAt
       : null;
+  const firestoreItems = removeUndefinedValues(items);
+  const firestoreUpdates = removeUndefinedValues(supplierRunUpdates);
 
   const updatedSupplierRuns = currentSupplierRuns.map(
     (supplierRun) =>
@@ -173,11 +194,11 @@ export async function updateSupplierRunItems(
     await updateDoc(
       doc(db, SUPPLIER_RUNS_COLLECTION, supplierRunId),
       {
-        items,
+        items: firestoreItems,
         status,
         updatedAt,
         completedAt,
-        ...supplierRunUpdates,
+        ...firestoreUpdates,
       },
     );
   }
@@ -193,6 +214,7 @@ export async function updateSupplierRunItemPhotos(
 ) {
   const currentSupplierRuns = getLocalSupplierRuns();
   const updatedAt = new Date().toISOString();
+  const firestoreItems = removeUndefinedValues(items);
   const updatedSupplierRuns = currentSupplierRuns.map((supplierRun) =>
     supplierRun.id === supplierRunId
       ? {
@@ -207,7 +229,7 @@ export async function updateSupplierRunItemPhotos(
     await updateDoc(
       doc(db, SUPPLIER_RUNS_COLLECTION, supplierRunId),
       {
-        items,
+        items: firestoreItems,
         updatedAt,
       },
     );
