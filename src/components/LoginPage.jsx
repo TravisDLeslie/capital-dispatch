@@ -5,7 +5,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
 } from "firebase/auth";
-import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
+import capitalLumberLogo from "../assets/capital-lumber-new.svg";
 import { auth, isFirebaseConfigured } from "../utils/firebase";
 
 function getLoginErrorMessage(error) {

@@ -1,6 +1,11 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 function normalizeStorageBucket(value) {
@@ -38,9 +43,24 @@ const firebaseApp = hasRequiredFirebaseConfig
   ? initializeApp(firebaseConfig)
   : null;
 
-export const db = firebaseApp
-  ? getFirestore(firebaseApp)
-  : null;
+function createFirestoreDatabase(app) {
+  if (!app) {
+    return null;
+  }
+
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  } catch (error) {
+    console.warn("Firebase persistent cache unavailable:", error);
+    return getFirestore(app);
+  }
+}
+
+export const db = createFirestoreDatabase(firebaseApp);
 
 export const auth = firebaseApp ? getAuth(firebaseApp) : null;
 

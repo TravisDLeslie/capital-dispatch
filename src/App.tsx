@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import {
   Calculator,
@@ -25,39 +33,7 @@ import {
 } from "lucide-react";
 import AppHeader from "./components/AppHeader";
 import SectionHubPage from "./components/SectionHubPage";
-import BounciePage from "./pages/BounciePage";
-import CheckInPage from "./pages/CheckInPage";
-import CustomersPage from "./pages/CustomersPage";
-import CustomerPaymentLinksPage from "./pages/CustomerPaymentLinksPage";
-import DashboardPage from "./pages/DashboardPage";
-import DriverDashboardPage from "./pages/DriverDashboardPage";
-import DeliveryCalendarPage from "./pages/DeliveryCalendarPage";
-import DeliveryDashboardPage from "./pages/DeliveryDashboardPage";
-import DeliveryDispatchPage from "./pages/DeliveryDispatchPage";
-import DeliveryHistoryPage from "./pages/DeliveryHistoryPage";
-import DeliveryQueuePage from "./pages/DeliveryQueuePage";
-import DeliverySettingsPage from "./pages/DeliverySettingsPage";
-import DeliveriesPage from "./pages/DeliveriesPage";
-import EmailListPage from "./pages/EmailListPage";
 import LoginPage from "./components/LoginPage";
-import POCalendarPage from "./pages/POCalendarPage";
-import OrderFlowPage from "./pages/OrderFlowPage";
-import SearchPage from "./pages/SearchPage";
-import SalesConverterPage from "./pages/SalesConverterPage";
-import SalesOrdersPage from "./pages/SalesOrdersPage";
-import SalesReportPage from "./pages/SalesReportPage";
-import StockingHandbookPage from "./pages/StockingHandbookPage";
-import SouthHubPage from "./pages/SouthHubPage";
-import SouthOverviewPage from "./pages/SouthOverviewPage";
-import SupplierRunsPage from "./pages/SupplierRunsPage";
-import TodayPage from "./pages/TodayPage";
-import TheirTruckHistoryPage from "./pages/TheirTruckHistoryPage";
-import TheirTruckOverviewPage from "./pages/TheirTruckOverviewPage";
-import TheirTruckPOPage from "./pages/TheirTruckPOPage";
-import TracePage from "./pages/TracePage";
-import UserAdminPage from "./pages/UserAdminPage";
-import VendorSettingsPage from "./pages/VendorSettingsPage";
-import YardTasksPage from "./pages/YardTasksPage";
 import {
   addCheckIn,
   deleteCheckIn,
@@ -148,6 +124,47 @@ import {
 } from "./utils/vendorSettingsStorage";
 import { capitalLumberAddress } from "./data/options";
 import { formatCustomerName } from "./utils/textFormatters";
+
+const BounciePage = lazy(() => import("./pages/BounciePage"));
+const CheckInPage = lazy(() => import("./pages/CheckInPage"));
+const CustomersPage = lazy(() => import("./pages/CustomersPage"));
+const CustomerPaymentLinksPage = lazy(
+  () => import("./pages/CustomerPaymentLinksPage"),
+);
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const DriverDashboardPage = lazy(() => import("./pages/DriverDashboardPage"));
+const DeliveryCalendarPage = lazy(() => import("./pages/DeliveryCalendarPage"));
+const DeliveryDashboardPage = lazy(
+  () => import("./pages/DeliveryDashboardPage"),
+);
+const DeliveryDispatchPage = lazy(() => import("./pages/DeliveryDispatchPage"));
+const DeliveryHistoryPage = lazy(() => import("./pages/DeliveryHistoryPage"));
+const DeliveryQueuePage = lazy(() => import("./pages/DeliveryQueuePage"));
+const DeliverySettingsPage = lazy(() => import("./pages/DeliverySettingsPage"));
+const DeliveriesPage = lazy(() => import("./pages/DeliveriesPage"));
+const EmailListPage = lazy(() => import("./pages/EmailListPage"));
+const POCalendarPage = lazy(() => import("./pages/POCalendarPage"));
+const OrderFlowPage = lazy(() => import("./pages/OrderFlowPage"));
+const SearchPage = lazy(() => import("./pages/SearchPage"));
+const SalesConverterPage = lazy(() => import("./pages/SalesConverterPage"));
+const SalesOrdersPage = lazy(() => import("./pages/SalesOrdersPage"));
+const SalesReportPage = lazy(() => import("./pages/SalesReportPage"));
+const StockingHandbookPage = lazy(() => import("./pages/StockingHandbookPage"));
+const SouthHubPage = lazy(() => import("./pages/SouthHubPage"));
+const SouthOverviewPage = lazy(() => import("./pages/SouthOverviewPage"));
+const SupplierRunsPage = lazy(() => import("./pages/SupplierRunsPage"));
+const TodayPage = lazy(() => import("./pages/TodayPage"));
+const TheirTruckHistoryPage = lazy(
+  () => import("./pages/TheirTruckHistoryPage"),
+);
+const TheirTruckOverviewPage = lazy(
+  () => import("./pages/TheirTruckOverviewPage"),
+);
+const TheirTruckPOPage = lazy(() => import("./pages/TheirTruckPOPage"));
+const TracePage = lazy(() => import("./pages/TracePage"));
+const UserAdminPage = lazy(() => import("./pages/UserAdminPage"));
+const VendorSettingsPage = lazy(() => import("./pages/VendorSettingsPage"));
+const YardTasksPage = lazy(() => import("./pages/YardTasksPage"));
 
 const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
@@ -1185,6 +1202,27 @@ function getAllowedPageIds(
   }
 
   return getAllowedPageIdsForRole(presetRole);
+}
+
+function PageLoadingFallback() {
+  return (
+    <div className="mx-auto max-w-6xl px-4 pb-10 pt-4 sm:px-6 lg:px-8">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+          Loading
+        </p>
+        <div className="mt-4 space-y-3">
+          <div className="h-7 w-56 animate-pulse rounded-full bg-slate-100" />
+          <div className="h-4 w-full max-w-xl animate-pulse rounded-full bg-slate-100" />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="h-24 animate-pulse rounded-2xl bg-slate-50" />
+            <div className="h-24 animate-pulse rounded-2xl bg-slate-50" />
+            <div className="h-24 animate-pulse rounded-2xl bg-slate-50" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function PendingApproval({
@@ -5488,7 +5526,9 @@ export default function App() {
               ) : null}
             </div>
 
-            {renderCurrentPage()}
+            <Suspense fallback={<PageLoadingFallback />}>
+              {renderCurrentPage()}
+            </Suspense>
           </main>
         </>
       )}
