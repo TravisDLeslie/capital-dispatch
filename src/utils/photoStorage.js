@@ -88,14 +88,19 @@ export async function uploadSupplierRunPickupPhoto({
   const path = `supplierRuns/${supplierRunId}/items/${itemId}/${fileName}`;
   const photoRef = ref(storage, path);
 
-  await uploadBytes(photoRef, blob, {
-    contentType: "image/jpeg",
-    customMetadata: {
-      supplierRunId,
-      itemId,
-      capturedAt,
-    },
-  });
+  try {
+    await uploadBytes(photoRef, blob, {
+      contentType: "image/jpeg",
+      customMetadata: {
+        supplierRunId,
+        itemId,
+        capturedAt,
+      },
+    });
+  } catch (error) {
+    error.message = `${error.message || "Upload failed"} Path: ${path}`;
+    throw error;
+  }
 
   const url = await getDownloadURL(photoRef);
 

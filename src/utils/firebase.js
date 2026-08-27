@@ -44,10 +44,9 @@ export const db = firebaseApp
 
 export const auth = firebaseApp ? getAuth(firebaseApp) : null;
 
-export const storage =
-  firebaseApp && storageBucket
-    ? getStorage(firebaseApp, `gs://${storageBucket}`)
-    : null;
+export const storage = firebaseApp && storageBucket
+  ? getStorage(firebaseApp)
+  : null;
 
 export const isFirebaseConfigured =
   hasRequiredFirebaseConfig;
