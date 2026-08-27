@@ -129,20 +129,39 @@ function DriverRouteCard({
   meta,
   icon: Icon,
   onClick,
+  disabled = false,
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      className="group flex min-h-[150px] w-full items-stretch overflow-hidden rounded-3xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-red-100 hover:shadow-md"
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`group flex min-h-[150px] w-full items-stretch overflow-hidden rounded-3xl border text-left shadow-sm transition ${
+        disabled
+          ? "cursor-default border-slate-200 bg-slate-50"
+          : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-red-100 hover:shadow-md"
+      }`}
     >
-      <span className="flex w-2 shrink-0 bg-[#FC2C38]" aria-hidden="true" />
+      <span
+        className={`flex w-2 shrink-0 ${
+          disabled ? "bg-slate-300" : "bg-[#FC2C38]"
+        }`}
+        aria-hidden="true"
+      />
       <span className="flex flex-1 items-center gap-4 p-5 sm:p-6">
-        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
+        <span
+          className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${
+            disabled ? "bg-white text-slate-400" : "bg-red-50 text-[#FC2C38]"
+          }`}
+        >
           <Icon aria-hidden="true" className="h-7 w-7" strokeWidth={2.4} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+          <span
+            className={`block text-xs font-black uppercase tracking-[0.18em] ${
+              disabled ? "text-slate-400" : "text-[#FC2C38]"
+            }`}
+          >
             {eyebrow}
           </span>
           <span className="mt-1 block text-2xl font-black text-slate-950 sm:text-3xl">
@@ -158,9 +177,15 @@ function DriverRouteCard({
             {meta}
           </span>
         </span>
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white transition group-hover:bg-[#FC2C38]">
-          <ArrowRight aria-hidden="true" className="h-5 w-5" strokeWidth={2.6} />
-        </span>
+        {!disabled ? (
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white transition group-hover:bg-[#FC2C38]">
+            <ArrowRight
+              aria-hidden="true"
+              className="h-5 w-5"
+              strokeWidth={2.6}
+            />
+          </span>
+        ) : null}
       </span>
     </button>
   );
@@ -177,45 +202,57 @@ function DriverRouteOverview({
   const supplierStopCount = getSupplierStopCount(sortedSupplierRuns);
   const supplierItemCount = getItemCountFromRuns(sortedSupplierRuns);
 
-  if (openSupplierRuns.length === 0 && openDeliveries.length === 0) {
-    return null;
-  }
-
   return (
     <section className="mb-5 grid gap-4 lg:grid-cols-2">
-      {openSupplierRuns.length > 0 ? (
-        <DriverRouteCard
-          icon={Route}
-          eyebrow="South Route"
-          title={nextSupplierRun?.vendor || "South pickups"}
-          primary={`${supplierStopCount} ${
-            supplierStopCount === 1 ? "stop" : "stops"
-          } ready`}
-          secondary={`${openSupplierRuns.length} ${
-            openSupplierRuns.length === 1 ? "PO" : "POs"
-          } • ${supplierItemCount || 0} ${
-            supplierItemCount === 1 ? "item" : "items"
-          }`}
-          meta="Open South Route"
-          onClick={() => onPageChange("supplier-runs-check")}
-        />
-      ) : null}
+      <DriverRouteCard
+        icon={Route}
+        eyebrow="South Route"
+        title={nextSupplierRun?.vendor || "No South Route"}
+        primary={
+          openSupplierRuns.length > 0
+            ? `${supplierStopCount} ${
+                supplierStopCount === 1 ? "stop" : "stops"
+              } ready`
+            : "Nothing assigned"
+        }
+        secondary={
+          openSupplierRuns.length > 0
+            ? `${openSupplierRuns.length} ${
+                openSupplierRuns.length === 1 ? "PO" : "POs"
+              } • ${supplierItemCount || 0} ${
+                supplierItemCount === 1 ? "item" : "items"
+              }`
+            : "South pickups will show here when dispatch assigns them."
+        }
+        meta={openSupplierRuns.length > 0 ? "Open South Route" : "No South Work"}
+        onClick={() => onPageChange("supplier-runs-check")}
+        disabled={openSupplierRuns.length === 0}
+      />
 
-      {openDeliveries.length > 0 ? (
-        <DriverRouteCard
-          icon={Truck}
-          eyebrow="Driver Route"
-          title={nextDelivery?.customerName || "Deliveries"}
-          primary={`${openDeliveries.length} ${
-            openDeliveries.length === 1 ? "delivery" : "deliveries"
-          } assigned`}
-          secondary={`${getDeliveryTimeLabel(nextDelivery)} • ${getDeliveryLocationLabel(
-            nextDelivery,
-          )}`}
-          meta="Open Delivery Route"
-          onClick={() => onPageChange("deliveries-queue")}
-        />
-      ) : null}
+      <DriverRouteCard
+        icon={Truck}
+        eyebrow="Delivery Route"
+        title={nextDelivery?.customerName || "No Delivery Route"}
+        primary={
+          openDeliveries.length > 0
+            ? `${openDeliveries.length} ${
+                openDeliveries.length === 1 ? "delivery" : "deliveries"
+              } assigned`
+            : "Nothing assigned"
+        }
+        secondary={
+          openDeliveries.length > 0
+            ? `${getDeliveryTimeLabel(nextDelivery)} • ${getDeliveryLocationLabel(
+                nextDelivery,
+              )}`
+            : "Deliveries will show here when dispatch assigns them."
+        }
+        meta={
+          openDeliveries.length > 0 ? "Open Delivery Route" : "No Delivery Work"
+        }
+        onClick={() => onPageChange("deliveries-queue")}
+        disabled={openDeliveries.length === 0}
+      />
     </section>
   );
 }
