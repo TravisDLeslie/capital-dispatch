@@ -17,6 +17,7 @@ const hasRequiredFirebaseConfig = Boolean(
   firebaseConfig.apiKey &&
     firebaseConfig.authDomain &&
     firebaseConfig.projectId &&
+    firebaseConfig.storageBucket &&
     firebaseConfig.appId,
 );
 

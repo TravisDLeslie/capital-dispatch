@@ -543,15 +543,31 @@ function getPhotoSaveErrorMessage(error) {
   const message = String(error?.message || "");
   const code = String(error?.code || "");
 
-  if (code.includes("storage/unauthorized") || code.includes("permission-denied")) {
+  if (
+    code.includes("storage/unauthorized") ||
+    code.includes("permission-denied")
+  ) {
     return "Firebase denied the photo upload. Publish Storage rules that allow South pickup photos.";
   }
 
-  if (message.toLowerCase().includes("larger than maximum") || message.includes("1048487")) {
+  if (
+    code.includes("storage/object-not-found") ||
+    code.includes("storage/bucket-not-found") ||
+    message.toLowerCase().includes("no default bucket")
+  ) {
+    return "Firebase Storage is not connected. Check VITE_FIREBASE_STORAGE_BUCKET in Vercel and redeploy.";
+  }
+
+  if (
+    message.toLowerCase().includes("larger than maximum") ||
+    message.includes("1048487")
+  ) {
     return "That PO already has too much photo data in Firestore. South pickup photos now need Firebase Storage.";
   }
 
-  return "Unable to save that photo. Try taking it again.";
+  return `Unable to save that photo. Firebase error: ${
+    code || message || "unknown"
+  }`;
 }
 
 export default function SupplierRunCard({
