@@ -596,7 +596,6 @@ export default function SupplierRunCard({
   compactWhenClosed = true,
   showCustomerName = false,
   customerNameTruncate = true,
-  canPickUpItems = true,
   driverFocused = false,
 }) {
   const items = Array.isArray(supplierRun.items)
@@ -813,21 +812,11 @@ export default function SupplierRunCard({
       return;
     }
 
-    if (!canPickUpItems) {
-      setPhotoError("Tap I've arrived before picking up items at this stop.");
-      return;
-    }
-
     setPhotoError("");
     document.getElementById(inputId)?.click();
   }
 
   async function markPickupItemComplete(item, inputId) {
-    if (!canPickUpItems && !item.pickedUp) {
-      setPhotoError("Tap I've arrived before picking up items at this stop.");
-      return;
-    }
-
     if (!item.pickedUp && getPickupPhotoList(item).length === 0) {
       setPhotoError("Take a pickup photo before marking this item complete.");
       document.getElementById(inputId)?.click();

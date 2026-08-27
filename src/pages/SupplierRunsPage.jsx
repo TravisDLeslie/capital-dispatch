@@ -12,7 +12,6 @@ import {
   Edit3,
   GripVertical,
   Home,
-  MapPin,
   Navigation,
   Package,
   RefreshCw,
@@ -1012,7 +1011,6 @@ export default function SupplierRunsPage({
   const isDriverView = _viewerRole === "driver";
   const todayKey = getDateInputValue();
   const [successMessage, setSuccessMessage] = useState("");
-  const [inactiveArrivalStopKey, setInactiveArrivalStopKey] = useState("");
   const [openStopKeys, setOpenStopKeys] = useState({});
   const [openDriverKeys, setOpenDriverKeys] = useState({});
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -1059,20 +1057,6 @@ export default function SupplierRunsPage({
       window.clearTimeout(timer);
     };
   }, [successMessage]);
-
-  useEffect(() => {
-    if (!inactiveArrivalStopKey) {
-      return undefined;
-    }
-
-    const timer = window.setTimeout(() => {
-      setInactiveArrivalStopKey("");
-    }, 3500);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [inactiveArrivalStopKey]);
 
   useEffect(() => {
     if (mode === "check") {
@@ -1366,16 +1350,9 @@ export default function SupplierRunsPage({
         strapUpUntil || completedAt,
       ),
       runIds: vendorGroup.runs.map((supplierRun) => supplierRun.id),
-      canArrive:
-        Boolean(onArriveSupplierStop) &&
-        !arrivedAt &&
-        vendorGroup.runs.length > 0 &&
-        !isConfirmedComplete &&
-        items.some((item) => !item.pickedUp),
       canComplete:
         Boolean(onCompleteSupplierStop) &&
         usesStopWorkflow &&
-        Boolean(arrivedAt) &&
         allItemsPickedUp &&
         !isConfirmedComplete,
     };
@@ -1402,31 +1379,6 @@ export default function SupplierRunsPage({
       lastStrapUp,
       routeDuration: formatDurationMinutes(firstArrival, lastStrapUp),
     };
-  }
-
-  function handleInactiveStopArrivalClick(stopKey) {
-    setInactiveArrivalStopKey(stopKey);
-  }
-
-  async function handleArriveStopClick(timing, isCurrentStop, inactiveArrivalKey) {
-    if (!isCurrentStop) {
-      handleInactiveStopArrivalClick(inactiveArrivalKey);
-      return;
-    }
-
-    if (typeof onArriveSupplierStop !== "function") {
-      setRouteOrderError("Unable to mark arrival for this stop.");
-      return;
-    }
-
-    setRouteOrderError("");
-
-    try {
-      await onArriveSupplierStop(timing.runIds);
-    } catch (arrivalError) {
-      console.error("Unable to mark South stop arrival:", arrivalError);
-      setRouteOrderError("Unable to mark arrival. Check connection and try again.");
-    }
   }
 
   async function handleCompleteStopClick(driver, vendor, timing) {
@@ -3562,10 +3514,6 @@ export default function SupplierRunsPage({
                           "open",
                           isDriverView ? isCurrentStop : !isCompleteStop,
                         );
-                        const inactiveArrivalKey = `arrival::${driverGroup.driver}::${vendorGroup.vendor}`;
-                        const showInactiveArrivalNotice =
-                          inactiveArrivalStopKey === inactiveArrivalKey;
-
                         return (
                           <div
                             key={vendorGroup.vendor}
@@ -3864,56 +3812,6 @@ export default function SupplierRunsPage({
                               </div>
                             </div>
 
-                            {!isCompleteStop ? (
-                            <div className="border-t border-slate-100 bg-white px-4 py-3">
-                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="hidden min-w-0 flex-1 sm:block">
-                                  {!timing.arrivedAt ? (
-                                    <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-500">
-                                      Not arrived yet
-                                    </span>
-                                  ) : (
-                                    <StopTimingPills timing={timing} />
-                                  )}
-                                </div>
-
-                                {timing.canArrive ? (
-                                  <div className="flex flex-col items-stretch gap-2 sm:items-end">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleArriveStopClick(
-                                          timing,
-                                          isCurrentStop,
-                                          inactiveArrivalKey,
-                                        )
-                                      }
-                                      aria-disabled={!isCurrentStop}
-                                      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-black shadow-sm transition ${
-                                        isCurrentStop
-                                          ? "bg-slate-950 text-white hover:bg-slate-800"
-                                          : "cursor-not-allowed bg-slate-200 text-slate-500"
-                                      }`}
-                                    >
-                                      <MapPin
-                                        aria-hidden="true"
-                                        className="h-4 w-4"
-                                        strokeWidth={2.6}
-                                      />
-                                      I've arrived
-                                    </button>
-
-                                    {showInactiveArrivalNotice ? (
-                                      <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
-                                        Not currently an active stop.
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-                              </div>
-                            </div>
-                            ) : null}
-
                             {stopIsOpen ? (
                               <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-3">
                                 {vendorGroup.runs.map((supplierRun) => (
@@ -3941,9 +3839,6 @@ export default function SupplierRunsPage({
                                         ? onDeleteSupplierRun
                                         : undefined
                                     }
-                                    canPickUpItems={Boolean(
-                                      timing.arrivedAt,
-                                    )}
                                     showCustomerName={
                                       canViewSouthCustomerName
                                     }
