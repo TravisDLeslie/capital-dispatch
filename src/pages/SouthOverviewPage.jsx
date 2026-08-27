@@ -1,5 +1,4 @@
 import {
-  AlertTriangle,
   ArrowRight,
   CalendarDays,
   History,
@@ -172,17 +171,6 @@ export default function SouthOverviewPage({
             description="Create a pickup request for dispatch."
             tone="red"
             onClick={() => onPageChange?.("supplier-runs-add")}
-          />
-        ) : null}
-
-        {canOpen("supplier-runs-dispatch") ? (
-          <QuickAction
-            icon={AlertTriangle}
-            title="Dispatch"
-            description="Assign driver and truck before pickup."
-            metric={needsDispatchRuns.length}
-            tone="amber"
-            onClick={() => onPageChange?.("supplier-runs-dispatch")}
           />
         ) : null}
 

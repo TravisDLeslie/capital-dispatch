@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  AlertTriangle,
   ArrowRight,
   CalendarDays,
   ClipboardList,
@@ -245,20 +244,6 @@ export default function SouthHubPage({
     (theirTruckPO) => theirTruckPO.status !== "complete",
   );
   const southActionCards = [
-    canOpen("supplier-runs-dispatch")
-      ? {
-          icon: AlertTriangle,
-          label: "Dispatch",
-          title: "Needs Dispatch",
-          description:
-            "Assign a driver before the pickup reaches the driver board.",
-          metric: needsDispatchRuns.length,
-          metricLabel: "Waiting",
-          tone: "warning",
-          variant: "alert",
-          pageId: "supplier-runs-dispatch",
-        }
-      : null,
     canOpen("supplier-runs-check")
       ? {
           icon: PackageCheck,
