@@ -132,30 +132,6 @@ function getSupplierRunActionLabel(items, isComplete) {
   return "Needs Pickup";
 }
 
-function getValidDate(value) {
-  const parsedDate = value ? new Date(value) : null;
-
-  return parsedDate && !Number.isNaN(parsedDate.getTime())
-    ? parsedDate
-    : null;
-}
-
-function formatDurationMinutes(startValue, endValue) {
-  const startDate = getValidDate(startValue);
-  const endDate = getValidDate(endValue);
-
-  if (!startDate || !endDate || endDate < startDate) {
-    return "";
-  }
-
-  const minutes = Math.max(
-    1,
-    Math.round((endDate.getTime() - startDate.getTime()) / 60000),
-  );
-
-  return `${minutes} min`;
-}
-
 function formatPickupItemsForPrint(items, showCustomerName = false) {
   if (items.length === 0) {
     return `
@@ -612,19 +588,6 @@ export default function SupplierRunCard({
           : `${remainingCount}/${items.length} ${itemLabel} left`;
   const progressPercent =
     items.length > 0 ? (pickedUpCount / items.length) * 100 : 0;
-  const poCompletedAt =
-    supplierRun.completedAt ||
-    (isComplete
-      ? items
-          .map((item) => item.pickedUpAt)
-          .filter(Boolean)
-          .sort()
-          .at(-1) || ""
-      : "");
-  const poTimeAtSupplier = formatDurationMinutes(
-    supplierRun.stopArrivedAt,
-    poCompletedAt,
-  );
   const [editingItemId, setEditingItemId] = useState("");
   const [editingQuantity, setEditingQuantity] = useState("");
   const [editingDescription, setEditingDescription] =
@@ -901,12 +864,6 @@ export default function SupplierRunCard({
               </span>
             )}
 
-            {poTimeAtSupplier ? (
-              <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-black uppercase tracking-wide text-violet-800">
-                PO time {poTimeAtSupplier}
-              </span>
-            ) : null}
-
           </div>
 
           {showCustomerName && supplierRunCustomerName ? (
@@ -933,21 +890,6 @@ export default function SupplierRunCard({
                 Driver: {supplierRun.driver || "Unassigned"}
               </p>
 
-              {poTimeAtSupplier ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2 border-l-4 border-violet-200 pl-3 text-xs font-black text-slate-500">
-                  <span className="rounded-full bg-violet-50 px-3 py-1 text-violet-800">
-                    PO time: {poTimeAtSupplier}
-                  </span>
-
-                  {supplierRun.stopArrivedAt ? (
-                    <span>Arrived {formatTime(supplierRun.stopArrivedAt)}</span>
-                  ) : null}
-
-                  {poCompletedAt ? (
-                    <span>Complete {formatTime(poCompletedAt)}</span>
-                  ) : null}
-                </div>
-              ) : null}
             </>
           ) : null}
         </div>

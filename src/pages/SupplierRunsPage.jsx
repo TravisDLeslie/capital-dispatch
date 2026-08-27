@@ -526,8 +526,7 @@ function getLatestItemPickedUpAt(supplierRun) {
 function getSupplierRunPickupDateKey(supplierRun) {
   return (
     getDateKeyFromValue(
-      supplierRun.stopStrapUpUntil ||
-        supplierRun.stopCompletedAt ||
+      supplierRun.stopCompletedAt ||
         supplierRun.completedAt ||
         getLatestItemPickedUpAt(supplierRun) ||
         supplierRun.updatedAt,
@@ -708,160 +707,6 @@ function supplierRunMatchesPickupSearch(
       searchableNumbers.some((searchableNumber) =>
         searchableNumber.includes(numericSearchTerm),
       ))
-  );
-}
-
-function StopTimingPills({ timing, compact = false }) {
-  const hasTiming =
-    timing?.arrivedAt || timing?.stopDuration || timing?.strapUpUntil;
-
-  if (!hasTiming) {
-    return null;
-  }
-
-  return (
-    <div
-      className={`rounded-2xl border border-violet-100 bg-violet-50/50 px-3 py-2.5 ${
-        compact ? "" : "sm:max-w-3xl"
-      }`}
-    >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        {timing.stopDuration ? (
-          <div className="flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1.5 text-sm font-black text-violet-800">
-            <span
-              className="h-2 w-2 rounded-full bg-violet-600"
-              aria-hidden="true"
-            />
-            {timing.stopDuration} at stop
-          </div>
-        ) : null}
-
-        {timing.arrivedAt ? (
-          <div className="flex items-center gap-1.5 text-xs font-black text-slate-500">
-            <span
-              className="h-1.5 w-1.5 rounded-full bg-violet-400"
-              aria-hidden="true"
-            />
-            Arrived {formatTime(timing.arrivedAt)}
-          </div>
-        ) : null}
-
-        {timing.strapUpUntil ? (
-          <div className="flex items-center gap-1.5 text-xs font-black text-slate-500">
-            <span
-              className="h-1.5 w-1.5 rounded-full bg-violet-400"
-              aria-hidden="true"
-            />
-            Strap-up done
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function StopDurationBadge({ timing }) {
-  if (!timing?.stopDuration) {
-    return null;
-  }
-
-  return (
-    <div className="hidden items-center gap-2 rounded-full bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-800 sm:flex">
-      <span
-        className="h-2 w-2 rounded-full bg-violet-600"
-        aria-hidden="true"
-      />
-      {timing.stopDuration} at stop
-    </div>
-  );
-}
-
-function StopMobileTiming({ timing }) {
-  if (!timing?.arrivedAt && !timing?.stopDuration && !timing?.strapUpUntil) {
-    return null;
-  }
-
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-black text-slate-500 sm:hidden">
-      {timing.stopDuration ? (
-        <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-1 text-violet-800">
-          <span
-            className="h-1.5 w-1.5 rounded-full bg-violet-600"
-            aria-hidden="true"
-          />
-          {timing.stopDuration}
-        </span>
-      ) : null}
-
-      {timing.arrivedAt ? (
-        <span>Arrived {formatTime(timing.arrivedAt)}</span>
-      ) : null}
-
-      {timing.strapUpUntil ? (
-        <span>Strap-up done</span>
-      ) : null}
-    </div>
-  );
-}
-
-function RouteTimingTimeline({ timing }) {
-  if (!timing?.routeDuration) {
-    return null;
-  }
-
-  return (
-    <div className="rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-          Route timeline
-        </p>
-
-        <div className="rounded-full bg-violet-50 px-3 py-1 text-sm font-black text-violet-800">
-          {timing.routeDuration} total
-        </div>
-      </div>
-
-      <div className="relative grid grid-cols-3 gap-2">
-        <div
-          className="absolute left-[16.6%] right-[16.6%] top-3 h-0.5 bg-slate-200"
-          aria-hidden="true"
-        />
-        <div
-          className="absolute left-[16.6%] right-[16.6%] top-3 h-0.5 bg-violet-300"
-          aria-hidden="true"
-        />
-
-        <div className="relative text-left">
-          <span className="block h-6 w-6 rounded-full border-4 border-violet-50 bg-violet-500 shadow-sm" />
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-500">
-            First stop
-          </p>
-          <p className="mt-0.5 text-sm font-black text-slate-900">
-            {formatTime(timing.firstArrival)}
-          </p>
-        </div>
-
-        <div className="relative text-center">
-          <span className="mx-auto block h-6 w-6 rounded-full border-4 border-violet-50 bg-violet-700 shadow-sm" />
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-700">
-            South time
-          </p>
-          <p className="mt-0.5 text-base font-black text-violet-900">
-            {timing.routeDuration}
-          </p>
-        </div>
-
-        <div className="relative text-right">
-          <span className="ml-auto block h-6 w-6 rounded-full border-4 border-violet-50 bg-violet-500 shadow-sm" />
-          <p className="mt-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-500">
-            Strap-up
-          </p>
-          <p className="mt-0.5 text-sm font-black text-slate-900">
-            {formatTime(timing.lastStrapUp)}
-          </p>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -1277,22 +1122,6 @@ export default function SupplierRunsPage({
       : null;
   }
 
-  function formatDurationMinutes(startValue, endValue) {
-    const startDate = getValidDate(startValue);
-    const endDate = getValidDate(endValue);
-
-    if (!startDate || !endDate || endDate < startDate) {
-      return "";
-    }
-
-    const minutes = Math.max(
-      1,
-      Math.round((endDate.getTime() - startDate.getTime()) / 60000),
-    );
-
-    return `${minutes} min`;
-  }
-
   function addMinutes(value, minutes) {
     const date = getValidDate(value);
 
@@ -1307,11 +1136,6 @@ export default function SupplierRunsPage({
     const items = vendorGroup.runs.flatMap((supplierRun) =>
       Array.isArray(supplierRun.items) ? supplierRun.items : [],
     );
-    const arrivedAt =
-      vendorGroup.runs
-        .map((supplierRun) => supplierRun.stopArrivedAt)
-        .filter(Boolean)
-        .sort()[0] || "";
     const allItemsPickedUp =
       items.length > 0 && items.every((item) => item.pickedUp);
     const savedCompletedAt =
@@ -1326,57 +1150,21 @@ export default function SupplierRunsPage({
         vendorGroup.runs.some((supplierRun) =>
           usesSouthStopWorkflow(supplierRun),
         ));
-    const completedAt = savedCompletedAt;
-    const strapUpUntil =
-      vendorGroup.runs
-        .map((supplierRun) => supplierRun.stopStrapUpUntil)
-        .filter(Boolean)
-        .sort()
-        .at(-1) || "";
     const isConfirmedComplete = usesStopWorkflow
-      ? Boolean(completedAt)
+      ? Boolean(savedCompletedAt)
       : allItemsPickedUp;
 
     return {
-      arrivedAt,
-      completedAt,
-      strapUpUntil,
+      completedAt: savedCompletedAt,
       allItemsPickedUp,
       usesStopWorkflow,
       isConfirmedComplete,
-      stopDuration: formatDurationMinutes(
-        arrivedAt,
-        strapUpUntil || completedAt,
-      ),
       runIds: vendorGroup.runs.map((supplierRun) => supplierRun.id),
       canComplete:
         Boolean(onCompleteSupplierStop) &&
         usesStopWorkflow &&
         allItemsPickedUp &&
         !isConfirmedComplete,
-    };
-  }
-
-  function getDriverGroupTiming(driverGroup) {
-    const stopTimings = driverGroup.vendorGroups
-      .map((vendorGroup) => getVendorGroupTiming(vendorGroup))
-      .filter((timing) => timing.arrivedAt || timing.strapUpUntil);
-    const firstArrival =
-      stopTimings
-        .map((timing) => timing.arrivedAt)
-        .filter(Boolean)
-        .sort()[0] || "";
-    const lastStrapUp =
-      stopTimings
-        .map((timing) => timing.strapUpUntil || timing.completedAt)
-        .filter(Boolean)
-        .sort()
-        .at(-1) || "";
-
-    return {
-      firstArrival,
-      lastStrapUp,
-      routeDuration: formatDurationMinutes(firstArrival, lastStrapUp),
     };
   }
 
@@ -2731,8 +2519,6 @@ export default function SupplierRunsPage({
                         driverKey,
                         "history",
                       );
-                      const driverTiming = getDriverGroupTiming(group);
-
                       return (
                         <div
                           key={driverKey}
@@ -2766,17 +2552,6 @@ export default function SupplierRunsPage({
                             </div>
 
                             <div className="flex shrink-0 items-center gap-2">
-                              {driverTiming.routeDuration ? (
-                                <div className="hidden rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-right shadow-sm sm:block">
-                                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-500">
-                                    Total South
-                                  </p>
-                                  <p className="text-sm font-black text-violet-900">
-                                    {driverTiming.routeDuration}
-                                  </p>
-                                </div>
-                              ) : null}
-
                               <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-600 shadow-sm">
                                 {group.vendorGroups.reduce(
                                   (count, vendorGroup) =>
@@ -2800,8 +2575,6 @@ export default function SupplierRunsPage({
 
                           {driverIsOpen ? (
                             <div className="mt-3 space-y-4">
-                              <RouteTimingTimeline timing={driverTiming} />
-
                               {group.vendorGroups.map((vendorGroup) => {
                                 const stats =
                                   getVendorGroupStats(vendorGroup);
@@ -2856,14 +2629,10 @@ export default function SupplierRunsPage({
                                               : "POs"}{" "}
                                             • {stats.itemCount} items
                                           </p>
-
-                                          <StopMobileTiming timing={timing} />
                                         </div>
                                       </div>
 
                                       <div className="absolute right-3 top-3 flex shrink-0 items-center gap-3 sm:static">
-                                        <StopDurationBadge timing={timing} />
-
                                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
                                         <ChevronDown
                                           aria-hidden="true"
@@ -2875,13 +2644,6 @@ export default function SupplierRunsPage({
                                         </span>
                                       </div>
                                     </button>
-
-                                    <div className="hidden border-t border-slate-100 bg-white px-4 py-3 sm:block">
-                                      <StopTimingPills
-                                        timing={timing}
-                                        compact
-                                      />
-                                    </div>
 
                                     {stopIsOpen ? (
                                       <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-3">
@@ -3248,8 +3010,6 @@ export default function SupplierRunsPage({
                   );
                   const vehicleLabel =
                     getDriverGroupVehicleLabel(driverGroup);
-                  const driverTiming =
-                    getDriverGroupTiming(driverGroup);
                   const driverPoCount =
                     driverGroup.vendorGroups.reduce(
                       (count, vendorGroup) =>
@@ -3445,9 +3205,6 @@ export default function SupplierRunsPage({
                               : " • complete"}
                           </p>
 
-                          <div className="mt-3">
-                            <RouteTimingTimeline timing={driverTiming} />
-                          </div>
                         </div>
                       </button>
 
@@ -3718,7 +3475,6 @@ export default function SupplierRunsPage({
                                       </a>
                                     ) : null}
 
-                                    <StopMobileTiming timing={timing} />
                                   </div>
                                 </div>
                                 </button>
@@ -3770,8 +3526,6 @@ export default function SupplierRunsPage({
                                 ) : null}
 
                                 <div className="flex items-center gap-1.5 sm:gap-2">
-                                  <StopDurationBadge timing={timing} />
-
                                   {!isDriverView ? (
                                     <span className="hidden rounded-lg bg-white px-2.5 py-1.5 text-xs font-black text-blue-800 shadow-sm sm:inline-flex sm:px-3">
                                       {stats.poCount}{" "}

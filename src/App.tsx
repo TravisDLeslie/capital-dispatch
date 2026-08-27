@@ -725,7 +725,6 @@ type SupplierRun = {
   stopWorkflowVersion?: number;
   stopArrivedAt?: string | null;
   stopCompletedAt?: string | null;
-  stopStrapUpUntil?: string | null;
   [key: string]: unknown;
 };
 
@@ -3257,9 +3256,6 @@ export default function App() {
 
   async function handleCompleteSupplierStop(supplierRunIds: string[]) {
     const completedAt = new Date().toISOString();
-    const strapUpUntil = new Date(
-      new Date(completedAt).getTime() + 5 * 60000,
-    ).toISOString();
     const updates = supplierRunIds
       .map((supplierRunId) =>
         supplierRuns.find(
@@ -3273,7 +3269,6 @@ export default function App() {
       .map((supplierRun) => ({
         id: supplierRun.id,
         stopCompletedAt: completedAt,
-        stopStrapUpUntil: strapUpUntil,
         status: "complete",
         completedAt,
       }));
