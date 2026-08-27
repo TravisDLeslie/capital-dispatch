@@ -796,9 +796,7 @@ export default function SupplierRunCard({
       }
 
       const pickupPhoto = await createPickupPhoto(file);
-      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto, {
-        markPickedUp: true,
-      });
+      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto);
       setIsItemsOpen(true);
     } catch (photoError) {
       console.error("Unable to save pickup photo:", photoError);
@@ -811,19 +809,7 @@ export default function SupplierRunCard({
 
   async function startPickupPhoto(item, inputId) {
     if (item.pickedUp) {
-      setPhotoError("");
-      setProcessingPhotoItemId(item.id);
-
-      try {
-        await onToggleItem(supplierRun.id, item.id);
-        setIsItemsOpen(true);
-      } catch (toggleError) {
-        console.error("Unable to update pickup item:", toggleError);
-        setPhotoError("Unable to update that item. Try again.");
-      } finally {
-        setProcessingPhotoItemId("");
-      }
-
+      setPhotoError("This item is already marked complete.");
       return;
     }
 
@@ -834,6 +820,32 @@ export default function SupplierRunCard({
 
     setPhotoError("");
     document.getElementById(inputId)?.click();
+  }
+
+  async function markPickupItemComplete(item, inputId) {
+    if (!canPickUpItems && !item.pickedUp) {
+      setPhotoError("Tap I've arrived before picking up items at this stop.");
+      return;
+    }
+
+    if (!item.pickedUp && getPickupPhotoList(item).length === 0) {
+      setPhotoError("Take a pickup photo before marking this item complete.");
+      document.getElementById(inputId)?.click();
+      return;
+    }
+
+    setPhotoError("");
+    setProcessingPhotoItemId(item.id);
+
+    try {
+      await onToggleItem(supplierRun.id, item.id);
+      setIsItemsOpen(true);
+    } catch (toggleError) {
+      console.error("Unable to update pickup item:", toggleError);
+      setPhotoError("Unable to update that item. Try again.");
+    } finally {
+      setProcessingPhotoItemId("");
+    }
   }
 
   function openPickupSheet() {
@@ -1166,7 +1178,9 @@ export default function SupplierRunCard({
                     >
                       {processingPhotoItemId === item.id
                         ? "Saving photo..."
-                        : "Take photo & mark picked up"}
+                        : latestPickupPhoto
+                          ? "Add another pickup photo"
+                          : "Take pickup photo"}
                     </button>
 
                     {latestPickupPhoto?.dataUrl ? (
@@ -1198,6 +1212,23 @@ export default function SupplierRunCard({
                         </span>
                       </button>
                     ) : null}
+
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void markPickupItemComplete(
+                          item,
+                          pickupPhotoInputId,
+                        );
+                      }}
+                      disabled={Boolean(processingPhotoItemId)}
+                      className="mt-3 flex min-h-[54px] w-full items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm font-black uppercase tracking-[0.08em] text-emerald-800 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      <span>{getMaterialActionLabel(item.materialUse)}</span>
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 border-emerald-500 bg-white" />
+                    </button>
                   </div>
                 );
               })() : (
@@ -1367,7 +1398,23 @@ export default function SupplierRunCard({
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
-                          void startPickupPhoto(item, pickupPhotoInputId);
+                          if (item.pickedUp) {
+                            void markPickupItemComplete(
+                              item,
+                              pickupPhotoInputId,
+                            );
+                            return;
+                          }
+
+                          if (pickupPhotos.length === 0) {
+                            void startPickupPhoto(item, pickupPhotoInputId);
+                            return;
+                          }
+
+                          void markPickupItemComplete(
+                            item,
+                            pickupPhotoInputId,
+                          );
                         }}
                         disabled={Boolean(processingPhotoItemId)}
                         className="mt-3 flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"

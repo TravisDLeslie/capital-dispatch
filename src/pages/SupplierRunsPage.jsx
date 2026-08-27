@@ -1884,12 +1884,22 @@ export default function SupplierRunsPage({
         )
       : driverScopedRuns;
 
+  const shouldKeepCompletedRunInActiveStop = (supplierRun) =>
+    mode === "check" &&
+    usesSouthStopWorkflow(supplierRun) &&
+    supplierRun.status === "complete" &&
+    !supplierRun.stopCompletedAt;
+
   const openRuns = filteredVisibleRuns.filter(
-    (supplierRun) => supplierRun.status !== "complete",
+    (supplierRun) =>
+      supplierRun.status !== "complete" ||
+      shouldKeepCompletedRunInActiveStop(supplierRun),
   );
 
   const completeRuns = filteredVisibleRuns.filter(
-    (supplierRun) => supplierRun.status === "complete",
+    (supplierRun) =>
+      supplierRun.status === "complete" &&
+      !shouldKeepCompletedRunInActiveStop(supplierRun),
   );
 
   const routeOrdersByDriver = southRouteOrders
@@ -3956,8 +3966,8 @@ export default function SupplierRunsPage({
                                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                       <div>
                                         <p className="text-base font-black text-emerald-950">
-                                          Are these POs for{" "}
-                                          {vendorGroup.vendor} complete?
+                                          Are you done at{" "}
+                                          {vendorGroup.vendor}?
                                         </p>
                                         <p className="mt-1 text-sm font-bold text-emerald-700">
                                           This closes the vendor stop and moves
@@ -3965,26 +3975,35 @@ export default function SupplierRunsPage({
                                         </p>
                                       </div>
 
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleCompleteStopClick(
-                                            driverGroup.driver,
-                                            vendorGroup.vendor,
-                                            timing,
-                                          )
-                                        }
-                                        disabled={
-                                          completingStopKey ===
+                                      <div className="flex flex-wrap gap-2">
+                                        <button
+                                          type="button"
+                                          className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-emerald-200 bg-white px-5 text-sm font-black text-emerald-800 shadow-sm transition hover:bg-emerald-100"
+                                        >
+                                          Not yet
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleCompleteStopClick(
+                                              driverGroup.driver,
+                                              vendorGroup.vendor,
+                                              timing,
+                                            )
+                                          }
+                                          disabled={
+                                            completingStopKey ===
+                                            `open::${driverGroup.driver}::${vendorGroup.vendor}`
+                                          }
+                                          className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-emerald-700 px-5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                                        >
+                                          {completingStopKey ===
                                           `open::${driverGroup.driver}::${vendorGroup.vendor}`
-                                        }
-                                        className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-emerald-700 px-5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300"
-                                      >
-                                        {completingStopKey ===
-                                        `open::${driverGroup.driver}::${vendorGroup.vendor}`
-                                          ? "Closing..."
-                                          : "Yes, complete stop"}
-                                      </button>
+                                            ? "Closing..."
+                                            : "Yes, complete stop"}
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
                                 ) : null}
