@@ -752,7 +752,7 @@ function StopTimingPills({ timing, compact = false }) {
               className="h-1.5 w-1.5 rounded-full bg-violet-400"
               aria-hidden="true"
             />
-            Strap-up done {formatTime(timing.strapUpUntil)}
+            Strap-up done
           </div>
         ) : null}
       </div>
@@ -798,7 +798,7 @@ function StopMobileTiming({ timing }) {
       ) : null}
 
       {timing.strapUpUntil ? (
-        <span>Strap {formatTime(timing.strapUpUntil)}</span>
+        <span>Strap-up done</span>
       ) : null}
     </div>
   );
