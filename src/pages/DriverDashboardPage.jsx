@@ -220,23 +220,6 @@ function DriverRouteOverview({
   );
 }
 
-function EmptyDriverRouteCard() {
-  return (
-    <section className="rounded-3xl border border-dashed border-slate-300 bg-white p-6 text-center shadow-sm">
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-        No Route Assigned
-      </p>
-      <h2 className="mt-2 text-2xl font-black text-slate-950">
-        Nothing active right now
-      </h2>
-      <p className="mt-2 text-sm font-semibold text-slate-500">
-        South pickups and driver deliveries will show here when dispatch assigns
-        them.
-      </p>
-    </section>
-  );
-}
-
 /**
  * @param {{
  *   supplierRuns: Array<Record<string, any>>;
@@ -325,10 +308,6 @@ export default function DriverDashboardPage({
         openDeliveries={openDeliveries}
         onPageChange={onPageChange}
       />
-
-      {openSupplierRuns.length === 0 && openDeliveries.length === 0 ? (
-        <EmptyDriverRouteCard />
-      ) : null}
 
     </PageContainer>
   );
