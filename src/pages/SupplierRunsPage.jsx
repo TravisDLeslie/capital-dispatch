@@ -271,11 +271,31 @@ function getMaterialUseLabel(materialUse) {
   return labels[materialUse] || "Order";
 }
 
+function getPickupPhotoUrl(photo) {
+  return String(photo?.url || photo?.dataUrl || "").trim();
+}
+
+function hasPickupPhoto(item) {
+  const photos = Array.isArray(item?.pickupPhotos)
+    ? item.pickupPhotos
+    : [];
+
+  return Boolean(
+    photos.some(getPickupPhotoUrl) || getPickupPhotoUrl(item?.pickupPhoto),
+  );
+}
+
+function isPickupItemComplete(item) {
+  return Boolean(item?.pickedUp || item?.pickedUpAt || hasPickupPhoto(item));
+}
+
 function getVendorGroupStatsFromRuns(runs) {
   const items = runs.flatMap((supplierRun) =>
     Array.isArray(supplierRun.items) ? supplierRun.items : [],
   );
-  const remainingItems = items.filter((item) => !item.pickedUp).length;
+  const remainingItems = items.filter(
+    (item) => !isPickupItemComplete(item),
+  ).length;
 
   return {
     poCount: runs.length,
@@ -544,7 +564,7 @@ function getSupplierRunBoardDateKey(supplierRun) {
 
 function hasPickedUpItems(supplierRun) {
   return Array.isArray(supplierRun?.items)
-    ? supplierRun.items.some((item) => item.pickedUp)
+    ? supplierRun.items.some(isPickupItemComplete)
     : false;
 }
 
@@ -1137,7 +1157,7 @@ export default function SupplierRunsPage({
       Array.isArray(supplierRun.items) ? supplierRun.items : [],
     );
     const allItemsPickedUp =
-      items.length > 0 && items.every((item) => item.pickedUp);
+      items.length > 0 && items.every(isPickupItemComplete);
     const savedCompletedAt =
       vendorGroup.runs
         .map((supplierRun) => supplierRun.stopCompletedAt)
@@ -1239,7 +1259,7 @@ export default function SupplierRunsPage({
         Array.isArray(supplierRun.items) ? supplierRun.items : [],
       ),
     );
-    const pickedUpItems = items.filter((item) => item.pickedUp).length;
+    const pickedUpItems = items.filter(isPickupItemComplete).length;
     const remainingItems = items.length - pickedUpItems;
     const progressPercent =
       items.length > 0
@@ -1682,7 +1702,9 @@ export default function SupplierRunsPage({
     (count, supplierRun) =>
       count +
       (Array.isArray(supplierRun.items)
-        ? supplierRun.items.filter((item) => !item.pickedUp).length
+        ? supplierRun.items.filter(
+            (item) => !isPickupItemComplete(item),
+          ).length
         : 0),
     0,
   );
@@ -4146,74 +4168,78 @@ export default function SupplierRunsPage({
                 <div className="space-y-3">
                   {Array.isArray(selectedSupplierRunDetails.items) &&
                   selectedSupplierRunDetails.items.length > 0 ? (
-                    selectedSupplierRunDetails.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`rounded-2xl border px-4 py-3 ${
-                          item.pickedUp
-                            ? "border-emerald-200 bg-emerald-50"
-                            : "border-slate-200 bg-white"
-                        }`}
-                      >
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="min-w-0">
-                            {item.quantity ? (
-                              <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
-                                QTY: {item.quantity}
-                              </p>
-                            ) : null}
+                    selectedSupplierRunDetails.items.map((item) => {
+                      const itemPickedUp = isPickupItemComplete(item);
 
-                            <p className="mt-1 text-base font-black text-slate-900">
-                              {item.description || "No description"}
-                            </p>
-
-                            <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
-                              {item.internalReference ? (
-                                <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-                                  SKU / SO: {item.internalReference}
-                                </span>
+                      return (
+                        <div
+                          key={item.id}
+                          className={`rounded-2xl border px-4 py-3 ${
+                            itemPickedUp
+                              ? "border-emerald-200 bg-emerald-50"
+                              : "border-slate-200 bg-white"
+                          }`}
+                        >
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              {item.quantity ? (
+                                <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                                  QTY: {item.quantity}
+                                </p>
                               ) : null}
 
-                              <span
-                                className={`rounded-full px-3 py-1 ${getMaterialUseBadgeClass(
-                                  item.materialUse,
-                                )}`}
-                              >
-                                {getMaterialUseLabel(item.materialUse)}
-                                {item.orderNumber
-                                  ? ` ${item.orderNumber}`
-                                  : ""}
-                              </span>
+                              <p className="mt-1 text-base font-black text-slate-900">
+                                {item.description || "No description"}
+                              </p>
+
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+                                {item.internalReference ? (
+                                  <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
+                                    SKU / SO: {item.internalReference}
+                                  </span>
+                                ) : null}
+
+                                <span
+                                  className={`rounded-full px-3 py-1 ${getMaterialUseBadgeClass(
+                                    item.materialUse,
+                                  )}`}
+                                >
+                                  {getMaterialUseLabel(item.materialUse)}
+                                  {item.orderNumber
+                                    ? ` ${item.orderNumber}`
+                                    : ""}
+                                </span>
+                              </div>
+
+                              {item.returnNotes ? (
+                                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
+                                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
+                                    Return / swap notes
+                                  </p>
+                                  <p className="mt-1">{item.returnNotes}</p>
+                                </div>
+                              ) : null}
                             </div>
 
-                            {item.returnNotes ? (
-                              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
-                                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
-                                  Return / swap notes
-                                </p>
-                                <p className="mt-1">{item.returnNotes}</p>
-                              </div>
-                            ) : null}
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${
+                                itemPickedUp
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-amber-100 text-amber-700"
+                              }`}
+                            >
+                              {itemPickedUp
+                                ? "Picked Up"
+                                : item.materialUse === "return"
+                                  ? "Needs Returned"
+                                  : item.materialUse === "swap"
+                                    ? "Needs Swapped"
+                                    : "Needs Pickup"}
+                            </span>
                           </div>
-
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${
-                              item.pickedUp
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-amber-100 text-amber-700"
-                            }`}
-                          >
-                            {item.pickedUp
-                              ? "Picked Up"
-                              : item.materialUse === "return"
-                                ? "Needs Returned"
-                                : item.materialUse === "swap"
-                                  ? "Needs Swapped"
-                                  : "Needs Pickup"}
-                          </span>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <p className="rounded-2xl border border-dashed border-slate-300 px-4 py-5 text-sm font-semibold text-slate-500">
                       No items listed on this PO.

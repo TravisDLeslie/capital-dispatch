@@ -119,7 +119,7 @@ function getSupplierRunActionLabel(items, isComplete) {
     return "Complete";
   }
 
-  const openItems = items.filter((item) => !item.pickedUp);
+  const openItems = items.filter((item) => !isPickupItemComplete(item));
 
   if (openItems.some((item) => item.materialUse === "return")) {
     return "Needs Returned";
@@ -170,7 +170,7 @@ function formatPickupItemsForPrint(items, showCustomerName = false) {
                 : ""
             }
           </td>
-          <td>${item.pickedUp ? "Picked up" : "Pending"}</td>
+          <td>${isPickupItemComplete(item) ? "Picked up" : "Pending"}</td>
         </tr>
       `,
     )
@@ -511,6 +511,14 @@ function getPickupPhotoList(item) {
   return photos;
 }
 
+function isPickupItemComplete(item) {
+  return Boolean(
+    item?.pickedUp ||
+      item?.pickedUpAt ||
+      getPickupPhotoList(item).length > 0,
+  );
+}
+
 function getPhotoUrl(photo) {
   return String(photo?.url || photo?.dataUrl || "").trim();
 }
@@ -564,9 +572,7 @@ export default function SupplierRunCard({
     ? supplierRun.items
     : [];
 
-  const pickedUpCount = items.filter(
-    (item) => item.pickedUp,
-  ).length;
+  const pickedUpCount = items.filter(isPickupItemComplete).length;
 
   const isComplete =
     items.length > 0 && pickedUpCount === items.length;
@@ -613,13 +619,17 @@ export default function SupplierRunCard({
     useState(defaultItemsOpen);
   const [completedPOPrompt, setCompletedPOPrompt] = useState(null);
   const isCompactClosed = compactWhenClosed && !isItemsOpen;
-  const activePickupItem = items.find((item) => !item.pickedUp) || null;
+  const activePickupItem =
+    items.find((item) => !isPickupItemComplete(item)) || null;
   const activePickupItemIndex = activePickupItem
     ? items.findIndex((item) => item.id === activePickupItem.id)
     : -1;
-  const completedPickupItems = items.filter((item) => item.pickedUp);
+  const completedPickupItems = items.filter(isPickupItemComplete);
   const upcomingPickupItems = activePickupItem
-    ? items.filter((item) => !item.pickedUp && item.id !== activePickupItem.id)
+    ? items.filter(
+        (item) =>
+          !isPickupItemComplete(item) && item.id !== activePickupItem.id,
+      )
     : [];
   const hasNotes = Boolean(String(supplierRun.notes || "").trim());
   const notesSignature = String(supplierRun.notes || "").trim();
@@ -764,8 +774,22 @@ export default function SupplierRunCard({
         itemId,
         file,
       });
-      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto);
+      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto, {
+        markPickedUp: true,
+      });
       setIsItemsOpen(true);
+
+      const remainingAfterPickup = items.filter(
+        (currentItem) =>
+          !isPickupItemComplete(currentItem) && currentItem.id !== itemId,
+      ).length;
+
+      if (remainingAfterPickup === 0) {
+        setCompletedPOPrompt({
+          poNumber: supplierRun.poNumber || "this PO",
+          vendor: supplierRun.vendor || "this vendor",
+        });
+      }
     } catch (photoError) {
       console.error("Unable to save pickup photo:", photoError);
       setPhotoError(getPhotoSaveErrorMessage(photoError));
@@ -783,7 +807,7 @@ export default function SupplierRunCard({
       return;
     }
 
-    if (item.pickedUp) {
+    if (isPickupItemComplete(item)) {
       return;
     }
 
@@ -809,7 +833,7 @@ export default function SupplierRunCard({
 
       const remainingAfterPickup = items.filter(
         (currentItem) =>
-          !currentItem.pickedUp && currentItem.id !== itemId,
+          !isPickupItemComplete(currentItem) && currentItem.id !== itemId,
       ).length;
 
       if (remainingAfterPickup === 0) {
@@ -1082,7 +1106,7 @@ export default function SupplierRunCard({
                 const pickupPhotoInputId = `pickup-photo-${supplierRun.id}-${item.id}`;
                 const materialUseClasses = getMaterialUseClasses(
                   item.materialUse,
-                  item.pickedUp,
+                  isPickupItemComplete(item),
                 );
                 const photoReminder = getMaterialPhotoReminder(item.materialUse);
                 const pickupPhotos = getPickupPhotoList(item);
@@ -1323,9 +1347,10 @@ export default function SupplierRunCard({
           {!driverFocused ? items.map((item) => {
             const isEditing = editingItemId === item.id;
             const pickupPhotoInputId = `pickup-photo-${supplierRun.id}-${item.id}`;
+            const itemPickedUp = isPickupItemComplete(item);
             const materialUseClasses = getMaterialUseClasses(
               item.materialUse,
-              item.pickedUp,
+              itemPickedUp,
             );
             const photoReminder = getMaterialPhotoReminder(
               item.materialUse,
@@ -1356,7 +1381,7 @@ export default function SupplierRunCard({
 
                       <span
                         className={`block text-base font-semibold ${
-                          item.pickedUp
+                          itemPickedUp
                             ? "text-emerald-800 line-through decoration-2"
                             : "text-slate-800"
                         }`}
@@ -1370,7 +1395,7 @@ export default function SupplierRunCard({
                         </span>
                       ) : null}
 
-                      {item.pickedUp && item.pickedUpAt ? (
+                      {itemPickedUp && item.pickedUpAt ? (
                         <span className="mt-1 block text-xs font-bold text-emerald-700">
                           Picked up {formatTime(item.pickedUpAt)}
                         </span>
@@ -1406,12 +1431,12 @@ export default function SupplierRunCard({
                         </span>
                       ) : null}
 
-                      {!item.pickedUp && photoReminder ? (
+                      {!itemPickedUp && photoReminder ? (
                         <span className="mt-3 block rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700">
                           {photoReminder}
                         </span>
                       ) : null}
-                      {!item.pickedUp && pickupPhotos.length === 0 ? (
+                      {!itemPickedUp && pickupPhotos.length === 0 ? (
                         <div className="relative mt-3 flex w-full cursor-pointer items-center justify-between gap-3 overflow-hidden rounded-lg border border-blue-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-blue-400 hover:bg-blue-50">
                           <input
                             id={pickupPhotoInputId}
@@ -1438,7 +1463,7 @@ export default function SupplierRunCard({
                             aria-hidden="true"
                           />
                         </div>
-                      ) : !item.pickedUp ? (
+                      ) : !itemPickedUp ? (
                         <button
                           type="button"
                           onClick={(event) => {
@@ -1511,7 +1536,7 @@ export default function SupplierRunCard({
                     </span>
 
                     <div className="flex shrink-0 flex-wrap gap-2">
-                      {!item.pickedUp ? (
+                      {!itemPickedUp ? (
                         <button
                           type="button"
                           onClick={(event) => {

@@ -3268,13 +3268,28 @@ export default function App() {
       };
     });
 
+    const allItemsPickedUp =
+      updatedItems.length > 0 &&
+      updatedItems.every(
+        (item) =>
+          item.pickedUp ||
+          item.pickedUpAt ||
+          (Array.isArray(item.pickupPhotos) &&
+            item.pickupPhotos.some(Boolean)) ||
+          Boolean(item.pickupPhoto),
+      );
+    const completedAt =
+      allItemsPickedUp
+        ? supplierRun.completedAt || new Date().toISOString()
+        : null;
+
     const updatedSupplierRuns = options.markPickedUp
       ? await updateSupplierRunItems(
           supplierRunId,
           updatedItems,
           {
-            status: "open",
-            completedAt: null,
+            status: allItemsPickedUp ? "complete" : "open",
+            completedAt,
             stopWorkflowVersion: supplierRun.stopWorkflowVersion || 1,
           },
         )
