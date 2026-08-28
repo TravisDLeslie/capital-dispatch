@@ -611,6 +611,7 @@ export default function SupplierRunCard({
   const [isViewingNotes, setIsViewingNotes] = useState(false);
   const [isItemsOpen, setIsItemsOpen] =
     useState(defaultItemsOpen);
+  const [completedPOPrompt, setCompletedPOPrompt] = useState(null);
   const isCompactClosed = compactWhenClosed && !isItemsOpen;
   const activePickupItem = items.find((item) => !item.pickedUp) || null;
   const activePickupItemIndex = activePickupItem
@@ -649,6 +650,12 @@ export default function SupplierRunCard({
       setNotesUnread(true);
     }
   }, [notesReadStorageKey, notesSignature]);
+
+  useEffect(() => {
+    if (!isComplete) {
+      setCompletedPOPrompt(null);
+    }
+  }, [isComplete, supplierRun.id]);
 
   function openNotes() {
     setIsViewingNotes(true);
@@ -799,6 +806,18 @@ export default function SupplierRunCard({
         markPickedUp: true,
       });
       setIsItemsOpen(true);
+
+      const remainingAfterPickup = items.filter(
+        (currentItem) =>
+          !currentItem.pickedUp && currentItem.id !== itemId,
+      ).length;
+
+      if (remainingAfterPickup === 0) {
+        setCompletedPOPrompt({
+          poNumber: supplierRun.poNumber || "this PO",
+          vendor: supplierRun.vendor || "this vendor",
+        });
+      }
     } catch (pickupError) {
       console.error("Unable to mark pickup item complete:", pickupError);
       setPhotoError("Unable to mark that item picked up. Try again.");
@@ -1013,6 +1032,46 @@ export default function SupplierRunCard({
               className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700"
             >
               {photoError}
+            </div>
+          ) : null}
+
+          {completedPOPrompt ? (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">
+                PO all picked up
+              </p>
+              <h3 className="mt-1 text-xl font-black text-emerald-950">
+                {completedPOPrompt.poNumber} all picked up?
+              </h3>
+              <p className="mt-1 text-sm font-bold text-emerald-800">
+                Stay here to review it, or confirm and keep working this stop.
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setCompletedPOPrompt(null);
+                    setIsItemsOpen(true);
+                  }}
+                  className="rounded-xl border border-emerald-200 bg-white px-4 py-3 text-sm font-black text-slate-800 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50"
+                >
+                  No
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setCompletedPOPrompt(null);
+                    setIsItemsOpen(true);
+                  }}
+                  className="rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800"
+                >
+                  Yes
+                </button>
+              </div>
             </div>
           ) : null}
 
@@ -1352,20 +1411,16 @@ export default function SupplierRunCard({
                           {photoReminder}
                         </span>
                       ) : null}
-                      {!item.pickedUp ? (
-                        <label
-                          htmlFor={pickupPhotoInputId}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setPhotoError("");
-                          }}
-                          className="relative mt-3 flex w-full cursor-pointer items-center justify-between gap-3 overflow-hidden rounded-lg border border-blue-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
-                        >
+                      {!item.pickedUp && pickupPhotos.length === 0 ? (
+                        <div className="relative mt-3 flex w-full cursor-pointer items-center justify-between gap-3 overflow-hidden rounded-lg border border-blue-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-blue-400 hover:bg-blue-50">
                           <input
                             id={pickupPhotoInputId}
                             type="file"
                             accept="image/*"
-                            onClick={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setPhotoError("");
+                            }}
                             onChange={(event) =>
                               handlePickupPhotoChange(item, event)
                             }
@@ -1375,16 +1430,38 @@ export default function SupplierRunCard({
                           <span className="text-xs font-black uppercase tracking-[0.08em] text-blue-700">
                             {processingPhotoItemId === item.id
                               ? "Saving photo..."
-                              : pickupPhotos.length > 0
-                                ? "Add another pickup photo"
-                                : "Photo required - tap to take photo"}
+                              : "Photo required - tap to take photo"}
                           </span>
 
                           <span
                             className="flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-blue-300 bg-blue-50"
                             aria-hidden="true"
                           />
-                        </label>
+                        </div>
+                      ) : !item.pickedUp ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            void markPickupItemComplete(item);
+                          }}
+                          disabled={processingPickupItemId === item.id}
+                          className="mt-3 flex w-full items-center justify-between gap-3 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-left shadow-sm transition hover:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          <span className="text-xs font-black uppercase tracking-[0.08em] text-emerald-800">
+                            {processingPickupItemId === item.id
+                              ? "Saving picked up..."
+                              : getMaterialActionLabel(item.materialUse)}
+                          </span>
+
+                          <span
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-emerald-600 bg-emerald-600"
+                            aria-hidden="true"
+                          >
+                            <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                          </span>
+                        </button>
                       ) : (
                         <div className="mt-3 flex w-full items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left">
                           <span className="text-xs font-black uppercase tracking-[0.08em] text-emerald-800">
