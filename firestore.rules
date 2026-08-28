@@ -103,6 +103,57 @@ service cloud.firestore {
       );
     }
 
+    function canCreateSouthRun() {
+      return isAdmin() ||
+        hasAnyPermission([
+          "supplier-runs-add",
+          "supplier-runs-dispatch"
+        ]);
+    }
+
+    function canDispatchSouthRun() {
+      return isAdmin() || hasAnyPermission(["supplier-runs-dispatch"]);
+    }
+
+    function isSouthRunCreator() {
+      return isApproved() && (
+        resource.data.createdById == request.auth.uid ||
+        resource.data.createdByEmail == request.auth.token.email
+      );
+    }
+
+    function canManageSouthRun() {
+      return isAdmin() || (
+        role() != "driver" &&
+        isSouthRunCreator()
+      );
+    }
+
+    function isSouthDispatchOnlyUpdate() {
+      return canDispatchSouthRun() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "driver",
+          "vehicleId",
+          "vehicleTitle",
+          "vehicleBadge",
+          "dispatchStatus",
+          "updatedAt"
+        ]);
+    }
+
+    function isSouthDriverProgressUpdate() {
+      return isDriverFor(resource.data.driver) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "items",
+          "status",
+          "updatedAt",
+          "completedAt",
+          "stopWorkflowVersion",
+          "stopArrivedAt",
+          "stopCompletedAt"
+        ]);
+    }
+
     function isDelivery() {
       return isApproved() && (
         isAdmin() ||
@@ -196,8 +247,11 @@ service cloud.firestore {
 
     match /supplierRuns/{supplierRunId} {
       allow read: if isSouth() || isReceiving() || isDriverFor(resource.data.driver);
-      allow create, delete: if isSouth();
-      allow update: if isSouth() || isDriverFor(resource.data.driver);
+      allow create: if canCreateSouthRun();
+      allow update: if canManageSouthRun() ||
+        isSouthDispatchOnlyUpdate() ||
+        isSouthDriverProgressUpdate();
+      allow delete: if canManageSouthRun();
     }
 
     match /theirTruckPOs/{theirTruckPOId} {

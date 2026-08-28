@@ -1170,15 +1170,48 @@ function getAllowedPageIds(
   workView?: string,
 ) {
   const presetRole = getPresetRole(role);
-  const addWorkViewPageIds = (pageIds: string[]) => {
+  const addParentPageIds = (pageIds: string[]) => {
     const nextPageIds = [...pageIds];
+
+    if (
+      pageIds.some((pageId) =>
+        [
+          "south-overview",
+          "supplier-runs-add",
+          "their-truck-pos",
+          "their-truck-overview",
+          "supplier-runs-check",
+          "supplier-runs-calendar",
+          "south-calendar",
+          "their-truck-calendar",
+          "po-calendar",
+          "their-truck-history",
+          "supplier-runs-history",
+        ].includes(pageId),
+      )
+    ) {
+      nextPageIds.push("south");
+    }
+
+    if (
+      pageIds.some((pageId) =>
+        ["receiving", "check-in", "today", "search", "trace"].includes(pageId),
+      )
+    ) {
+      nextPageIds.push("receiving");
+    }
+
+    return nextPageIds;
+  };
+  const addWorkViewPageIds = (pageIds: string[]) => {
+    const nextPageIds = addParentPageIds(pageIds);
 
     if (["driver", "receiving"].includes(String(workView || ""))) {
       nextPageIds.push("south");
+      nextPageIds.push("supplier-runs-check");
 
       if (workView === "driver") {
         nextPageIds.push(
-          "supplier-runs-check",
           "supplier-runs-calendar",
           "south-calendar",
         );
@@ -1752,6 +1785,9 @@ export default function App() {
   );
   const canAssignSouthRoutes = effectiveAllowedPageIds.includes(
     "supplier-runs-dispatch",
+  );
+  const canManageAllSouthSupplierRuns = ["superAdmin", "admin"].includes(
+    effectiveUserRole,
   );
   const canMaintainSouthSchedule =
     isSuperAdmin || allowedPageIds.includes("supplier-runs-dispatch");
@@ -4514,9 +4550,10 @@ export default function App() {
             employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
             canReorderRoute={canAssignSouthRoutes}
-            canEditSupplierRuns={canAssignSouthRoutes}
+            canEditSupplierRuns={canManageAllSouthSupplierRuns}
             canReadAllRouteOrders={false}
             routeOrderDriverName={driverName}
+            createdBy={currentUserCreator}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
             onSaveSupplierRunItemPickupPhoto={
@@ -5135,6 +5172,8 @@ export default function App() {
             viewerRole={southViewerRole}
             canAssignRoute
             canReorderRoute={canAssignSouthRoutes}
+            canEditSupplierRuns={canManageAllSouthSupplierRuns}
+            createdBy={currentUserCreator}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
             onSaveSupplierRunItemPickupPhoto={
@@ -5167,7 +5206,8 @@ export default function App() {
             employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
             canReorderRoute={canAssignSouthRoutes}
-            canEditSupplierRuns={canAssignSouthRoutes}
+            canEditSupplierRuns={canManageAllSouthSupplierRuns}
+            createdBy={currentUserCreator}
             canReadAllRouteOrders={
               !isSouthDriverScopedView && canReadSouth
             }
@@ -5202,7 +5242,8 @@ export default function App() {
             employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
             canReorderRoute={canAssignSouthRoutes}
-            canEditSupplierRuns={canAssignSouthRoutes}
+            canEditSupplierRuns={canManageAllSouthSupplierRuns}
+            createdBy={currentUserCreator}
             canReadAllRouteOrders={
               !isSouthDriverScopedView && canReadSouth
             }
@@ -5239,7 +5280,8 @@ export default function App() {
             vendorDisplayNameMap={vendorDisplayNameMap}
             employeeAliasMap={employeeAliasMap}
             viewerRole={southViewerRole}
-            canEditSupplierRuns={canAssignSouthRoutes}
+            canEditSupplierRuns={canManageAllSouthSupplierRuns}
+            createdBy={currentUserCreator}
             onAddSupplierRun={handleAddSupplierRun}
             onUpdateSupplierRun={handleUpdateSupplierRun}
             onSaveSupplierRunItemPickupPhoto={

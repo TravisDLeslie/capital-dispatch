@@ -928,7 +928,12 @@ export default function SupplierRunsPage({
   }, [initialCheckViewMode, mode]);
 
   useEffect(() => {
-    if (mode !== "check" || !canEditSupplierRuns) {
+    if (mode !== "check") {
+      return;
+    }
+
+    if (!canReadAllRouteOrders && !routeOrderDriverName) {
+      setSouthRouteOrders([]);
       return;
     }
 
@@ -950,14 +955,32 @@ export default function SupplierRunsPage({
       (supplierRun) => supplierRun.id === pendingSupplierRunId,
     );
 
-    if (pendingSupplierRun) {
+    if (pendingSupplierRun && canManageSupplierRun(pendingSupplierRun)) {
       setEditingSupplierRun(pendingSupplierRun);
     }
-  }, [canEditSupplierRuns, mode, supplierRuns]);
+  }, [
+    createdBy,
+    isDriverView,
+    _viewerRole,
+    canEditSupplierRuns,
+    mode,
+    routeOrderDriverName,
+    canReadAllRouteOrders,
+    supplierRuns,
+  ]);
 
   useEffect(
-    () =>
-      subscribeToSouthRouteOrders(
+    () => {
+      if (mode !== "check") {
+        return undefined;
+      }
+
+      if (!canReadAllRouteOrders && !routeOrderDriverName) {
+        setSouthRouteOrders([]);
+        return undefined;
+      }
+
+      return subscribeToSouthRouteOrders(
         setSouthRouteOrders,
         (routeOrderSyncError) => {
           console.error(
@@ -971,8 +994,9 @@ export default function SupplierRunsPage({
         canReadAllRouteOrders
           ? {}
           : { driverName: routeOrderDriverName },
-      ),
-    [canReadAllRouteOrders, routeOrderDriverName],
+      );
+    },
+    [canReadAllRouteOrders, mode, routeOrderDriverName],
   );
 
   async function handleSubmit(supplierRun) {
@@ -990,7 +1014,7 @@ export default function SupplierRunsPage({
   }
 
   async function handleEditSubmit(supplierRun) {
-    if (!editingSupplierRun?.id || !canEditSupplierRuns) {
+    if (!editingSupplierRun?.id || !canManageSupplierRun(editingSupplierRun)) {
       return;
     }
 
@@ -1037,6 +1061,46 @@ export default function SupplierRunsPage({
     }
 
     return Boolean(openStopKeys[stopKey]);
+  }
+
+  function canManageSupplierRun(supplierRun) {
+    if (!supplierRun) {
+      return false;
+    }
+
+    if (canEditSupplierRuns) {
+      return true;
+    }
+
+    if (isDriverView || _viewerRole === "driver") {
+      return false;
+    }
+
+    const viewerId = String(createdBy?.id || "").trim();
+    const viewerEmail = String(createdBy?.email || "").trim().toLowerCase();
+    const viewerName = String(createdBy?.name || "").trim().toLowerCase();
+    const supplierRunCreatorId = String(supplierRun.createdById || "").trim();
+    const supplierRunCreatorEmail = String(
+      supplierRun.createdByEmail || "",
+    )
+      .trim()
+      .toLowerCase();
+    const supplierRunCreatorName = String(supplierRun.createdByName || "")
+      .trim()
+      .toLowerCase();
+    const hasStrongCreator =
+      Boolean(supplierRunCreatorId) || Boolean(supplierRunCreatorEmail);
+
+    return Boolean(
+      (viewerId && supplierRunCreatorId && viewerId === supplierRunCreatorId) ||
+        (viewerEmail &&
+          supplierRunCreatorEmail &&
+          viewerEmail === supplierRunCreatorEmail) ||
+        (!hasStrongCreator &&
+          viewerName &&
+          supplierRunCreatorName &&
+          viewerName === supplierRunCreatorName),
+    );
   }
 
   async function saveRouteOrder(driver, vendorOrder) {
@@ -1529,7 +1593,7 @@ export default function SupplierRunsPage({
       return;
     }
 
-    if (!canEditSupplierRuns) {
+    if (!canManageSupplierRun(selectedSupplierRunDetails)) {
       setDateMoveError("You do not have access to move this PO.");
       return;
     }
@@ -1743,7 +1807,7 @@ export default function SupplierRunsPage({
       hasPickedUpItems(selectedSupplierRunDetails));
   const canMoveSelectedSupplierRunDate =
     selectedSupplierRunDetails &&
-    canEditSupplierRuns &&
+    canManageSupplierRun(selectedSupplierRunDetails) &&
     !selectedSupplierRunDateIsLocked;
   const pageTitle = getSouthPageTitle(mode);
   const displayPageTitle =
@@ -2430,7 +2494,7 @@ export default function SupplierRunsPage({
                             : "Assign Driver"}
                         </button>
 
-                        {canEditSupplierRuns ? (
+                        {canManageSupplierRun(supplierRun) ? (
                           <div className="mt-3 border-t border-slate-200 pt-3">
                           <button
                             type="button"
@@ -2683,7 +2747,7 @@ export default function SupplierRunsPage({
                                                 onUpdateSupplierRunItemDescription
                                               }
                                               onDelete={
-                                                canEditSupplierRuns
+                                                canManageSupplierRun(supplierRun)
                                                   ? onDeleteSupplierRun
                                                   : undefined
                                               }
@@ -3600,12 +3664,12 @@ export default function SupplierRunsPage({
                                       onUpdateSupplierRunItemDescription
                                     }
                                     onEdit={
-                                      canEditSupplierRuns
+                                      canManageSupplierRun(supplierRun)
                                         ? setEditingSupplierRun
                                         : undefined
                                     }
                                     onDelete={
-                                      canEditSupplierRuns
+                                      canManageSupplierRun(supplierRun)
                                         ? onDeleteSupplierRun
                                         : undefined
                                     }
@@ -3880,7 +3944,7 @@ export default function SupplierRunsPage({
                                       onUpdateSupplierRunItemDescription
                                     }
                                     onDelete={
-                                      canEditSupplierRuns
+                                      canManageSupplierRun(supplierRun)
                                         ? onDeleteSupplierRun
                                         : undefined
                                     }
@@ -3908,7 +3972,7 @@ export default function SupplierRunsPage({
         </section>
       )}
 
-      {editingSupplierRun && canEditSupplierRuns ? (
+      {editingSupplierRun && canManageSupplierRun(editingSupplierRun) ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-6">
           <button
             type="button"
