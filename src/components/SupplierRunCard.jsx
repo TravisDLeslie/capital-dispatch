@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, MessageSquareText, X } from "lucide-react";
+import { Check, FileText, MessageSquareText, X } from "lucide-react";
 import CustomerNameBadge from "./CustomerNameBadge";
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 import {
@@ -605,6 +605,8 @@ export default function SupplierRunCard({
   const [photoError, setPhotoError] = useState("");
   const [processingPhotoItemId, setProcessingPhotoItemId] =
     useState("");
+  const [processingPickupItemId, setProcessingPickupItemId] =
+    useState("");
   const [viewingPhoto, setViewingPhoto] = useState(null);
   const [isViewingNotes, setIsViewingNotes] = useState(false);
   const [isItemsOpen, setIsItemsOpen] =
@@ -755,9 +757,7 @@ export default function SupplierRunCard({
         itemId,
         file,
       });
-      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto, {
-        markPickedUp: true,
-      });
+      await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto);
       setIsItemsOpen(true);
     } catch (photoError) {
       console.error("Unable to save pickup photo:", photoError);
@@ -768,14 +768,43 @@ export default function SupplierRunCard({
     }
   }
 
-  async function startPickupPhoto(item, inputId) {
-    if (item.pickedUp) {
-      setPhotoError("This item is already marked complete.");
+  async function markPickupItemComplete(item) {
+    const itemId = item?.id;
+
+    if (!itemId) {
+      setPhotoError("Unable to find that pickup item. Try reopening the PO.");
       return;
     }
 
+    if (item.pickedUp) {
+      return;
+    }
+
+    const pickupPhotos = getPickupPhotoList(item);
+
+    if (pickupPhotos.length === 0) {
+      setPhotoError("Take at least one photo before marking this item picked up.");
+      return;
+    }
+
+    setProcessingPickupItemId(itemId);
     setPhotoError("");
-    document.getElementById(inputId)?.click();
+
+    try {
+      if (typeof onSavePickupPhoto !== "function") {
+        throw new Error("Pickup completion is not configured.");
+      }
+
+      await onSavePickupPhoto(supplierRun.id, itemId, null, {
+        markPickedUp: true,
+      });
+      setIsItemsOpen(true);
+    } catch (pickupError) {
+      console.error("Unable to mark pickup item complete:", pickupError);
+      setPhotoError("Unable to mark that item picked up. Try again.");
+    } finally {
+      setProcessingPickupItemId("");
+    }
   }
 
   function openPickupSheet() {
@@ -1062,35 +1091,33 @@ export default function SupplierRunCard({
                       </div>
                     ) : null}
 
-                    <input
-                      id={pickupPhotoInputId}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onClick={(event) => event.stopPropagation()}
-                      onChange={(event) =>
-                        handlePickupPhotoChange(item, event)
-                      }
-                      disabled={Boolean(processingPhotoItemId)}
-                      className="sr-only"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void startPickupPhoto(item, pickupPhotoInputId);
-                      }}
-                      disabled={Boolean(processingPhotoItemId)}
-                      className="mt-4 flex min-h-[54px] w-full items-center justify-center gap-3 rounded-xl bg-slate-950 px-4 py-3 text-base font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+                    <div
+                      className={`relative mt-4 flex min-h-[54px] w-full items-center justify-center gap-3 overflow-hidden rounded-xl px-4 py-3 text-base font-black text-white shadow-sm transition ${
+                        processingPhotoItemId
+                          ? "cursor-not-allowed bg-slate-400 opacity-70"
+                          : "cursor-pointer bg-slate-950 hover:bg-slate-800"
+                      }`}
                     >
+                      <input
+                        id={pickupPhotoInputId}
+                        type="file"
+                        accept="image/*"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setPhotoError("");
+                        }}
+                        onChange={(event) =>
+                          handlePickupPhotoChange(item, event)
+                        }
+                        disabled={Boolean(processingPhotoItemId)}
+                        className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                      />
                       {processingPhotoItemId === item.id
                         ? "Saving photo..."
                         : latestPickupPhoto
                           ? "Add another pickup photo"
-                          : `${getMaterialActionLabel(item.materialUse)} with photo`}
-                    </button>
+                          : "Take pickup photo"}
+                    </div>
 
                     {getPhotoUrl(latestPickupPhoto) ? (
                       <button
@@ -1122,10 +1149,45 @@ export default function SupplierRunCard({
                       </button>
                     ) : null}
 
-                    <div className="mt-3 flex min-h-[54px] w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-black uppercase tracking-[0.08em] text-slate-500 shadow-sm">
-                      <span>Photo required to mark picked up</span>
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded border-2 border-slate-300 bg-white" />
-                    </div>
+                    {pickupPhotos.length === 0 ? (
+                      <label
+                        htmlFor={pickupPhotoInputId}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setPhotoError("");
+                        }}
+                        className="mt-3 flex min-h-[54px] w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-blue-200 bg-white px-4 py-3 text-left text-sm font-black uppercase tracking-[0.08em] text-blue-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
+                      >
+                        <span>Photo required - tap to take photo</span>
+                        <span
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded border-2 border-blue-300 bg-blue-50"
+                          aria-hidden="true"
+                        />
+                      </label>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void markPickupItemComplete(item);
+                        }}
+                        disabled={processingPickupItemId === item.id}
+                        className="mt-3 flex min-h-[54px] w-full items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-left text-sm font-black uppercase tracking-[0.08em] text-emerald-800 shadow-sm transition hover:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        <span>
+                          {processingPickupItemId === item.id
+                            ? "Saving picked up..."
+                            : getMaterialActionLabel(item.materialUse)}
+                        </span>
+                        <span
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded border-2 border-emerald-600 bg-emerald-600 text-white"
+                          aria-hidden="true"
+                        >
+                          <Check className="h-4 w-4" strokeWidth={3} />
+                        </span>
+                      </button>
+                    )}
                   </div>
                 );
               })() : (
@@ -1290,42 +1352,55 @@ export default function SupplierRunCard({
                           {photoReminder}
                         </span>
                       ) : null}
-                      <div
-                        className={`mt-3 flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left ${
-                          item.pickedUp
-                            ? "border-emerald-200 bg-emerald-50"
-                            : "border-slate-200 bg-white"
-                        }`}
-                      >
-                        <span
-                          className={`text-xs font-black uppercase tracking-[0.08em] ${
-                            item.pickedUp
-                              ? "text-emerald-800"
-                              : "text-slate-600"
-                          }`}
+                      {!item.pickedUp ? (
+                        <label
+                          htmlFor={pickupPhotoInputId}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setPhotoError("");
+                          }}
+                          className="relative mt-3 flex w-full cursor-pointer items-center justify-between gap-3 overflow-hidden rounded-lg border border-blue-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
                         >
-                          {processingPhotoItemId === item.id
-                            ? "Saving photo..."
-                            : item.pickedUp
-                              ? "Picked up"
-                              : "Photo required"}
-                        </span>
+                          <input
+                            id={pickupPhotoInputId}
+                            type="file"
+                            accept="image/*"
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={(event) =>
+                              handlePickupPhotoChange(item, event)
+                            }
+                            disabled={Boolean(processingPhotoItemId)}
+                            className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+                          />
+                          <span className="text-xs font-black uppercase tracking-[0.08em] text-blue-700">
+                            {processingPhotoItemId === item.id
+                              ? "Saving photo..."
+                              : pickupPhotos.length > 0
+                                ? "Add another pickup photo"
+                                : "Photo required - tap to take photo"}
+                          </span>
 
-                        <span
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ${
-                            item.pickedUp
-                              ? "border-emerald-600 bg-emerald-600"
-                              : "border-slate-300 bg-white"
-                          }`}
-                          aria-hidden="true"
-                        >
-                          {item.pickedUp ? (
+                          <span
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-blue-300 bg-blue-50"
+                            aria-hidden="true"
+                          />
+                        </label>
+                      ) : (
+                        <div className="mt-3 flex w-full items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left">
+                          <span className="text-xs font-black uppercase tracking-[0.08em] text-emerald-800">
+                            Picked up
+                          </span>
+
+                          <span
+                            className="flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 border-emerald-600 bg-emerald-600"
+                            aria-hidden="true"
+                          >
                             <span className="text-sm font-black leading-none text-white">
                               ✓
                             </span>
-                          ) : null}
-                        </span>
-                      </div>
+                          </span>
+                        </div>
+                      )}
 
                       {getPhotoUrl(latestPickupPhoto) ? (
                         <button
@@ -1359,21 +1434,6 @@ export default function SupplierRunCard({
                     </span>
 
                     <div className="flex shrink-0 flex-wrap gap-2">
-                      {!item.pickedUp ? (
-                        <input
-                          id={pickupPhotoInputId}
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={(event) =>
-                            handlePickupPhotoChange(item, event)
-                          }
-                          disabled={Boolean(processingPhotoItemId)}
-                          className="sr-only"
-                        />
-                      ) : null}
-
                       {!item.pickedUp ? (
                         <button
                           type="button"

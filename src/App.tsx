@@ -3242,13 +3242,25 @@ export default function App() {
         : item.pickupPhoto
           ? [item.pickupPhoto]
           : [];
+      const hasNewPickupPhoto = Boolean(
+        pickupPhoto &&
+          (typeof pickupPhoto !== "object" ||
+            (pickupPhoto as { url?: unknown; dataUrl?: unknown })
+              .url ||
+            (pickupPhoto as { url?: unknown; dataUrl?: unknown })
+              .dataUrl),
+      );
       const shouldMarkPickedUp =
         options.markPickedUp && !item.pickedUp;
 
       return {
         ...item,
-        pickupPhoto,
-        pickupPhotos: [...existingPhotos, pickupPhoto],
+        ...(hasNewPickupPhoto
+          ? {
+              pickupPhoto,
+              pickupPhotos: [...existingPhotos, pickupPhoto],
+            }
+          : {}),
         pickedUp: shouldMarkPickedUp ? true : item.pickedUp,
         pickedUpAt: shouldMarkPickedUp
           ? new Date().toISOString()
