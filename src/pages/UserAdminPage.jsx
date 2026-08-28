@@ -47,6 +47,8 @@ const permissionGroups = [
     title: "Dispatch",
     permissions: [
       { id: "dispatch", label: "Dispatch Hub" },
+      { id: "supplier-runs-dispatch", label: "South Needs Dispatch" },
+      { id: "deliveries-dispatch", label: "Delivery Needs Dispatch" },
     ],
   },
   {
@@ -57,7 +59,6 @@ const permissionGroups = [
       { id: "supplier-runs-add", label: "Add South Pickup" },
       { id: "their-truck-overview", label: "Their Truck Overview" },
       { id: "their-truck-pos", label: "Add Their Truck PO" },
-      { id: "supplier-runs-dispatch", label: "Needs Dispatch" },
       { id: "supplier-runs-check", label: "View POs to Pick Up" },
       { id: "supplier-runs-calendar", label: "South Calendar" },
       { id: "south-calendar", label: "South Only Calendar" },
@@ -72,7 +73,6 @@ const permissionGroups = [
     permissions: [
       { id: "deliveries", label: "Deliveries" },
       { id: "deliveries-add", label: "Add Deliveries" },
-      { id: "deliveries-dispatch", label: "Needs Dispatch" },
       { id: "deliveries-calendar", label: "Delivery Calendar" },
       { id: "deliveries-queue", label: "To Be Delivered" },
       { id: "deliveries-history", label: "Delivery History" },

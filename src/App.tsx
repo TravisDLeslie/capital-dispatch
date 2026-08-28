@@ -1167,8 +1167,29 @@ function getAllowedPageIdsForRole(role: string) {
 function getAllowedPageIds(
   role: string,
   permissions?: unknown,
+  workView?: string,
 ) {
   const presetRole = getPresetRole(role);
+  const addWorkViewPageIds = (pageIds: string[]) => {
+    const nextPageIds = [...pageIds];
+
+    if (["driver", "receiving"].includes(String(workView || ""))) {
+      nextPageIds.push("south");
+
+      if (workView === "driver") {
+        nextPageIds.push(
+          "supplier-runs-check",
+          "supplier-runs-calendar",
+          "south-calendar",
+        );
+      }
+    }
+
+    return nextPageIds.filter(
+      (pageId, index, currentPageIds) =>
+        currentPageIds.indexOf(pageId) === index,
+    );
+  };
 
   if (presetRole === "superAdmin") {
     return getAllowedPageIdsForRole(presetRole);
@@ -1200,17 +1221,14 @@ function getAllowedPageIds(
       pageIds.push("documents");
     }
 
-    return pageIds.filter(
-      (pageId, index, currentPageIds) =>
-        currentPageIds.indexOf(pageId) === index,
-    );
+    return addWorkViewPageIds(pageIds);
   }
 
   if (LEGACY_ROLE_PAGE_IDS[role]) {
-    return LEGACY_ROLE_PAGE_IDS[role];
+    return addWorkViewPageIds(LEGACY_ROLE_PAGE_IDS[role]);
   }
 
-  return getAllowedPageIdsForRole(presetRole);
+  return addWorkViewPageIds(getAllowedPageIdsForRole(presetRole));
 }
 
 function PageLoadingFallback() {
@@ -1517,8 +1535,13 @@ export default function App() {
   const isApproved =
     isSuperAdmin || userProfile?.status === "approved";
   const allowedPageIds = useMemo(
-    () => getAllowedPageIds(userRole, userProfile?.permissions),
-    [userRole, userProfile?.permissions],
+    () =>
+      getAllowedPageIds(
+        userRole,
+        userProfile?.permissions,
+        getWorkView(userProfile, rawUserRole),
+      ),
+    [rawUserRole, userRole, userProfile],
   );
   const activeVendors = useMemo(
     () =>
@@ -1672,7 +1695,14 @@ export default function App() {
       )
     : userRole;
   const effectiveAllowedPageIds = isSuperAdmin
-    ? getAllowedPageIds(effectiveUserRole, selectedPreviewProfile?.permissions)
+    ? getAllowedPageIds(
+        effectiveUserRole,
+        selectedPreviewProfile?.permissions,
+        getWorkView(
+          selectedPreviewProfile,
+          getUserRole(selectedPreviewProfile, selectedPreviewProfile?.email),
+        ),
+      )
     : allowedPageIds;
   const effectiveWorkView = isSuperAdmin
     ? getWorkView(

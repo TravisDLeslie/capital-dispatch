@@ -25,11 +25,6 @@ const navigationItems = [
     label: "Dashboard",
   },
   {
-    group: "Receiving",
-    id: "receiving",
-    label: "Receiving",
-  },
-  {
     group: "Yard Tasks",
     id: "yard-tasks",
     label: "Yard Tasks",
@@ -190,7 +185,7 @@ function getCurrentPageGroup(currentPage) {
   }
 
   if (["receiving", "check-in", "today", "search", "trace"].includes(currentPage)) {
-    return "Receiving";
+    return "South";
   }
 
   if (currentPage === "yard-tasks") {
@@ -328,7 +323,6 @@ export default function AppHeader({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openNavGroups, setOpenNavGroups] = useState({
     Dashboard: true,
-    Receiving: true,
     "Yard Tasks": false,
     Dispatch: false,
     South: false,
@@ -347,7 +341,7 @@ export default function AppHeader({
     .trim()
     .charAt(0)
     .toUpperCase();
-  const southGroupLabel = isDriverView ? "South" : "Fulfillment";
+  const southGroupLabel = "Fulfillment";
 
   useEffect(() => {
     const currentGroup = getCurrentPageGroup(currentPage);
@@ -358,7 +352,6 @@ export default function AppHeader({
 
     setOpenNavGroups({
       Dashboard: false,
-      Receiving: false,
       "Yard Tasks": false,
       Dispatch: false,
       South: false,
@@ -384,6 +377,13 @@ export default function AppHeader({
         : groupItems[0].id;
     }
 
+    if (group === "South") {
+      const southLinks = getSouthDropdownLinks();
+      const activeSouthLink = southLinks.find((link) => link.isActive);
+
+      return activeSouthLink?.pageId || southLinks[0]?.pageId || groupItems[0].id;
+    }
+
     return groupItems[0].id;
   }
 
@@ -393,7 +393,6 @@ export default function AppHeader({
 
       return {
         Dashboard: false,
-        Receiving: false,
         "Yard Tasks": false,
         Dispatch: false,
         South: false,
@@ -409,10 +408,6 @@ export default function AppHeader({
   }
 
   function getSouthDropdownLinks() {
-    if (isDriverView) {
-      return [];
-    }
-
     const pageAllowed = (pageId) =>
       !allowedPageIds || allowedPageIds.includes(pageId);
     const hasAllowedPage = (pageIds) =>
@@ -443,7 +438,7 @@ export default function AppHeader({
       ])
         ? {
             id: "po-south",
-            label: "South Pickups",
+            label: "South",
             pageId: southPageId,
             isActive:
               currentPage === "south-overview" ||
@@ -461,6 +456,16 @@ export default function AppHeader({
               currentPage === "their-truck-overview" ||
               currentPage === "their-truck-calendar" ||
               currentPage === "their-truck-history",
+          }
+        : null,
+      hasAllowedPage(["receiving", "check-in", "today", "search", "trace"])
+        ? {
+            id: "po-receiving",
+            label: "Receiving",
+            pageId: pageAllowed("receiving") ? "receiving" : "check-in",
+            isActive: ["receiving", "check-in", "today", "search", "trace"].includes(
+              currentPage,
+            ),
           }
         : null,
     ].filter(Boolean);
@@ -574,7 +579,7 @@ export default function AppHeader({
   }
 
   function renderNavigation(isMobile = false) {
-    return ["Dashboard", "Receiving", "Yard Tasks", "Dispatch", "South", "Deliveries", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
+    return ["Dashboard", "Yard Tasks", "Dispatch", "South", "Deliveries", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||
@@ -588,10 +593,7 @@ export default function AppHeader({
               pageId === "south-calendar" ||
               pageId === "their-truck-calendar" ||
               pageId === "their-truck-history" ||
-              pageId === "po-calendar",
-            )) ||
-          (item.id === "receiving" &&
-            allowedPageIds.some((pageId) =>
+              pageId === "po-calendar" ||
               ["check-in", "today", "search", "trace"].includes(pageId),
             )) ||
           (item.id === "yard-tasks" &&
@@ -668,7 +670,6 @@ export default function AppHeader({
         accountingDropdownLinks.length > 0;
       const isSinglePageGroup = [
         "Dashboard",
-        "Receiving",
         "Yard Tasks",
         "Dispatch",
         "South",
@@ -770,12 +771,6 @@ export default function AppHeader({
                       : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      link.isActive ? "bg-white" : "bg-white/40"
-                    }`}
-                    aria-hidden="true"
-                  />
                   <span className="min-w-0 flex-1 truncate">
                     {link.label}
                   </span>
@@ -797,12 +792,6 @@ export default function AppHeader({
                       : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      link.isActive ? "bg-white" : "bg-white/40"
-                    }`}
-                    aria-hidden="true"
-                  />
                   <span className="min-w-0 flex-1 truncate">
                     {link.label}
                   </span>
@@ -824,12 +813,6 @@ export default function AppHeader({
                       : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      link.isActive ? "bg-white" : "bg-white/40"
-                    }`}
-                    aria-hidden="true"
-                  />
                   <span className="min-w-0 flex-1 truncate">
                     {link.label}
                   </span>
@@ -851,12 +834,6 @@ export default function AppHeader({
                       : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      link.isActive ? "bg-white" : "bg-white/40"
-                    }`}
-                    aria-hidden="true"
-                  />
                   <span className="min-w-0 flex-1 truncate">
                     {link.label}
                   </span>
@@ -893,14 +870,7 @@ export default function AppHeader({
                       >
                         <Plus className="h-4 w-4" strokeWidth={3} />
                       </span>
-                    ) : (
-                      <span
-                        className={`h-2 w-2 shrink-0 rounded-full ${
-                          isActive ? "bg-white" : "bg-white/40"
-                        }`}
-                        aria-hidden="true"
-                      />
-                    )}
+                    ) : null}
                     <span className="min-w-0 flex-1 truncate">
                       {item.label}
                     </span>
