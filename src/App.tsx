@@ -3345,6 +3345,22 @@ export default function App() {
     return Array.from(groups.values());
   }
 
+  function stripUndefinedFields<T>(value: T): T {
+    if (Array.isArray(value)) {
+      return value.map((item) => stripUndefinedFields(item)) as T;
+    }
+
+    if (value && typeof value === "object") {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+          .filter(([, fieldValue]) => fieldValue !== undefined)
+          .map(([key, fieldValue]) => [key, stripUndefinedFields(fieldValue)]),
+      ) as T;
+    }
+
+    return value;
+  }
+
   async function handleProcessOrderFlow(orderPayload: Record<string, unknown>) {
     const now = new Date().toISOString();
     const orderId = createId();
@@ -3526,6 +3542,10 @@ export default function App() {
         | { durationValue?: number; durationText?: string; distanceText?: string }
         | null
         | undefined;
+      const routeEtaSeconds = Number(routeEta?.durationValue);
+      const oneWayDriveMinutes = Number.isFinite(routeEtaSeconds) && routeEtaSeconds > 0
+        ? Math.round(routeEtaSeconds / 60)
+        : undefined;
       const delivery: Delivery = {
         id: createId(),
         orderNumber: sourceOrderNumber,
@@ -3561,10 +3581,8 @@ export default function App() {
         deliveryTimeSlot: "",
         deliveryOriginName: "Capital Lumber",
         deliveryOriginAddress: capitalLumberAddress,
-        oneWayDriveMinutes: routeEta?.durationValue
-          ? Math.round(Number(routeEta.durationValue) / 60)
-          : undefined,
-        routeEta,
+        oneWayDriveMinutes,
+        routeEta: routeEta || undefined,
         status: "open",
         sourceOrderId: orderId,
         sourceOrderNumber,
@@ -3572,7 +3590,7 @@ export default function App() {
         updatedAt: now,
       };
 
-      await handleAddDelivery(delivery);
+      await handleAddDelivery(stripUndefinedFields(delivery));
       createdDelivery = delivery;
     }
 
