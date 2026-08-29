@@ -1069,6 +1069,8 @@ function getAllowedPageIdsForRole(role: string) {
   if (role === "superAdmin") {
     return [
       "new-home",
+      "new-fulfillment",
+      "new-build",
       "dashboard",
       "driver-dashboard",
       "receiving",
@@ -5491,6 +5493,134 @@ export default function App() {
       case "new-home":
         return isSuperAdmin ? (
           <NewHomePage onPageChange={navigateToPage} />
+        ) : null;
+
+      case "new-fulfillment":
+        return isSuperAdmin ? (
+          <SectionHubPage
+            eyebrow="New Flow"
+            title="Fulfillment"
+            description="A lab view for everything coming into the yard: South pickups, supplier trucks, PODs, and receiving."
+            icon={Truck}
+            stats={[
+              {
+                icon: Truck,
+                label: "South",
+                value: visibleSupplierRuns.filter(
+                  (supplierRun) => supplierRun.status !== "complete",
+                ).length,
+                note: "Open POs",
+              },
+              {
+                icon: PackageCheck,
+                label: "Their Truck",
+                value: theirTruckPOs.length,
+                note: "Inbound POs",
+              },
+              {
+                icon: Warehouse,
+                label: "Receiving",
+                value: checkIns.length,
+                note: "Checked in",
+              },
+            ]}
+            actions={[
+              {
+                icon: Truck,
+                label: "We Pick Up",
+                title: "South",
+                description:
+                  "View current South pickup work and supplier stops.",
+                metric: visibleSupplierRuns.length,
+                metricLabel: "POs",
+                tone: "dispatch",
+                onClick: () => navigateToPage("south-overview"),
+              },
+              {
+                icon: Package,
+                label: "Supplier Delivery",
+                title: "Their Truck",
+                description:
+                  "Track inbound supplier-delivered POs and calendars.",
+                metric: theirTruckPOs.length,
+                metricLabel: "Inbound",
+                tone: "schedule",
+                onClick: () => navigateToPage("their-truck-overview"),
+              },
+              {
+                icon: ClipboardCheck,
+                label: "Check In",
+                title: "Receiving",
+                description:
+                  "Receive materials into the yard and attach locations/photos.",
+                metric: checkIns.length,
+                metricLabel: "Records",
+                tone: "success",
+                onClick: () => navigateToPage("receiving"),
+              },
+              {
+                icon: PackageCheck,
+                label: "Customer Pickup",
+                title: "POD",
+                description:
+                  "Track supplier pickup orders handled by customers.",
+                metric: podPickups.length,
+                metricLabel: "PODs",
+                tone: "warning",
+                onClick: () => navigateToPage("pod-pickups"),
+              },
+            ]}
+          />
+        ) : null;
+
+      case "new-build":
+        return isSuperAdmin ? (
+          <SectionHubPage
+            eyebrow="New Flow"
+            title="Build"
+            description="A lab view for yard build work connected to orders, waiting materials, and active tasks."
+            icon={Package}
+            stats={[
+              {
+                icon: ClipboardList,
+                label: "Order Builds",
+                value: orderBuilds.length,
+                note: "Tracked",
+              },
+              {
+                icon: ClipboardCheck,
+                label: "Yard Tasks",
+                value: yardTasks.filter(
+                  (yardTask) => yardTask.status !== "complete",
+                ).length,
+                note: "Active",
+              },
+            ]}
+            actions={[
+              {
+                icon: ClipboardList,
+                label: "Build Queue",
+                title: "Order Builds",
+                description:
+                  "See what can be built now and what is waiting on POs.",
+                metric: orderBuilds.length,
+                metricLabel: "Builds",
+                tone: "warning",
+                onClick: () => navigateToPage("order-builds"),
+              },
+              {
+                icon: ClipboardCheck,
+                label: "Yard Work",
+                title: "Yard Tasks",
+                description:
+                  "Assign and complete focused yard tasks.",
+                metric: yardTasks.length,
+                metricLabel: "Tasks",
+                tone: "success",
+                onClick: () => navigateToPage("yard-tasks"),
+              },
+            ]}
+          />
         ) : null;
 
       case "order-builds":

@@ -31,7 +31,7 @@ export default function NewHomePage({ onPageChange }) {
           description: "The daily heartbeat and quick summary of what matters.",
           tone: "default",
           variant: "compact",
-          onClick: () => onPageChange?.("dashboard"),
+          onClick: () => onPageChange?.("new-home"),
         },
         {
           icon: ShoppingCart,
@@ -49,7 +49,7 @@ export default function NewHomePage({ onPageChange }) {
           description: "South pickups, vendor trucks, and receiving live here.",
           tone: "dispatch",
           variant: "compact",
-          onClick: () => onPageChange?.("south"),
+          onClick: () => onPageChange?.("new-fulfillment"),
         },
         {
           icon: ClipboardList,
@@ -58,7 +58,7 @@ export default function NewHomePage({ onPageChange }) {
           description: "A future home for load building and yard work.",
           tone: "warning",
           variant: "compact",
-          onClick: () => onPageChange?.("order-builds"),
+          onClick: () => onPageChange?.("new-build"),
         },
         {
           icon: ClipboardCheck,

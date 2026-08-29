@@ -88,12 +88,12 @@ const newHomeNavigationItems = [
     icon: ClipboardList,
   },
   {
-    id: "south",
+    id: "new-fulfillment",
     label: "Fulfillment",
     icon: Truck,
   },
   {
-    id: "yard-tasks",
+    id: "new-build",
     label: "Build",
     icon: Package,
   },
@@ -137,6 +137,20 @@ function getActionNavButtonClass(isActive, isMobile = false) {
 function getCurrentPageLabel(currentPage) {
   if (currentPage === "new-home") {
     return "New Home";
+  }
+
+  if (
+    [
+      "new-overview",
+      "new-orders",
+      "new-fulfillment",
+      "new-build",
+      "new-dispatch",
+      "new-deliveries",
+      "new-documents",
+    ].includes(currentPage)
+  ) {
+    return "New App Flow";
   }
 
   if (
@@ -219,6 +233,20 @@ function getCurrentPageLabel(currentPage) {
 
 function getCurrentPageGroup(currentPage) {
   if (currentPage === "new-home") {
+    return "New Home";
+  }
+
+  if (
+    [
+      "new-overview",
+      "new-orders",
+      "new-fulfillment",
+      "new-build",
+      "new-dispatch",
+      "new-deliveries",
+      "new-documents",
+    ].includes(currentPage)
+  ) {
     return "New Home";
   }
 
