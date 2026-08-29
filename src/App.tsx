@@ -78,6 +78,16 @@ import {
   saveSalesOrder,
   subscribeToSalesOrders,
 } from "./utils/salesOrderStorage";
+import { createId } from "./utils/idHelpers";
+import {
+  deletePodPickup,
+  savePodPickup,
+  subscribeToPodPickups,
+} from "./utils/podPickupStorage";
+import {
+  saveOrderBuild,
+  subscribeToOrderBuilds,
+} from "./utils/orderBuildStorage";
 import {
   deleteTheirTruckPO,
   saveTheirTruckPO,
@@ -150,8 +160,11 @@ const DeliveryQueuePage = lazy(() => import("./pages/DeliveryQueuePage"));
 const DeliverySettingsPage = lazy(() => import("./pages/DeliverySettingsPage"));
 const DeliveriesPage = lazy(() => import("./pages/DeliveriesPage"));
 const EmailListPage = lazy(() => import("./pages/EmailListPage"));
+const NewHomePage = lazy(() => import("./pages/NewHomePage"));
+const OrderBuildsPage = lazy(() => import("./pages/OrderBuildsPage"));
 const POCalendarPage = lazy(() => import("./pages/POCalendarPage"));
 const OrderFlowPage = lazy(() => import("./pages/OrderFlowPage"));
+const PodPickupsPage = lazy(() => import("./pages/PodPickupsPage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const SalesConverterPage = lazy(() => import("./pages/SalesConverterPage"));
 const SalesOrdersPage = lazy(() => import("./pages/SalesOrdersPage"));
@@ -1055,6 +1068,7 @@ function getWorkView(userProfile: UserProfile | null, role: string) {
 function getAllowedPageIdsForRole(role: string) {
   if (role === "superAdmin") {
     return [
+      "new-home",
       "dashboard",
       "driver-dashboard",
       "receiving",
@@ -1102,6 +1116,8 @@ function getAllowedPageIdsForRole(role: string) {
       "delivery-settings",
       "vendor-settings",
       "order-flow",
+      "order-builds",
+      "pod-pickups",
       "sales-report",
       "bouncie",
     ];
@@ -1132,6 +1148,7 @@ function getAllowedPageIdsForRole(role: string) {
       "po-calendar",
       "their-truck-history",
       "supplier-runs-history",
+      "pod-pickups",
       "deliveries",
       "deliveries-add",
       "deliveries-dispatch",
@@ -1539,6 +1556,12 @@ export default function App() {
     CustomerStatement[]
   >([]);
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
+  const [podPickups, setPodPickups] = useState<Array<Record<string, unknown>>>(
+    [],
+  );
+  const [orderBuilds, setOrderBuilds] = useState<Array<Record<string, unknown>>>(
+    [],
+  );
   const [stockingHandbookItems, setStockingHandbookItems] = useState<
     StockingHandbookItem[]
   >([]);
@@ -1781,8 +1804,10 @@ export default function App() {
       "their-truck-pos",
       "their-truck-calendar",
       "their-truck-history",
+      "pod-pickups",
     ].includes(pageId),
   );
+  const canReadOrderBuilds = effectiveAllowedPageIds.includes("order-builds");
   const canAssignSouthRoutes = effectiveAllowedPageIds.includes(
     "supplier-runs-dispatch",
   );
@@ -1830,6 +1855,7 @@ export default function App() {
       "delivery-settings",
       "vendor-settings",
       "order-flow",
+      "order-builds",
       "sales-report",
     ].includes(pageId),
   );
@@ -2336,6 +2362,8 @@ export default function App() {
       setCustomerPaymentLinks([]);
       setCustomerStatements([]);
       setSalesOrders([]);
+      setPodPickups([]);
+      setOrderBuilds([]);
       setStockingHandbookItems([]);
       setEmailList([]);
       setSalesReports([]);
@@ -2356,6 +2384,8 @@ export default function App() {
     let unsubscribeFromCustomerPaymentLinks = () => {};
     let unsubscribeFromCustomerStatements = () => {};
     let unsubscribeFromSalesOrders = () => {};
+    let unsubscribeFromPodPickups = () => {};
+    let unsubscribeFromOrderBuilds = () => {};
     let unsubscribeFromStockingHandbookItems = () => {};
     let unsubscribeFromEmailList = () => {};
     let unsubscribeFromSalesReports = () => {};
@@ -2604,6 +2634,50 @@ export default function App() {
         setSalesOrders([]);
       }
 
+      if (canReadSouth) {
+        unsubscribeFromPodPickups = subscribeToPodPickups(
+          (savedPodPickups: Array<Record<string, unknown>>) => {
+            if (isMounted) {
+              setPodPickups(savedPodPickups);
+              setSyncError("");
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to sync POD pickups:", error);
+
+            if (isMounted) {
+              reportBackgroundSyncError(error);
+              setIsLoading(false);
+            }
+          },
+        );
+      } else {
+        setPodPickups([]);
+      }
+
+      if (canReadOrderBuilds) {
+        unsubscribeFromOrderBuilds = subscribeToOrderBuilds(
+          (savedOrderBuilds: Array<Record<string, unknown>>) => {
+            if (isMounted) {
+              setOrderBuilds(savedOrderBuilds);
+              setSyncError("");
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to sync order builds:", error);
+
+            if (isMounted) {
+              reportBackgroundSyncError(error);
+              setIsLoading(false);
+            }
+          },
+        );
+      } else {
+        setOrderBuilds([]);
+      }
+
       if (canReadDocuments) {
         unsubscribeFromStockingHandbookItems =
           subscribeToStockingHandbookItems(
@@ -2679,6 +2753,7 @@ export default function App() {
         !canReadCustomerPaymentLinks &&
         !canReadSales &&
         !canReadSalesOrders &&
+        !canReadOrderBuilds &&
         !canReadDocuments &&
         !canReadEmailList &&
         !canReadSalesReport
@@ -2843,6 +2918,38 @@ export default function App() {
         setSalesOrders([]);
       }
 
+      if (canReadSouth) {
+        unsubscribeFromPodPickups = subscribeToPodPickups(
+          (savedPodPickups: Array<Record<string, unknown>>) => {
+            if (isMounted) {
+              setPodPickups(savedPodPickups);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load POD pickups:", error);
+          },
+        );
+      } else {
+        setPodPickups([]);
+      }
+
+      if (canReadOrderBuilds) {
+        unsubscribeFromOrderBuilds = subscribeToOrderBuilds(
+          (savedOrderBuilds: Array<Record<string, unknown>>) => {
+            if (isMounted) {
+              setOrderBuilds(savedOrderBuilds);
+              setIsLoading(false);
+            }
+          },
+          (error: Error) => {
+            console.error("Unable to load order builds:", error);
+          },
+        );
+      } else {
+        setOrderBuilds([]);
+      }
+
       if (canReadDocuments) {
         subscribeToStockingHandbookItems(
           (savedStockingHandbookItems: StockingHandbookItem[]) => {
@@ -2904,6 +3011,8 @@ export default function App() {
       unsubscribeFromCustomerPaymentLinks();
       unsubscribeFromCustomerStatements();
       unsubscribeFromSalesOrders();
+      unsubscribeFromPodPickups();
+      unsubscribeFromOrderBuilds();
       unsubscribeFromStockingHandbookItems();
       unsubscribeFromEmailList();
       unsubscribeFromSalesReports();
@@ -2915,6 +3024,7 @@ export default function App() {
     canReadSales,
     canReadSalesOrders,
     canReadSalesReport,
+    canReadOrderBuilds,
     canReadDocuments,
     canManageCustomerStatements,
     currentUser,
@@ -3016,6 +3126,36 @@ export default function App() {
   async function handleSaveTheirTruckPO(theirTruckPO: TheirTruckPO) {
     const updatedTheirTruckPOs = await saveTheirTruckPO(theirTruckPO);
     setTheirTruckPOs(updatedTheirTruckPOs);
+    setSyncError("");
+  }
+
+  async function handleSavePodPickup(podPickup: Record<string, unknown>) {
+    const updatedPodPickups = await savePodPickup(podPickup);
+    setPodPickups(updatedPodPickups);
+    setSyncError("");
+  }
+
+  async function handleDeletePodPickup(podPickupId: string) {
+    const podPickup = podPickups.find(
+      (currentPodPickup) => currentPodPickup.id === podPickupId,
+    );
+    const poNumber =
+      typeof podPickup?.poNumber === "string"
+        ? `PO ${podPickup.poNumber}`
+        : "this POD pickup";
+
+    if (!canDeleteRecord(poNumber)) {
+      return;
+    }
+
+    const updatedPodPickups = await deletePodPickup(podPickupId);
+    setPodPickups(updatedPodPickups);
+    setSyncError("");
+  }
+
+  async function handleSaveOrderBuild(orderBuild: Record<string, unknown>) {
+    const updatedOrderBuilds = await saveOrderBuild(orderBuild);
+    setOrderBuilds(updatedOrderBuilds);
     setSyncError("");
   }
 
@@ -3154,6 +3294,323 @@ export default function App() {
 
     setDeliveries(updatedDeliveries);
     setSyncError("");
+  }
+
+  function normalizeOrderFlowItems(items: Array<Record<string, unknown>>) {
+    return (Array.isArray(items) ? items : [])
+      .filter((item) => {
+        const description = String(item.description || "").trim();
+        const quantity = String(item.quantity || "").trim();
+        const poNumber = String(item.poNumber || "").trim();
+
+        return Boolean(description || quantity || poNumber);
+      })
+      .map((item, index) => ({
+        ...item,
+        id: String(item.id || createId()),
+        quantity: String(item.quantity || "").trim(),
+        description: String(item.description || "").trim(),
+        path: String(item.path || "supplierDelivery"),
+        vendor: String(item.vendor || "").trim(),
+        poNumber: String(item.poNumber || "").trim(),
+        routeDate: String(item.routeDate || "").trim(),
+        supplierDate: String(item.supplierDate || "").trim(),
+        supplierNote: String(item.supplierNote || "").trim(),
+        sequence: index + 1,
+      }));
+  }
+
+  function groupOrderFlowItems(
+    items: ReturnType<typeof normalizeOrderFlowItems>,
+    getGroupKey: (item: ReturnType<typeof normalizeOrderFlowItems>[number]) => string,
+  ) {
+    const groups = new Map<
+      string,
+      {
+        key: string;
+        items: ReturnType<typeof normalizeOrderFlowItems>;
+      }
+    >();
+
+    items.forEach((item) => {
+      const key = getGroupKey(item);
+
+      if (!groups.has(key)) {
+        groups.set(key, { key, items: [] });
+      }
+
+      groups.get(key)?.items.push(item);
+    });
+
+    return Array.from(groups.values());
+  }
+
+  async function handleProcessOrderFlow(orderPayload: Record<string, unknown>) {
+    const now = new Date().toISOString();
+    const orderId = createId();
+    const cleanItems = normalizeOrderFlowItems(
+      orderPayload.items as Array<Record<string, unknown>>,
+    );
+    const customerName = String(orderPayload.customerName || "").trim();
+    const businessName = String(orderPayload.businessName || "").trim();
+    const customerDisplayName = businessName || customerName || "New customer";
+    const sourceOrderNumber = String(orderPayload.orderNumber || "").trim();
+    const poNumbers = Array.from(
+      new Set(cleanItems.map((item) => item.poNumber).filter(Boolean)),
+    );
+    const creator = {
+      id: currentUserCreator.id,
+      name: currentUserCreator.name,
+      email: currentUserCreator.email,
+    };
+
+    const salesOrder: SalesOrder = {
+      id: orderId,
+      orderNumber: sourceOrderNumber,
+      customerName,
+      businessName,
+      phone: String(orderPayload.phoneNumber || "").trim(),
+      accountNumber: String(orderPayload.accountNumber || "").trim(),
+      handoffType: String(orderPayload.orderMethod || "willCall"),
+      deliveryAddress: String(orderPayload.deliveryAddress || "").trim(),
+      deliveryDate: String(orderPayload.deliveryDate || "").trim(),
+      poNumbers,
+      items: cleanItems,
+      status: "processed",
+      source: "new-order-flow",
+      createdBy: creator,
+      createdByName: creator.name,
+      createdByEmail: creator.email,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await handleSaveSalesOrder(salesOrder);
+
+    const createdSouthRuns: SupplierRun[] = [];
+    const createdTheirTruckPOs: TheirTruckPO[] = [];
+    const createdPodPickups: Array<Record<string, unknown>> = [];
+    let createdDelivery: Delivery | null = null;
+
+    const southGroups = groupOrderFlowItems(
+      cleanItems.filter((item) => item.path === "wePickup"),
+      (item) => `${item.vendor || "Unknown vendor"}|${item.poNumber || createId()}`,
+    );
+
+    for (const group of southGroups) {
+      const firstItem = group.items[0];
+      const supplierRun: SupplierRun = {
+        id: createId(),
+        poNumber: firstItem.poNumber,
+        vendor: firstItem.vendor,
+        scheduledDate:
+          firstItem.routeDate || String(orderPayload.deliveryDate || ""),
+        pickupDate:
+          firstItem.routeDate || String(orderPayload.deliveryDate || ""),
+        orderedBy: creator.name,
+        customerName: customerDisplayName,
+        orderNumber: sourceOrderNumber,
+        driver: "",
+        supplierAddress: "",
+        createdByName: creator.name,
+        createdByEmail: creator.email,
+        createdById: creator.id,
+        vehicleId: "",
+        vehicleTitle: "",
+        vehicleBadge: "",
+        dispatchStatus: "needsDispatch",
+        status: "open",
+        sourceOrderId: orderId,
+        sourceOrderNumber,
+        stopWorkflowVersion: 2,
+        items: group.items.map((item) => ({
+          id: String(item.id || createId()),
+          quantity: item.quantity,
+          description: item.description,
+          materialUse: "order",
+          orderNumber: sourceOrderNumber,
+          customerName: customerDisplayName,
+          pickedUp: false,
+          pickedUpAt: null,
+          pickupPhoto: null,
+          pickupPhotos: [],
+        })),
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await handleAddSupplierRun(supplierRun);
+      createdSouthRuns.push(supplierRun);
+    }
+
+    const theirTruckGroups = groupOrderFlowItems(
+      cleanItems.filter((item) => item.path === "supplierDelivery"),
+      (item) => `${item.vendor || "Unknown vendor"}|${item.poNumber || createId()}`,
+    );
+
+    for (const group of theirTruckGroups) {
+      const firstItem = group.items[0];
+      const theirTruckPO: TheirTruckPO = {
+        id: createId(),
+        poNumber: firstItem.poNumber,
+        deliveryDate:
+          firstItem.supplierDate || String(orderPayload.deliveryDate || ""),
+        vendor: firstItem.vendor,
+        customerName: customerDisplayName,
+        businessName,
+        orderNumber: sourceOrderNumber,
+        isStock: false,
+        status: "scheduled",
+        createdByName: creator.name,
+        createdByEmail: creator.email,
+        createdById: creator.id,
+        orderedBy: creator.name,
+        sourceOrderId: orderId,
+        sourceOrderNumber,
+        sentToDeliveryCalendarAt: now,
+        supplierNote: firstItem.supplierNote,
+        items: group.items.map((item) => ({
+          id: String(item.id || createId()),
+          quantity: item.quantity,
+          description: item.description,
+          materialUse: "order",
+          orderNumber: sourceOrderNumber,
+          customerName: customerDisplayName,
+        })),
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await handleSaveTheirTruckPO(theirTruckPO);
+      createdTheirTruckPOs.push(theirTruckPO);
+    }
+
+    const podGroups = groupOrderFlowItems(
+      cleanItems.filter((item) => item.path === "pod"),
+      (item) => `${item.vendor || "Unknown vendor"}|${item.poNumber || createId()}`,
+    );
+
+    for (const group of podGroups) {
+      const firstItem = group.items[0];
+      const podPickup = {
+        id: createId(),
+        poNumber: firstItem.poNumber,
+        vendor: firstItem.vendor,
+        podDate: firstItem.supplierDate || String(orderPayload.deliveryDate || ""),
+        customerName: customerDisplayName,
+        businessName,
+        orderNumber: sourceOrderNumber,
+        status: "open",
+        sourceOrderId: orderId,
+        sourceOrderNumber,
+        createdByName: creator.name,
+        createdByEmail: creator.email,
+        createdById: creator.id,
+        items: group.items.map((item) => ({
+          id: String(item.id || createId()),
+          quantity: item.quantity,
+          description: item.description,
+          orderNumber: sourceOrderNumber,
+          customerName: customerDisplayName,
+        })),
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await handleSavePodPickup(podPickup);
+      createdPodPickups.push(podPickup);
+    }
+
+    if (orderPayload.orderMethod === "delivery") {
+      const routeEta = orderPayload.routeEta as
+        | { durationValue?: number; durationText?: string; distanceText?: string }
+        | null
+        | undefined;
+      const delivery: Delivery = {
+        id: createId(),
+        orderNumber: sourceOrderNumber,
+        customerName: customerDisplayName,
+        address: String(orderPayload.deliveryAddress || "").trim(),
+        contactName: customerName,
+        contactPhone: String(orderPayload.phoneNumber || "").trim(),
+        phoneNumber: String(orderPayload.phoneNumber || "").trim(),
+        driver: "",
+        deliveryType: "Standard",
+        unloadType: String(orderPayload.unloadType || "Forklift"),
+        hasHardware: Boolean(orderPayload.hasHardware),
+        needsTarp: Boolean(orderPayload.needsTarp),
+        hardwareChecked: false,
+        deliveryLocationNotes: "",
+        generalNotes: String(orderPayload.deliveryNotes || "").trim(),
+        deliveryNotes: String(orderPayload.deliveryNotes || "").trim(),
+        items: cleanItems.map((item) => ({
+          id: String(item.id || createId()),
+          quantity: item.quantity,
+          description: item.description,
+          delivered: false,
+        })),
+        deliveryPhoto: null,
+        deliveryPhotos: [],
+        hardwarePhoto: null,
+        hardwarePhotos: [],
+        deliveredAt: "",
+        dispatchStatus: "needsDispatch",
+        deliveryScope: "full",
+        deliveryScopeNotes: "",
+        deliveryDate: String(orderPayload.deliveryDate || "").trim(),
+        deliveryTimeSlot: "",
+        deliveryOriginName: "Capital Lumber",
+        deliveryOriginAddress: capitalLumberAddress,
+        oneWayDriveMinutes: routeEta?.durationValue
+          ? Math.round(Number(routeEta.durationValue) / 60)
+          : undefined,
+        routeEta,
+        status: "open",
+        sourceOrderId: orderId,
+        sourceOrderNumber,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await handleAddDelivery(delivery);
+      createdDelivery = delivery;
+    }
+
+    const orderBuild = {
+      id: createId(),
+      orderId,
+      orderNumber: sourceOrderNumber,
+      customerName,
+      businessName,
+      phoneNumber: String(orderPayload.phoneNumber || "").trim(),
+      handoffType: String(orderPayload.orderMethod || "willCall"),
+      deliveryDate: String(orderPayload.deliveryDate || "").trim(),
+      status: "waiting",
+      waitingItems: cleanItems.filter((item) => item.path !== "inStock"),
+      stockItems: cleanItems.filter((item) => item.path === "inStock"),
+      linkedSouthRunIds: createdSouthRuns.map((run) => run.id),
+      linkedTheirTruckPOIds: createdTheirTruckPOs.map((po) => po.id),
+      linkedPodPickupIds: createdPodPickups.map((podPickup) =>
+        String(podPickup.id || ""),
+      ),
+      linkedDeliveryId: createdDelivery?.id || "",
+      createdBy: creator,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await handleSaveOrderBuild(orderBuild);
+    setSyncError("");
+
+    return {
+      orderId,
+      orderNumber: sourceOrderNumber,
+      southCount: createdSouthRuns.length,
+      theirTruckCount: createdTheirTruckPOs.length,
+      podCount: createdPodPickups.length,
+      deliveryCreated: Boolean(createdDelivery),
+      buildCreated: true,
+    };
   }
 
   async function handleAddCustomer(customer: Customer) {
@@ -5003,6 +5460,19 @@ export default function App() {
       case "dashboard":
         return renderDashboardPage();
 
+      case "new-home":
+        return isSuperAdmin ? (
+          <NewHomePage onPageChange={navigateToPage} />
+        ) : null;
+
+      case "order-builds":
+        return isSuperAdmin ? (
+          <OrderBuildsPage
+            builds={orderBuilds}
+            onPageChange={navigateToPage}
+          />
+        ) : null;
+
       case "driver-dashboard":
         return (
           <DriverDashboardPage
@@ -5056,7 +5526,24 @@ export default function App() {
         );
 
       case "order-flow":
-        return isSuperAdmin ? <OrderFlowPage /> : null;
+        return isSuperAdmin ? (
+          <OrderFlowPage
+            currentUser={currentUserCreator}
+            onProcessOrder={handleProcessOrderFlow}
+            onPageChange={navigateToPage}
+          />
+        ) : null;
+
+      case "pod-pickups":
+        return canReadSouth ? (
+          <PodPickupsPage
+            podPickups={podPickups}
+            onDeletePodPickup={
+              isSuperAdmin ? handleDeletePodPickup : undefined
+            }
+            onPageChange={navigateToPage}
+          />
+        ) : null;
 
       case "bouncie":
         return <BounciePage onPageChange={setCurrentPage} />;
