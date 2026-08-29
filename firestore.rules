@@ -168,6 +168,28 @@ service cloud.firestore {
       );
     }
 
+    function isSales() {
+      return isApproved() && (
+        isAdmin() ||
+        hasAnyPermission([
+          "sales",
+          "sales-orders",
+          "order-flow",
+          "customers",
+          "stocking-handbook",
+          "sales-tools"
+        ])
+      );
+    }
+
+    function canAccessPodPickups() {
+      return isSouth() || isReceiving() || isSales();
+    }
+
+    function canAccessOrderBuilds() {
+      return isAdmin() || hasAnyPermission(["order-builds", "order-flow"]);
+    }
+
     function isSalesReportViewer() {
       return isAdmin() || (
         isApproved() &&
@@ -257,6 +279,23 @@ service cloud.firestore {
     match /theirTruckPOs/{theirTruckPOId} {
       allow read: if isSouth() || isReceiving();
       allow create, update, delete: if isSouth();
+    }
+
+    match /podPickups/{podPickupId} {
+      allow read: if canAccessPodPickups();
+      allow create, update, delete: if isSales() || isSouth();
+    }
+
+    match /salesOrders/{salesOrderId} {
+      allow read: if isSales() || isReceiving() || isSouth() || isDelivery();
+      allow create, update: if isSales();
+      allow delete: if isAdmin();
+    }
+
+    match /orderBuilds/{orderBuildId} {
+      allow read: if canAccessOrderBuilds() || isSales();
+      allow create, update: if isSales();
+      allow delete: if isAdmin();
     }
 
     match /southRouteOrders/{routeOrderId} {
