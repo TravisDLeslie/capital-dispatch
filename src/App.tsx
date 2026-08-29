@@ -5578,7 +5578,7 @@ export default function App() {
           <SectionHubPage
             eyebrow="New Flow"
             title="Build"
-            description="A lab view for yard build work connected to orders, waiting materials, and active tasks."
+            description="A lab view for build work connected to orders, stocked items, and materials still waiting on POs."
             icon={Package}
             stats={[
               {
@@ -5586,14 +5586,6 @@ export default function App() {
                 label: "Order Builds",
                 value: orderBuilds.length,
                 note: "Tracked",
-              },
-              {
-                icon: ClipboardCheck,
-                label: "Yard Tasks",
-                value: yardTasks.filter(
-                  (yardTask) => yardTask.status !== "complete",
-                ).length,
-                note: "Active",
               },
             ]}
             actions={[
@@ -5607,17 +5599,6 @@ export default function App() {
                 metricLabel: "Builds",
                 tone: "warning",
                 onClick: () => navigateToPage("order-builds"),
-              },
-              {
-                icon: ClipboardCheck,
-                label: "Yard Work",
-                title: "Yard Tasks",
-                description:
-                  "Assign and complete focused yard tasks.",
-                metric: yardTasks.length,
-                metricLabel: "Tasks",
-                tone: "success",
-                onClick: () => navigateToPage("yard-tasks"),
               },
             ]}
           />
