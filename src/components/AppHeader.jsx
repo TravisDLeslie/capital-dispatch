@@ -20,6 +20,11 @@ import capitalLumberLogo from "../assets/capital-lumber-new.svg";
 
 const navigationItems = [
   {
+    group: "New Home",
+    id: "new-home",
+    label: "New Home",
+  },
+  {
     group: "Dashboard",
     id: "dashboard",
     label: "Dashboard",
@@ -71,6 +76,44 @@ const navigationItems = [
   },
 ];
 
+const newHomeNavigationItems = [
+  {
+    id: "new-home",
+    label: "Overview",
+    icon: LayoutDashboard,
+  },
+  {
+    id: "order-flow",
+    label: "Orders",
+    icon: ClipboardList,
+  },
+  {
+    id: "south",
+    label: "Fulfillment",
+    icon: Truck,
+  },
+  {
+    id: "yard-tasks",
+    label: "Build",
+    icon: Package,
+  },
+  {
+    id: "dispatch",
+    label: "Dispatch",
+    icon: ClipboardCheck,
+  },
+  {
+    id: "deliveries",
+    label: "Deliveries",
+    icon: PackageCheck,
+  },
+  {
+    id: "documents",
+    label: "Documents",
+    icon: BookOpen,
+  },
+];
+
 function getNavButtonClass(isActive, isMobile = false) {
   const activeClass = "bg-white/10 text-white";
   const inactiveClass =
@@ -92,6 +135,10 @@ function getActionNavButtonClass(isActive, isMobile = false) {
 }
 
 function getCurrentPageLabel(currentPage) {
+  if (currentPage === "new-home") {
+    return "New Home";
+  }
+
   if (
     String(currentPage || "").startsWith("supplier-runs") ||
     currentPage === "south-overview" ||
@@ -171,6 +218,10 @@ function getCurrentPageLabel(currentPage) {
 }
 
 function getCurrentPageGroup(currentPage) {
+  if (currentPage === "new-home") {
+    return "New Home";
+  }
+
   if (
     String(currentPage || "").startsWith("supplier-runs") ||
     currentPage === "south-overview" ||
@@ -247,6 +298,10 @@ function getCurrentPageGroup(currentPage) {
 }
 
 function getNavGroupIcon(group) {
+  if (group === "New Home") {
+    return LayoutDashboard;
+  }
+
   if (group === "South") {
     return Truck;
   }
@@ -300,6 +355,8 @@ function getNavGroupIcon(group) {
  *   allowedPageIds?: string[];
  *   isDriverView?: boolean;
  *   isSuperAdmin?: boolean;
+ *   isNewAppShell?: boolean;
+ *   onExitNewAppShell?: () => void;
  *   previewUsers?: Array<Record<string, any>>;
  *   selectedPreviewUserId?: string;
  *   onPreviewUserChange?: (userId: string) => void;
@@ -315,6 +372,8 @@ export default function AppHeader({
   allowedPageIds,
   isDriverView = false,
   isSuperAdmin = false,
+  isNewAppShell = false,
+  onExitNewAppShell,
   previewUsers = [],
   selectedPreviewUserId = "",
   onPreviewUserChange,
@@ -322,6 +381,7 @@ export default function AppHeader({
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openNavGroups, setOpenNavGroups] = useState({
+    "New Home": false,
     Dashboard: true,
     "Yard Tasks": false,
     Dispatch: false,
@@ -342,6 +402,8 @@ export default function AppHeader({
     .charAt(0)
     .toUpperCase();
   const southGroupLabel = "Fulfillment";
+  const isNewHomeHeader = isSuperAdmin && isNewAppShell;
+  const logoHomePageId = isNewHomeHeader ? "new-home" : "dashboard";
 
   useEffect(() => {
     const currentGroup = getCurrentPageGroup(currentPage);
@@ -351,6 +413,7 @@ export default function AppHeader({
     }
 
     setOpenNavGroups({
+      "New Home": false,
       Dashboard: false,
       "Yard Tasks": false,
       Dispatch: false,
@@ -392,6 +455,7 @@ export default function AppHeader({
       const nextIsOpen = !currentOpenNavGroups[group];
 
       return {
+        "New Home": false,
         Dashboard: false,
         "Yard Tasks": false,
         Dispatch: false,
@@ -579,7 +643,62 @@ export default function AppHeader({
   }
 
   function renderNavigation(isMobile = false) {
-    return ["Dashboard", "Yard Tasks", "Dispatch", "South", "Deliveries", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
+    if (isNewHomeHeader) {
+      return (
+        <div className="space-y-3 py-2">
+          <div className="px-4 pb-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">
+              New App Flow
+            </p>
+            <p className="mt-1 text-sm font-semibold leading-5 text-white/70">
+              A clean pass at the future menu.
+            </p>
+          </div>
+
+          {newHomeNavigationItems.map((item) => {
+            const NewHomeIcon = item.icon;
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handlePageChange(item.id)}
+                className={`flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-lg font-black transition ${
+                  isMobile
+                    ? "text-white hover:bg-white/10"
+                    : "text-white/90 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white">
+                  <NewHomeIcon
+                    aria-hidden="true"
+                    className="h-5 w-5"
+                    strokeWidth={2.6}
+                  />
+                </span>
+
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              </button>
+            );
+          })}
+
+          <div className="px-4 pt-3">
+            <button
+              type="button"
+              onClick={() => {
+                onExitNewAppShell?.();
+                setIsMenuOpen(false);
+              }}
+              className="flex w-full items-center justify-center rounded-xl border border-white/15 bg-white px-4 py-3 text-sm font-black text-slate-950 shadow-sm transition hover:bg-white/90"
+            >
+              Back to Current App
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return ["New Home", "Dashboard", "Yard Tasks", "Dispatch", "South", "Deliveries", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||
@@ -639,7 +758,9 @@ export default function AppHeader({
           (item.id === "fleet" &&
             allowedPageIds.some((pageId) =>
               ["fleet", "bouncie"].includes(pageId),
-            ));
+            )) ||
+          (item.id === "new-home" &&
+            allowedPageIds.includes("new-home"));
 
         return item.group === group && pageIsAllowed;
       });
@@ -670,6 +791,7 @@ export default function AppHeader({
         accountingDropdownLinks.length > 0;
       const isSinglePageGroup = [
         "Dashboard",
+        "New Home",
         "Yard Tasks",
         "Dispatch",
         "South",
@@ -931,7 +1053,7 @@ export default function AppHeader({
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-white/10 bg-[#1e1e1e] md:flex">
         <button
           type="button"
-          onClick={() => handlePageChange("dashboard")}
+          onClick={() => handlePageChange(logoHomePageId)}
           className="block px-8 pb-8 pt-8 text-left"
         >
           <img
@@ -1028,7 +1150,7 @@ export default function AppHeader({
 
             <button
               type="button"
-              onClick={() => handlePageChange("dashboard")}
+              onClick={() => handlePageChange(logoHomePageId)}
               className="min-w-0 flex-1 text-center"
             >
               <img
@@ -1063,7 +1185,7 @@ export default function AppHeader({
             <div className="flex items-center justify-between px-6 pb-5 pt-6">
               <button
                 type="button"
-                onClick={() => handlePageChange("dashboard")}
+                onClick={() => handlePageChange(logoHomePageId)}
                 className="min-w-0 text-left"
               >
                 <img

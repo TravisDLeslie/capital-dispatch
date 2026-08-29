@@ -1514,6 +1514,7 @@ export default function App() {
         return "dashboard";
       }
     });
+  const [isNewAppShellActive, setIsNewAppShellActive] = useState(false);
   const [previewUserId, setPreviewUserId] =
     useState("");
   const [traceInitialSearch, setTraceInitialSearch] = useState("");
@@ -3712,7 +3713,16 @@ export default function App() {
       setEditingDeliveryId("");
     }
 
+    if (pageId === "new-home") {
+      setIsNewAppShellActive(true);
+    }
+
     setCurrentPage(pageId);
+  }
+
+  function handleExitNewAppShell() {
+    setIsNewAppShellActive(false);
+    setCurrentPage("dashboard");
   }
 
   function handleTraceSearch(searchValue: string) {
@@ -6114,6 +6124,8 @@ export default function App() {
             allowedPageIds={effectiveAllowedPageIds}
             isDriverView={isSouthDriverScopedView || isDeliveryDriverScopedView}
             isSuperAdmin={isSuperAdmin}
+            isNewAppShell={isNewAppShellActive}
+            onExitNewAppShell={handleExitNewAppShell}
             previewUsers={dashboardPreviewUsers}
             selectedPreviewUserId={
               selectedPreviewProfile?.uid ||
