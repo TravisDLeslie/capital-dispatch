@@ -13,6 +13,8 @@ import PageContainer from "../components/PageContainer";
  *   theirTruckPOs?: any[];
  *   checkedInByDefault?: string;
  *   teamMemberOptions?: string[];
+ *   prefill?: any;
+ *   breadcrumbParent?: { label: string; pageId: string };
  * }} props
  */
 export default function CheckInPage({
@@ -24,6 +26,8 @@ export default function CheckInPage({
   theirTruckPOs = [],
   checkedInByDefault = "",
   teamMemberOptions = [],
+  prefill = null,
+  breadcrumbParent = { label: "Receiving", pageId: "receiving" },
 }) {
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -53,7 +57,10 @@ export default function CheckInPage({
     <PageContainer>
       <Breadcrumbs
         items={[
-          { label: "Receiving", onClick: () => onPageChange?.("receiving") },
+          {
+            label: breadcrumbParent.label,
+            onClick: () => onPageChange?.(breadcrumbParent.pageId),
+          },
           { label: "Check In" },
         ]}
       />
@@ -81,6 +88,7 @@ export default function CheckInPage({
         theirTruckPOs={theirTruckPOs}
         checkedInByDefault={checkedInByDefault}
         teamMemberOptions={teamMemberOptions}
+        prefill={prefill}
       />
     </PageContainer>
   );

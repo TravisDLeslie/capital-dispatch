@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -46,6 +47,25 @@ function sortOrderBuilds(orderBuilds) {
   );
 }
 
+function removeUndefinedValues(value) {
+  if (Array.isArray(value)) {
+    return value.map(removeUndefinedValues);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, entryValue]) => entryValue !== undefined)
+        .map(([entryKey, entryValue]) => [
+          entryKey,
+          removeUndefinedValues(entryValue),
+        ]),
+    );
+  }
+
+  return value;
+}
+
 export function subscribeToOrderBuilds(onOrderBuilds, onError) {
   if (!db) {
     onOrderBuilds(getLocalOrderBuilds());
@@ -85,18 +105,34 @@ export async function saveOrderBuild(orderBuild) {
     createdAt: existingBuild?.createdAt || orderBuild.createdAt || now,
     updatedAt: now,
   };
+  const cleanSavedBuild = removeUndefinedValues(savedBuild);
   const updatedOrderBuilds = sortOrderBuilds([
-    savedBuild,
+    cleanSavedBuild,
     ...currentOrderBuilds.filter(
-      (currentBuild) => currentBuild.id !== savedBuild.id,
+      (currentBuild) => currentBuild.id !== cleanSavedBuild.id,
     ),
   ]);
 
   if (db) {
     await setDoc(
-      doc(db, ORDER_BUILDS_COLLECTION, savedBuild.id),
-      savedBuild,
+      doc(db, ORDER_BUILDS_COLLECTION, cleanSavedBuild.id),
+      cleanSavedBuild,
     );
+  }
+
+  saveLocalOrderBuilds(updatedOrderBuilds);
+
+  return updatedOrderBuilds;
+}
+
+export async function deleteOrderBuild(orderBuildId) {
+  const currentOrderBuilds = getLocalOrderBuilds();
+  const updatedOrderBuilds = currentOrderBuilds.filter(
+    (orderBuild) => orderBuild.id !== orderBuildId,
+  );
+
+  if (db) {
+    await deleteDoc(doc(db, ORDER_BUILDS_COLLECTION, orderBuildId));
   }
 
   saveLocalOrderBuilds(updatedOrderBuilds);

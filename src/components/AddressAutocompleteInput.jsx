@@ -10,11 +10,21 @@ function getPlaceComponent(place, type, useShortName = false) {
 }
 
 function getFullAddressFromPlace(place, fallbackAddress = "") {
+  const formattedAddress = String(place?.formatted_address || "")
+    .replace(/,\s*USA$/i, "")
+    .trim();
+
+  if (formattedAddress) {
+    return formattedAddress;
+  }
+
   const streetNumber = getPlaceComponent(place, "street_number");
   const route = getPlaceComponent(place, "route");
   const city =
     getPlaceComponent(place, "locality") ||
+    getPlaceComponent(place, "sublocality_level_1") ||
     getPlaceComponent(place, "postal_town") ||
+    getPlaceComponent(place, "administrative_area_level_3") ||
     getPlaceComponent(place, "administrative_area_level_2");
   const state = getPlaceComponent(place, "administrative_area_level_1", true);
   const zip = getPlaceComponent(place, "postal_code");
@@ -27,7 +37,7 @@ function getFullAddressFromPlace(place, fallbackAddress = "") {
     .join(", ");
   const fullAddress = [streetAddress, cityStateZip].filter(Boolean).join(", ");
 
-  return fullAddress || place?.formatted_address || fallbackAddress;
+  return fullAddress || fallbackAddress;
 }
 
 export default function AddressAutocompleteInput({
@@ -42,6 +52,7 @@ export default function AddressAutocompleteInput({
   autoComplete = "street-address",
 }) {
   const inputRef = useRef(null);
+  const isFocusedRef = useRef(false);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const onPlaceSelectedRef = useRef(onPlaceSelected);
@@ -51,7 +62,16 @@ export default function AddressAutocompleteInput({
   );
 
   useEffect(() => {
-    valueRef.current = value;
+    const nextValue = value || "";
+    valueRef.current = nextValue;
+
+    if (
+      inputRef.current &&
+      !isFocusedRef.current &&
+      inputRef.current.value !== nextValue
+    ) {
+      inputRef.current.value = nextValue;
+    }
   }, [value]);
 
   useEffect(() => {
@@ -139,6 +159,12 @@ export default function AddressAutocompleteInput({
     }, 150);
   }
 
+  function handleInputChange(event) {
+    const nextValue = event.target.value;
+    valueRef.current = nextValue;
+    onChangeRef.current(nextValue);
+  }
+
   return (
     <>
       <input
@@ -146,9 +172,15 @@ export default function AddressAutocompleteInput({
         id={id}
         type="text"
         autoComplete={autoComplete}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onBlur={commitCurrentInputValue}
+        defaultValue={value || ""}
+        onChange={handleInputChange}
+        onFocus={() => {
+          isFocusedRef.current = true;
+        }}
+        onBlur={() => {
+          isFocusedRef.current = false;
+          commitCurrentInputValue();
+        }}
         disabled={disabled}
         placeholder={placeholder}
         className={className}

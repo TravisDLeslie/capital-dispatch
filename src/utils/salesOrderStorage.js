@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -129,6 +130,19 @@ export async function updateSalesOrder(orderId, updates) {
       doc(db, SALES_ORDERS_COLLECTION, orderId),
       savedUpdates,
     );
+  }
+
+  saveLocalSalesOrders(updatedOrders);
+
+  return updatedOrders;
+}
+
+export async function deleteSalesOrder(orderId) {
+  const currentOrders = getLocalSalesOrders();
+  const updatedOrders = currentOrders.filter((order) => order.id !== orderId);
+
+  if (db) {
+    await deleteDoc(doc(db, SALES_ORDERS_COLLECTION, orderId));
   }
 
   saveLocalSalesOrders(updatedOrders);

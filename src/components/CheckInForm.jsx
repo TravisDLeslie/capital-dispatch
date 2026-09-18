@@ -33,15 +33,18 @@ function createEmptyMaterial() {
     id: createId(),
     description: "",
     location: "",
+    lastSavedLocation: "",
+    locationHistory: [],
     locationPhoto: null,
     locationPhotos: [],
     notes: "",
     conditionGood: true,
-    damagePhoto: null,
-    damagePhotos: [],
-    saved: false,
-  };
-}
+	    damagePhoto: null,
+	    damagePhotos: [],
+	    backOrdered: false,
+	    saved: false,
+	  };
+	}
 
 function getCheckInDrafts() {
   try {
@@ -180,8 +183,47 @@ function getMaterialDamagePhotos(material) {
   return material.damagePhoto ? [material.damagePhoto] : [];
 }
 
-function getMaterialStatus(material) {
-  const hasDescription = Boolean(String(material.description || "").trim());
+function getMaterialLocationHistory(material) {
+  return Array.isArray(material.locationHistory)
+    ? material.locationHistory.filter((entry) => entry && typeof entry === "object")
+    : [];
+}
+
+function getUpdatedLocationHistory(material, nextLocation) {
+  const previousLocation = findMatchingOption(
+    material.lastSavedLocation || "",
+    locations,
+  );
+  const cleanNextLocation = findMatchingOption(nextLocation, locations);
+  const locationHistory = getMaterialLocationHistory(material);
+
+  if (
+    !material.saved ||
+    !previousLocation ||
+    !cleanNextLocation ||
+    previousLocation === cleanNextLocation
+  ) {
+    return locationHistory;
+  }
+
+	  return [
+	    ...locationHistory,
+	    {
+	      currentLocation: previousLocation,
+	      movingToLocation: cleanNextLocation,
+	      previousLocation,
+	      updatedLocation: cleanNextLocation,
+	      changedAt: new Date().toISOString(),
+	    },
+	  ];
+}
+
+	function getMaterialStatus(material) {
+	  if (material.backOrdered) {
+	    return "backOrdered";
+	  }
+
+	  const hasDescription = Boolean(String(material.description || "").trim());
   const hasLocation = Boolean(String(material.location || "").trim());
   const hasLocationPhotos = getMaterialLocationPhotos(material).length > 0;
   const needsDamagePhotos = material.conditionGood === false;
@@ -210,10 +252,14 @@ function getMaterialStatus(material) {
   return "notStarted";
 }
 
-function getMaterialStatusLabel(status) {
-  if (status === "ready") {
-    return "Ready";
-  }
+	function getMaterialStatusLabel(status) {
+	  if (status === "ready") {
+	    return "Ready";
+	  }
+
+	  if (status === "backOrdered") {
+	    return "Back Ordered";
+	  }
 
   if (status === "inProgress") {
     return "In Progress";
@@ -222,10 +268,14 @@ function getMaterialStatusLabel(status) {
   return "Not Started";
 }
 
-function getMaterialStatusClass(status) {
-  if (status === "ready") {
-    return "bg-emerald-100 text-emerald-700";
-  }
+	function getMaterialStatusClass(status) {
+	  if (status === "ready") {
+	    return "bg-emerald-100 text-emerald-700";
+	  }
+
+	  if (status === "backOrdered") {
+	    return "bg-orange-100 text-orange-700";
+	  }
 
   if (status === "inProgress") {
     return "bg-amber-100 text-amber-700";
@@ -239,11 +289,16 @@ function getCheckInDraftKey({
   receivingTruckType,
   linkedSouthRunId,
   linkedTheirTruckPOId,
+  prefillDraftId,
 }) {
   const normalizedPoNumber = normalizePoNumber(poNumber);
 
   if (!normalizedPoNumber) {
     return "";
+  }
+
+  if (prefillDraftId) {
+    return `newOrder:${prefillDraftId}:${normalizedPoNumber}`;
   }
 
   if (linkedSouthRunId) {
@@ -322,9 +377,50 @@ function createMaterialFromPoItem(item, sourceType) {
       [item.quantity, item.description].filter(Boolean).join(" ") ||
       item.description ||
       "",
-    sourceItemId: item.id || "",
+    sourceItemId: item.sourceItemId || item.id || "",
+    sourceOrderId: item.orderId || "",
+    sourceBuildId: item.buildId || "",
+    sourceOrderNumber: item.orderNumber || "",
+    sku: item.sku || "",
     sourceType,
-  };
+    location: item.location || "",
+    lastSavedLocation: item.lastSavedLocation || item.location || "",
+    locationHistory: Array.isArray(item.locationHistory)
+      ? item.locationHistory
+      : [],
+    locationPhoto: item.locationPhoto || null,
+    locationPhotos: Array.isArray(item.locationPhotos)
+      ? item.locationPhotos.filter(Boolean)
+      : item.locationPhoto
+        ? [item.locationPhoto]
+        : [],
+    notes: item.notes || "",
+    conditionGood: item.conditionGood !== false,
+    damagePhoto: item.damagePhoto || null,
+	    damagePhotos: Array.isArray(item.damagePhotos)
+	      ? item.damagePhotos.filter(Boolean)
+	      : item.damagePhoto
+	        ? [item.damagePhoto]
+	        : [],
+	    backOrdered: Boolean(item.backOrdered || item.status === "backOrdered"),
+	    saved: Boolean(item.saved || item.location || item.locationPhoto),
+	    savedAt: item.savedAt || "",
+	  };
+	}
+
+function getPrefillDraftId(prefill) {
+  if (!prefill) {
+    return "";
+  }
+
+  return [
+    prefill.sourceType || "newOrderFlow",
+    prefill.id || "",
+    prefill.poNumber || "",
+    prefill.orderNumber || "",
+  ]
+    .filter(Boolean)
+    .join(":");
 }
 
 function getLinkedSouthOrderAssignment(supplierRun, items) {
@@ -599,6 +695,7 @@ export default function CheckInForm({
   theirTruckPOs = [],
   checkedInByDefault = "",
   teamMemberOptions = [],
+  prefill = null,
 }) {
   const vendors =
     Array.isArray(vendorOptions) && vendorOptions.length > 0
@@ -621,6 +718,9 @@ export default function CheckInForm({
   );
   const [linkedSouthRunId, setLinkedSouthRunId] = useState("");
   const [linkedTheirTruckPOId, setLinkedTheirTruckPOId] = useState("");
+  const [prefillDraftId, setPrefillDraftId] = useState(() =>
+    getPrefillDraftId(prefill),
+  );
   const [isPoSuggestionMenuOpen, setIsPoSuggestionMenuOpen] =
     useState(false);
   const [processingPhotoMaterialId, setProcessingPhotoMaterialId] =
@@ -631,6 +731,7 @@ export default function CheckInForm({
     createEmptyMaterial(),
   ]);
   const [openMaterialId, setOpenMaterialId] = useState("");
+  const [movingLocationMaterialId, setMovingLocationMaterialId] = useState("");
   const hydratedDraftKeyRef = useRef("");
   const lastSavedDraftJsonRef = useRef("");
 
@@ -644,11 +745,13 @@ export default function CheckInForm({
         receivingTruckType,
         linkedSouthRunId,
         linkedTheirTruckPOId,
+        prefillDraftId,
       }),
     [
       linkedSouthRunId,
       linkedTheirTruckPOId,
       poNumber,
+      prefillDraftId,
       receivingTruckType,
     ],
   );
@@ -669,7 +772,16 @@ export default function CheckInForm({
   }, [checkedInBy, checkedInByDefault, teamMembers]);
 
   useEffect(() => {
-    if (poNumber.length !== 7 || linkedSouthRunId || linkedTheirTruckPOId) {
+    const isViewingPrefilledPO =
+      prefillDraftId &&
+      normalizePoNumber(poNumber) === normalizePoNumber(prefill?.poNumber);
+
+    if (
+      isViewingPrefilledPO ||
+      poNumber.length !== 7 ||
+      linkedSouthRunId ||
+      linkedTheirTruckPOId
+    ) {
       return;
     }
 
@@ -724,7 +836,38 @@ export default function CheckInForm({
     poNumber,
     supplierRuns,
     theirTruckPOs,
+    prefill,
+    prefillDraftId,
   ]);
+
+  useEffect(() => {
+    if (!prefill?.poNumber) {
+      return;
+    }
+
+    const nextPrefillDraftId = getPrefillDraftId(prefill);
+    const nextPoNumber = formatPoNumber(String(prefill.poNumber || ""));
+    const nextItems = Array.isArray(prefill.items) ? prefill.items : [];
+
+    setPrefillDraftId(nextPrefillDraftId);
+    setPoNumber(nextPoNumber);
+    setVendor(prefill.vendor || "");
+    setLinkedSouthRunId("");
+    setLinkedTheirTruckPOId("");
+    setReceivingTruckType(
+      prefill.receivingTruckType ||
+        (prefill.path === "wePickup" || prefill.sourcePath === "wePickup"
+          ? "ourTruck"
+          : "theirTruck"),
+    );
+    populateMaterialsFromPoItems(nextItems, "newOrderFlow", {
+      openFirstMaterial: prefill.mode === "updateLocation",
+    });
+    setCurrentStep(
+      Math.max(1, Math.min(Number(prefill.startStep) || 1, 3)),
+    );
+    clearError();
+  }, [prefill]);
 
   useEffect(() => {
     if (!activeDraftKey || hydratedDraftKeyRef.current === activeDraftKey) {
@@ -759,12 +902,16 @@ export default function CheckInForm({
       );
     }
 
-    if (draft.currentStep) {
+    if (prefill?.startStep) {
+      setCurrentStep(
+        Math.max(1, Math.min(Number(prefill.startStep) || 1, 3)),
+      );
+    } else if (draft.currentStep) {
       setCurrentStep(Math.max(1, Math.min(Number(draft.currentStep) || 1, 3)));
     }
 
     lastSavedDraftJsonRef.current = JSON.stringify(draft);
-  }, [activeDraftKey]);
+  }, [activeDraftKey, prefill?.startStep]);
 
   useEffect(() => {
     if (!activeDraftKey || hydratedDraftKeyRef.current !== activeDraftKey) {
@@ -802,7 +949,7 @@ export default function CheckInForm({
     setError("");
   }
 
-  function populateMaterialsFromPoItems(items, sourceType) {
+  function populateMaterialsFromPoItems(items, sourceType, options = {}) {
     if (!Array.isArray(items) || items.length === 0) {
       return;
     }
@@ -812,7 +959,13 @@ export default function CheckInForm({
     );
 
     setMaterials(nextMaterials);
-    setOpenMaterialId("");
+    setOpenMaterialId(
+      options.openFirstMaterial
+        ? nextMaterials.find((material) => material.saved)?.id ||
+            nextMaterials[0]?.id ||
+            ""
+        : "",
+    );
   }
 
   const matchingSouthRuns = getMatchingSouthRunsForPo(
@@ -871,6 +1024,14 @@ export default function CheckInForm({
 
   function handlePoChange(event) {
     const nextPoNumber = formatPoNumber(event.target.value);
+    const isChangingPrefilledPO =
+      prefillDraftId &&
+      normalizePoNumber(nextPoNumber) !== normalizePoNumber(prefill?.poNumber);
+
+    if (isChangingPrefilledPO) {
+      setPrefillDraftId("");
+    }
+
     const preferredSouthMatches =
       receivingTruckType === "ourTruck"
         ? getMatchingSouthRunsForPo(nextPoNumber, supplierRuns)
@@ -1027,7 +1188,42 @@ export default function CheckInForm({
     clearError();
   }
 
-  function updateMaterialNotes(materialId, value) {
+  function beginMoveMaterial(materialId) {
+    setMovingLocationMaterialId(materialId);
+    setMaterials((currentMaterials) =>
+      currentMaterials.map((material) => {
+        if (material.id !== materialId) {
+          return material;
+        }
+
+        const savedLocation = findMatchingOption(
+          material.lastSavedLocation || "",
+          locations,
+        );
+        const currentLocation = findMatchingOption(
+          material.location || "",
+          locations,
+        );
+
+        return {
+          ...material,
+          location:
+            savedLocation && savedLocation === currentLocation
+              ? ""
+              : material.location,
+          saved: false,
+        };
+      }),
+    );
+    clearError();
+  }
+
+  function cancelMoveMaterial() {
+    setMovingLocationMaterialId("");
+    clearError();
+  }
+
+	  function updateMaterialNotes(materialId, value) {
     setMaterials((currentMaterials) =>
       currentMaterials.map((material) =>
         material.id === materialId
@@ -1040,8 +1236,34 @@ export default function CheckInForm({
       ),
     );
 
-    clearError();
-  }
+	    clearError();
+	  }
+
+	  function updateMaterialBackOrdered(materialId, backOrdered) {
+	    setMaterials((currentMaterials) =>
+	      currentMaterials.map((material) =>
+	        material.id === materialId
+	          ? {
+	              ...material,
+	              backOrdered,
+	              saved: false,
+	              ...(backOrdered
+	                ? {
+	                    location: "",
+	                    locationPhoto: null,
+	                    locationPhotos: [],
+	                    conditionGood: true,
+	                    damagePhoto: null,
+	                    damagePhotos: [],
+	                  }
+	                : {}),
+	            }
+	          : material,
+	      ),
+	    );
+
+	    clearError();
+	  }
 
   function updateMaterialCondition(materialId, conditionGood) {
     setMaterials((currentMaterials) =>
@@ -1074,26 +1296,39 @@ export default function CheckInForm({
       return;
     }
 
-    if (!findMatchingOption(material.location, locations)) {
-      setError("Select a location for this material before saving it.");
-      return;
-    }
+	    if (!material.backOrdered && !findMatchingOption(material.location, locations)) {
+	      setError("Select a location for this material before saving it.");
+	      return;
+	    }
 
     setMaterials((currentMaterials) =>
       currentMaterials.map((item) =>
         item.id === materialId
-          ? {
-              ...item,
-              description: item.description.trim(),
-              location: findMatchingOption(item.location, locations),
-              notes: item.notes.trim(),
-              saved: true,
-            }
+	          ? {
+	              ...item,
+	              description: item.description.trim(),
+		              location: item.backOrdered
+		                ? ""
+		                : findMatchingOption(item.location, locations),
+		              locationHistory: item.backOrdered
+		                ? getMaterialLocationHistory(item)
+		                : getUpdatedLocationHistory(
+		                    item,
+		                    item.location,
+		                  ),
+		              lastSavedLocation: item.backOrdered
+		                ? item.lastSavedLocation || ""
+		                : findMatchingOption(item.location, locations),
+		              notes: item.notes.trim(),
+		              backOrdered: Boolean(item.backOrdered),
+		              saved: true,
+		            }
           : item,
       ),
     );
 
     setOpenMaterialId("");
+    setMovingLocationMaterialId("");
     clearError();
   }
 
@@ -1106,27 +1341,40 @@ export default function CheckInForm({
       return;
     }
 
-    if (!findMatchingOption(material.location, locations)) {
-      setError("Select a location for this material before saving progress.");
-      setOpenMaterialId(materialId);
-      return;
+	    if (!material.backOrdered && !findMatchingOption(material.location, locations)) {
+	      setError("Select a location for this material before saving progress.");
+	      setOpenMaterialId(materialId);
+	      return;
     }
 
     setMaterials((currentMaterials) =>
       currentMaterials.map((item) =>
         item.id === materialId
-          ? {
-              ...item,
-              description: item.description.trim(),
-              location: findMatchingOption(item.location, locations),
-              notes: item.notes.trim(),
-              saved: true,
+	          ? {
+	              ...item,
+	              description: item.description.trim(),
+		              location: item.backOrdered
+		                ? ""
+		                : findMatchingOption(item.location, locations),
+		              locationHistory: item.backOrdered
+		                ? getMaterialLocationHistory(item)
+		                : getUpdatedLocationHistory(
+		                    item,
+		                    item.location,
+		                  ),
+		              lastSavedLocation: item.backOrdered
+		                ? item.lastSavedLocation || ""
+		                : findMatchingOption(item.location, locations),
+		              notes: item.notes.trim(),
+		              backOrdered: Boolean(item.backOrdered),
+		              saved: true,
               savedAt: new Date().toISOString(),
             }
           : item,
       ),
     );
 
+    setMovingLocationMaterialId("");
     clearError();
   }
 
@@ -1143,6 +1391,7 @@ export default function CheckInForm({
     );
 
     setOpenMaterialId(materialId);
+    setMovingLocationMaterialId("");
     clearError();
   }
 
@@ -1340,9 +1589,12 @@ export default function CheckInForm({
   const savedMaterials = enteredMaterials.filter(
     (material) => material.saved,
   );
-  const readyMaterials = enteredMaterials.filter(
-    (material) => getMaterialStatus(material) === "ready",
-  );
+	  const readyMaterials = enteredMaterials.filter(
+	    (material) => getMaterialStatus(material) === "ready",
+	  );
+	  const handledMaterials = enteredMaterials.filter((material) =>
+	    ["ready", "backOrdered"].includes(getMaterialStatus(material)),
+	  );
   const materialStatusCounts = enteredMaterials.reduce(
     (counts, material) => {
       const status = getMaterialStatus(material);
@@ -1352,29 +1604,49 @@ export default function CheckInForm({
         [status]: (counts[status] || 0) + 1,
       };
     },
-    {
-      notStarted: 0,
-      inProgress: 0,
-      ready: 0,
-    },
-  );
+	    {
+	      notStarted: 0,
+	      inProgress: 0,
+	      ready: 0,
+	      backOrdered: 0,
+	    },
+	  );
   const hasLinkedPo = Boolean(linkedSouthRun || linkedTheirTruckPO);
   const activeSourceRecord = linkedSouthRun || linkedTheirTruckPO;
   const sourceLabel = linkedSouthRun
-    ? "Our Truck"
+    ? "South"
     : linkedTheirTruckPO
       ? "Their Truck"
       : receivingTruckType === "ourTruck"
-        ? "Our Truck"
+        ? "South"
         : "Their Truck";
-  const allSavedMaterialsHaveLocationPhotos =
-    savedMaterials.length > 0 &&
-    savedMaterials.every(
-      (material) => getMaterialLocationPhotos(material).length > 0,
-    );
-  const damagedMaterials = savedMaterials.filter(
-    (material) => material.conditionGood === false,
-  );
+  const sourceTone = linkedTheirTruckPO || receivingTruckType === "theirTruck"
+    ? {
+        border: "border-red-200",
+        bg: "bg-red-50",
+        text: "text-[#FC2C38]",
+        button: "bg-[#FC2C38] hover:bg-red-700",
+        subtleButton: "border-red-200 text-[#FC2C38] hover:bg-red-100",
+        focus: "focus:border-[#FC2C38] focus:ring-red-100",
+      }
+    : {
+        border: "border-blue-200",
+        bg: "bg-blue-50",
+        text: "text-blue-700",
+        button: "bg-blue-700 hover:bg-blue-800",
+        subtleButton: "border-blue-200 text-blue-700 hover:bg-blue-100",
+        focus: "focus:border-blue-700 focus:ring-blue-100",
+      };
+	  const allSavedMaterialsHaveLocationPhotos =
+	    savedMaterials.length > 0 &&
+	    savedMaterials.every(
+	      (material) =>
+	        material.backOrdered ||
+	        getMaterialLocationPhotos(material).length > 0,
+	    );
+	  const damagedMaterials = savedMaterials.filter(
+	    (material) => !material.backOrdered && material.conditionGood === false,
+	  );
   const damagedMaterialsMissingPhotos = damagedMaterials.filter(
     (material) => getMaterialDamagePhotos(material).length === 0,
   );
@@ -1424,16 +1696,17 @@ export default function CheckInForm({
       return false;
     }
 
-    const notReadyMaterial = enteredMaterials.find(
-      (material) => getMaterialStatus(material) !== "ready",
-    );
-
-    if (notReadyMaterial) {
-      setError(
-        `${notReadyMaterial.description || "A material"} still needs saved details and required photos before final check-in.`,
-      );
-      return false;
-    }
+	    const notHandledMaterial = enteredMaterials.find(
+	      (material) =>
+	        !["ready", "backOrdered"].includes(getMaterialStatus(material)),
+	    );
+	
+	    if (notHandledMaterial) {
+	      setError(
+	        `${notHandledMaterial.description || "A material"} still needs saved details, required photos, or needs marked back ordered before final check-in.`,
+	      );
+	      return false;
+	    }
 
     if (!allSavedMaterialsHaveLocationPhotos) {
       setError("Add a location photo for each received material.");
@@ -1474,18 +1747,27 @@ export default function CheckInForm({
 
     const matchedVendor = findMatchingOption(vendor, vendors);
 
-    const cleanedMaterials = enteredMaterials.map((material) => ({
+	    const cleanedMaterials = enteredMaterials.map((material) => ({
       id: material.id,
       description: material.description.trim(),
       location: findMatchingOption(material.location, locations),
       locationPhoto: getMaterialLocationPhotos(material)[0] || null,
       locationPhotos: getMaterialLocationPhotos(material),
-      conditionGood: material.conditionGood !== false,
+      locationHistory: getMaterialLocationHistory(material),
+      lastSavedLocation:
+        material.lastSavedLocation ||
+        findMatchingOption(material.location, locations),
+	      conditionGood: material.conditionGood !== false,
       damagePhoto: getMaterialDamagePhotos(material)[0] || null,
       damagePhotos: getMaterialDamagePhotos(material),
-      notes: material.notes.trim(),
-      status: getMaterialStatus(material),
+	      notes: material.notes.trim(),
+	      backOrdered: Boolean(material.backOrdered),
+	      status: getMaterialStatus(material),
       sourceItemId: material.sourceItemId || "",
+      sourceOrderId: material.sourceOrderId || "",
+      sourceBuildId: material.sourceBuildId || "",
+      sourceOrderNumber: material.sourceOrderNumber || "",
+      sku: material.sku || "",
       sourceType: material.sourceType || "",
       savedAt: material.savedAt || "",
     }));
@@ -1509,8 +1791,18 @@ export default function CheckInForm({
     );
     const linkedTheirTruckOrderAssignment =
       getLinkedTheirTruckOrderAssignment(linkedTheirTruckPO);
+    const prefillOrderAssignment = prefillDraftId
+      ? {
+          orderNumber: prefill?.orderNumber || "",
+          customerName: prefill?.customerName || "",
+          businessName: prefill?.businessName || "",
+          assignedAt: null,
+        }
+      : null;
     const linkedOrderAssignment =
-      linkedSouthOrderAssignment || linkedTheirTruckOrderAssignment;
+      linkedSouthOrderAssignment ||
+      linkedTheirTruckOrderAssignment ||
+      prefillOrderAssignment;
 
     const newCheckIn = {
       id: createId(),
@@ -1520,7 +1812,7 @@ export default function CheckInForm({
       receivingTruckType,
       receivingTruckLabel:
         receivingTruckType === "ourTruck"
-          ? "Our Truck"
+          ? "South"
           : "Their Truck",
       checkedInBy,
       notes: "",
@@ -1535,7 +1827,19 @@ export default function CheckInForm({
         ? "south"
         : linkedTheirTruckPO
           ? "theirTruck"
-          : "",
+          : prefillDraftId
+            ? "newOrderFlow"
+            : "",
+      sourceNewOrderFlowId: prefillDraftId ? prefill?.id || "" : "",
+      sourceNewOrderFlowOrderNumber: prefillDraftId
+        ? prefill?.orderNumber || ""
+        : "",
+      sourceNewOrderFlowCustomerName: prefillDraftId
+        ? prefill?.customerName || ""
+        : "",
+      sourceNewOrderFlowBusinessName: prefillDraftId
+        ? prefill?.businessName || ""
+        : "",
       sourceSupplierRunId: linkedSouthRun?.id || "",
       sourceSupplierRunPoNumber: linkedSouthRun?.poNumber || "",
       sourceSupplierRunVendor: linkedSouthRun?.vendor || "",
@@ -1562,13 +1866,6 @@ export default function CheckInForm({
 
       checkedInAt: new Date().toISOString(),
     };
-
-    if (JSON.stringify(newCheckIn).length > 850000) {
-      setError(
-        "This check-in has too many photos to save at once. Remove a couple photos or retake fewer wide photos, then try again.",
-      );
-      return;
-    }
 
     setIsSubmitting(true);
 
@@ -1691,16 +1988,16 @@ export default function CheckInForm({
                     label: "Their Truck",
                     detail: "Vendor delivery or outside carrier",
                     icon: Truck,
-                    selectedClass: "border-blue-500 bg-blue-50",
-                    textClass: "text-blue-800",
+                    selectedClass: "border-[#FC2C38] bg-red-50",
+                    textClass: "text-[#FC2C38]",
                   },
                   {
                     value: "ourTruck",
-                    label: "Our Truck",
+                    label: "South",
                     detail: "South run or Capital driver",
                     icon: Warehouse,
-                    selectedClass: "border-red-500 bg-red-50",
-                    textClass: "text-red-800",
+                    selectedClass: "border-blue-500 bg-blue-50",
+                    textClass: "text-blue-800",
                   },
                 ].map((option) => {
                   const Icon = option.icon;
@@ -1778,7 +2075,7 @@ export default function CheckInForm({
                     }}
                     disabled={isSubmitting}
                     placeholder="123-456"
-                    className="w-full rounded-xl border border-slate-300 px-4 py-4 pr-14 text-2xl font-black tracking-[0.08em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                    className={`w-full rounded-xl border border-slate-300 px-4 py-4 pr-14 text-2xl font-black tracking-[0.08em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:ring-4 ${sourceTone.focus}`}
                   />
                   {/^\d{3}-\d{3}$/.test(poNumber) ? (
                     <CheckCircle2
@@ -1829,7 +2126,7 @@ export default function CheckInForm({
                                     )}
                                   </span>
                                   {poSuggestionTitle ? (
-                                    <span className="mt-1 block text-xs font-bold uppercase tracking-[0.12em] text-blue-700">
+                                    <span className={`mt-1 block text-xs font-bold uppercase tracking-[0.12em] ${sourceTone.text}`}>
                                       {poSuggestionTitle}
                                     </span>
                                   ) : null}
@@ -1880,7 +2177,7 @@ export default function CheckInForm({
               <section
                 className={`rounded-2xl border px-4 py-4 ${
                   hasLinkedPo
-                    ? "border-blue-200 bg-blue-50"
+                    ? `${sourceTone.border} ${sourceTone.bg}`
                     : "border-amber-200 bg-amber-50"
                 }`}
               >
@@ -1888,7 +2185,7 @@ export default function CheckInForm({
                   <div className="min-w-0">
                     <p
                       className={`text-xs font-black uppercase tracking-[0.18em] ${
-                        hasLinkedPo ? "text-blue-700" : "text-amber-700"
+                        hasLinkedPo ? sourceTone.text : "text-amber-700"
                       }`}
                     >
                       {hasLinkedPo ? "PO Linked" : "PO Found"}
@@ -1912,7 +2209,7 @@ export default function CheckInForm({
                       onClick={
                         linkedSouthRun ? unlinkSouthRun : unlinkTheirTruckPO
                       }
-                      className="rounded-xl border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+                      className={`rounded-xl border bg-white px-4 py-2 text-sm font-bold transition ${sourceTone.subtleButton}`}
                     >
                       Unlink
                     </button>
@@ -1924,7 +2221,7 @@ export default function CheckInForm({
                           ? linkSouthRun(visibleSouthRun)
                           : linkTheirTruckPO(visibleTheirTruckPO)
                       }
-                      className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800"
+                      className={`rounded-xl px-4 py-2 text-sm font-bold text-white transition ${sourceTone.button}`}
                     >
                       Link PO
                     </button>
@@ -1963,16 +2260,21 @@ export default function CheckInForm({
             {enteredMaterials.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
-                  {
-                    label: "Ready",
-                    value: materialStatusCounts.ready,
-                    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-                  },
-                  {
-                    label: "In Progress",
-                    value: materialStatusCounts.inProgress,
-                    className: "border-amber-200 bg-amber-50 text-amber-700",
-                  },
+	                  {
+	                    label: "Ready",
+	                    value: materialStatusCounts.ready,
+	                    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+	                  },
+	                  {
+	                    label: "Back Ordered",
+	                    value: materialStatusCounts.backOrdered,
+	                    className: "border-orange-200 bg-orange-50 text-orange-700",
+	                  },
+	                  {
+	                    label: "In Progress",
+	                    value: materialStatusCounts.inProgress,
+	                    className: "border-amber-200 bg-amber-50 text-amber-700",
+	                  },
                   {
                     label: "Not Started",
                     value: materialStatusCounts.notStarted,
@@ -2001,13 +2303,28 @@ export default function CheckInForm({
             </datalist>
 
             <div className="space-y-3">
-              {materials.map((material, index) => {
-                const isMaterialOpen = openMaterialId === material.id;
-                const materialStatus = getMaterialStatus(material);
-                const materialTitle =
-                  material.description.trim() || `Material ${index + 1}`;
+	              {materials.map((material, index) => {
+	                const isMaterialOpen = openMaterialId === material.id;
+	                const materialStatus = getMaterialStatus(material);
+	                const materialTitle =
+	                  material.description.trim() || `Material ${index + 1}`;
+	                const currentSavedLocation = findMatchingOption(
+	                  material.lastSavedLocation || "",
+	                  locations,
+	                );
+	                const movingToLocation = findMatchingOption(
+	                  material.location || "",
+	                  locations,
+	                );
+		                const isMoveSelectorOpen =
+		                  !currentSavedLocation ||
+		                  movingLocationMaterialId === material.id;
+		                const isMovingLocation =
+		                  currentSavedLocation &&
+		                  movingToLocation &&
+		                  currentSavedLocation !== movingToLocation;
 
-                return (
+	                return (
                   <div
                     key={material.id}
                     className={`overflow-hidden rounded-2xl border ${
@@ -2088,77 +2405,225 @@ export default function CheckInForm({
                             placeholder="Example: 2x4-8 SPF Studs"
                             className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
                           />
-                        </div>
+	                        </div>
+	
+	                        <button
+	                          type="button"
+	                          onClick={() =>
+	                            updateMaterialBackOrdered(
+	                              material.id,
+	                              !material.backOrdered,
+	                            )
+	                          }
+	                          disabled={isSubmitting}
+	                          className={`flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition ${
+	                            material.backOrdered
+	                              ? "border-orange-200 bg-orange-50 text-orange-800"
+	                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+	                          }`}
+	                        >
+	                          <span>
+	                            <span className="block text-sm font-black uppercase tracking-[0.12em]">
+	                              Back ordered / did not arrive
+	                            </span>
+	                            <span className="mt-1 block text-sm font-semibold text-slate-500">
+	                              Use this when this line did not come on the truck with the rest of the PO.
+	                            </span>
+	                          </span>
+	                          <span
+	                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${
+	                              material.backOrdered
+	                                ? "border-orange-600 bg-orange-600 text-white"
+	                                : "border-slate-300 bg-white text-transparent"
+	                            }`}
+	                          >
+	                            <Check className="h-4 w-4" aria-hidden="true" />
+	                          </span>
+	                        </button>
 
-                        <div>
-                          <label
-                            htmlFor={`material-location-${material.id}`}
-                            className="mb-2 block text-sm font-bold text-slate-700"
-                          >
-                            Material Location *
-                          </label>
-                          <select
-                            id={`material-location-${material.id}`}
-                            value={material.location}
-                            onChange={(event) =>
-                              updateMaterialLocation(
-                                material.id,
-                                event.target.value,
-                              )
-                            }
-                            disabled={isSubmitting}
-                            className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100 md:hidden"
-                          >
-                            <option value="">Select a material location...</option>
-                            {locations.map((location) => (
-                              <option key={location} value={location}>
-                                {location}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            id={`material-location-search-${material.id}`}
-                            type="text"
-                            list="location-options"
-                            autoComplete="off"
-                            value={material.location}
-                            onChange={(event) =>
-                              updateMaterialLocation(
-                                material.id,
-                                event.target.value,
-                              )
-                            }
-                            disabled={isSubmitting}
-                            placeholder="Where is this material?"
-                            aria-label={`Location for material ${index + 1}`}
-                            className="hidden w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100 md:block"
-                          />
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {[
-                              "Building C - Bay 1 Rack",
-                              "Inner Yard",
-                              "On Street",
-                              "On Truck/Delivery",
-                              "Window/door Rack",
-                            ].map((location) => (
-                                <button
-                                  key={location}
-                                  type="button"
-                                  onClick={() =>
-                                    updateMaterialLocation(
-                                      material.id,
-                                      location,
-                                    )
-                                  }
-                                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-                                >
-                                  {location}
-                                </button>
-                              ))}
-                          </div>
-                        </div>
+		                        {!material.backOrdered ? (
+		                          <div className="space-y-3">
+		                            {currentSavedLocation ? (
+		                              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+		                                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+		                                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
+		                                    Current location
+		                                  </p>
+		                                  <p className="mt-1 text-sm font-black text-slate-900">
+		                                    {currentSavedLocation}
+		                                  </p>
+		                                </div>
+		                                {isMoveSelectorOpen ? (
+		                                  <button
+		                                    type="button"
+		                                    onClick={cancelMoveMaterial}
+		                                    disabled={isSubmitting}
+		                                    className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+		                                  >
+		                                    Cancel Move
+		                                  </button>
+		                                ) : (
+		                                  <button
+		                                    type="button"
+		                                    onClick={() => beginMoveMaterial(material.id)}
+		                                    disabled={isSubmitting}
+		                                    className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+		                                  >
+		                                    Move Material
+		                                  </button>
+		                                )}
+		                              </div>
+		                            ) : null}
 
-                        <div>
+		                            {currentSavedLocation && isMoveSelectorOpen ? (
+		                              <div
+		                                className={`rounded-xl border px-3 py-2 ${
+		                                  isMovingLocation
+		                                    ? "border-blue-200 bg-blue-50"
+		                                    : "border-slate-200 bg-white"
+		                                }`}
+		                              >
+		                                <p
+		                                  className={`text-[11px] font-black uppercase tracking-[0.14em] ${
+		                                    isMovingLocation
+		                                      ? "text-blue-700"
+		                                      : "text-slate-400"
+		                                  }`}
+		                                >
+		                                  Moving to
+		                                </p>
+		                                <p
+		                                  className={`mt-1 text-sm font-black ${
+		                                    isMovingLocation
+		                                      ? "text-blue-950"
+		                                      : "text-slate-500"
+		                                  }`}
+		                                >
+		                                  {isMovingLocation
+		                                    ? movingToLocation
+		                                    : "Select the new location below"}
+		                                </p>
+		                              </div>
+		                            ) : null}
+
+		                            {isMoveSelectorOpen ? (
+		                              <div>
+		                                <label
+		                                  htmlFor={`material-location-${material.id}`}
+		                                  className="mb-2 block text-sm font-bold text-slate-700"
+		                                >
+		                                  {currentSavedLocation
+		                                    ? "New Material Location *"
+		                                    : "Material Location *"}
+		                                </label>
+		                                <select
+		                                  id={`material-location-${material.id}`}
+		                                  value={material.location}
+		                                  onChange={(event) =>
+		                                    updateMaterialLocation(
+		                                      material.id,
+		                                      event.target.value,
+		                                    )
+		                                  }
+		                                  disabled={isSubmitting}
+		                                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100 md:hidden"
+		                                >
+		                                  <option value="">
+		                                    Select a material location...
+		                                  </option>
+		                                  {locations.map((location) => (
+		                                    <option key={location} value={location}>
+		                                      {location}
+		                                    </option>
+		                                  ))}
+		                                </select>
+		                                <input
+		                                  id={`material-location-search-${material.id}`}
+		                                  type="text"
+		                                  list="location-options"
+		                                  autoComplete="off"
+		                                  value={material.location}
+		                                  onChange={(event) =>
+		                                    updateMaterialLocation(
+		                                      material.id,
+		                                      event.target.value,
+		                                    )
+		                                  }
+		                                  disabled={isSubmitting}
+		                                  placeholder={
+		                                    currentSavedLocation
+		                                      ? "Where is it moving to?"
+		                                      : "Where is this material?"
+		                                  }
+		                                  aria-label={`Location for material ${index + 1}`}
+		                                  className="hidden w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100 md:block"
+		                                />
+		                                <div className="mt-3 flex flex-wrap gap-2">
+		                                  {[
+		                                    "Building C - Bay 1 Rack",
+		                                    "Inner Yard",
+		                                    "On Street",
+		                                    "On Truck/Delivery",
+		                                    "Window/door Rack",
+		                                  ].map((location) => (
+		                                    <button
+		                                      key={location}
+		                                      type="button"
+		                                      onClick={() =>
+		                                        updateMaterialLocation(
+		                                          material.id,
+		                                          location,
+		                                        )
+		                                      }
+		                                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+		                                    >
+		                                      {location}
+		                                    </button>
+		                                  ))}
+		                                </div>
+		                              </div>
+		                            ) : null}
+
+		                            {getMaterialLocationHistory(material).length > 0 ? (
+		                              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+		                                <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+		                                  Previous moves
+		                                </p>
+		                                <div className="mt-1 space-y-1 text-sm font-bold text-slate-700">
+		                                  {getMaterialLocationHistory(material)
+		                                    .slice(-3)
+		                                    .map((entry, historyIndex) => {
+		                                      const fromLocation =
+		                                        entry.currentLocation ||
+		                                        entry.previousLocation;
+		                                      const toLocation =
+		                                        entry.movingToLocation ||
+		                                        entry.updatedLocation;
+
+		                                      return (
+		                                        <p
+		                                          key={`${entry.changedAt || "location"}-${historyIndex}`}
+		                                        >
+		                                          {fromLocation} to {toLocation}
+		                                        </p>
+		                                      );
+		                                    })}
+		                                </div>
+		                              </div>
+		                            ) : null}
+		                          </div>
+		                        ) : (
+	                          <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+	                            <p className="text-sm font-black text-orange-800">
+	                              No location photo needed yet.
+	                            </p>
+	                            <p className="mt-1 text-sm font-semibold text-orange-700">
+	                              Save this item as back ordered, then finish the other items that did arrive.
+	                            </p>
+	                          </div>
+	                        )}
+	
+	                        <div>
                           <label
                             htmlFor={`material-notes-${material.id}`}
                             className="mb-2 block text-sm font-bold text-slate-700"
@@ -2215,7 +2680,7 @@ export default function CheckInForm({
                     Item Progress
                   </p>
                   <p className="mt-1 text-lg font-black text-slate-950">
-                    {readyMaterials.length} of {enteredMaterials.length} ready
+                    {handledMaterials.length} of {enteredMaterials.length} handled
                   </p>
                 </div>
 
@@ -2223,6 +2688,11 @@ export default function CheckInForm({
                   <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-emerald-700">
                     {materialStatusCounts.ready} Ready
                   </span>
+                  {materialStatusCounts.backOrdered > 0 ? (
+                    <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-orange-700">
+                      {materialStatusCounts.backOrdered} Back Ordered
+                    </span>
+                  ) : null}
                   <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-amber-700">
                     {materialStatusCounts.inProgress} In Progress
                   </span>
@@ -2241,7 +2711,7 @@ export default function CheckInForm({
                     width: `${
                       enteredMaterials.length > 0
                         ? Math.round(
-                            (readyMaterials.length / enteredMaterials.length) *
+                            (handledMaterials.length / enteredMaterials.length) *
                               100,
                           )
                         : 0
@@ -2270,14 +2740,18 @@ export default function CheckInForm({
                         </span>
                         <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
                           {[
-                            material.location || "No location",
-                            getMaterialLocationPhotos(material).length > 0
-                              ? `${getMaterialLocationPhotos(material).length} photo${
-                                  getMaterialLocationPhotos(material).length === 1
-                                    ? ""
-                                    : "s"
-                                }`
-                              : "No photos",
+                            material.backOrdered
+                              ? "Did not arrive"
+                              : material.location || "No location",
+                            material.backOrdered
+                              ? "No photos required yet"
+                              : getMaterialLocationPhotos(material).length > 0
+                                ? `${getMaterialLocationPhotos(material).length} photo${
+                                    getMaterialLocationPhotos(material).length === 1
+                                      ? ""
+                                      : "s"
+                                  }`
+                                : "No photos",
                           ].join(" • ")}
                         </span>
                       </span>
@@ -2309,7 +2783,10 @@ export default function CheckInForm({
                     label: `${savedMaterials.length} ${
                       savedMaterials.length === 1 ? "Item" : "Items"
                     }`,
-                    detail: "Received",
+                    detail:
+                      materialStatusCounts.backOrdered > 0
+                        ? `${materialStatusCounts.ready} received, ${materialStatusCounts.backOrdered} back ordered`
+                        : "Received",
                     done: savedMaterials.length > 0,
                   },
                   {
@@ -2325,8 +2802,10 @@ export default function CheckInForm({
                           ].join(", ") || "No location"
                         : "No location",
                     detail: "Location",
-                    done: savedMaterials.every((material) =>
-                      findMatchingOption(material.location, locations),
+                    done: savedMaterials.every(
+                      (material) =>
+                        material.backOrdered ||
+                        findMatchingOption(material.location, locations),
                     ),
                   },
                 ].map((item) => {
@@ -2394,142 +2873,158 @@ export default function CheckInForm({
                     </div>
                   </div>
 
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {[
-                      {
-                        value: true,
-                        label: "No, all items are in good condition",
-                        icon: CheckCircle2,
-                        className: "border-emerald-300 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-100",
-                      },
-                      {
-                        value: false,
-                        label: "Yes, some items are damaged",
-                        icon: AlertTriangle,
-                        className: "border-red-200 bg-red-50 text-red-700",
-                      },
-                    ].map((option) => {
-                      const Icon = option.icon;
-                      const isSelected =
-                        material.conditionGood !== false === option.value;
-
-                      return (
-                        <button
-                          key={option.label}
-                          type="button"
-                          onClick={() =>
-                            updateMaterialCondition(
-                              material.id,
-                              option.value,
-                            )
-                          }
-                          className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-bold transition ${
-                            isSelected
-                              ? option.className
-                              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                          }`}
-                        >
-                          <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-4">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-black uppercase tracking-[0.08em] text-slate-700">
-                          Location Photos *
+                  {material.backOrdered ? (
+                    <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4">
+                      <p className="text-sm font-black uppercase tracking-[0.12em] text-orange-700">
+                        Back ordered
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-orange-800">
+                        This item did not arrive on this truck. It can be checked in later when it arrives.
+                      </p>
+                      {material.notes ? (
+                        <p className="mt-3 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-orange-900">
+                          {material.notes}
                         </p>
-                        <p className="mt-1 text-xs font-semibold text-slate-500">
-                          Add one or more wide photos showing where this material was placed.
-                        </p>
-                      </div>
-                      {materialLocationPhotos.length > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => removeMaterialPhoto(material.id)}
-                          disabled={
-                            isSubmitting ||
-                            Boolean(processingPhotoMaterialId)
-                          }
-                          className="text-sm font-bold text-red-600"
-                        >
-                          Remove all
-                        </button>
                       ) : null}
                     </div>
+                  ) : (
+                    <>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        {[
+                          {
+                            value: true,
+                            label: "No, all items are in good condition",
+                            icon: CheckCircle2,
+                            className: "border-emerald-300 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-100",
+                          },
+                          {
+                            value: false,
+                            label: "Yes, some items are damaged",
+                            icon: AlertTriangle,
+                            className: "border-red-200 bg-red-50 text-red-700",
+                          },
+                        ].map((option) => {
+                          const Icon = option.icon;
+                          const isSelected =
+                            material.conditionGood !== false === option.value;
 
-                    {materialLocationPhotos.length > 0 ? (
-                      <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                        {materialLocationPhotos.map((photo, photoIndex) => (
-                          <div
-                            key={`${material.id}-location-photo-${photoIndex}`}
-                            className="relative overflow-hidden rounded-xl border border-slate-200 bg-white"
-                          >
-                            <img
-                              src={photo.dataUrl}
-                              alt={`Location preview ${photoIndex + 1} for material ${index + 1}`}
-                              className="h-28 w-full object-cover sm:h-32"
-                            />
+                          return (
                             <button
+                              key={option.label}
                               type="button"
                               onClick={() =>
-                                removeMaterialLocationPhoto(
+                                updateMaterialCondition(
                                   material.id,
-                                  photoIndex,
+                                  option.value,
                                 )
                               }
+                              className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm font-bold transition ${
+                                isSelected
+                                  ? option.className
+                                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-4">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-black uppercase tracking-[0.08em] text-slate-700">
+                              Location Photos *
+                            </p>
+                            <p className="mt-1 text-xs font-semibold text-slate-500">
+                              Add one or more wide photos showing where this material was placed.
+                            </p>
+                          </div>
+                          {materialLocationPhotos.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => removeMaterialPhoto(material.id)}
                               disabled={
                                 isSubmitting ||
                                 Boolean(processingPhotoMaterialId)
                               }
-                              className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-red-700"
-                              aria-label={`Remove location photo ${photoIndex + 1}`}
+                              className="text-sm font-bold text-red-600"
                             >
-                              <X className="h-4 w-4" aria-hidden="true" />
+                              Remove all
                             </button>
-                            <span className="block px-2 py-1 text-xs font-black text-slate-600">
-                              Photo {photoIndex + 1}
-                            </span>
+                          ) : null}
+                        </div>
+
+                        {materialLocationPhotos.length > 0 ? (
+                          <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {materialLocationPhotos.map((photo, photoIndex) => (
+                              <div
+                                key={`${material.id}-location-photo-${photoIndex}`}
+                                className="relative overflow-hidden rounded-xl border border-slate-200 bg-white"
+                              >
+                                <img
+                                  src={photo.dataUrl}
+                                  alt={`Location preview ${photoIndex + 1} for material ${index + 1}`}
+                                  className="h-28 w-full object-cover sm:h-32"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    removeMaterialLocationPhoto(
+                                      material.id,
+                                      photoIndex,
+                                    )
+                                  }
+                                  disabled={
+                                    isSubmitting ||
+                                    Boolean(processingPhotoMaterialId)
+                                  }
+                                  className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-slate-700 shadow-sm transition hover:bg-red-50 hover:text-red-700"
+                                  aria-label={`Remove location photo ${photoIndex + 1}`}
+                                >
+                                  <X className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                                <span className="block px-2 py-1 text-xs font-black text-slate-600">
+                                  Photo {photoIndex + 1}
+                                </span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        ) : null}
+
+                        <label
+                          htmlFor={`material-photo-${material.id}`}
+                          className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center transition hover:border-blue-600 hover:bg-blue-50"
+                        >
+                          <Camera className="h-8 w-8 text-blue-700" aria-hidden="true" />
+                          <span className="mt-2 text-sm font-black text-blue-700">
+                            {materialLocationPhotos.length > 0
+                              ? "Add Another Location Photo"
+                              : "Add Location Photo"}
+                          </span>
+                          <span className="mt-1 text-xs font-semibold text-slate-500">
+                            Please take a wide photo showing where this material was placed.
+                          </span>
+                        </label>
+                        <input
+                          id={`material-photo-${material.id}`}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          multiple
+                          onChange={(event) =>
+                            handleMaterialPhotoChange(material.id, event)
+                          }
+                          disabled={
+                            isSubmitting || Boolean(processingPhotoMaterialId)
+                          }
+                          className="sr-only"
+                        />
                       </div>
-                    ) : null}
 
-                    <label
-                      htmlFor={`material-photo-${material.id}`}
-                      className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center transition hover:border-blue-600 hover:bg-blue-50"
-                    >
-                      <Camera className="h-8 w-8 text-blue-700" aria-hidden="true" />
-                      <span className="mt-2 text-sm font-black text-blue-700">
-                        {materialLocationPhotos.length > 0
-                          ? "Add Another Location Photo"
-                          : "Add Location Photo"}
-                      </span>
-                      <span className="mt-1 text-xs font-semibold text-slate-500">
-                        Please take a wide photo showing where this material was placed.
-                      </span>
-                    </label>
-                    <input
-                      id={`material-photo-${material.id}`}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      multiple
-                      onChange={(event) =>
-                        handleMaterialPhotoChange(material.id, event)
-                      }
-                      disabled={
-                        isSubmitting || Boolean(processingPhotoMaterialId)
-                      }
-                      className="sr-only"
-                    />
-                  </div>
-
-                  {material.conditionGood === false ? (
-                    <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
+                      {material.conditionGood === false ? (
+                        <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4">
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-black uppercase tracking-[0.08em] text-red-800">
@@ -2625,8 +3120,10 @@ export default function CheckInForm({
                         }
                         className="sr-only"
                       />
-                    </div>
-                  ) : null}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
 
                   <button
                     type="button"
@@ -2635,12 +3132,16 @@ export default function CheckInForm({
                       isSubmitting || Boolean(processingPhotoMaterialId)
                     }
                     className={`mt-4 w-full rounded-xl px-5 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                      materialStatus === "ready"
+                      materialStatus === "backOrdered"
+                        ? "bg-orange-600 text-white hover:bg-orange-700"
+                        : materialStatus === "ready"
                         ? "bg-emerald-700 text-white hover:bg-emerald-800"
                         : "bg-slate-950 text-white hover:bg-slate-800"
                     }`}
                   >
-                    {materialStatus === "ready"
+                    {materialStatus === "backOrdered"
+                      ? "Back Ordered"
+                      : materialStatus === "ready"
                       ? "Item Ready"
                       : "Save Item Progress"}
                   </button>

@@ -39,6 +39,7 @@ import {
   saveSouthRouteOrder,
   subscribeToSouthRouteOrders,
 } from "../utils/southRouteOrderStorage";
+import { isPickupItemComplete } from "../utils/supplierRunFlow";
 
 const UNASSIGNED_DRIVER = "Unassigned Driver";
 const driverAvatarColors = [
@@ -269,24 +270,6 @@ function getMaterialUseLabel(materialUse) {
   };
 
   return labels[materialUse] || "Order";
-}
-
-function getPickupPhotoUrl(photo) {
-  return String(photo?.url || photo?.dataUrl || "").trim();
-}
-
-function hasPickupPhoto(item) {
-  const photos = Array.isArray(item?.pickupPhotos)
-    ? item.pickupPhotos
-    : [];
-
-  return Boolean(
-    photos.some(getPickupPhotoUrl) || getPickupPhotoUrl(item?.pickupPhoto),
-  );
-}
-
-function isPickupItemComplete(item) {
-  return Boolean(item?.pickedUp || item?.pickedUpAt || hasPickupPhoto(item));
 }
 
 function getVendorGroupStatsFromRuns(runs) {

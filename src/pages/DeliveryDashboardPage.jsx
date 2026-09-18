@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   CalendarDays,
   Clock,
+  Package,
   History,
   MapPin,
   PackageCheck,
@@ -45,6 +46,71 @@ function getDeliveryDrivers(delivery) {
   const legacyDrivers = Array.isArray(delivery.drivers) ? delivery.drivers : [];
 
   return [...new Set([delivery.driver, ...legacyDrivers, ...dispatchDrivers].filter(Boolean))];
+}
+
+function getBuildItems(build) {
+  if (Array.isArray(build?.items) && build.items.length > 0) {
+    return build.items;
+  }
+
+  return [
+    ...(Array.isArray(build?.stockItems) ? build.stockItems : []),
+    ...(Array.isArray(build?.waitingItems) ? build.waitingItems : []),
+  ];
+}
+
+function getLinkedBuild(delivery, orderBuilds) {
+  return orderBuilds.find((build) => {
+    const deliveryId = String(delivery?.id || "");
+    const sourceOrderId = String(delivery?.sourceOrderId || "");
+    const deliveryOrderNumber = String(delivery?.orderNumber || "");
+
+    return (
+      (deliveryId && String(build.linkedDeliveryId || "") === deliveryId) ||
+      (sourceOrderId && String(build.orderId || "") === sourceOrderId) ||
+      (deliveryOrderNumber && String(build.orderNumber || "") === deliveryOrderNumber)
+    );
+  });
+}
+
+function getWaitingBuildItems(delivery, orderBuilds) {
+  const linkedBuild = getLinkedBuild(delivery, orderBuilds);
+
+  if (!linkedBuild) {
+    return [];
+  }
+
+  return getBuildItems(linkedBuild).filter((item) => {
+    const buildStatus = String(item.buildStatus || "").toLowerCase();
+    const receivedStatus = String(item.receivingStatus || "").toLowerCase();
+
+    if (item.path === "inStock") {
+      return false;
+    }
+
+    return !["ready", "built", "complete", "completed", "staged"].includes(
+      buildStatus,
+    ) && receivedStatus !== "received";
+  });
+}
+
+function getWaitingPathSummary(waitingItems) {
+  const counts = waitingItems.reduce((summary, item) => {
+    const path = item.path || "unknown";
+
+    return {
+      ...summary,
+      [path]: (summary[path] || 0) + 1,
+    };
+  }, {});
+
+  return [
+    counts.wePickup ? `${counts.wePickup} South` : "",
+    counts.supplierDelivery ? `${counts.supplierDelivery} Their Truck` : "",
+    counts.pod ? `${counts.pod} POD` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function getOpenDeliveryList(deliveries) {
@@ -200,9 +266,72 @@ function DriverScheduleColumn({ driver, deliveries, onOpenQueue }) {
   );
 }
 
+function WaitingMaterialCard({ delivery, orderBuilds, onOpenBuild }) {
+  const waitingItems = getWaitingBuildItems(delivery, orderBuilds);
+  const waitingSummary = getWaitingPathSummary(waitingItems);
+  const firstWaitingItem = waitingItems[0];
+
+  return (
+    <article className="rounded-3xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+            Scheduled · Waiting on Items
+          </p>
+          <h3 className="mt-1 text-2xl font-black text-slate-950">
+            {formatCustomerName(delivery.customerName) || "No customer"}
+          </h3>
+          <p className="mt-1 text-sm font-black text-slate-500">
+            Order {delivery.orderNumber || "No order"} ·{" "}
+            {formatDateLabel(delivery.deliveryDate)}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-amber-700 shadow-sm">
+            {waitingItems.length} waiting
+          </span>
+          {delivery.driver ? (
+            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
+              {delivery.driver}
+            </span>
+          ) : null}
+          {delivery.deliveryTimeSlot ? (
+            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
+              {getTimeSlotLabel(delivery.deliveryTimeSlot)}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl bg-white p-3">
+        <p className="text-sm font-black text-slate-950">
+          {waitingSummary || "Waiting on linked material"}
+        </p>
+        <p className="mt-1 text-sm font-bold text-slate-500">
+          {firstWaitingItem
+            ? `${firstWaitingItem.quantity ? `QTY ${firstWaitingItem.quantity} · ` : ""}${
+                firstWaitingItem.description || "Material"
+              }`
+            : "Open the build to review what is holding this delivery."}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onOpenBuild}
+        className="mt-4 inline-flex h-11 items-center justify-center rounded-xl border border-amber-200 bg-white px-4 text-sm font-black text-amber-800 shadow-sm"
+      >
+        View Build Status
+      </button>
+    </article>
+  );
+}
+
 /**
  * @param {{
  *   deliveries?: any[];
+ *   orderBuilds?: Array<Record<string, any>>;
  *   allowedPageIds?: string[];
  *   isDriverView?: boolean;
  *   onPageChange?: (pageId: string) => void;
@@ -210,22 +339,44 @@ function DriverScheduleColumn({ driver, deliveries, onOpenQueue }) {
  */
 export default function DeliveryDashboardPage({
   deliveries = [],
+  orderBuilds = [],
   allowedPageIds = [],
   isDriverView = false,
   onPageChange,
 }) {
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
   const openDeliveries = useMemo(() => getOpenDeliveryList(deliveries), [deliveries]);
-  const selectedDateDeliveries = useMemo(
+  const waitingMaterialDeliveries = useMemo(
     () =>
       openDeliveries
+        .filter((delivery) => getWaitingBuildItems(delivery, orderBuilds).length > 0)
+        .sort(sortDeliveriesBySchedule),
+    [openDeliveries, orderBuilds],
+  );
+  const readyOpenDeliveries = useMemo(
+    () =>
+      openDeliveries.filter(
+        (delivery) => getWaitingBuildItems(delivery, orderBuilds).length === 0,
+      ),
+    [openDeliveries, orderBuilds],
+  );
+  const selectedDateDeliveries = useMemo(
+    () =>
+      readyOpenDeliveries
         .filter((delivery) => delivery.deliveryDate === selectedDate)
         .sort(sortDeliveriesBySchedule),
-    [openDeliveries, selectedDate],
+    [readyOpenDeliveries, selectedDate],
+  );
+  const selectedDateWaitingMaterialDeliveries = useMemo(
+    () =>
+      waitingMaterialDeliveries.filter(
+        (delivery) => delivery.deliveryDate === selectedDate,
+      ),
+    [selectedDate, waitingMaterialDeliveries],
   );
   const upcomingDeliveries = useMemo(
-    () => openDeliveries.sort(sortDeliveriesBySchedule).slice(0, 5),
-    [openDeliveries],
+    () => readyOpenDeliveries.sort(sortDeliveriesBySchedule).slice(0, 5),
+    [readyOpenDeliveries],
   );
   const deliveriesByDriver = useMemo(
     () => groupDeliveriesByDriver(selectedDateDeliveries),
@@ -275,13 +426,25 @@ export default function DeliveryDashboardPage({
         <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <div className="rounded-3xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
-              Scheduled
+              Ready
             </p>
             <p className="mt-2 text-4xl font-black text-slate-950">
               {selectedDateDeliveries.length}
             </p>
             <p className="mt-1 text-sm font-bold text-slate-600">
-              {formatDateLabel(selectedDate)}
+              Scheduled for {formatDateLabel(selectedDate)}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">
+              Waiting Items
+            </p>
+            <p className="mt-2 text-4xl font-black text-slate-950">
+              {selectedDateWaitingMaterialDeliveries.length}
+            </p>
+            <p className="mt-1 text-sm font-bold text-slate-600">
+              Scheduled, but not ready to load
             </p>
           </div>
 
@@ -325,7 +488,7 @@ export default function DeliveryDashboardPage({
           <ActionButton
             icon={PackageCheck}
             title="View Upcoming"
-            detail={`${openDeliveries.length} open`}
+            detail={`${readyOpenDeliveries.length} ready`}
             tone="green"
             onClick={() => onPageChange?.("deliveries-queue")}
           />
@@ -348,6 +511,40 @@ export default function DeliveryDashboardPage({
           />
         ) : null}
       </div>
+
+      {!isDriverView && selectedDateWaitingMaterialDeliveries.length > 0 ? (
+        <section className="mt-8 rounded-[2rem] border border-amber-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">
+                Hold Before Loading
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-slate-950">
+                Scheduled, Waiting on Items
+              </h2>
+              <p className="mt-1 text-sm font-bold text-slate-500">
+                These deliveries are planned, but still have material waiting on
+                South, Their Truck, POD, or receiving.
+              </p>
+            </div>
+            <span className="inline-flex w-fit items-center gap-2 rounded-full bg-amber-50 px-4 py-2 text-sm font-black text-amber-800">
+              <Package className="h-4 w-4" aria-hidden="true" />
+              {selectedDateWaitingMaterialDeliveries.length} waiting
+            </span>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            {selectedDateWaitingMaterialDeliveries.map((delivery) => (
+              <WaitingMaterialCard
+                key={delivery.id}
+                delivery={delivery}
+                orderBuilds={orderBuilds}
+                onOpenBuild={() => onPageChange?.("new-home-build")}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="mt-8 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
