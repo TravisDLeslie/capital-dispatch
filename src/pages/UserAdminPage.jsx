@@ -98,10 +98,6 @@ const permissionGroups = [
     ],
   },
   {
-    title: "Purchasing",
-    permissions: [{ id: "purchase-orders", label: "Purchase Orders" }],
-  },
-  {
     title: "Accounting",
     permissions: [
       { id: "accounting", label: "Accounting" },

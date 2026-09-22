@@ -24,7 +24,6 @@ import {
   MailCheck,
   Package,
   PackageCheck,
-  PackageSearch,
   Plus,
   Search,
   ShieldCheck,
@@ -76,7 +75,6 @@ import {
   subscribeToCustomerStatements,
 } from "./utils/customerStatementStorage";
 import {
-  deleteSalesOrder,
   saveSalesOrder,
   subscribeToSalesOrders,
 } from "./utils/salesOrderStorage";
@@ -87,7 +85,6 @@ import {
   subscribeToPodPickups,
 } from "./utils/podPickupStorage";
 import {
-  deleteOrderBuild,
   saveOrderBuild,
   subscribeToOrderBuilds,
 } from "./utils/orderBuildStorage";
@@ -118,27 +115,11 @@ import {
   subscribeToStockingHandbookItems,
 } from "./utils/stockingHandbookStorage";
 import {
-  deleteItemCatalogItem,
-  saveItemCatalogItem,
-  subscribeToItemCatalogItems,
-} from "./utils/itemCatalogStorage";
-import {
   deleteYardTask,
   saveYardTask,
   subscribeToYardTasks,
   updateYardTask,
 } from "./utils/yardTaskStorage";
-import {
-  deleteFeedbackEntry,
-  saveFeedbackEntry,
-  subscribeToFeedbackEntries,
-} from "./utils/feedbackStorage";
-import {
-  deleteInternalMessage,
-  saveInternalMessage,
-  subscribeToInternalMessages,
-  updateInternalMessage,
-} from "./utils/internalMessageStorage";
 import { subscribeToBouncieVehicleSettings } from "./utils/bouncieVehicleStorage";
 import {
   defaultDeliveryScheduleSettings,
@@ -154,11 +135,6 @@ import {
 } from "./utils/vendorSettingsStorage";
 import { capitalLumberAddress } from "./data/options";
 import { formatCustomerName } from "./utils/textFormatters";
-import {
-  addPickupPhotoToItems,
-  areAllPickupItemsComplete,
-  markPickupItemPickedUpInItems,
-} from "./utils/supplierRunFlow";
 
 const BounciePage = lazy(() => import("./pages/BounciePage"));
 const CheckInPage = lazy(() => import("./pages/CheckInPage"));
@@ -184,52 +160,10 @@ const DeliveryQueuePage = lazy(() => import("./pages/DeliveryQueuePage"));
 const DeliverySettingsPage = lazy(() => import("./pages/DeliverySettingsPage"));
 const DeliveriesPage = lazy(() => import("./pages/DeliveriesPage"));
 const EmailListPage = lazy(() => import("./pages/EmailListPage"));
-const FeedbackPage = lazy(
-  () =>
-    import("./pages/FeedbackPage") as Promise<{
-      default: ComponentType<any>;
-    }>,
-);
-const FulfillmentDashboardPage = lazy(
-  () =>
-    import("./pages/FulfillmentDashboardPage") as Promise<{
-      default: ComponentType<any>;
-    }>,
-);
 const NewHomePage = lazy(() => import("./pages/NewHomePage"));
-const MessagesPage = lazy(
-  () =>
-    import("./pages/MessagesPage") as Promise<{
-      default: ComponentType<any>;
-    }>,
-);
-const ItemCatalogPage = lazy(
-  () =>
-    import("./pages/ItemCatalogPage") as Promise<{
-      default: ComponentType<any>;
-    }>,
-);
 const OrderBuildsPage = lazy(() => import("./pages/OrderBuildsPage"));
-const OrderHistoryPage = lazy(
-  () =>
-    import("./pages/OrderHistoryPage") as Promise<{
-      default: ComponentType<any>;
-    }>,
-);
-const OrderQueuePage = lazy(
-  () =>
-    import("./pages/OrderQueuePage") as Promise<{
-      default: ComponentType<any>;
-    }>,
-);
 const POCalendarPage = lazy(() => import("./pages/POCalendarPage"));
 const OrderFlowPage = lazy(() => import("./pages/OrderFlowPage"));
-const PurchaseOrdersPage = lazy(
-  () =>
-    import("./pages/PurchaseOrdersPage") as Promise<{
-      default: ComponentType<any>;
-    }>,
-);
 const PodPickupsPage = lazy(() => import("./pages/PodPickupsPage"));
 const SearchPage = lazy(() => import("./pages/SearchPage"));
 const SalesConverterPage = lazy(() => import("./pages/SalesConverterPage"));
@@ -297,16 +231,6 @@ function normalizeSearchText(value: unknown) {
 
 function normalizeSearchNumber(value: unknown) {
   return String(value ?? "").replace(/\D/g, "");
-}
-
-function formatPONumber(value: unknown) {
-  const digitsOnly = String(value ?? "").replace(/\D/g, "").slice(0, 6);
-
-  if (digitsOnly.length <= 3) {
-    return digitsOnly;
-  }
-
-  return `${digitsOnly.slice(0, 3)}-${digitsOnly.slice(3)}`;
 }
 
 function getLookupItemText(item: Record<string, unknown>) {
@@ -959,24 +883,6 @@ type StockingHandbookItem = {
   [key: string]: unknown;
 };
 
-type ItemCatalogItem = {
-  id: string;
-  itemNumber?: string;
-  description?: string;
-  category?: string;
-  group?: string;
-  unit?: string;
-  price?: string | number;
-  lastPurchasePrice?: string | number;
-  alternativeSkus?: string[];
-  keywords?: string[];
-  notes?: string;
-  archived?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  [key: string]: unknown;
-};
-
 type CustomerContact = {
   id: string;
   label?: string;
@@ -1164,17 +1070,7 @@ function getAllowedPageIdsForRole(role: string) {
     return [
       "new-home",
       "new-fulfillment",
-      "new-fulfillment-receiving",
-      "new-receiving-check-in",
-      "new-fulfillment-south",
-      "new-fulfillment-their-truck",
-      "new-fulfillment-pod",
       "new-build",
-      "new-dispatch",
-      "new-supplier-runs-dispatch",
-      "new-deliveries-dispatch",
-      "messages",
-      "feedback",
       "dashboard",
       "driver-dashboard",
       "receiving",
@@ -1204,7 +1100,6 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-calendar",
       "deliveries-queue",
       "deliveries-history",
-      "order-delivery-history",
       "sales",
       "sales-orders",
       "customers-add",
@@ -1212,7 +1107,6 @@ function getAllowedPageIdsForRole(role: string) {
       "sales-tools",
       "sales-converter",
       "trace",
-      "purchase-orders",
       "stocking-handbook",
       "accounting",
       "accounting-customers",
@@ -1224,15 +1118,9 @@ function getAllowedPageIdsForRole(role: string) {
       "delivery-settings",
       "vendor-settings",
       "order-flow",
-      "item-catalog",
-      "purchase-orders",
-      "order-queue",
-      "order-history",
       "order-builds",
       "pod-pickups",
       "sales-report",
-      "messages",
-      "feedback",
       "bouncie",
     ];
   }
@@ -1240,8 +1128,6 @@ function getAllowedPageIdsForRole(role: string) {
   if (role === "admin") {
     return [
       "dashboard",
-      "messages",
-      "feedback",
       "driver-dashboard",
       "receiving",
       "check-in",
@@ -1286,15 +1172,12 @@ function getAllowedPageIdsForRole(role: string) {
       "email-list",
       "delivery-settings",
       "vendor-settings",
-      "item-catalog",
       "sales-report",
-      "messages",
-      "feedback",
     ];
   }
 
   if (role === "customer") {
-    return ["dashboard", "messages", "feedback"];
+    return ["dashboard"];
   }
 
   return [];
@@ -1342,8 +1225,6 @@ function getAllowedPageIds(
   const addWorkViewPageIds = (pageIds: string[]) => {
     const nextPageIds = addParentPageIds(pageIds);
 
-    nextPageIds.push("messages", "feedback");
-
     if (["driver", "receiving"].includes(String(workView || ""))) {
       nextPageIds.push("south");
       nextPageIds.push("supplier-runs-check");
@@ -1386,8 +1267,7 @@ function getAllowedPageIds(
     }
 
     if (
-      (pageIds.includes("stocking-handbook") ||
-        pageIds.includes("item-catalog")) &&
+      pageIds.includes("stocking-handbook") &&
       !pageIds.includes("documents")
     ) {
       pageIds.push("documents");
@@ -1401,31 +1281,6 @@ function getAllowedPageIds(
   }
 
   return addWorkViewPageIds(getAllowedPageIdsForRole(presetRole));
-}
-
-const NEW_APP_PAGE_IDS = new Set([
-  "new-home",
-  "new-fulfillment",
-  "new-fulfillment-receiving",
-  "new-receiving-check-in",
-  "new-fulfillment-south",
-  "new-fulfillment-their-truck",
-  "new-fulfillment-pod",
-  "new-build",
-  "new-dispatch",
-  "new-supplier-runs-dispatch",
-  "new-deliveries-dispatch",
-  "order-flow",
-  "item-catalog",
-  "purchase-orders",
-  "order-queue",
-  "order-history",
-  "order-builds",
-  "order-delivery-history",
-]);
-
-function isNewAppPageId(pageId: string) {
-  return NEW_APP_PAGE_IDS.has(pageId);
 }
 
 function PageLoadingFallback() {
@@ -1679,8 +1534,6 @@ export default function App() {
         subtitle: string;
       }>;
     } | null>(null);
-  const [newFlowCheckInPrefill, setNewFlowCheckInPrefill] =
-    useState<Record<string, unknown> | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] =
     useState<UserProfile | null>(null);
@@ -1715,17 +1568,8 @@ export default function App() {
   const [stockingHandbookItems, setStockingHandbookItems] = useState<
     StockingHandbookItem[]
   >([]);
-  const [itemCatalogItems, setItemCatalogItems] = useState<ItemCatalogItem[]>(
-    [],
-  );
   const [emailList, setEmailList] = useState<EmailListEntry[]>([]);
   const [salesReports, setSalesReports] = useState<SalesReport[]>([]);
-  const [feedbackEntries, setFeedbackEntries] = useState<
-    Array<Record<string, unknown>>
-  >([]);
-  const [internalMessages, setInternalMessages] = useState<
-    Array<Record<string, unknown>>
-  >([]);
   const [vehicleSettings, setVehicleSettings] = useState<VehicleSetting[]>([]);
   const [deliverySettings, setDeliverySettings] =
     useState<DeliverySettings>(defaultDeliveryScheduleSettings);
@@ -1925,28 +1769,6 @@ export default function App() {
         getUserRole(selectedPreviewProfile, selectedPreviewProfile?.email),
       )
     : getWorkView(userProfile, rawUserRole);
-  const effectiveUserIdentity = isSuperAdmin
-    ? {
-        uid:
-          selectedPreviewProfile?.uid ||
-          selectedPreviewProfile?.id ||
-          currentUser?.uid ||
-          "",
-        email: selectedPreviewProfile?.email || currentUser?.email || "",
-        displayName:
-          getProfileDisplayName(selectedPreviewProfile) ||
-          currentUser?.displayName ||
-          "",
-      }
-    : currentUser;
-  const effectiveUserIdentityId =
-    effectiveUserIdentity?.uid ||
-    selectedPreviewProfile?.uid ||
-    selectedPreviewProfile?.id ||
-    userProfile?.uid ||
-    userProfile?.id ||
-    currentUser?.uid ||
-    "";
   const driverName = isSuperAdmin
     ? selectedPreviewProfile?.driverName || ""
     : userProfile?.driverName || "";
@@ -2005,7 +1827,6 @@ export default function App() {
       "deliveries-calendar",
       "deliveries-queue",
       "deliveries-history",
-      "order-delivery-history",
     ].includes(pageId),
   );
   const canEditDeliveryDetails = ["superAdmin", "admin"].includes(
@@ -2021,13 +1842,9 @@ export default function App() {
       "sales-converter",
     ].includes(pageId),
   );
-  const canReadItemCatalog =
-    isApproved && effectiveAllowedPageIds.includes("item-catalog");
   const canReadDocuments = effectiveAllowedPageIds.some((pageId) =>
-    ["documents", "stocking-handbook", "item-catalog"].includes(pageId),
+    ["documents", "stocking-handbook"].includes(pageId),
   );
-  const canReadPurchasing =
-    isApproved && effectiveAllowedPageIds.includes("purchase-orders");
   const canReadAccounting = effectiveAllowedPageIds.some((pageId) =>
     ["accounting", "accounting-customers", "customer-payment-links"].includes(
       pageId,
@@ -2041,8 +1858,6 @@ export default function App() {
       "delivery-settings",
       "vendor-settings",
       "order-flow",
-      "order-queue",
-      "order-history",
       "order-builds",
       "sales-report",
     ].includes(pageId),
@@ -2053,12 +1868,6 @@ export default function App() {
   const canReadEmailList = effectiveAllowedPageIds.includes("email-list");
   const canReadSalesReport = effectiveAllowedPageIds.includes("sales-report");
   const canReadSalesOrders = effectiveAllowedPageIds.includes("sales-orders");
-  const canReadFeedback = effectiveAllowedPageIds.includes("feedback");
-  const canReadMessages = effectiveAllowedPageIds.includes("messages");
-  const canViewTeamFeedback = ["superAdmin", "admin"].includes(effectiveUserRole);
-  const canManageInternalMessages = ["superAdmin", "admin"].includes(
-    effectiveUserRole,
-  );
   const canReadCustomerPaymentLinks =
     canReadAccounting &&
     effectiveAllowedPageIds.includes("customer-payment-links");
@@ -2199,131 +2008,6 @@ export default function App() {
             };
           })
       : deliveries;
-  const newOrderFlowSalesOrders = salesOrders.filter(
-    (salesOrder) => salesOrder.source === "new-order-flow",
-  );
-  const legacySalesOrders = salesOrders.filter(
-    (salesOrder) => salesOrder.source !== "new-order-flow",
-  );
-  const closedOrderStatuses = new Set([
-    "complete",
-    "completed",
-    "archived",
-    "cancelled",
-    "canceled",
-  ]);
-  const activeNewOrderFlowSalesOrders = newOrderFlowSalesOrders.filter(
-    (salesOrder) =>
-      !closedOrderStatuses.has(
-        String(salesOrder.status || "").trim().toLowerCase(),
-      ),
-  );
-  const historicalNewOrderFlowSalesOrders = newOrderFlowSalesOrders.filter(
-    (salesOrder) =>
-      closedOrderStatuses.has(
-        String(salesOrder.status || "").trim().toLowerCase(),
-      ),
-  );
-  const newOrderFlowOrderIds = new Set(
-    newOrderFlowSalesOrders.map((salesOrder) => String(salesOrder.id || "")),
-  );
-  const isNewOrderFlowRecord = (
-    record: Record<string, unknown> | null | undefined,
-  ) => {
-    if (!record) {
-      return false;
-    }
-
-    const source = String(record.source || "");
-    const sourceOrderId = String(record.sourceOrderId || "");
-    const orderId = String(record.orderId || "");
-
-    return (
-      source === "new-order-flow" ||
-      Boolean(sourceOrderId && newOrderFlowOrderIds.has(sourceOrderId)) ||
-      Boolean(orderId && newOrderFlowOrderIds.has(orderId))
-    );
-  };
-  const isNewOrderFlowCheckIn = (checkIn: CheckIn) => {
-    if (isNewOrderFlowRecord(checkIn as unknown as Record<string, unknown>)) {
-      return true;
-    }
-
-    const materials = Array.isArray(checkIn.materials)
-      ? checkIn.materials
-      : [];
-
-    return materials.some((material: unknown) => {
-      const materialRecord = material as unknown as Record<string, unknown>;
-      const sourceItemId = String(materialRecord.sourceItemId || "");
-      const orderId = String(materialRecord.orderId || "");
-
-      return (
-        Boolean(sourceItemId) ||
-        Boolean(orderId && newOrderFlowOrderIds.has(orderId))
-      );
-    });
-  };
-  const legacyCheckIns = checkIns.filter(
-    (checkIn) => !isNewOrderFlowCheckIn(checkIn),
-  );
-  const newOrderFlowCheckIns = checkIns.filter((checkIn) =>
-    isNewOrderFlowCheckIn(checkIn),
-  );
-  const legacyVisibleSupplierRuns = visibleSupplierRuns.filter(
-    (supplierRun) =>
-      !isNewOrderFlowRecord(supplierRun as unknown as Record<string, unknown>),
-  );
-  const newOrderFlowSupplierRuns = visibleSupplierRuns.filter((supplierRun) =>
-    isNewOrderFlowRecord(supplierRun as unknown as Record<string, unknown>),
-  );
-  const legacyCheckBoardSupplierRuns = checkBoardSupplierRuns.filter(
-    (supplierRun) =>
-      !isNewOrderFlowRecord(supplierRun as unknown as Record<string, unknown>),
-  );
-  const legacySouthLookupSupplierRuns = southLookupSupplierRuns.filter(
-    (supplierRun) =>
-      !isNewOrderFlowRecord(supplierRun as unknown as Record<string, unknown>),
-  );
-  const legacySouthAssignedLookupSupplierRuns =
-    southAssignedLookupSupplierRuns.filter(
-      (supplierRun) =>
-        !isNewOrderFlowRecord(
-          supplierRun as unknown as Record<string, unknown>,
-        ),
-    );
-  const legacyDriverDashboardSupplierRuns = driverDashboardSupplierRuns.filter(
-    (supplierRun) =>
-      !isNewOrderFlowRecord(supplierRun as unknown as Record<string, unknown>),
-  );
-  const legacyTheirTruckPOs = theirTruckPOs.filter(
-    (theirTruckPO) =>
-      !isNewOrderFlowRecord(theirTruckPO as unknown as Record<string, unknown>),
-  );
-  const newOrderFlowTheirTruckPOs = theirTruckPOs.filter((theirTruckPO) =>
-    isNewOrderFlowRecord(theirTruckPO as unknown as Record<string, unknown>),
-  );
-  const legacyPodPickups = podPickups.filter(
-    (podPickup) =>
-      !isNewOrderFlowRecord(podPickup as unknown as Record<string, unknown>),
-  );
-  const legacyVisibleDeliveries = visibleDeliveries.filter(
-    (delivery) =>
-      !isNewOrderFlowRecord(delivery as unknown as Record<string, unknown>),
-  );
-  const legacyDeliveries = deliveries.filter(
-    (delivery) =>
-      !isNewOrderFlowRecord(delivery as unknown as Record<string, unknown>),
-  );
-  const newOrderFlowOrderBuilds = orderBuilds.filter(
-    (build) =>
-      (build.source === "new-order-flow" ||
-        newOrderFlowOrderIds.has(String(build.orderId || ""))) &&
-      String(build.status || "").trim().toLowerCase() !== "removed",
-  );
-  const newOrderFlowDeliveries = visibleDeliveries.filter((delivery) =>
-    isNewOrderFlowRecord(delivery as unknown as Record<string, unknown>),
-  );
   const currentUserDisplayName =
     getProfileDisplayName(userProfile) ||
     currentUser?.displayName ||
@@ -2403,13 +2087,6 @@ export default function App() {
       badge: vehicleSetting.badge || "",
     }))
     .filter((vehicleOption) => vehicleOption.id && vehicleOption.title);
-
-  useEffect(() => {
-    if (isNewAppPageId(currentPage)) {
-      setIsNewAppShellActive(true);
-    }
-  }, [currentPage]);
-
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const bouncieCode = searchParams.get("code");
@@ -2691,7 +2368,6 @@ export default function App() {
       setPodPickups([]);
       setOrderBuilds([]);
       setStockingHandbookItems([]);
-      setItemCatalogItems([]);
       setEmailList([]);
       setSalesReports([]);
       setIsLoading(false);
@@ -2714,11 +2390,8 @@ export default function App() {
     let unsubscribeFromPodPickups = () => {};
     let unsubscribeFromOrderBuilds = () => {};
     let unsubscribeFromStockingHandbookItems = () => {};
-    let unsubscribeFromItemCatalogItems = () => {};
     let unsubscribeFromEmailList = () => {};
     let unsubscribeFromSalesReports = () => {};
-    let unsubscribeFromFeedbackEntries = () => {};
-    let unsubscribeFromInternalMessages = () => {};
 
     async function loadCheckIns() {
       try {
@@ -3031,28 +2704,6 @@ export default function App() {
         setStockingHandbookItems([]);
       }
 
-      if (canReadItemCatalog) {
-        unsubscribeFromItemCatalogItems = subscribeToItemCatalogItems(
-          (savedItemCatalogItems: ItemCatalogItem[]) => {
-            if (isMounted) {
-              setItemCatalogItems(savedItemCatalogItems);
-              setSyncError("");
-              setIsLoading(false);
-            }
-          },
-          (error: Error) => {
-            console.error("Unable to sync item catalog:", error);
-
-            if (isMounted) {
-              reportBackgroundSyncError(error);
-              setIsLoading(false);
-            }
-          },
-        );
-      } else {
-        setItemCatalogItems([]);
-      }
-
       if (canReadEmailList) {
         unsubscribeFromEmailList = subscribeToEmailList(
           (savedEmailList: EmailListEntry[]) => {
@@ -3097,54 +2748,6 @@ export default function App() {
         setSalesReports([]);
       }
 
-      if (canReadFeedback) {
-        unsubscribeFromFeedbackEntries = subscribeToFeedbackEntries(
-          effectiveUserIdentityId,
-          canViewTeamFeedback,
-          (savedFeedbackEntries: Array<Record<string, unknown>>) => {
-            if (isMounted) {
-              setFeedbackEntries(savedFeedbackEntries);
-              setSyncError("");
-              setIsLoading(false);
-            }
-          },
-          (error: Error) => {
-            console.error("Unable to sync feedback:", error);
-
-            if (isMounted) {
-              reportBackgroundSyncError(error);
-              setIsLoading(false);
-            }
-          },
-        );
-      } else {
-        setFeedbackEntries([]);
-      }
-
-      if (canReadMessages) {
-        unsubscribeFromInternalMessages = subscribeToInternalMessages(
-          effectiveUserIdentityId,
-          canManageInternalMessages,
-          (savedMessages: Array<Record<string, unknown>>) => {
-            if (isMounted) {
-              setInternalMessages(savedMessages);
-              setSyncError("");
-              setIsLoading(false);
-            }
-          },
-          (error: Error) => {
-            console.error("Unable to sync internal messages:", error);
-
-            if (isMounted) {
-              reportBackgroundSyncError(error);
-              setIsLoading(false);
-            }
-          },
-        );
-      } else {
-        setInternalMessages([]);
-      }
-
       if (
         !canReadReceiving &&
         !canReadSouth &&
@@ -3156,9 +2759,7 @@ export default function App() {
         !canReadOrderBuilds &&
         !canReadDocuments &&
         !canReadEmailList &&
-        !canReadSalesReport &&
-        !canReadFeedback &&
-        !canReadMessages
+        !canReadSalesReport
       ) {
         setIsLoading(false);
       }
@@ -3368,22 +2969,6 @@ export default function App() {
         setStockingHandbookItems([]);
       }
 
-      if (canReadItemCatalog) {
-        subscribeToItemCatalogItems(
-          (savedItemCatalogItems: ItemCatalogItem[]) => {
-            if (isMounted) {
-              setItemCatalogItems(savedItemCatalogItems);
-              setIsLoading(false);
-            }
-          },
-          (error: Error) => {
-            console.error("Unable to load item catalog:", error);
-          },
-        );
-      } else {
-        setItemCatalogItems([]);
-      }
-
       if (canReadEmailList) {
         subscribeToEmailList(
           (savedEmailList: EmailListEntry[]) => {
@@ -3415,42 +3000,6 @@ export default function App() {
       } else {
         setSalesReports([]);
       }
-
-      if (canReadFeedback) {
-        unsubscribeFromFeedbackEntries = subscribeToFeedbackEntries(
-          effectiveUserIdentityId,
-          canViewTeamFeedback,
-          (savedFeedbackEntries: Array<Record<string, unknown>>) => {
-            if (isMounted) {
-              setFeedbackEntries(savedFeedbackEntries);
-              setIsLoading(false);
-            }
-          },
-          (error: Error) => {
-            console.error("Unable to load feedback:", error);
-          },
-        );
-      } else {
-        setFeedbackEntries([]);
-      }
-
-      if (canReadMessages) {
-        unsubscribeFromInternalMessages = subscribeToInternalMessages(
-          effectiveUserIdentityId,
-          canManageInternalMessages,
-          (savedMessages: Array<Record<string, unknown>>) => {
-            if (isMounted) {
-              setInternalMessages(savedMessages);
-              setIsLoading(false);
-            }
-          },
-          (error: Error) => {
-            console.error("Unable to load internal messages:", error);
-          },
-        );
-      } else {
-        setInternalMessages([]);
-      }
     }
 
     return () => {
@@ -3468,11 +3017,8 @@ export default function App() {
       unsubscribeFromPodPickups();
       unsubscribeFromOrderBuilds();
       unsubscribeFromStockingHandbookItems();
-      unsubscribeFromItemCatalogItems();
       unsubscribeFromEmailList();
       unsubscribeFromSalesReports();
-      unsubscribeFromFeedbackEntries();
-      unsubscribeFromInternalMessages();
     };
   }, [
     canReadEmailList,
@@ -3481,16 +3027,10 @@ export default function App() {
     canReadSales,
     canReadSalesOrders,
     canReadSalesReport,
-    canReadFeedback,
-    canReadMessages,
     canReadOrderBuilds,
     canReadDocuments,
-    canReadItemCatalog,
-    canViewTeamFeedback,
-    canManageInternalMessages,
     canManageCustomerStatements,
     currentUser,
-    effectiveUserIdentityId,
     canReadDeliveries,
     canReadReceiving,
     canReadYardTasks,
@@ -3536,41 +3076,6 @@ export default function App() {
     setSyncError("");
   }
 
-  async function handleSaveFeedback(feedbackEntry: Record<string, unknown>) {
-    const updatedFeedbackEntries = await saveFeedbackEntry(feedbackEntry);
-    setFeedbackEntries(updatedFeedbackEntries);
-    setSyncError("");
-  }
-
-  async function handleDeleteFeedback(feedbackEntryId: string) {
-    const updatedFeedbackEntries = await deleteFeedbackEntry(feedbackEntryId);
-    setFeedbackEntries(updatedFeedbackEntries);
-    setSyncError("");
-  }
-
-  async function handleSendInternalMessage(
-    message: Record<string, unknown>,
-  ) {
-    const updatedMessages = await saveInternalMessage(message);
-    setInternalMessages(updatedMessages);
-    setSyncError("");
-  }
-
-  async function handleMarkInternalMessageRead(messageId: string) {
-    const updatedMessages = await updateInternalMessage(messageId, {
-      readAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-    setInternalMessages(updatedMessages);
-    setSyncError("");
-  }
-
-  async function handleDeleteInternalMessage(messageId: string) {
-    const updatedMessages = await deleteInternalMessage(messageId);
-    setInternalMessages(updatedMessages);
-    setSyncError("");
-  }
-
   async function handleSaveSalesReport(salesReport: SalesReport) {
     const updatedSalesReports = await saveSalesReport(salesReport);
     setSalesReports(updatedSalesReports);
@@ -3594,18 +3099,6 @@ export default function App() {
   async function handleDeleteStockingHandbookItem(itemId: string) {
     const updatedItems = await deleteStockingHandbookItem(itemId);
     setStockingHandbookItems(updatedItems);
-    setSyncError("");
-  }
-
-  async function handleSaveItemCatalogItem(itemCatalogItem: ItemCatalogItem) {
-    const updatedItems = await saveItemCatalogItem(itemCatalogItem);
-    setItemCatalogItems(updatedItems);
-    setSyncError("");
-  }
-
-  async function handleDeleteItemCatalogItem(itemId: string) {
-    const updatedItems = await deleteItemCatalogItem(itemId);
-    setItemCatalogItems(updatedItems);
     setSyncError("");
   }
 
@@ -3665,118 +3158,6 @@ export default function App() {
 
   async function handleSaveOrderBuild(orderBuild: Record<string, unknown>) {
     const updatedOrderBuilds = await saveOrderBuild(orderBuild);
-    setOrderBuilds(updatedOrderBuilds);
-    setSyncError("");
-  }
-
-  function getCheckInReceivedItemUpdates(checkIn: CheckIn) {
-    const checkedInAt = String(checkIn.checkedInAt || new Date().toISOString());
-    const materials = Array.isArray(checkIn.materials)
-      ? (checkIn.materials as Array<Record<string, unknown>>)
-      : [];
-    const updatesByItemId = new Map<string, Record<string, unknown>>();
-
-    materials.forEach((material) => {
-      const sourceItemId = String(material.sourceItemId || "").trim();
-
-      if (!sourceItemId) {
-        return;
-      }
-
-      updatesByItemId.set(sourceItemId, {
-        receivingStatus: "received",
-        receivedAt: checkedInAt,
-        receivedCheckInId: checkIn.id,
-        receivedLocation: material.location || "",
-        receivedPhotosCount: Array.isArray(material.locationPhotos)
-          ? material.locationPhotos.length
-          : material.locationPhoto
-            ? 1
-            : 0,
-        receivedNotes: material.notes || "",
-      });
-    });
-
-    return updatesByItemId;
-  }
-
-  function applyReceivingToBuild(
-    build: Record<string, unknown>,
-    receivedItemUpdates: Map<string, Record<string, unknown>>,
-  ) {
-    const currentItems = Array.isArray(build.items)
-      ? (build.items as Array<Record<string, unknown>>)
-      : [
-          ...(Array.isArray(build.waitingItems)
-            ? (build.waitingItems as Array<Record<string, unknown>>)
-            : []),
-          ...(Array.isArray(build.stockItems)
-            ? (build.stockItems as Array<Record<string, unknown>>)
-            : []),
-        ];
-    let didChange = false;
-    const nextItems = currentItems.map((item) => {
-      const itemId = String(item.id || "").trim();
-      const receivedUpdate = itemId ? receivedItemUpdates.get(itemId) : null;
-
-      if (!receivedUpdate) {
-        return item;
-      }
-
-      didChange = true;
-
-      return {
-        ...item,
-        ...receivedUpdate,
-        buildStatus:
-          item.buildStatus === "built" || item.buildStatus === "complete"
-            ? item.buildStatus
-            : "ready",
-      };
-    });
-
-    if (!didChange) {
-      return null;
-    }
-
-    const inboundItems = nextItems.filter((item) => item.path !== "inStock");
-    const receivedInboundCount = inboundItems.filter(
-      (item) => item.receivingStatus === "received",
-    ).length;
-    const allInboundReceived =
-      inboundItems.length > 0 && receivedInboundCount === inboundItems.length;
-    const currentStatus = String(build.buildStatus || build.status || "waiting");
-    const shouldPreserveStatus = ["building", "complete", "removed"].includes(
-      currentStatus.toLowerCase(),
-    );
-    const nextBuildStatus = shouldPreserveStatus
-      ? currentStatus
-      : allInboundReceived
-        ? "ready"
-        : "waiting";
-
-    return stripUndefinedFields({
-      ...build,
-      buildStatus: nextBuildStatus,
-      status: nextBuildStatus,
-      receivedItemCount: receivedInboundCount,
-      waitingItemCount: Math.max(inboundItems.length - receivedInboundCount, 0),
-      items: nextItems,
-      waitingItems: nextItems.filter((item) => item.path !== "inStock"),
-      stockItems: nextItems.filter((item) => item.path === "inStock"),
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  async function handleRemoveOrderBuild(orderBuild: Record<string, unknown>) {
-    const removedBuild = stripUndefinedFields({
-      ...orderBuild,
-      status: "removed",
-      buildStatus: "removed",
-      removedAt: new Date().toISOString(),
-    });
-
-    const updatedOrderBuilds = await saveOrderBuild(removedBuild);
     setOrderBuilds(updatedOrderBuilds);
     setSyncError("");
   }
@@ -3847,28 +3228,7 @@ export default function App() {
   async function handleAddCheckIn(checkIn: CheckIn) {
     const updatedCheckIns = await addCheckIn(checkIn);
     setCheckIns(updatedCheckIns);
-
-    const receivedItemUpdates = getCheckInReceivedItemUpdates(checkIn);
-
-    if (receivedItemUpdates.size > 0) {
-      const linkedBuilds = orderBuilds
-        .map((orderBuild) =>
-          applyReceivingToBuild(orderBuild, receivedItemUpdates),
-        )
-        .filter(Boolean) as Array<Record<string, unknown>>;
-
-      for (const linkedBuild of linkedBuilds) {
-        const updatedOrderBuilds = await saveOrderBuild(linkedBuild);
-        setOrderBuilds(updatedOrderBuilds);
-      }
-    }
-
     setSyncError("");
-  }
-
-  function handleStartNewFlowCheckIn(prefill: Record<string, unknown>) {
-    setNewFlowCheckInPrefill(prefill);
-    navigateToPage("new-receiving-check-in");
   }
 
   async function handleUpdateAssignment(
@@ -3940,28 +3300,6 @@ export default function App() {
   }
 
   function normalizeOrderFlowItems(items: Array<Record<string, unknown>>) {
-    function normalizeFulfillmentPath(value: unknown) {
-      const path = String(value || "").trim();
-
-      if (["wePickup", "south", "pickup"].includes(path)) {
-        return "wePickup";
-      }
-
-      if (["supplierDelivery", "theirTruck", "their-truck"].includes(path)) {
-        return "supplierDelivery";
-      }
-
-      if (path === "pod") {
-        return "pod";
-      }
-
-      if (path === "inStock") {
-        return "inStock";
-      }
-
-      return "";
-    }
-
     return (Array.isArray(items) ? items : [])
       .filter((item) => {
         const description = String(item.description || "").trim();
@@ -3975,108 +3313,14 @@ export default function App() {
         id: String(item.id || createId()),
         quantity: String(item.quantity || "").trim(),
         description: String(item.description || "").trim(),
-        path: normalizeFulfillmentPath(item.path),
+        path: String(item.path || "supplierDelivery"),
         vendor: String(item.vendor || "").trim(),
-        poNumber: formatPONumber(String(item.poNumber || "")),
+        poNumber: String(item.poNumber || "").trim(),
         routeDate: String(item.routeDate || "").trim(),
         supplierDate: String(item.supplierDate || "").trim(),
         supplierNote: String(item.supplierNote || "").trim(),
         sequence: index + 1,
       }));
-  }
-
-  async function handleUpdateNewOrderFlowOrder(
-    orderId: string,
-    updates: Partial<SalesOrder>,
-  ) {
-    const existingOrder = salesOrders.find(
-      (salesOrder) => String(salesOrder.id) === String(orderId),
-    );
-
-    if (!existingOrder) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const mergedOrder = stripUndefinedFields({
-      ...existingOrder,
-      ...updates,
-      id: existingOrder.id,
-      source: "new-order-flow",
-      updatedAt: now,
-    }) as SalesOrder;
-    const cleanItems = normalizeOrderFlowItems(
-      Array.isArray(mergedOrder.items)
-        ? (mergedOrder.items as Array<Record<string, unknown>>)
-        : [],
-    );
-    const orderWithCleanItems = stripUndefinedFields({
-      ...mergedOrder,
-      items: cleanItems,
-      poNumbers: Array.from(
-        new Set(cleanItems.map((item) => item.poNumber).filter(Boolean)),
-      ),
-    }) as SalesOrder;
-
-    await handleSaveSalesOrder(orderWithCleanItems);
-
-    const linkedBuild = orderBuilds.find(
-      (orderBuild) => String(orderBuild.orderId || "") === String(orderId),
-    );
-
-    if (linkedBuild) {
-      await handleSaveOrderBuild(
-        stripUndefinedFields({
-          ...linkedBuild,
-          orderNumber: orderWithCleanItems.orderNumber,
-          customerName: orderWithCleanItems.customerName || "",
-          businessName: orderWithCleanItems.businessName || "",
-          phoneNumber:
-            orderWithCleanItems.phone || orderWithCleanItems.phoneNumber || "",
-          handoffType: orderWithCleanItems.handoffType || "willCall",
-          deliveryDate: orderWithCleanItems.deliveryDate || "",
-          status: closedOrderStatuses.has(
-            String(orderWithCleanItems.status || "").toLowerCase(),
-          )
-            ? orderWithCleanItems.status
-            : linkedBuild.status || "waiting",
-          source: "new-order-flow",
-          items: cleanItems,
-          waitingItems: cleanItems.filter((item) => item.path !== "inStock"),
-          stockItems: cleanItems.filter((item) => item.path === "inStock"),
-          updatedAt: now,
-        }),
-      );
-    }
-  }
-
-  async function handleDeleteNewOrderFlowOrder(orderId: string) {
-    const existingOrder = salesOrders.find(
-      (salesOrder) => String(salesOrder.id) === String(orderId),
-    );
-    const orderLabel =
-      existingOrder?.orderNumber || existingOrder?.customerName || "this order";
-
-    if (
-      !window.confirm(
-        `Permanently remove ${orderLabel} from order history? This cannot be undone.`,
-      )
-    ) {
-      return;
-    }
-
-    const linkedBuild = orderBuilds.find(
-      (orderBuild) => String(orderBuild.orderId || "") === String(orderId),
-    );
-
-    if (linkedBuild?.id) {
-      const updatedOrderBuilds = await deleteOrderBuild(String(linkedBuild.id));
-      setOrderBuilds(updatedOrderBuilds);
-    }
-
-    const updatedSalesOrders = await deleteSalesOrder(orderId);
-    setSalesOrders(updatedSalesOrders);
-    setSyncError("");
   }
 
   function groupOrderFlowItems(
@@ -4118,139 +3362,6 @@ export default function App() {
     }
 
     return value;
-  }
-
-  async function handleCreateStockPurchaseOrder(
-    purchaseOrderPayload: Record<string, unknown>,
-  ) {
-    const now = new Date().toISOString();
-    const method = String(purchaseOrderPayload.method || "pickup");
-    const poNumber = formatPONumber(purchaseOrderPayload.poNumber);
-    const vendor = String(purchaseOrderPayload.vendor || "").trim();
-    const expectedDate = String(purchaseOrderPayload.expectedDate || "").trim();
-    const vendorAddress = String(
-      purchaseOrderPayload.vendorAddress ||
-        supplierAddressMap[vendor] ||
-        "",
-    ).trim();
-    const notes = String(purchaseOrderPayload.notes || "").trim();
-    const creator = {
-      id: currentUserCreator.id,
-      name: currentUserCreator.name,
-      email: currentUserCreator.email,
-    };
-    const cleanItems = (Array.isArray(purchaseOrderPayload.items)
-      ? (purchaseOrderPayload.items as Array<Record<string, unknown>>)
-      : []
-    )
-      .filter((item) => {
-        const quantity = String(item.quantity || "").trim();
-        const description = String(item.description || "").trim();
-
-        return Boolean(quantity || description);
-      })
-      .map((item) => ({
-        id: String(item.id || createId()),
-        quantity: String(item.quantity || "").trim(),
-        description: String(item.description || "").trim(),
-        sku: String(item.sku || item.itemNumber || "").trim(),
-        path: method === "pickup" ? "wePickup" : "supplierDelivery",
-        vendor,
-        poNumber,
-        routeDate: method === "pickup" ? expectedDate : "",
-        supplierDate: method === "supplierDelivery" ? expectedDate : "",
-        expectedDate,
-        materialUse: "stock",
-        customerName: "Stock",
-        orderNumber: "",
-      }));
-
-    if (method === "pickup") {
-      const supplierRun: SupplierRun = stripUndefinedFields({
-        id: createId(),
-        poNumber,
-        vendor,
-        scheduledDate: expectedDate,
-        pickupDate: expectedDate,
-        orderedBy: creator.name,
-        customerName: "Stock",
-        orderNumber: "",
-        driver: "",
-        supplierAddress: vendorAddress,
-        notes,
-        createdByName: creator.name,
-        createdByEmail: creator.email,
-        createdById: creator.id,
-        vehicleId: "",
-        vehicleTitle: "",
-        vehicleBadge: "",
-        dispatchStatus: "needsDispatch",
-        status: "open",
-        source: "new-order-flow",
-        sourceType: "stock-purchase-order",
-        stockPurchaseOrder: true,
-        destination: "Inventory",
-        stopWorkflowVersion: 2,
-        items: cleanItems.map((item) => ({
-          id: item.id,
-          quantity: item.quantity,
-          description: item.description,
-          internalReference: item.sku,
-          sku: item.sku,
-          materialUse: "stock",
-          orderNumber: "",
-          customerName: "Stock",
-          pickedUp: false,
-          pickedUpAt: null,
-          pickupPhoto: null,
-          pickupPhotos: [],
-        })),
-        createdAt: now,
-        updatedAt: now,
-      }) as SupplierRun;
-
-      await handleAddSupplierRun(supplierRun);
-      navigateToPage("new-fulfillment-south");
-      return supplierRun;
-    }
-
-    const theirTruckPO: TheirTruckPO = stripUndefinedFields({
-      id: createId(),
-      poNumber,
-      deliveryDate: expectedDate,
-      vendor,
-      supplierAddress: vendorAddress,
-      customerName: "Stock",
-      businessName: "Inventory",
-      orderNumber: "",
-      isStock: true,
-      notes,
-      status: "scheduled",
-      createdByName: creator.name,
-      createdByEmail: creator.email,
-      createdById: creator.id,
-      orderedBy: creator.name,
-      source: "new-order-flow",
-      sourceType: "stock-purchase-order",
-      stockPurchaseOrder: true,
-      sentToDeliveryCalendarAt: now,
-      items: cleanItems.map((item) => ({
-        id: item.id,
-        quantity: item.quantity,
-        description: item.description,
-        itemNumber: item.sku,
-        sku: item.sku,
-        materialUse: "stock",
-        orderNumber: "",
-        customerName: "Stock",
-      })),
-      createdAt: now,
-      updatedAt: now,
-    }) as TheirTruckPO;
-
-    await handleSaveTheirTruckPO(theirTruckPO);
-    navigateToPage("new-fulfillment-their-truck");
-    return theirTruckPO;
   }
 
   async function handleProcessOrderFlow(orderPayload: Record<string, unknown>) {
@@ -4431,20 +3542,13 @@ export default function App() {
 
     if (orderPayload.orderMethod === "delivery") {
       const routeEta = orderPayload.routeEta as
-        | {
-            durationSeconds?: number;
-            durationValue?: number;
-            durationText?: string;
-            distanceText?: string;
-          }
+        | { durationValue?: number; durationText?: string; distanceText?: string }
         | null
         | undefined;
-      const routeEtaSeconds = Number(
-        routeEta?.durationSeconds || routeEta?.durationValue || 0,
-      );
+      const routeEtaSeconds = Number(routeEta?.durationValue);
       const oneWayDriveMinutes = Number.isFinite(routeEtaSeconds) && routeEtaSeconds > 0
-        ? Math.max(1, Math.round(routeEtaSeconds / 60))
-        : 0;
+        ? Math.round(routeEtaSeconds / 60)
+        : undefined;
       const delivery: Delivery = {
         id: createId(),
         orderNumber: sourceOrderNumber,
@@ -4481,7 +3585,7 @@ export default function App() {
         deliveryOriginName: "Capital Lumber",
         deliveryOriginAddress: capitalLumberAddress,
         oneWayDriveMinutes,
-        routeEta: routeEta || null,
+        routeEta: routeEta || undefined,
         status: "open",
         sourceOrderId: orderId,
         sourceOrderNumber,
@@ -4503,8 +3607,6 @@ export default function App() {
       handoffType: String(orderPayload.orderMethod || "willCall"),
       deliveryDate: String(orderPayload.deliveryDate || "").trim(),
       status: "waiting",
-      source: "new-order-flow",
-      items: cleanItems,
       waitingItems: cleanItems.filter((item) => item.path !== "inStock"),
       stockItems: cleanItems.filter((item) => item.path === "inStock"),
       linkedSouthRunIds: createdSouthRuns.map((run) => run.id),
@@ -4613,7 +3715,7 @@ export default function App() {
       setEditingDeliveryId("");
     }
 
-    if (isNewAppPageId(pageId)) {
+    if (pageId === "new-home") {
       setIsNewAppShellActive(true);
     }
 
@@ -4683,11 +3785,52 @@ export default function App() {
       return;
     }
 
-    const updatedItems = options.markPickedUp
-      ? markPickupItemPickedUpInItems(supplierRun.items, itemId)
-      : addPickupPhotoToItems(supplierRun.items, itemId, pickupPhoto);
+    const updatedItems = supplierRun.items.map((item) => {
+      if (item.id !== itemId) {
+        return item;
+      }
 
-    const allItemsPickedUp = areAllPickupItemsComplete(updatedItems);
+      const existingPhotos = Array.isArray(item.pickupPhotos)
+        ? item.pickupPhotos.filter(Boolean)
+        : item.pickupPhoto
+          ? [item.pickupPhoto]
+          : [];
+      const hasNewPickupPhoto = Boolean(
+        pickupPhoto &&
+          (typeof pickupPhoto !== "object" ||
+            (pickupPhoto as { url?: unknown; dataUrl?: unknown })
+              .url ||
+            (pickupPhoto as { url?: unknown; dataUrl?: unknown })
+              .dataUrl),
+      );
+      const shouldMarkPickedUp =
+        options.markPickedUp && !item.pickedUp;
+
+      return {
+        ...item,
+        ...(hasNewPickupPhoto
+          ? {
+              pickupPhoto,
+              pickupPhotos: [...existingPhotos, pickupPhoto],
+            }
+          : {}),
+        pickedUp: shouldMarkPickedUp ? true : item.pickedUp,
+        pickedUpAt: shouldMarkPickedUp
+          ? new Date().toISOString()
+          : item.pickedUpAt,
+      };
+    });
+
+    const allItemsPickedUp =
+      updatedItems.length > 0 &&
+      updatedItems.every(
+        (item) =>
+          item.pickedUp ||
+          item.pickedUpAt ||
+          (Array.isArray(item.pickupPhotos) &&
+            item.pickupPhotos.some(Boolean)) ||
+          Boolean(item.pickupPhoto),
+      );
     const completedAt =
       allItemsPickedUp
         ? supplierRun.completedAt || new Date().toISOString()
@@ -4867,8 +4010,8 @@ export default function App() {
     ) {
       return (
         <DriverDashboardPage
-          supplierRuns={legacyDriverDashboardSupplierRuns}
-          deliveries={legacyVisibleDeliveries}
+          supplierRuns={driverDashboardSupplierRuns}
+          deliveries={deliveries}
           users={users}
           employeeOptions={approvedEmployeeNames}
           driverName={driverName}
@@ -4889,17 +4032,17 @@ export default function App() {
           operations={adminDashboardOperations}
           onPageChange={navigateToPage}
           allowedPageIds={dashboardAllowedPageIds}
-          checkIns={legacyCheckIns}
-          supplierRuns={legacyVisibleSupplierRuns}
-          theirTruckPOs={legacyTheirTruckPOs}
-          deliveries={legacyDeliveries}
+          checkIns={checkIns}
+          supplierRuns={supplierRuns}
+          theirTruckPOs={theirTruckPOs}
+          deliveries={deliveries}
           onTraceSearch={handleTraceSearch}
         />
       );
     }
 
     if (dashboardWorkView === "receiving" && canReadReceiving) {
-      const todayCheckIns = legacyCheckIns.filter((checkIn) => {
+      const todayCheckIns = checkIns.filter((checkIn) => {
         const checkedAt =
           typeof checkIn.checkedInAt === "string"
             ? checkIn.checkedInAt
@@ -4908,7 +4051,7 @@ export default function App() {
         return checkedAt.slice(0, 10) === new Date().toISOString().slice(0, 10);
       });
       const todayDateKey = new Date().toISOString().slice(0, 10);
-      const receivingDashboardSouthRuns = legacySouthLookupSupplierRuns;
+      const receivingDashboardSouthRuns = southLookupSupplierRuns;
       const todaySouthRuns = receivingDashboardSouthRuns.filter((supplierRun) => {
         const runDate =
           typeof supplierRun.scheduledDate === "string"
@@ -4935,7 +4078,7 @@ export default function App() {
         receivingQuickLookupQuery,
       );
       const quickReceivingCheckIns =
-        legacyCheckIns as unknown as Array<Record<string, unknown>>;
+        checkIns as unknown as Array<Record<string, unknown>>;
       const receivingQuickMatches = receivingQuickLookupQuery
         ? [
             ...receivingDashboardSouthRuns.map((supplierRun) => {
@@ -5003,7 +4146,7 @@ export default function App() {
                 recordNumberText,
               };
             }),
-            ...legacyTheirTruckPOs.map((theirTruckPO) => {
+            ...theirTruckPOs.map((theirTruckPO) => {
               const items = Array.isArray(theirTruckPO.items)
                 ? theirTruckPO.items.map((item) => item as Record<string, unknown>)
                 : [];
@@ -5063,7 +4206,7 @@ export default function App() {
                 recordNumberText,
               };
             }),
-            ...legacyCheckIns.map((checkIn) => {
+            ...checkIns.map((checkIn) => {
               const rawItems =
                 Array.isArray(checkIn.materials)
                   ? checkIn.materials
@@ -5218,7 +4361,7 @@ export default function App() {
                   title: "Receiving History",
                   description:
                     "Search and review every checked-in PO by date, vendor, item, customer, or yard location.",
-                  metric: legacyCheckIns.length,
+                  metric: checkIns.length,
                   metricLabel: "POs",
                   tone: "archive",
                   variant: "default",
@@ -5641,16 +4784,16 @@ export default function App() {
     }
 
     if (dashboardWorkView === "south" && canReadSouth) {
-      const needsDispatchRuns = legacyVisibleSupplierRuns.filter(
+      const needsDispatchRuns = visibleSupplierRuns.filter(
         (supplierRun) => isUnassignedSouthRun(supplierRun),
       );
-      const openRuns = legacyVisibleSupplierRuns.filter(
+      const openRuns = visibleSupplierRuns.filter(
         (supplierRun) =>
           supplierRun.status !== "complete" &&
           supplierRun.dispatchStatus !== "needsDispatch" &&
           supplierRun.driver,
       );
-      const completeRuns = legacyVisibleSupplierRuns.filter(
+      const completeRuns = visibleSupplierRuns.filter(
         (supplierRun) => supplierRun.status === "complete",
       );
 
@@ -5750,8 +4893,7 @@ export default function App() {
     if (dashboardWorkView === "delivery" && canReadDeliveries) {
       return (
         <DeliveryDashboardPage
-          deliveries={legacyVisibleDeliveries}
-          orderBuilds={[]}
+          deliveries={visibleDeliveries}
           allowedPageIds={dashboardAllowedPageIds}
           isDriverView={isDeliveryDriverScopedView}
           onPageChange={navigateToPage}
@@ -5866,10 +5008,10 @@ export default function App() {
         operations={adminDashboardOperations}
         onPageChange={navigateToPage}
         allowedPageIds={effectiveAllowedPageIds}
-        checkIns={legacyCheckIns}
-        supplierRuns={legacySouthLookupSupplierRuns}
-        theirTruckPOs={legacyTheirTruckPOs}
-        deliveries={canReadDeliveries ? legacyDeliveries : []}
+        checkIns={checkIns}
+        supplierRuns={southLookupSupplierRuns}
+        theirTruckPOs={theirTruckPOs}
+        deliveries={canReadDeliveries ? deliveries : []}
         onTraceSearch={handleTraceSearch}
       />
     );
@@ -5885,7 +5027,7 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="check"
-            supplierRuns={legacyCheckBoardSupplierRuns}
+            supplierRuns={checkBoardSupplierRuns}
             vehicleOptions={southVehicleOptions}
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
@@ -5918,8 +5060,8 @@ export default function App() {
 
       return (
         <SouthHubPage
-          supplierRuns={legacyVisibleSupplierRuns}
-          theirTruckPOs={legacyTheirTruckPOs}
+          supplierRuns={visibleSupplierRuns}
+          theirTruckPOs={theirTruckPOs}
           allowedPageIds={effectiveAllowedPageIds}
           isDriverView={isSouthDriverScopedView}
           onPageChange={navigateToPage}
@@ -5930,7 +5072,7 @@ export default function App() {
     if (currentPage === "south-overview" && canReadSouth) {
       return (
         <SouthOverviewPage
-          supplierRuns={legacyVisibleSupplierRuns}
+          supplierRuns={visibleSupplierRuns}
           allowedPageIds={effectiveAllowedPageIds}
           onPageChange={navigateToPage}
         />
@@ -5940,37 +5082,8 @@ export default function App() {
     if (currentPage === "their-truck-overview" && canReadSouth) {
       return (
         <TheirTruckOverviewPage
-          theirTruckPOs={legacyTheirTruckPOs}
+          theirTruckPOs={theirTruckPOs}
           allowedPageIds={effectiveAllowedPageIds}
-          onPageChange={navigateToPage}
-        />
-      );
-    }
-
-    if (currentPage === "messages" && canReadMessages) {
-      return (
-        <MessagesPage
-          currentUser={effectiveUserIdentity}
-          userProfile={isSuperAdmin ? selectedPreviewProfile : userProfile}
-          users={users}
-          messages={internalMessages}
-          canManageMessages={canManageInternalMessages}
-          onSendMessage={handleSendInternalMessage}
-          onMarkMessageRead={handleMarkInternalMessageRead}
-          onDeleteMessage={handleDeleteInternalMessage}
-        />
-      );
-    }
-
-    if (currentPage === "feedback" && canReadFeedback) {
-      return (
-        <FeedbackPage
-          currentUser={effectiveUserIdentity}
-          userProfile={isSuperAdmin ? selectedPreviewProfile : userProfile}
-          feedbackEntries={feedbackEntries}
-          canViewTeamFeedback={canViewTeamFeedback}
-          onSaveFeedback={handleSaveFeedback}
-          onDeleteFeedback={handleDeleteFeedback}
           onPageChange={navigateToPage}
         />
       );
@@ -5979,8 +5092,7 @@ export default function App() {
     if (currentPage === "deliveries" && canReadDeliveries) {
       return (
         <DeliveryDashboardPage
-          deliveries={legacyVisibleDeliveries}
-          orderBuilds={[]}
+          deliveries={visibleDeliveries}
           allowedPageIds={effectiveAllowedPageIds}
           isDriverView={isDeliveryDriverScopedView}
           onPageChange={navigateToPage}
@@ -6111,12 +5223,6 @@ export default function App() {
               value: stockingHandbookItems.length,
               note: "Stock items",
             },
-            {
-              icon: PackageSearch,
-              label: "Catalog",
-              value: itemCatalogItems.length,
-              note: "Sellable items",
-            },
           ]}
           actions={[
             effectiveAllowedPageIds.includes("stocking-handbook")
@@ -6131,20 +5237,6 @@ export default function App() {
                   tone: "dispatch",
                   variant: "compact",
                   onClick: () => setCurrentPage("stocking-handbook"),
-                }
-              : null,
-            effectiveAllowedPageIds.includes("item-catalog")
-              ? {
-                  icon: PackageSearch,
-                  label: "Sellable Items",
-                  title: "Item Catalog",
-                  description:
-                    "Search and maintain item numbers, pricing, last purchase costs, alternate SKUs, and keywords.",
-                  metric: itemCatalogItems.length,
-                  metricLabel: "Items",
-                  tone: "archive",
-                  variant: "compact",
-                  onClick: () => setCurrentPage("item-catalog"),
                 }
               : null,
           ].filter(Boolean)}
@@ -6304,6 +5396,19 @@ export default function App() {
                   onClick: () => setCurrentPage("vendor-settings"),
                 }
               : null,
+            effectiveAllowedPageIds.includes("order-flow") && isSuperAdmin
+              ? {
+                  icon: ClipboardList,
+                  label: "Workflow",
+                  title: "Order Flow",
+                  description:
+                    "Prototype the order-first flow and yard build handoff.",
+                  metric: "Lab",
+                  metricLabel: "Super",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("order-flow"),
+                }
+              : null,
             canReadSalesReport
               ? {
                   icon: DollarSign,
@@ -6387,106 +5492,84 @@ export default function App() {
 
       case "new-home":
         return isSuperAdmin ? (
-          <NewHomePage
-            checkIns={[...legacyCheckIns, ...newOrderFlowCheckIns]}
-            currentUser={currentUserCreator}
-            customers={customers}
-            deliveries={[...legacyDeliveries, ...newOrderFlowDeliveries]}
-            itemCatalogItems={itemCatalogItems}
-            onPageChange={navigateToPage}
-            onTraceSearch={handleTraceSearch}
-            salesOrders={salesOrders}
-            stockingHandbookItems={stockingHandbookItems}
-            supplierRuns={[...legacySouthLookupSupplierRuns, ...newOrderFlowSupplierRuns]}
-            theirTruckPOs={[...legacyTheirTruckPOs, ...newOrderFlowTheirTruckPOs]}
-          />
+          <NewHomePage onPageChange={navigateToPage} />
         ) : null;
 
       case "new-fulfillment":
         return isSuperAdmin ? (
-          <FulfillmentDashboardPage
-            orders={activeNewOrderFlowSalesOrders}
-            builds={newOrderFlowOrderBuilds}
-            supplierRuns={newOrderFlowSupplierRuns}
-            theirTruckPOs={newOrderFlowTheirTruckPOs}
-            checkIns={newOrderFlowCheckIns}
-            onPageChange={navigateToPage}
-            onCheckInPO={handleStartNewFlowCheckIn}
-          />
-        ) : null;
-
-      case "new-fulfillment-receiving":
-        return isSuperAdmin ? (
-          <FulfillmentDashboardPage
-            orders={activeNewOrderFlowSalesOrders}
-            builds={newOrderFlowOrderBuilds}
-            supplierRuns={newOrderFlowSupplierRuns}
-            theirTruckPOs={newOrderFlowTheirTruckPOs}
-            checkIns={newOrderFlowCheckIns}
-            initialSection="receiving"
-            onPageChange={navigateToPage}
-            onCheckInPO={handleStartNewFlowCheckIn}
-          />
-        ) : null;
-
-      case "new-fulfillment-south":
-        return isSuperAdmin ? (
-          <FulfillmentDashboardPage
-            orders={activeNewOrderFlowSalesOrders}
-            builds={newOrderFlowOrderBuilds}
-            supplierRuns={newOrderFlowSupplierRuns}
-            theirTruckPOs={newOrderFlowTheirTruckPOs}
-            checkIns={newOrderFlowCheckIns}
-            initialSection="south"
-            onPageChange={navigateToPage}
-            onCheckInPO={handleStartNewFlowCheckIn}
-          />
-        ) : null;
-
-      case "new-fulfillment-their-truck":
-        return isSuperAdmin ? (
-          <FulfillmentDashboardPage
-            orders={activeNewOrderFlowSalesOrders}
-            builds={newOrderFlowOrderBuilds}
-            supplierRuns={newOrderFlowSupplierRuns}
-            theirTruckPOs={newOrderFlowTheirTruckPOs}
-            checkIns={newOrderFlowCheckIns}
-            initialSection="their-truck"
-            onPageChange={navigateToPage}
-            onCheckInPO={handleStartNewFlowCheckIn}
-          />
-        ) : null;
-
-      case "new-fulfillment-pod":
-        return isSuperAdmin ? (
-          <FulfillmentDashboardPage
-            orders={activeNewOrderFlowSalesOrders}
-            builds={newOrderFlowOrderBuilds}
-            supplierRuns={newOrderFlowSupplierRuns}
-            theirTruckPOs={newOrderFlowTheirTruckPOs}
-            checkIns={newOrderFlowCheckIns}
-            initialSection="pod"
-            onPageChange={navigateToPage}
-            onCheckInPO={handleStartNewFlowCheckIn}
-          />
-        ) : null;
-
-      case "new-receiving-check-in":
-        return isSuperAdmin ? (
-          <CheckInPage
-            onAddCheckIn={handleAddCheckIn}
-            onViewToday={() => navigateToPage("today")}
-            onPageChange={navigateToPage}
-            vendorOptions={vendorOptions}
-            supplierRuns={[]}
-            theirTruckPOs={[]}
-            checkedInByDefault={currentUserDisplayName}
-            teamMemberOptions={approvedEmployeeNames}
-            prefill={newFlowCheckInPrefill}
-            breadcrumbParent={{
-              label: "Fulfillment",
-              pageId: "new-fulfillment-receiving",
-            }}
+          <SectionHubPage
+            eyebrow="New Flow"
+            title="Fulfillment"
+            description="A lab view for everything coming into the yard: South pickups, supplier trucks, PODs, and receiving."
+            icon={Truck}
+            stats={[
+              {
+                icon: Truck,
+                label: "South",
+                value: visibleSupplierRuns.filter(
+                  (supplierRun) => supplierRun.status !== "complete",
+                ).length,
+                note: "Open POs",
+              },
+              {
+                icon: PackageCheck,
+                label: "Their Truck",
+                value: theirTruckPOs.length,
+                note: "Inbound POs",
+              },
+              {
+                icon: Warehouse,
+                label: "Receiving",
+                value: checkIns.length,
+                note: "Checked in",
+              },
+            ]}
+            actions={[
+              {
+                icon: Truck,
+                label: "We Pick Up",
+                title: "South",
+                description:
+                  "View current South pickup work and supplier stops.",
+                metric: visibleSupplierRuns.length,
+                metricLabel: "POs",
+                tone: "dispatch",
+                onClick: () => navigateToPage("south-overview"),
+              },
+              {
+                icon: Package,
+                label: "Supplier Delivery",
+                title: "Their Truck",
+                description:
+                  "Track inbound supplier-delivered POs and calendars.",
+                metric: theirTruckPOs.length,
+                metricLabel: "Inbound",
+                tone: "schedule",
+                onClick: () => navigateToPage("their-truck-overview"),
+              },
+              {
+                icon: ClipboardCheck,
+                label: "Check In",
+                title: "Receiving",
+                description:
+                  "Receive materials into the yard and attach locations/photos.",
+                metric: checkIns.length,
+                metricLabel: "Records",
+                tone: "success",
+                onClick: () => navigateToPage("receiving"),
+              },
+              {
+                icon: PackageCheck,
+                label: "Customer Pickup",
+                title: "POD",
+                description:
+                  "Track supplier pickup orders handled by customers.",
+                metric: podPickups.length,
+                metricLabel: "PODs",
+                tone: "warning",
+                onClick: () => navigateToPage("pod-pickups"),
+              },
+            ]}
           />
         ) : null;
 
@@ -6501,7 +5584,7 @@ export default function App() {
               {
                 icon: ClipboardList,
                 label: "Order Builds",
-                value: newOrderFlowOrderBuilds.length,
+                value: orderBuilds.length,
                 note: "Tracked",
               },
             ]}
@@ -6512,7 +5595,7 @@ export default function App() {
                 title: "Order Builds",
                 description:
                   "See what can be built now and what is waiting on POs.",
-                metric: newOrderFlowOrderBuilds.length,
+                metric: orderBuilds.length,
                 metricLabel: "Builds",
                 tone: "warning",
                 onClick: () => navigateToPage("order-builds"),
@@ -6524,74 +5607,7 @@ export default function App() {
       case "order-builds":
         return isSuperAdmin ? (
           <OrderBuildsPage
-            builds={newOrderFlowOrderBuilds}
-            onSaveBuild={handleSaveOrderBuild}
-            onRemoveBuild={handleRemoveOrderBuild}
-            onPageChange={navigateToPage}
-          />
-        ) : null;
-
-      case "new-dispatch":
-        return isSuperAdmin ? (
-          <DispatchPage
-            supplierRuns={newOrderFlowSupplierRuns}
-            deliveries={newOrderFlowDeliveries}
-            allowedPageIds={[
-              ...effectiveAllowedPageIds,
-              "supplier-runs-dispatch",
-              "deliveries-dispatch",
-            ]}
-            southDispatchPageId="new-supplier-runs-dispatch"
-            deliveryDispatchPageId="new-deliveries-dispatch"
-            onPageChange={navigateToPage}
-          />
-        ) : null;
-
-      case "new-supplier-runs-dispatch":
-        return isSuperAdmin ? (
-          <SupplierRunsPage
-            mode="dispatch"
-            supplierRuns={newOrderFlowSupplierRuns}
-            vehicleOptions={southVehicleOptions}
-            employeeOptions={approvedEmployeeNames}
-            vendorOptions={vendorOptions}
-            supplierAddressMap={supplierAddressMap}
-            vendorRouteOrder={vendorRouteOptions}
-            vendorDisplayNameMap={vendorDisplayNameMap}
-            employeeAliasMap={employeeAliasMap}
-            viewerRole={southViewerRole}
-            canAssignRoute
-            canReorderRoute={canAssignSouthRoutes}
-            canEditSupplierRuns={canManageAllSouthSupplierRuns}
-            createdBy={currentUserCreator}
-            onAddSupplierRun={handleAddSupplierRun}
-            onUpdateSupplierRun={handleUpdateSupplierRun}
-            onSaveSupplierRunItemPickupPhoto={
-              handleSaveSupplierRunItemPickupPhoto
-            }
-            onArriveSupplierStop={handleArriveSupplierStop}
-            onCompleteSupplierStop={handleCompleteSupplierStop}
-            onUpdateSupplierRunItemDescription={
-              handleUpdateSupplierRunItemDescription
-            }
-            onDeleteSupplierRun={handleDeleteSupplierRun}
-            onPageChange={navigateToPage}
-            onRefreshPage={() =>
-              refreshAndRestorePage("new-supplier-runs-dispatch")
-            }
-          />
-        ) : null;
-
-      case "new-deliveries-dispatch":
-        return isSuperAdmin ? (
-          <DeliveryDispatchPage
-            deliveries={newOrderFlowDeliveries}
-            vehicleOptions={southVehicleOptions}
-            employeeOptions={approvedEmployeeNames}
-            deliveryOriginOptions={deliveryOriginOptions}
-            canEditDeliveries={canEditDeliveryDetails}
-            onUpdateDelivery={handleUpdateDelivery}
-            onEditDelivery={handleEditDelivery}
+            builds={orderBuilds}
             onPageChange={navigateToPage}
           />
         ) : null;
@@ -6599,8 +5615,8 @@ export default function App() {
       case "driver-dashboard":
         return (
           <DriverDashboardPage
-            supplierRuns={legacyDriverDashboardSupplierRuns}
-            deliveries={legacyVisibleDeliveries}
+            supplierRuns={driverDashboardSupplierRuns}
+            deliveries={visibleDeliveries}
             users={users}
             employeeOptions={approvedEmployeeNames}
             driverName={driverName}
@@ -6652,50 +5668,7 @@ export default function App() {
         return isSuperAdmin ? (
           <OrderFlowPage
             currentUser={currentUserCreator}
-            vendorOptions={vendorOptions}
             onProcessOrder={handleProcessOrderFlow}
-            onPageChange={navigateToPage}
-          />
-        ) : null;
-
-      case "purchase-orders":
-        return canReadPurchasing ? (
-          <PurchaseOrdersPage
-            currentUser={currentUserCreator}
-            vendorOptions={vendorOptions}
-            supplierAddressMap={supplierAddressMap}
-            onCreatePurchaseOrder={handleCreateStockPurchaseOrder}
-            onPageChange={navigateToPage}
-          />
-        ) : null;
-
-      case "item-catalog":
-        return canReadItemCatalog ? (
-          <ItemCatalogPage
-            items={itemCatalogItems}
-            canEdit={["superAdmin", "admin"].includes(effectiveUserRole)}
-            currentUser={currentUserCreator}
-            onSaveItem={handleSaveItemCatalogItem}
-            onDeleteItem={handleDeleteItemCatalogItem}
-            onPageChange={navigateToPage}
-          />
-        ) : null;
-
-      case "order-queue":
-        return isSuperAdmin ? (
-          <OrderQueuePage
-            orders={activeNewOrderFlowSalesOrders}
-            onUpdateOrder={handleUpdateNewOrderFlowOrder}
-            onPageChange={navigateToPage}
-          />
-        ) : null;
-
-      case "order-history":
-        return isSuperAdmin ? (
-          <OrderHistoryPage
-            orders={historicalNewOrderFlowSalesOrders}
-            onUpdateOrder={handleUpdateNewOrderFlowOrder}
-            onDeleteOrder={handleDeleteNewOrderFlowOrder}
             onPageChange={navigateToPage}
           />
         ) : null;
@@ -6703,7 +5676,7 @@ export default function App() {
       case "pod-pickups":
         return canReadSouth ? (
           <PodPickupsPage
-            podPickups={legacyPodPickups}
+            podPickups={podPickups}
             onDeletePodPickup={
               isSuperAdmin ? handleDeletePodPickup : undefined
             }
@@ -6731,8 +5704,8 @@ export default function App() {
       case "dispatch":
         return canReadDispatch ? (
           <DispatchPage
-            supplierRuns={legacyVisibleSupplierRuns}
-            deliveries={legacyDeliveries}
+            supplierRuns={supplierRuns}
+            deliveries={deliveries}
             allowedPageIds={effectiveAllowedPageIds}
             onPageChange={navigateToPage}
           />
@@ -6741,10 +5714,10 @@ export default function App() {
       case "today":
         return (
           <TodayPage
-            checkIns={legacyCheckIns}
+            checkIns={checkIns}
             customers={customers}
-            supplierRuns={legacySouthLookupSupplierRuns}
-            theirTruckPOs={legacyTheirTruckPOs}
+            supplierRuns={southLookupSupplierRuns}
+            theirTruckPOs={theirTruckPOs}
             onDeleteCheckIn={handleDeleteCheckIn}
             onUpdateAssignment={
               handleUpdateAssignment
@@ -6756,9 +5729,9 @@ export default function App() {
       case "search":
         return (
           <SearchPage
-            checkIns={legacyCheckIns}
-            supplierRuns={legacySouthLookupSupplierRuns}
-            theirTruckPOs={legacyTheirTruckPOs}
+            checkIns={checkIns}
+            supplierRuns={southLookupSupplierRuns}
+            theirTruckPOs={theirTruckPOs}
             onDeleteCheckIn={handleDeleteCheckIn}
             onUpdateAssignment={
               handleUpdateAssignment
@@ -6770,10 +5743,10 @@ export default function App() {
       case "trace":
         return (
           <TracePage
-            checkIns={legacyCheckIns}
-            supplierRuns={legacySouthLookupSupplierRuns}
-            theirTruckPOs={legacyTheirTruckPOs}
-            deliveries={canReadDeliveries ? legacyDeliveries : []}
+            checkIns={checkIns}
+            supplierRuns={southLookupSupplierRuns}
+            theirTruckPOs={theirTruckPOs}
+            deliveries={canReadDeliveries ? deliveries : []}
             initialSearch={traceInitialSearch}
             onPageChange={navigateToPage}
           />
@@ -6783,7 +5756,7 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="add"
-            supplierRuns={legacyVisibleSupplierRuns}
+            supplierRuns={supplierRuns}
             createdBy={currentUserCreator}
             vehicleOptions={southVehicleOptions}
             employeeOptions={approvedEmployeeNames}
@@ -6814,7 +5787,7 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="dispatch"
-            supplierRuns={legacyVisibleSupplierRuns}
+            supplierRuns={supplierRuns}
             vehicleOptions={southVehicleOptions}
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
@@ -6849,7 +5822,7 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="check"
-            supplierRuns={legacyCheckBoardSupplierRuns}
+            supplierRuns={checkBoardSupplierRuns}
             vehicleOptions={southVehicleOptions}
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
@@ -6885,7 +5858,7 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="check"
-            supplierRuns={legacyCheckBoardSupplierRuns}
+            supplierRuns={checkBoardSupplierRuns}
             vehicleOptions={southVehicleOptions}
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
@@ -6924,7 +5897,7 @@ export default function App() {
         return (
           <SupplierRunsPage
             mode="history"
-            supplierRuns={legacySouthAssignedLookupSupplierRuns}
+            supplierRuns={southAssignedLookupSupplierRuns}
             vehicleOptions={southVehicleOptions}
             employeeOptions={approvedEmployeeNames}
             vendorOptions={vendorOptions}
@@ -6956,7 +5929,7 @@ export default function App() {
       case "their-truck-pos":
         return canReadSouth ? (
           <TheirTruckPOPage
-            theirTruckPOs={legacyTheirTruckPOs}
+            theirTruckPOs={theirTruckPOs}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
             vendorDeliveryCadenceMap={vendorDeliveryCadenceMap}
@@ -6972,7 +5945,7 @@ export default function App() {
         return canReadSouth ? (
           <POCalendarPage
             supplierRuns={[]}
-            theirTruckPOs={legacyTheirTruckPOs}
+            theirTruckPOs={theirTruckPOs}
             mode="theirTruck"
             onSaveTheirTruckPO={handleSaveTheirTruckPO}
             onDeleteTheirTruckPO={handleDeleteTheirTruckPO}
@@ -6983,7 +5956,7 @@ export default function App() {
       case "their-truck-history":
         return canReadSouth ? (
           <TheirTruckHistoryPage
-            theirTruckPOs={legacyTheirTruckPOs}
+            theirTruckPOs={theirTruckPOs}
             onDeleteTheirTruckPO={handleDeleteTheirTruckPO}
             onPageChange={setCurrentPage}
           />
@@ -6992,7 +5965,7 @@ export default function App() {
       case "south-calendar":
         return canReadSouth ? (
           <POCalendarPage
-            supplierRuns={legacyVisibleSupplierRuns}
+            supplierRuns={visibleSupplierRuns}
             theirTruckPOs={[]}
             mode="south"
             onEditSouthPO={handleEditSouthPOFromCalendar}
@@ -7003,8 +5976,8 @@ export default function App() {
       case "po-calendar":
         return canReadSouth ? (
           <POCalendarPage
-            supplierRuns={legacyVisibleSupplierRuns}
-            theirTruckPOs={legacyTheirTruckPOs}
+            supplierRuns={visibleSupplierRuns}
+            theirTruckPOs={theirTruckPOs}
             mode="all"
             onEditSouthPO={handleEditSouthPOFromCalendar}
             onSaveTheirTruckPO={handleSaveTheirTruckPO}
@@ -7016,7 +5989,7 @@ export default function App() {
       case "deliveries-add":
         return (
           <DeliveriesPage
-            deliveries={legacyDeliveries}
+            deliveries={deliveries}
             customers={customers}
             deliverySettings={deliverySettings}
             deliveryOriginOptions={deliveryOriginOptions}
@@ -7034,7 +6007,7 @@ export default function App() {
       case "deliveries-queue":
         return (
           <DeliveryQueuePage
-            deliveries={legacyVisibleDeliveries}
+            deliveries={visibleDeliveries}
             onUpdateDelivery={handleUpdateDelivery}
             canEditDeliveries={canEditDeliveryDetails}
             employeeOptions={approvedEmployeeNames}
@@ -7048,7 +6021,7 @@ export default function App() {
       case "deliveries-dispatch":
         return (
           <DeliveryDispatchPage
-            deliveries={legacyDeliveries}
+            deliveries={deliveries}
             vehicleOptions={southVehicleOptions}
             employeeOptions={approvedEmployeeNames}
             deliveryOriginOptions={deliveryOriginOptions}
@@ -7062,7 +6035,7 @@ export default function App() {
       case "deliveries-calendar":
         return (
           <DeliveryCalendarPage
-            deliveries={legacyVisibleDeliveries}
+            deliveries={visibleDeliveries}
             canEditDeliveries={canEditDeliveryDetails}
             onEditDelivery={handleEditDelivery}
             onUpdateDelivery={handleUpdateDelivery}
@@ -7073,22 +6046,12 @@ export default function App() {
       case "deliveries-history":
         return (
           <DeliveryHistoryPage
-            deliveries={legacyVisibleDeliveries}
+            deliveries={visibleDeliveries}
             onPageChange={navigateToPage}
             onUpdateDelivery={handleUpdateDelivery}
             isSuperAdmin={isSuperAdmin}
           />
         );
-
-      case "order-delivery-history":
-        return isSuperAdmin ? (
-          <DeliveryHistoryPage
-            deliveries={newOrderFlowDeliveries}
-            onPageChange={navigateToPage}
-            onUpdateDelivery={handleUpdateDelivery}
-            isSuperAdmin={isSuperAdmin}
-          />
-        ) : null;
 
       case "customers-add":
         return (
@@ -7155,7 +6118,7 @@ export default function App() {
       case "sales-orders":
         return canReadSalesOrders ? (
           <SalesOrdersPage
-            orders={legacySalesOrders}
+            orders={salesOrders}
             customers={customers}
             currentUser={currentUserCreator}
             onSaveOrder={handleSaveSalesOrder}
@@ -7181,12 +6144,6 @@ export default function App() {
                 value: stockingHandbookItems.length,
                 note: "Stock items",
               },
-              {
-                icon: PackageSearch,
-                label: "Catalog",
-                value: itemCatalogItems.length,
-                note: "Sellable items",
-              },
             ]}
             actions={[
               effectiveAllowedPageIds.includes("stocking-handbook")
@@ -7201,20 +6158,6 @@ export default function App() {
                     tone: "dispatch",
                     variant: "compact",
                     onClick: () => setCurrentPage("stocking-handbook"),
-                  }
-                : null,
-              effectiveAllowedPageIds.includes("item-catalog")
-                ? {
-                    icon: PackageSearch,
-                    label: "Sellable Items",
-                    title: "Item Catalog",
-                    description:
-                      "Search and maintain item numbers, pricing, last purchase costs, alternate SKUs, and keywords.",
-                    metric: itemCatalogItems.length,
-                    metricLabel: "Items",
-                    tone: "archive",
-                    variant: "compact",
-                    onClick: () => setCurrentPage("item-catalog"),
                   }
                 : null,
             ].filter(Boolean)}
@@ -7253,8 +6196,8 @@ export default function App() {
             }
             onPageChange={setCurrentPage}
             vendorOptions={vendorOptions}
-            supplierRuns={legacySouthLookupSupplierRuns}
-            theirTruckPOs={legacyTheirTruckPOs}
+            supplierRuns={southLookupSupplierRuns}
+            theirTruckPOs={theirTruckPOs}
             checkedInByDefault={currentUserDisplayName}
             teamMemberOptions={approvedEmployeeNames}
           />
@@ -7305,9 +6248,6 @@ export default function App() {
               setPreviewUserId(nextPreviewUserId);
               setCurrentPage("dashboard");
             }}
-            messages={internalMessages}
-            canManageMessages={canManageInternalMessages}
-            onMarkMessageRead={handleMarkInternalMessageRead}
             onSignOut={handleSignOut}
           />
 

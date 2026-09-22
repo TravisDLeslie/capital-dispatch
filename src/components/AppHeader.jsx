@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpen,
   ChevronDown,
@@ -7,8 +7,6 @@ import {
   DollarSign,
   LogOut,
   LayoutDashboard,
-  MessageCircle,
-  MessageSquareText,
   Package,
   PackageCheck,
   Plus,
@@ -17,7 +15,6 @@ import {
   Wrench,
   UserRound,
   UsersRound,
-  X,
 } from "lucide-react";
 import capitalLumberLogo from "../assets/capital-lumber-new.svg";
 
@@ -58,11 +55,6 @@ const navigationItems = [
     label: "Sales",
   },
   {
-    group: "Purchasing",
-    id: "purchase-orders",
-    label: "Purchasing",
-  },
-  {
     group: "Documents",
     id: "documents",
     label: "Documents",
@@ -94,43 +86,11 @@ const newHomeNavigationItems = [
     id: "order-flow",
     label: "Orders",
     icon: ClipboardList,
-    children: [
-      {
-        id: "order-flow",
-        label: "New Order",
-      },
-      {
-        id: "order-queue",
-        label: "Order Queue",
-      },
-      {
-        id: "order-history",
-        label: "Order History",
-      },
-    ],
   },
   {
     id: "new-fulfillment",
     label: "Fulfillment",
     icon: Truck,
-    children: [
-      {
-        id: "new-fulfillment-receiving",
-        label: "Receiving",
-      },
-      {
-        id: "new-fulfillment-south",
-        label: "South",
-      },
-      {
-        id: "new-fulfillment-their-truck",
-        label: "Their Truck",
-      },
-      {
-        id: "new-fulfillment-pod",
-        label: "POD",
-      },
-    ],
   },
   {
     id: "new-build",
@@ -138,7 +98,7 @@ const newHomeNavigationItems = [
     icon: Package,
   },
   {
-    id: "new-dispatch",
+    id: "dispatch",
     label: "Dispatch",
     icon: ClipboardCheck,
   },
@@ -148,24 +108,9 @@ const newHomeNavigationItems = [
     icon: PackageCheck,
   },
   {
-    id: "purchase-orders",
-    label: "Purchasing",
-    icon: ClipboardList,
-  },
-  {
     id: "documents",
     label: "Documents",
     icon: BookOpen,
-    children: [
-      {
-        id: "stocking-handbook",
-        label: "Stocking Handbook",
-      },
-      {
-        id: "item-catalog",
-        label: "Item Catalog",
-      },
-    ],
   },
 ];
 
@@ -199,14 +144,8 @@ function getCurrentPageLabel(currentPage) {
       "new-overview",
       "new-orders",
       "new-fulfillment",
-      "new-fulfillment-receiving",
-      "new-fulfillment-south",
-      "new-fulfillment-their-truck",
-      "new-fulfillment-pod",
       "new-build",
       "new-dispatch",
-      "new-supplier-runs-dispatch",
-      "new-deliveries-dispatch",
       "new-deliveries",
       "new-documents",
     ].includes(currentPage)
@@ -235,14 +174,6 @@ function getCurrentPageLabel(currentPage) {
     return "Yard Tasks";
   }
 
-  if (currentPage === "messages") {
-    return "Messages";
-  }
-
-  if (currentPage === "feedback") {
-    return "Feedback";
-  }
-
   if (currentPage === "dispatch") {
     return "Dispatch";
   }
@@ -260,11 +191,7 @@ function getCurrentPageLabel(currentPage) {
     return "Sales";
   }
 
-  if (currentPage === "purchase-orders") {
-    return "Purchasing";
-  }
-
-  if (["documents", "stocking-handbook", "item-catalog"].includes(currentPage)) {
+  if (["documents", "stocking-handbook"].includes(currentPage)) {
     return "Documents";
   }
 
@@ -283,8 +210,6 @@ function getCurrentPageLabel(currentPage) {
       "delivery-settings",
       "vendor-settings",
       "order-flow",
-      "order-queue",
-      "order-history",
       "sales-report",
     ].includes(currentPage)
   ) {
@@ -316,14 +241,8 @@ function getCurrentPageGroup(currentPage) {
       "new-overview",
       "new-orders",
       "new-fulfillment",
-      "new-fulfillment-receiving",
-      "new-fulfillment-south",
-      "new-fulfillment-their-truck",
-      "new-fulfillment-pod",
       "new-build",
       "new-dispatch",
-      "new-supplier-runs-dispatch",
-      "new-deliveries-dispatch",
       "new-deliveries",
       "new-documents",
     ].includes(currentPage)
@@ -352,14 +271,6 @@ function getCurrentPageGroup(currentPage) {
     return "Yard Tasks";
   }
 
-  if (currentPage === "messages") {
-    return "Messages";
-  }
-
-  if (currentPage === "feedback") {
-    return "Feedback";
-  }
-
   if (currentPage === "dispatch") {
     return "Dispatch";
   }
@@ -381,11 +292,7 @@ function getCurrentPageGroup(currentPage) {
     return "Sales";
   }
 
-  if (currentPage === "purchase-orders") {
-    return "Purchasing";
-  }
-
-  if (["documents", "stocking-handbook", "item-catalog"].includes(currentPage)) {
+  if (["documents", "stocking-handbook"].includes(currentPage)) {
     return "Documents";
   }
 
@@ -405,8 +312,6 @@ function getCurrentPageGroup(currentPage) {
       "delivery-settings",
       "vendor-settings",
       "order-flow",
-      "order-queue",
-      "order-history",
       "sales-report",
     ].includes(currentPage)
   ) {
@@ -418,23 +323,6 @@ function getCurrentPageGroup(currentPage) {
   }
 
   return navigationItems.find((item) => item.id === currentPage)?.group || "";
-}
-
-function formatMessageTime(value) {
-  if (!value) {
-    return "";
-  }
-
-  try {
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    }).format(new Date(value));
-  } catch {
-    return String(value);
-  }
 }
 
 function getNavGroupIcon(group) {
@@ -450,24 +338,12 @@ function getNavGroupIcon(group) {
     return LayoutDashboard;
   }
 
-  if (group === "Messages") {
-    return MessageCircle;
-  }
-
-  if (group === "Feedback") {
-    return MessageSquareText;
-  }
-
   if (group === "Deliveries") {
     return PackageCheck;
   }
 
   if (group === "Sales") {
     return UsersRound;
-  }
-
-  if (group === "Purchasing") {
-    return ClipboardList;
   }
 
   if (group === "Yard Tasks") {
@@ -512,9 +388,6 @@ function getNavGroupIcon(group) {
  *   previewUsers?: Array<Record<string, any>>;
  *   selectedPreviewUserId?: string;
  *   onPreviewUserChange?: (userId: string) => void;
- *   messages?: Array<Record<string, any>>;
- *   canManageMessages?: boolean;
- *   onMarkMessageRead?: (messageId: string) => void;
  *   onSignOut: () => void;
  * }} props
  */
@@ -532,13 +405,9 @@ export default function AppHeader({
   previewUsers = [],
   selectedPreviewUserId = "",
   onPreviewUserChange,
-  messages = [],
-  canManageMessages = false,
-  onMarkMessageRead,
   onSignOut,
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isMessagesOpen, setIsMessagesOpen] = useState(false);
   const [openNavGroups, setOpenNavGroups] = useState({
     "New Home": false,
     Dashboard: true,
@@ -547,13 +416,11 @@ export default function AppHeader({
     South: false,
     Deliveries: false,
     Sales: false,
-    Purchasing: false,
     Documents: false,
     Accounting: false,
     Admin: false,
     Fleet: false,
   });
-  const [openNewHomeGroups, setOpenNewHomeGroups] = useState({});
   const userInitial = (
     currentUser?.displayName ||
     currentUser?.email ||
@@ -565,31 +432,6 @@ export default function AppHeader({
   const southGroupLabel = "Fulfillment";
   const isNewHomeHeader = isSuperAdmin && isNewAppShell;
   const logoHomePageId = isNewHomeHeader ? "new-home" : "dashboard";
-  const currentUserId =
-    currentUser?.uid || currentUserProfile?.uid || currentUserProfile?.id || "";
-  const canOpenMessages =
-    !Array.isArray(allowedPageIds) || allowedPageIds.includes("messages");
-  const canOpenFeedback =
-    !Array.isArray(allowedPageIds) || allowedPageIds.includes("feedback");
-  const mobileMessageScope = useMemo(
-    () =>
-      canManageMessages
-        ? messages
-        : messages.filter((message) => message.recipientId === currentUserId),
-    [canManageMessages, currentUserId, messages],
-  );
-  const mobileMessages = useMemo(() => {
-    return [...mobileMessageScope]
-      .sort((firstMessage, secondMessage) =>
-        String(secondMessage.createdAt || "").localeCompare(
-          String(firstMessage.createdAt || ""),
-        ),
-      )
-      .slice(0, 6);
-  }, [mobileMessageScope]);
-  const unreadMessageCount = mobileMessageScope.filter(
-    (message) => message.recipientId === currentUserId && !message.readAt,
-  ).length;
 
   useEffect(() => {
     const currentGroup = getCurrentPageGroup(currentPage);
@@ -601,14 +443,11 @@ export default function AppHeader({
     setOpenNavGroups({
       "New Home": false,
       Dashboard: false,
-      Messages: false,
-      Feedback: false,
       "Yard Tasks": false,
       Dispatch: false,
       South: false,
       Deliveries: false,
       Sales: false,
-      Purchasing: false,
       Documents: false,
       Accounting: false,
       Admin: false,
@@ -617,25 +456,9 @@ export default function AppHeader({
     });
   }, [allowedPageIds, currentPage]);
 
-  useEffect(() => {
-    const activeNewHomeGroup = newHomeNavigationItems.find((item) =>
-      item.children?.some((child) => child.id === currentPage),
-    );
-
-    if (!activeNewHomeGroup) {
-      return;
-    }
-
-    setOpenNewHomeGroups((currentOpenNewHomeGroups) => ({
-      ...currentOpenNewHomeGroups,
-      [activeNewHomeGroup.id]: true,
-    }));
-  }, [currentPage]);
-
   function handlePageChange(pageId) {
     onPageChange(pageId);
     setIsMenuOpen(false);
-    setIsMessagesOpen(false);
   }
 
   function getPrimaryGroupPageId(groupItems, group) {
@@ -662,14 +485,11 @@ export default function AppHeader({
       return {
         "New Home": false,
         Dashboard: false,
-        Messages: false,
-        Feedback: false,
         "Yard Tasks": false,
         Dispatch: false,
         South: false,
         Deliveries: false,
         Sales: false,
-        Purchasing: false,
         Documents: false,
         Accounting: false,
         Admin: false,
@@ -677,13 +497,6 @@ export default function AppHeader({
         [group]: nextIsOpen,
       };
     });
-  }
-
-  function toggleNewHomeGroup(groupId) {
-    setOpenNewHomeGroups((currentOpenNewHomeGroups) => ({
-      ...currentOpenNewHomeGroups,
-      [groupId]: !currentOpenNewHomeGroups[groupId],
-    }));
   }
 
   function getSouthDropdownLinks() {
@@ -870,83 +683,30 @@ export default function AppHeader({
             </p>
           </div>
 
-          {[...newHomeNavigationItems]
-            .filter(
-              (item) =>
-                !allowedPageIds ||
-                allowedPageIds.includes(item.id) ||
-                item.children?.some((child) => allowedPageIds.includes(child.id)),
-            )
-            .map((item) => {
+          {newHomeNavigationItems.map((item) => {
             const NewHomeIcon = item.icon;
-            const itemIsActive =
-              currentPage === item.id ||
-              item.children?.some((child) => currentPage === child.id);
-            const hasChildren = Boolean(item.children?.length);
-            const childrenAreOpen =
-              hasChildren && Boolean(openNewHomeGroups[item.id]);
 
             return (
-              <div key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (hasChildren) {
-                      toggleNewHomeGroup(item.id);
-                      onPageChange(item.id);
-                      return;
-                    }
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handlePageChange(item.id)}
+                className={`flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-lg font-black transition ${
+                  isMobile
+                    ? "text-white hover:bg-white/10"
+                    : "text-white/90 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white">
+                  <NewHomeIcon
+                    aria-hidden="true"
+                    className="h-5 w-5"
+                    strokeWidth={2.6}
+                  />
+                </span>
 
-                    handlePageChange(item.id);
-                  }}
-                  className={`flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-lg font-black transition ${
-                    itemIsActive
-                      ? "bg-white/10 text-white"
-                      : isMobile
-                        ? "text-white hover:bg-white/10"
-                        : "text-white/90 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white">
-                    <NewHomeIcon
-                      aria-hidden="true"
-                      className="h-5 w-5"
-                      strokeWidth={2.6}
-                    />
-                  </span>
-
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="min-w-0 truncate">{item.label}</span>
-                  </span>
-                  {hasChildren ? (
-                    <ChevronDown
-                      className={`h-4 w-4 shrink-0 text-white/60 transition ${
-                        childrenAreOpen ? "rotate-180" : ""
-                      }`}
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                </button>
-
-                {childrenAreOpen ? (
-                  <div className="mt-2 space-y-1 pl-[4.75rem] pr-2">
-                    {item.children.map((child) => (
-                      <button
-                        key={child.id}
-                        type="button"
-                        onClick={() => handlePageChange(child.id)}
-                        className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-sm font-bold transition ${
-                          currentPage === child.id
-                            ? "bg-white text-slate-950"
-                            : "text-white/65 hover:bg-white/10 hover:text-white"
-                        }`}
-                      >
-                        {child.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              </button>
             );
           })}
 
@@ -966,23 +726,7 @@ export default function AppHeader({
       );
     }
 
-    const groupOrder = [
-      "New Home",
-      "Dashboard",
-      "Yard Tasks",
-      "Dispatch",
-      "South",
-      "Deliveries",
-      "Sales",
-      "Purchasing",
-      "Documents",
-      "Accounting",
-      "Admin",
-      "Fleet",
-    ];
-    const orderedGroups = groupOrder;
-
-    return orderedGroups.map((group) => {
+    return ["New Home", "Dashboard", "Yard Tasks", "Dispatch", "South", "Deliveries", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||
@@ -1016,11 +760,9 @@ export default function AppHeader({
                 pageId === "sales-tools" ||
                 pageId === "sales-converter",
             )) ||
-          (item.id === "purchase-orders" &&
-            allowedPageIds.includes("purchase-orders")) ||
           (item.id === "documents" &&
             allowedPageIds.some((pageId) =>
-              ["documents", "stocking-handbook", "item-catalog"].includes(pageId),
+              ["documents", "stocking-handbook"].includes(pageId),
             )) ||
           (item.id === "accounting" &&
             allowedPageIds.some((pageId) =>
@@ -1037,6 +779,7 @@ export default function AppHeader({
                 "email-list",
                 "delivery-settings",
                 "vendor-settings",
+                "order-flow",
                 "sales-report",
               ].includes(pageId),
             )) ||
@@ -1082,7 +825,6 @@ export default function AppHeader({
         "South",
         "Deliveries",
         "Sales",
-        "Purchasing",
         "Documents",
         "Accounting",
         "Admin",
@@ -1126,10 +868,8 @@ export default function AppHeader({
                 className="h-6 w-6 shrink-0"
                 strokeWidth={2.5}
               />
-              <span className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="min-w-0 truncate">
-                  {group === "South" ? southGroupLabel : group}
-                </span>
+              <span className="min-w-0 truncate">
+                {group === "South" ? southGroupLabel : group}
               </span>
             </button>
 
@@ -1383,43 +1123,6 @@ export default function AppHeader({
               </span>
             </div>
 
-            {canOpenMessages || canOpenFeedback ? (
-              <div className="grid grid-cols-2 gap-2 border-t border-white/10 px-3 py-3">
-                {canOpenMessages ? (
-                  <button
-                    type="button"
-                    onClick={() => handlePageChange("messages")}
-                    className="relative flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-black text-white transition hover:bg-white/10"
-                  >
-                    <MessageCircle
-                      aria-hidden="true"
-                      className="h-4 w-4"
-                      strokeWidth={2.4}
-                    />
-                    Messages
-                    {unreadMessageCount > 0 ? (
-                      <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#FC2C38]" />
-                    ) : null}
-                  </button>
-                ) : null}
-
-                {canOpenFeedback ? (
-                  <button
-                    type="button"
-                    onClick={() => handlePageChange("feedback")}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-black text-white transition hover:bg-white/10"
-                  >
-                    <MessageSquareText
-                      aria-hidden="true"
-                      className="h-4 w-4"
-                      strokeWidth={2.4}
-                    />
-                    Feedback
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-
             <button
               type="button"
               onClick={onSignOut}
@@ -1487,158 +1190,15 @@ export default function AppHeader({
 
             <button
               type="button"
-              onClick={() => {
-                if (canOpenMessages || canOpenFeedback) {
-                  setIsMessagesOpen(true);
-                }
-              }}
-              className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-black text-white ring-1 ring-white/15 transition hover:bg-white/15"
-              aria-label="Open messages"
-              aria-expanded={isMessagesOpen}
+              onClick={() => setIsMenuOpen(true)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-black text-white ring-1 ring-white/15 transition hover:bg-white/15"
+              aria-label="Open account menu"
             >
               {userInitial}
-              {unreadMessageCount > 0 ? (
-                <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 rounded-full bg-[#FC2C38] ring-2 ring-[#1e1e1e]" />
-              ) : null}
             </button>
           </div>
         </div>
       </header>
-
-      {isMessagesOpen ? (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <button
-            type="button"
-            className="absolute inset-0 bg-slate-950/35"
-            aria-label="Close messages"
-            onClick={() => setIsMessagesOpen(false)}
-          />
-
-          <aside className="absolute inset-y-0 right-0 flex h-full w-[90vw] max-w-[380px] flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-4">
-              <button
-                type="button"
-                onClick={() => setIsMessagesOpen(false)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
-                aria-label="Close messages"
-              >
-                <X aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
-              </button>
-
-              <div className="min-w-0">
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-                  Messages
-                </p>
-                <h2 className="truncate text-2xl font-black text-slate-950">
-                  Inbox
-                </h2>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-              {mobileMessages.length > 0 ? (
-                <div className="space-y-3">
-                  {mobileMessages.map((message) => {
-                    const isUnread =
-                      message.recipientId === currentUserId && !message.readAt;
-                    const senderOrRecipient = canManageMessages
-                      ? message.recipientName || message.recipientEmail || "Team member"
-                      : message.senderName || "Capital Dispatch";
-
-                    return (
-                      <article
-                        key={message.id}
-                        className={`rounded-2xl border px-4 py-3 shadow-sm ${
-                          isUnread
-                            ? "border-red-200 bg-red-50"
-                            : "border-slate-200 bg-slate-50"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-black text-slate-950">
-                              {senderOrRecipient}
-                            </p>
-                            <p className="text-xs font-bold text-slate-500">
-                              {formatMessageTime(message.createdAt)}
-                            </p>
-                          </div>
-
-                          {isUnread ? (
-                            <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#FC2C38]" />
-                          ) : null}
-                        </div>
-
-                        <p className="mt-3 line-clamp-3 text-sm font-semibold leading-6 text-slate-700">
-                          {message.body}
-                        </p>
-
-                        {isUnread ? (
-                          <button
-                            type="button"
-                            onClick={() => onMarkMessageRead?.(message.id)}
-                            className="mt-3 text-xs font-black uppercase tracking-[0.14em] text-[#FC2C38]"
-                          >
-                            Mark read
-                          </button>
-                        ) : null}
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
-                  <MessageCircle
-                    aria-hidden="true"
-                    className="mx-auto h-8 w-8 text-slate-300"
-                    strokeWidth={2.4}
-                  />
-                  <p className="mt-3 text-sm font-black text-slate-950">
-                    No messages yet
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                    New internal messages will show here.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-slate-200 bg-white p-4">
-              <div className="grid gap-2">
-                {canOpenMessages ? (
-                  <button
-                    type="button"
-                    onClick={() => handlePageChange("messages")}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-600"
-                  >
-                    <MessageCircle
-                      aria-hidden="true"
-                      className="h-4 w-4"
-                      strokeWidth={2.6}
-                    />
-                    Open Messages
-                  </button>
-                ) : null}
-
-                {canOpenFeedback ? (
-                  <button
-                    type="button"
-                    onClick={() => handlePageChange("feedback")}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 shadow-sm transition hover:bg-slate-50"
-                  >
-                    <MessageSquareText
-                      aria-hidden="true"
-                      className="h-4 w-4"
-                      strokeWidth={2.6}
-                    />
-                    Send Feedback
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </aside>
-        </div>
-      ) : null}
 
       {isMenuOpen ? (
         <div className="fixed inset-0 z-50 md:hidden">

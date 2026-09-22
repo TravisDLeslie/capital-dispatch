@@ -333,8 +333,6 @@ export default function DispatchPage({
   supplierRuns = [],
   deliveries = [],
   allowedPageIds = [],
-  southDispatchPageId = "supplier-runs-dispatch",
-  deliveryDispatchPageId = "deliveries-dispatch",
   onPageChange,
 }) {
   const [activeMobileQueue, setActiveMobileQueue] = useState("south");
@@ -485,7 +483,7 @@ export default function DispatchPage({
             todayCount={southToday}
             rows={southRows}
             tone="south"
-            onClick={() => onPageChange?.(southDispatchPageId)}
+            onClick={() => onPageChange?.("supplier-runs-dispatch")}
           />
           </div>
         ) : null}
@@ -501,7 +499,7 @@ export default function DispatchPage({
             todayCount={deliveryToday}
             rows={deliveryRows}
             tone="delivery"
-            onClick={() => onPageChange?.(deliveryDispatchPageId)}
+            onClick={() => onPageChange?.("deliveries-dispatch")}
           />
           </div>
         ) : null}

@@ -1,5 +1,9 @@
 function getGoogleMapsApiKey() {
-  return process.env.GOOGLE_MAPS_API_KEY || "";
+  return (
+    process.env.GOOGLE_MAPS_API_KEY ||
+    process.env.VITE_GOOGLE_MAPS_API_KEY ||
+    ""
+  );
 }
 
 function readRouteDurationSeconds(duration) {
@@ -46,16 +50,9 @@ export default async function handler(request, response) {
   const apiKey = getGoogleMapsApiKey();
   const origin = String(request.query.origin || "").trim();
   const destination = String(request.query.destination || "").trim();
-  const referer =
-    request.headers.referer ||
-    request.headers.origin ||
-    "http://localhost/";
 
   if (!apiKey) {
-    response.status(500).json({
-      error:
-        "Missing Google Maps server key. Add GOOGLE_MAPS_API_KEY for route ETA.",
-    });
+    response.status(500).json({ error: "Missing Google Maps API key." });
     return;
   }
 
@@ -74,7 +71,6 @@ export default async function handler(request, response) {
           "X-Goog-Api-Key": apiKey,
           "X-Goog-FieldMask":
             "routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline",
-          Referer: referer,
         },
         body: JSON.stringify({
           origin: { address: origin },

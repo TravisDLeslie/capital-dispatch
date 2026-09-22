@@ -52,32 +52,20 @@ function getSourceItemDescription(item, index) {
   );
 }
 
-function getPhotoUrl(photo) {
-  if (!photo) {
-    return "";
-  }
-
-  if (typeof photo === "string") {
-    return photo;
-  }
-
-  return photo.dataUrl || photo.url || "";
-}
-
 function getMaterialLocationPhotos(material) {
   if (Array.isArray(material.locationPhotos)) {
-    return material.locationPhotos.filter((photo) => getPhotoUrl(photo));
+    return material.locationPhotos.filter((photo) => photo?.dataUrl);
   }
 
-  return getPhotoUrl(material.locationPhoto) ? [material.locationPhoto] : [];
+  return material.locationPhoto?.dataUrl ? [material.locationPhoto] : [];
 }
 
 function getMaterialDamagePhotos(material) {
   if (Array.isArray(material.damagePhotos)) {
-    return material.damagePhotos.filter((photo) => getPhotoUrl(photo));
+    return material.damagePhotos.filter((photo) => photo?.dataUrl);
   }
 
-  return getPhotoUrl(material.damagePhoto) ? [material.damagePhoto] : [];
+  return material.damagePhoto?.dataUrl ? [material.damagePhoto] : [];
 }
 
 export default function CheckInCard({
@@ -336,19 +324,17 @@ export default function CheckInCard({
     firstLocationPhotoMaterial
       ? getMaterialLocationPhotos(firstLocationPhotoMaterial)[0]
       : null;
-  const firstLocationPhotoUrl = getPhotoUrl(firstLocationPhoto);
-  const checkInLocationPhotoUrl = getPhotoUrl(checkIn.locationPhoto);
-  const locationPhoto = firstLocationPhotoUrl
+  const locationPhoto = firstLocationPhoto?.dataUrl
     ? {
-        dataUrl: firstLocationPhotoUrl,
+        dataUrl: firstLocationPhoto.dataUrl,
         title: "Location Photo",
         subtitle:
           firstLocationPhotoMaterial.description ||
           "Material location",
       }
-    : checkInLocationPhotoUrl
+    : checkIn.locationPhoto?.dataUrl
       ? {
-          dataUrl: checkInLocationPhotoUrl,
+          dataUrl: checkIn.locationPhoto.dataUrl,
           title: "Location Photo",
           subtitle:
             "Wide photo of where the material was placed",
@@ -359,7 +345,7 @@ export default function CheckInCard({
   const receivingTruckLabel =
     checkIn.receivingTruckLabel ||
     (checkIn.receivingTruckType === "ourTruck"
-      ? "South"
+      ? "Our Truck"
       : checkIn.receivingTruckType === "theirTruck"
         ? "Their Truck"
         : "");
@@ -378,13 +364,13 @@ export default function CheckInCard({
     .filter(Boolean)
     .join(" • ");
   const sourceBadgeClass = isFromSouth
-    ? "bg-blue-50 text-blue-700"
-    : "bg-red-50 text-[#FC2C38]";
+    ? "bg-red-50 text-[#FC2C38]"
+    : "bg-blue-50 text-blue-700";
   const receivingTruckBadgeClass =
     checkIn.receivingTruckType === "ourTruck"
-      ? "bg-blue-50 text-blue-700"
+      ? "bg-red-50 text-[#FC2C38]"
       : checkIn.receivingTruckType === "theirTruck"
-        ? "bg-red-50 text-[#FC2C38]"
+        ? "bg-blue-50 text-blue-700"
         : "bg-slate-100 text-slate-600";
   const hasMaterialDetails = materials.some(
     (material) =>
@@ -399,29 +385,27 @@ export default function CheckInCard({
       count +
       getMaterialLocationPhotos(material).length +
       getMaterialDamagePhotos(material).length,
-    checkInLocationPhotoUrl ? 1 : 0,
+    checkIn.locationPhoto?.dataUrl ? 1 : 0,
   );
   const hasAnyPhoto = materialPhotoCount > 0;
   const previewPhotos = [];
   const seenPreviewPhotoUrls = new Set();
 
   function addPreviewPhoto(photo, title, subtitle, tone = "location") {
-    const photoUrl = getPhotoUrl(photo);
-
-    if (!photoUrl || seenPreviewPhotoUrls.has(photoUrl)) {
+    if (!photo?.dataUrl || seenPreviewPhotoUrls.has(photo.dataUrl)) {
       return;
     }
 
-    seenPreviewPhotoUrls.add(photoUrl);
+    seenPreviewPhotoUrls.add(photo.dataUrl);
     previewPhotos.push({
-      dataUrl: photoUrl,
+      dataUrl: photo.dataUrl,
       title,
       subtitle,
       tone,
     });
   }
 
-  if (checkInLocationPhotoUrl) {
+  if (checkIn.locationPhoto?.dataUrl) {
     addPreviewPhoto(
       checkIn.locationPhoto,
       "PO Location Photo",
@@ -1368,16 +1352,13 @@ export default function CheckInCard({
                     {getMaterialLocationPhotos(material).length > 0 ? (
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         {getMaterialLocationPhotos(material).map(
-                          (photo, photoIndex) => {
-                            const photoUrl = getPhotoUrl(photo);
-
-                            return (
+                          (photo, photoIndex) => (
                             <button
                               key={`${material.id}-location-photo-${photoIndex}`}
                               type="button"
                               onClick={() =>
                                 setViewingPhoto({
-                                  dataUrl: photoUrl,
+                                  dataUrl: photo.dataUrl,
                                   title: `Item ${index + 1} Location Photo ${photoIndex + 1}`,
                                   subtitle: material.description,
                                 })
@@ -1385,7 +1366,7 @@ export default function CheckInCard({
                               className="block w-full overflow-hidden rounded-xl border border-[#DCE4EF] bg-white text-left"
                             >
                               <img
-                                src={photoUrl}
+                                src={photo.dataUrl}
                                 alt={`Location ${photoIndex + 1} for item ${index + 1}`}
                                 className="h-32 w-full object-cover sm:h-44 lg:h-56"
                               />
@@ -1394,8 +1375,7 @@ export default function CheckInCard({
                                 View location photo {photoIndex + 1}
                               </span>
                             </button>
-                          );
-                        },
+                          ),
                         )}
                       </div>
                     ) : null}
@@ -1403,16 +1383,13 @@ export default function CheckInCard({
                     {getMaterialDamagePhotos(material).length > 0 ? (
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         {getMaterialDamagePhotos(material).map(
-                          (photo, photoIndex) => {
-                            const photoUrl = getPhotoUrl(photo);
-
-                            return (
+                          (photo, photoIndex) => (
                             <button
                               key={`${material.id}-damage-photo-${photoIndex}`}
                               type="button"
                               onClick={() =>
                                 setViewingPhoto({
-                                  dataUrl: photoUrl,
+                                  dataUrl: photo.dataUrl,
                                   title: `Item ${index + 1} Damage Photo ${photoIndex + 1}`,
                                   subtitle: material.description,
                                 })
@@ -1420,7 +1397,7 @@ export default function CheckInCard({
                               className="block w-full overflow-hidden rounded-xl border border-red-200 bg-white text-left"
                             >
                               <img
-                                src={photoUrl}
+                                src={photo.dataUrl}
                                 alt={`Damage ${photoIndex + 1} for item ${index + 1}`}
                                 className="h-32 w-full object-cover sm:h-44 lg:h-56"
                               />
@@ -1429,8 +1406,7 @@ export default function CheckInCard({
                                 View damage photo {photoIndex + 1}
                               </span>
                             </button>
-                          );
-                        },
+                          ),
                         )}
                       </div>
                     ) : null}

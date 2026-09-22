@@ -19,7 +19,6 @@ import {
 import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
-import SearchableSelect from "../components/SearchableSelect";
 
 const fulfillmentPaths = [
   {
@@ -61,7 +60,9 @@ const fulfillmentPaths = [
   },
 ];
 
-const activeFulfillmentPaths = fulfillmentPaths;
+const activeFulfillmentPaths = fulfillmentPaths.filter(
+  (path) => path.id !== "inStock",
+);
 
 const CAPITAL_LUMBER_ADDRESS = "3105 W State St, Boise, ID 83703";
 
@@ -80,32 +81,6 @@ function createGoogleMapsRouteUrl(destination) {
   });
 
   return `https://www.google.com/maps/dir/?${params.toString()}`;
-}
-
-function getRouteEtaSeconds(routeEta) {
-  const seconds = Number(routeEta?.durationSeconds || routeEta?.durationValue);
-  return Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
-}
-
-function formatRouteMinutes(totalMinutes) {
-  const minutes = Math.max(0, Math.round(Number(totalMinutes) || 0));
-
-  if (!minutes) {
-    return "";
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-
-  if (hours > 0 && remainingMinutes > 0) {
-    return `${hours} hr ${remainingMinutes} min`;
-  }
-
-  if (hours > 0) {
-    return `${hours} hr`;
-  }
-
-  return `${minutes} min`;
 }
 
 const unloadTypes = [
@@ -176,7 +151,29 @@ function createBlankItem(overrides = {}) {
   };
 }
 
-const defaultItems = [createBlankItem({ id: "item-1" })];
+const defaultItems = [
+  createBlankItem({
+    id: "item-1",
+    quantity: "10",
+    description: "2x6-16 #2 Doug Fir",
+    path: "wePickup",
+    vendor: "OrePac",
+    poNumber: "441-185",
+    routeDate: "2026-08-28",
+    saved: true,
+  }),
+  createBlankItem({
+    id: "item-2",
+    quantity: "4",
+    description: "4x4-16 Pressure Treat",
+    path: "supplierDelivery",
+    vendor: "Boise Cascade",
+    poNumber: "441-186",
+    supplierDate: "2026-08-29",
+    supplierNote: "Typical cadence: M-W-F",
+    saved: true,
+  }),
+];
 
 function getPath(pathId) {
   return (
@@ -195,22 +192,6 @@ function getItemDateLabel(pathId) {
   }
 
   return "Delivery";
-}
-
-function getPoRouteLabel(pathId) {
-  if (pathId === "wePickup") {
-    return "South PO";
-  }
-
-  if (pathId === "supplierDelivery") {
-    return "Their Truck PO";
-  }
-
-  if (pathId === "pod") {
-    return "POD PO";
-  }
-
-  return "PO";
 }
 
 function getItemDateValue(item) {
@@ -245,14 +226,6 @@ function formatOrderNumberInput(value) {
   }
 
   return `${digitsOnly.slice(0, 3)}-${digitsOnly.slice(3)}`;
-}
-
-function formatPoNumberInput(value) {
-  return formatOrderNumberInput(value);
-}
-
-function isValidPoNumber(value) {
-  return /^\d{3}-\d{3}$/.test(String(value || "").trim());
 }
 
 function formatPhoneInput(value) {
@@ -336,24 +309,24 @@ function ChoiceButton({
 /**
  * @param {{
  *   currentUser?: { id?: string; name?: string; email?: string } | null;
- *   vendorOptions?: string[];
  *   onProcessOrder?: (orderPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
 export default function OrderFlowPage({
   currentUser = null,
-  vendorOptions = [],
   onProcessOrder,
   onPageChange,
 }) {
-  const [orderNumber, setOrderNumber] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [businessName, setBusinessName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [orderNumber, setOrderNumber] = useState("019-390");
+  const [customerName, setCustomerName] = useState("Zach Peel");
+  const [businessName, setBusinessName] = useState("King Building");
+  const [phoneNumber, setPhoneNumber] = useState("(208) 555-0192");
   const [accountNumber, setAccountNumber] = useState("");
   const [orderMethod, setOrderMethod] = useState("delivery");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryAddress, setDeliveryAddress] = useState(
+    "1234 W Example St, Boise, ID 83702",
+  );
   const [deliveryDate, setDeliveryDate] = useState("");
   const [items, setItems] = useState(defaultItems);
   const [activeItemId, setActiveItemId] = useState(null);
@@ -375,29 +348,8 @@ export default function OrderFlowPage({
     unloadTypes.find((option) => option.id === unloadType) || unloadTypes[0];
   const SelectedUnloadIcon = selectedUnloadType.icon;
   const routeMapUrl = createGoogleMapsRouteUrl(deliveryAddress);
-  const routeEtaSeconds = getRouteEtaSeconds(routeEta);
-  const oneWayRouteMinutes = routeEtaSeconds
-    ? Math.max(1, Math.round(routeEtaSeconds / 60))
-    : 0;
-  const roundTripRouteMinutes = oneWayRouteMinutes * 2;
-  const oneWayRouteText =
-    routeEta?.durationText || formatRouteMinutes(oneWayRouteMinutes);
-  const roundTripRouteText = formatRouteMinutes(roundTripRouteMinutes);
   const selectedHandoff = getHandoffOption(orderMethod);
   const SelectedHandoffIcon = selectedHandoff.icon;
-  const sortedVendorOptions = useMemo(
-    () =>
-      [...new Set(Array.isArray(vendorOptions) ? vendorOptions : [])]
-        .filter(Boolean)
-        .sort((firstVendor, secondVendor) =>
-          String(firstVendor).localeCompare(String(secondVendor), undefined, {
-            sensitivity: "base",
-          }),
-        ),
-    [vendorOptions],
-  );
-  const handoffDateLabel =
-    orderMethod === "delivery" ? "Delivery Date" : "Expected Date";
   const deliveryDateText = formatShortDate(deliveryDate) || "No date";
   const pathCounts = useMemo(
     () =>
@@ -422,19 +374,12 @@ export default function OrderFlowPage({
       }),
     [items],
   );
-  const savedItemsHaveValidPoNumbers = savedItems.every((item) =>
-    item.path === "inStock" || isValidPoNumber(item.poNumber),
-  );
   const canProcessOrder = Boolean(
     orderNumber &&
       customerName &&
       savedItems.length > 0 &&
-      savedItemsHaveValidPoNumbers &&
       (orderMethod !== "delivery" || deliveryAddress),
   );
-  const editingItemHasValidPoNumber = editingItem
-    ? editingItem.path === "inStock" || isValidPoNumber(editingItem.poNumber)
-    : true;
 
   useEffect(() => {
     if (orderMethod !== "delivery") {
@@ -560,8 +505,6 @@ export default function OrderFlowPage({
       unloadType,
       deliveryNotes,
       routeEta,
-      oneWayDriveMinutes: oneWayRouteMinutes,
-      roundTripDriveMinutes: roundTripRouteMinutes,
       routeEtaStatus,
       items: savedItems,
       createdBy: currentUser,
@@ -637,22 +580,22 @@ export default function OrderFlowPage({
               </p>
             </div>
 
-            <div className="flex flex-col items-start gap-2 sm:items-end">
-              <span
-                className={`inline-flex w-fit items-center gap-2 rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.12em] ${selectedHandoff.tone}`}
-              >
-                <SelectedHandoffIcon className="h-4 w-4" aria-hidden="true" />
-                {selectedHandoff.label}
-              </span>
+            <span
+              className={`inline-flex w-fit items-center gap-2 rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.12em] ${selectedHandoff.tone}`}
+            >
+              <SelectedHandoffIcon className="h-4 w-4" aria-hidden="true" />
+              {selectedHandoff.label}
+            </span>
+            {orderMethod === "delivery" ? (
               <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-right">
                 <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-                  {handoffDateLabel}
+                  Delivery Date
                 </p>
                 <p className="text-sm font-black text-slate-950">
                   {deliveryDateText}
                 </p>
               </div>
-            </div>
+            ) : null}
           </div>
 
           <div className="mt-6 grid gap-4 xl:grid-cols-[1fr_1fr]">
@@ -693,13 +636,11 @@ export default function OrderFlowPage({
                         <p className="mt-1 text-2xl font-black text-emerald-900">
                           {routeEtaStatus === "loading"
                             ? "Calculating..."
-                            : oneWayRouteText || "Not calculated"}
+                            : routeEta?.durationText || "Not calculated"}
                         </p>
                         <p className="text-sm font-bold text-emerald-700">
-                          {oneWayRouteText
-                            ? `${routeEta?.distanceText || "Route"} one-way · ${
-                                roundTripRouteText || "Not calculated"
-                              } there and back`
+                          {routeEta?.distanceText
+                            ? `${routeEta.distanceText} one-way`
                             : routeEtaMessage ||
                               "Enter a delivery address to calculate the route."}
                         </p>
@@ -877,17 +818,17 @@ export default function OrderFlowPage({
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"
-                  onClick={() => onPageChange?.("order-queue")}
+                  onClick={() => onPageChange?.("order-builds")}
                   className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-black text-white"
                 >
-                  View Order Queue
+                  View Build Watch
                 </button>
                 <button
                   type="button"
-                  onClick={() => onPageChange?.("order-builds")}
+                  onClick={() => onPageChange?.("new-home")}
                   className="inline-flex h-11 items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 text-sm font-black text-emerald-800"
                 >
-                  View Build Watch
+                  Back to New Home
                 </button>
               </div>
             </div>
@@ -917,13 +858,9 @@ export default function OrderFlowPage({
               <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
                 Current Order
               </p>
-              <p
-                className={`truncate text-sm font-black ${
-                  businessName || customerName ? "text-slate-700" : "text-slate-300"
-                }`}
-              >
-                {businessName || "Example: King Building"} ·{" "}
-                {customerName || "Example: Zach Peel"}
+              <p className="truncate text-sm font-black text-slate-700">
+                {businessName || "Business name"} ·{" "}
+                {customerName || "Customer name"}
               </p>
               {accountNumber ? (
                 <p className="mt-1 truncate text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
@@ -932,19 +869,11 @@ export default function OrderFlowPage({
               ) : null}
             </div>
             <div className="text-right">
-              <p
-                className={`text-2xl font-black tracking-tight ${
-                  orderNumber ? "text-slate-950" : "text-slate-300"
-                }`}
-              >
-                {orderNumber || "123-456"}
+              <p className="text-2xl font-black tracking-tight text-slate-950">
+                {orderNumber || "000-000"}
               </p>
-              <p
-                className={`text-xs font-bold ${
-                  phoneNumber ? "text-slate-500" : "text-slate-300"
-                }`}
-              >
-                {phoneNumber || "Example: (208) 555-0192"}
+              <p className="text-xs font-bold text-slate-500">
+                {phoneNumber || "No phone"}
               </p>
               <span
                 className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] ${selectedHandoff.tone}`}
@@ -956,7 +885,9 @@ export default function OrderFlowPage({
                 {selectedHandoff.label}
               </span>
               <p className="mt-1 text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
-                {handoffDateLabel.replace(" Date", "")} {deliveryDateText}
+                {orderMethod === "delivery"
+                  ? `Delivery ${deliveryDateText}`
+                  : selectedHandoff.description}
               </p>
             </div>
           </div>
@@ -1001,7 +932,7 @@ export default function OrderFlowPage({
               <TextInput
                 value={customerName}
                 onChange={(event) => setCustomerName(event.target.value)}
-                placeholder="Zach Peel"
+                placeholder="Customer name"
                 className="pl-12"
               />
             </div>
@@ -1016,7 +947,7 @@ export default function OrderFlowPage({
               <TextInput
                 value={businessName}
                 onChange={(event) => setBusinessName(event.target.value)}
-                placeholder="King Building"
+                placeholder="Business name"
                 className="pl-12"
               />
             </div>
@@ -1081,7 +1012,7 @@ export default function OrderFlowPage({
           {orderMethod === "delivery" ? (
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
               <div className="grid gap-3 xl:grid-cols-[180px_1fr_190px] xl:items-end">
-                <Field label={handoffDateLabel}>
+                <Field label="Delivery Date">
                   <TextInput
                     type="date"
                     value={deliveryDate}
@@ -1098,13 +1029,8 @@ export default function OrderFlowPage({
                     <AddressAutocompleteInput
                       value={deliveryAddress}
                       onChange={setDeliveryAddress}
-                      onPlaceSelected={(_place, selectedAddress) => {
-                        if (selectedAddress) {
-                          setDeliveryAddress(selectedAddress);
-                        }
-                      }}
-                      placeholder="1234 W Example St, Boise, ID 83702"
-                      showStatus
+                      placeholder="Start typing the delivery address..."
+                      showStatus={false}
                       className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                     />
                   </div>
@@ -1114,37 +1040,14 @@ export default function OrderFlowPage({
                   <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
                     Route ETA
                   </p>
-                  {routeEtaStatus === "loading" ? (
-                    <p className="mt-1 text-sm font-black text-slate-950">
-                      Calculating...
-                    </p>
-                  ) : oneWayRouteText ? (
-                    <div className="mt-1 grid grid-cols-2 gap-2">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                          There
-                        </p>
-                        <p className="text-sm font-black text-slate-950">
-                          {oneWayRouteText}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                          There & Back
-                        </p>
-                        <p className="text-sm font-black text-slate-950">
-                          {roundTripRouteText}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-sm font-black text-slate-950">
-                      Not calculated yet
-                    </p>
-                  )}
+                  <p className="mt-1 text-sm font-black text-slate-950">
+                    {routeEtaStatus === "loading"
+                      ? "Calculating..."
+                      : routeEta?.durationText || "Not calculated yet"}
+                  </p>
                   {routeEta?.distanceText ? (
-                    <p className="mt-1 text-xs font-bold text-slate-500">
-                      {routeEta.distanceText} one-way from Capital Lumber
+                    <p className="mt-0.5 text-xs font-bold text-slate-500">
+                      {routeEta.distanceText} one-way
                     </p>
                   ) : null}
                 </div>
@@ -1164,28 +1067,18 @@ export default function OrderFlowPage({
             </div>
           ) : (
             <div
-              className={`grid gap-3 rounded-3xl border p-3 ${
+              className={`rounded-2xl border px-4 py-3 ${
                 orderMethod === "pod"
                   ? "border-amber-200 bg-amber-50 text-amber-900"
                   : "border-blue-200 bg-blue-50 text-blue-900"
               }`}
             >
-              <Field label={handoffDateLabel}>
-                <TextInput
-                  type="date"
-                  value={deliveryDate}
-                  onChange={(event) => setDeliveryDate(event.target.value)}
-                />
-              </Field>
-
-              <div className="rounded-2xl border border-white/60 bg-white/65 px-4 py-3">
-                <p className="text-xs font-black uppercase tracking-[0.14em] opacity-70">
-                  {selectedHandoff.label}
-                </p>
-                <p className="mt-1 font-black">
-                  {selectedHandoff.description}
-                </p>
-              </div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] opacity-70">
+                {selectedHandoff.label}
+              </p>
+              <p className="mt-1 font-black">
+                {selectedHandoff.description}
+              </p>
             </div>
           )}
         </div>
@@ -1246,9 +1139,8 @@ export default function OrderFlowPage({
                       <p className="truncate text-sm font-black text-slate-950">
                         {item.description || "New material"}
                       </p>
-                      <p className="truncate text-xs font-black text-slate-950">
-                        {getPoRouteLabel(item.path)} ·{" "}
-                        {item.vendor || "No vendor"} ·{" "}
+                      <p className="truncate text-xs font-bold text-slate-500">
+                        {item.vendor || "No vendor"} · PO{" "}
                         {item.poNumber || "not entered"}
                       </p>
                     </div>
@@ -1352,8 +1244,7 @@ export default function OrderFlowPage({
                 <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-black text-slate-950">
-                      {getPoRouteLabel(item.path)} ·{" "}
-                      {item.vendor || "No vendor selected"} ·{" "}
+                      {item.vendor || "No vendor selected"} · PO{" "}
                       {item.poNumber || "not entered"}
                     </p>
                     <p className="mt-1 text-xs font-bold text-slate-500">
@@ -1588,13 +1479,10 @@ export default function OrderFlowPage({
                     {deliveryAddress || "No delivery address"}
                   </p>
                 ) : null}
-                {oneWayRouteText ? (
+                {routeEta?.durationText ? (
                   <p className="mt-2 text-sm font-black text-emerald-700">
-                    Route ETA: {oneWayRouteText} there
-                    {roundTripRouteText
-                      ? ` · ${roundTripRouteText} there and back`
-                      : ""}
-                    {routeEta?.distanceText ? ` · ${routeEta.distanceText}` : ""}
+                    Route ETA: {routeEta.durationText}
+                    {routeEta.distanceText ? ` · ${routeEta.distanceText}` : ""}
                   </p>
                 ) : null}
                 {deliveryNotes ? (
@@ -1628,10 +1516,7 @@ export default function OrderFlowPage({
                           {item.description || "Unnamed item"}
                         </p>
                         <p className="mt-1 text-sm font-bold text-slate-600">
-                          <span className="font-black text-slate-950">
-                            {getPoRouteLabel(item.path)}
-                          </span>{" "}
-                          · {item.vendor || "No vendor"} ·{" "}
+                          {item.vendor || "No vendor"} · PO{" "}
                           {item.poNumber || "not entered"}
                         </p>
                         <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
@@ -1687,78 +1572,59 @@ export default function OrderFlowPage({
             </div>
 
             <div className="mt-5 grid gap-4">
-              {editingItem.path === "inStock" ? (
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
-                  This item will be pulled from Capital Lumber inventory, so no
-                  vendor PO is needed.
-                </div>
-              ) : (
-                <>
-                  <Field label="Vendor">
-                    <SearchableSelect
-                      value={editingItem.vendor}
-                      options={sortedVendorOptions}
-                      onChange={(nextVendor) =>
-                        updateItem(editingItem.id, { vendor: nextVendor })
-                      }
-                      placeholder="Start typing a vendor..."
-                      allowCustomValue
-                      accent={editingItem.path === "wePickup" ? "red" : "blue"}
-                    />
-                  </Field>
-                  <Field label="PO Number">
-                    <TextInput
-                      value={editingItem.poNumber}
-                      onChange={(event) =>
-                        updateItem(editingItem.id, {
-                          poNumber: formatPoNumberInput(event.target.value),
-                        })
-                      }
-                      placeholder="441-185"
-                      inputMode="numeric"
-                      maxLength={7}
-                    />
-                    {!editingItemHasValidPoNumber ? (
-                      <p className="mt-2 text-sm font-bold text-[#FC2C38]">
-                        PO must be 6 digits, formatted like 441-185.
-                      </p>
-                    ) : null}
-                  </Field>
-                  <Field
-                    label={
+              <Field label="Vendor">
+                <TextInput
+                  value={editingItem.vendor}
+                  onChange={(event) =>
+                    updateItem(editingItem.id, { vendor: event.target.value })
+                  }
+                  placeholder="Vendor"
+                />
+              </Field>
+              <Field label="PO Number">
+                <TextInput
+                  value={editingItem.poNumber}
+                  onChange={(event) =>
+                    updateItem(editingItem.id, {
+                      poNumber: event.target.value,
+                    })
+                  }
+                  placeholder="441-185"
+                />
+              </Field>
+              <Field
+                label={
+                  editingItem.path === "wePickup"
+                    ? "Pickup Date"
+                    : editingItem.path === "pod"
+                      ? "POD Date"
+                      : "Delivery Date"
+                }
+              >
+                <div className="relative">
+                  <CalendarDays
+                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+                    aria-hidden="true"
+                  />
+                  <TextInput
+                    type="date"
+                    value={
                       editingItem.path === "wePickup"
-                        ? "Pickup Date"
-                        : editingItem.path === "supplierDelivery"
-                          ? "Delivery Date"
-                          : "Expected Date"
+                        ? editingItem.routeDate
+                        : editingItem.supplierDate
                     }
-                  >
-                    <div className="relative">
-                      <CalendarDays
-                        className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-                        aria-hidden="true"
-                      />
-                      <TextInput
-                        type="date"
-                        value={
-                          editingItem.path === "wePickup"
-                            ? editingItem.routeDate
-                            : editingItem.supplierDate
-                        }
-                        onChange={(event) =>
-                          updateItem(
-                            editingItem.id,
-                            editingItem.path === "wePickup"
-                              ? { routeDate: event.target.value }
-                              : { supplierDate: event.target.value },
-                          )
-                        }
-                        className="pl-12"
-                      />
-                    </div>
-                  </Field>
-                </>
-              )}
+                    onChange={(event) =>
+                      updateItem(
+                        editingItem.id,
+                        editingItem.path === "wePickup"
+                          ? { routeDate: event.target.value }
+                          : { supplierDate: event.target.value },
+                      )
+                    }
+                    className="pl-12"
+                  />
+                </div>
+              </Field>
               {editingItem.path === "supplierDelivery" ? (
                 <Field label="Cadence / Note">
                   <TextInput
@@ -1776,15 +1642,8 @@ export default function OrderFlowPage({
 
             <button
               type="button"
-              onClick={() => {
-                if (!editingItemHasValidPoNumber) {
-                  return;
-                }
-
-                setEditingItemId(null);
-              }}
-              disabled={!editingItemHasValidPoNumber}
-              className="mt-5 w-full rounded-2xl bg-slate-950 px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              onClick={() => setEditingItemId(null)}
+              className="mt-5 w-full rounded-2xl bg-slate-950 px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-slate-800"
             >
               Done
             </button>

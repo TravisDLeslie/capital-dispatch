@@ -9,11 +9,6 @@ import {
   formatTime,
 } from "../utils/dateHelpers";
 import { uploadSupplierRunPickupPhoto } from "../utils/photoStorage";
-import {
-  getPhotoUrl,
-  getPickupPhotoList,
-  isPickupItemComplete,
-} from "../utils/supplierRunFlow";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const capitalLumberInfo = {
@@ -500,6 +495,34 @@ function createPickupSheetHtml(supplierRun, items, showCustomerName = false) {
   `;
 }
 
+function getPickupPhotoList(item) {
+  const photos = Array.isArray(item?.pickupPhotos)
+    ? item.pickupPhotos.filter((photo) => getPhotoUrl(photo))
+    : [];
+  const legacyPhoto = getPhotoUrl(item?.pickupPhoto) ? item.pickupPhoto : null;
+
+  if (
+    legacyPhoto &&
+    !photos.some((photo) => getPhotoUrl(photo) === getPhotoUrl(legacyPhoto))
+  ) {
+    return [...photos, legacyPhoto];
+  }
+
+  return photos;
+}
+
+function isPickupItemComplete(item) {
+  return Boolean(
+    item?.pickedUp ||
+      item?.pickedUpAt ||
+      getPickupPhotoList(item).length > 0,
+  );
+}
+
+function getPhotoUrl(photo) {
+  return String(photo?.url || photo?.dataUrl || "").trim();
+}
+
 function getPhotoSaveErrorMessage(error) {
   const message = String(error?.message || "");
   const code = String(error?.code || "");
@@ -752,9 +775,21 @@ export default function SupplierRunCard({
         file,
       });
       await onSavePickupPhoto(supplierRun.id, itemId, pickupPhoto, {
-        markPickedUp: false,
+        markPickedUp: true,
       });
       setIsItemsOpen(true);
+
+      const remainingAfterPickup = items.filter(
+        (currentItem) =>
+          !isPickupItemComplete(currentItem) && currentItem.id !== itemId,
+      ).length;
+
+      if (remainingAfterPickup === 0) {
+        setCompletedPOPrompt({
+          poNumber: supplierRun.poNumber || "this PO",
+          vendor: supplierRun.vendor || "this vendor",
+        });
+      }
     } catch (photoError) {
       console.error("Unable to save pickup photo:", photoError);
       setPhotoError(getPhotoSaveErrorMessage(photoError));

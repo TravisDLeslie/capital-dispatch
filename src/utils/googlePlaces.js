@@ -2,11 +2,7 @@ let googlePlacesPromise = null;
 let googlePlacesCallbackId = 0;
 
 export function getGoogleMapsApiKey() {
-  return (
-    import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
-    import.meta.env.VITE_GOOGLE_API_KEY ||
-    ""
-  );
+  return import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 }
 
 export function loadGooglePlaces() {

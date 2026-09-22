@@ -182,25 +182,12 @@ service cloud.firestore {
       );
     }
 
-    function isAccounting() {
-      return isApproved() && (
-        isAdmin() ||
-        hasAnyPermission([
-          "accounting",
-          "payment-links",
-          "customer-statements"
-        ])
-      );
-    }
-
     function canAccessPodPickups() {
       return isSouth() || isReceiving() || isSales();
     }
 
     function canAccessOrderBuilds() {
-      return isAdmin() ||
-        isReceiving() ||
-        hasAnyPermission(["order-builds", "order-flow"]);
+      return isAdmin() || hasAnyPermission(["order-builds", "order-flow"]);
     }
 
     function isSalesReportViewer() {
@@ -269,61 +256,6 @@ service cloud.firestore {
       allow read, create, update, delete: if isReceiving();
     }
 
-    match /customers/{customerId} {
-      allow read: if isApproved();
-      allow create, update: if isSales() || isAccounting();
-      allow delete: if isAdmin();
-    }
-
-    match /customerPaymentLinks/{paymentLinkId} {
-      allow read, create, update, delete: if isAccounting();
-    }
-
-    match /customerStatements/{statementId} {
-      allow read, create, update, delete: if isAccounting();
-    }
-
-    match /emailList/{emailListEntryId} {
-      allow read, create, update, delete: if isSales() || isAdmin();
-    }
-
-    match /appFeedback/{feedbackId} {
-      allow create: if isApproved() &&
-        request.resource.data.userId == request.auth.uid &&
-        request.resource.data.userEmail == request.auth.token.email;
-      allow read: if isAdmin() ||
-        (
-          isApproved() &&
-          resource.data.userId == request.auth.uid
-        );
-      allow update, delete: if isAdmin() ||
-        (
-          isApproved() &&
-          resource.data.userId == request.auth.uid
-        );
-    }
-
-    match /internalMessages/{messageId} {
-      allow read: if isAdmin() ||
-        (
-          isApproved() &&
-          (
-            resource.data.recipientId == request.auth.uid ||
-            resource.data.senderId == request.auth.uid
-          )
-        );
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() ||
-        (
-          isApproved() &&
-          resource.data.recipientId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "readAt",
-            "updatedAt"
-          ])
-        );
-    }
-
     match /yardTasks/{yardTaskId} {
       allow read: if canAccessYardTasks();
       allow update: if isAdmin() ||
@@ -362,8 +294,7 @@ service cloud.firestore {
 
     match /orderBuilds/{orderBuildId} {
       allow read: if canAccessOrderBuilds() || isSales();
-      allow create: if isSales();
-      allow update: if isSales() || isReceiving();
+      allow create, update: if isSales();
       allow delete: if isAdmin();
     }
 
@@ -381,18 +312,7 @@ service cloud.firestore {
     }
 
     match /bouncieVehicleSettings/{vehicleSettingId} {
-      allow read: if isApproved();
-      allow create, update, delete: if isAdmin();
-    }
-
-    match /settings/{settingsId} {
-      allow read: if isApproved();
-      allow create, update, delete: if isAdmin();
-    }
-
-    match /appSettings/{settingsId} {
-      allow read: if isApproved();
-      allow create, update, delete: if isAdmin();
+      allow read, create, update, delete: if isAdmin();
     }
 
     match /salesMonthlyReports/{salesReportId} {
@@ -402,11 +322,6 @@ service cloud.firestore {
 
     match /stockingHandbookItems/{stockingHandbookItemId} {
       allow read: if isStockingHandbookViewer();
-      allow create, update, delete: if isAdmin();
-    }
-
-    match /itemCatalogItems/{itemCatalogItemId} {
-      allow read: if isApproved();
       allow create, update, delete: if isAdmin();
     }
   }

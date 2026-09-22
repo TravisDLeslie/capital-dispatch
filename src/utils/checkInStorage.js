@@ -11,7 +11,6 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { uploadCheckInPhotos } from "./photoStorage";
 
 const STORAGE_KEY = "dispatch-cl-check-ins";
 const CHECK_INS_COLLECTION = "checkIns";
@@ -101,18 +100,17 @@ export function saveCheckIns(checkIns) {
 }
 
 export async function addCheckIn(checkIn) {
-  const persistedCheckIn = await uploadCheckInPhotos(checkIn);
   const currentCheckIns = getLocalCheckIns();
 
   const updatedCheckIns = [
-    persistedCheckIn,
+    checkIn,
     ...currentCheckIns,
   ];
 
   if (db) {
     await setDoc(
-      doc(db, CHECK_INS_COLLECTION, persistedCheckIn.id),
-      persistedCheckIn,
+      doc(db, CHECK_INS_COLLECTION, checkIn.id),
+      checkIn,
     );
   }
 
