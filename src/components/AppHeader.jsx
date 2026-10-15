@@ -733,7 +733,7 @@ export default function AppHeader({
       );
     }
 
-    return ["New Home", "Dashboard", "Yard Tasks", "Dispatch", "South", "Deliveries", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
+    return ["Dashboard", "Dispatch", "South", "Deliveries", "Yard Tasks", "Sales", "Documents", "Accounting", "Admin", "Fleet", "New Home"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||
