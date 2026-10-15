@@ -148,6 +148,9 @@ const DeliveryCalendarPage = lazy(() => import("./pages/DeliveryCalendarPage"));
 const DeliveryDashboardPage = lazy(
   () => import("./pages/DeliveryDashboardPage"),
 );
+const DeliveryRoutePlannerPage = lazy(
+  () => import("./pages/DeliveryRoutePlannerPage"),
+);
 const DeliveryDispatchPage = lazy(() => import("./pages/DeliveryDispatchPage"));
 const DispatchPage = lazy(
   () =>
@@ -613,6 +616,7 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "deliveries",
     "deliveries-calendar",
     "deliveries-queue",
+    "deliveries-route-planner",
   ],
   receiving: [
     "dashboard",
@@ -646,6 +650,7 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "deliveries-dispatch",
     "deliveries-calendar",
     "deliveries-queue",
+    "deliveries-route-planner",
     "deliveries-history",
   ],
   sales: [
@@ -1099,6 +1104,7 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-dispatch",
       "deliveries-calendar",
       "deliveries-queue",
+      "deliveries-route-planner",
       "deliveries-history",
       "sales",
       "sales-orders",
@@ -1156,6 +1162,7 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-dispatch",
       "deliveries-calendar",
       "deliveries-queue",
+      "deliveries-route-planner",
       "deliveries-history",
       "sales",
       "sales-orders",
@@ -1260,10 +1267,15 @@ function getAllowedPageIds(
     if (
       pageIds.includes("deliveries") ||
       pageIds.includes("deliveries-queue") ||
-      pageIds.includes("deliveries-calendar")
+      pageIds.includes("deliveries-calendar") ||
+      pageIds.includes("deliveries-route-planner")
     ) {
       pageIds.push("deliveries");
-      pageIds.push("deliveries-queue", "deliveries-calendar");
+      pageIds.push(
+        "deliveries-queue",
+        "deliveries-calendar",
+        "deliveries-route-planner",
+      );
     }
 
     if (
@@ -1826,6 +1838,7 @@ export default function App() {
       "deliveries-dispatch",
       "deliveries-calendar",
       "deliveries-queue",
+      "deliveries-route-planner",
       "deliveries-history",
     ].includes(pageId),
   );
@@ -6017,6 +6030,9 @@ export default function App() {
             isDriverView={isDeliveryDriverScopedView}
           />
         );
+
+      case "deliveries-route-planner":
+        return <DeliveryRoutePlannerPage onPageChange={navigateToPage} />;
 
       case "deliveries-dispatch":
         return (

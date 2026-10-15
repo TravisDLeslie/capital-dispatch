@@ -40,6 +40,25 @@ function formatDistance(meters) {
   return `${miles.toFixed(1)} mi`;
 }
 
+function readWaypointAddresses(value) {
+  const waypointValue = Array.isArray(value) ? value.join("|") : value;
+
+  return String(waypointValue || "")
+    .split("|")
+    .map((address) => address.trim())
+    .filter(Boolean)
+    .slice(0, 10);
+}
+
+function getRequestReferrer(request) {
+  return String(
+    request.headers?.referer ||
+      request.headers?.referrer ||
+      request.headers?.origin ||
+      "",
+  ).trim();
+}
+
 export default async function handler(request, response) {
   if (request.method !== "GET") {
     response.setHeader("Allow", "GET");
@@ -50,6 +69,10 @@ export default async function handler(request, response) {
   const apiKey = getGoogleMapsApiKey();
   const origin = String(request.query.origin || "").trim();
   const destination = String(request.query.destination || "").trim();
+  const waypointAddresses = readWaypointAddresses(request.query.waypoints);
+  const shouldOptimizeWaypoints =
+    String(request.query.optimizeWaypoints || "") === "true";
+  const requestReferrer = getRequestReferrer(request);
 
   if (!apiKey) {
     response.status(500).json({ error: "Missing Google Maps API key." });
@@ -69,12 +92,21 @@ export default async function handler(request, response) {
         headers: {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": apiKey,
+          ...(requestReferrer ? { Referer: requestReferrer } : {}),
           "X-Goog-FieldMask":
-            "routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline",
+            "routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.optimizedIntermediateWaypointIndex",
         },
         body: JSON.stringify({
           origin: { address: origin },
           destination: { address: destination },
+          ...(waypointAddresses.length > 0
+            ? {
+                intermediates: waypointAddresses.map((address) => ({
+                  address,
+                })),
+                optimizeWaypointOrder: shouldOptimizeWaypoints,
+              }
+            : {}),
           travelMode: "DRIVE",
           routingPreference: "TRAFFIC_AWARE",
           computeAlternativeRoutes: false,
@@ -111,6 +143,11 @@ export default async function handler(request, response) {
       distanceMeters: route.distanceMeters || 0,
       distanceText: formatDistance(route.distanceMeters),
       encodedPolyline: route.polyline?.encodedPolyline || "",
+      optimizedWaypointOrder: Array.isArray(
+        route.optimizedIntermediateWaypointIndex,
+      )
+        ? route.optimizedIntermediateWaypointIndex
+        : [],
     });
   } catch (error) {
     console.error("Unable to calculate Google route:", error);

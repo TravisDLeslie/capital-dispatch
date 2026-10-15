@@ -641,6 +641,13 @@ export default function AppHeader({
       !allowedPageIds || allowedPageIds.includes(pageId);
 
     return [
+      pageAllowed("deliveries-route-planner")
+        ? {
+            id: "deliveries-route-planner",
+            label: "Route Planner",
+            pageId: "deliveries-route-planner",
+          }
+        : null,
       pageAllowed("deliveries-calendar")
         ? {
             id: "deliveries-calendar",

@@ -4,6 +4,7 @@ import {
   Clock,
   History,
   MapPin,
+  Navigation,
   PackageCheck,
   Plus,
   ShieldCheck,
@@ -162,6 +163,7 @@ function ScheduleDeliveryCard({ delivery, onOpenQueue }) {
           </span>
         ) : null}
       </div>
+
     </button>
   );
 }
@@ -328,6 +330,15 @@ export default function DeliveryDashboardPage({
             detail={`${openDeliveries.length} open`}
             tone="green"
             onClick={() => onPageChange?.("deliveries-queue")}
+          />
+        ) : null}
+        {allowedPageIds.includes("deliveries-route-planner") ? (
+          <ActionButton
+            icon={Navigation}
+            title="Route Planner"
+            detail="Map saved addresses"
+            tone="amber"
+            onClick={() => onPageChange?.("deliveries-route-planner")}
           />
         ) : null}
         {allowedPageIds.includes("deliveries-calendar") ? (
