@@ -606,6 +606,22 @@ function isActiveEmployee(user: Partial<UserProfile> | null | undefined) {
   return user?.status === "approved" && user?.employeeActive !== false;
 }
 
+function isAssignableDeliveryDriver(
+  user: Partial<UserProfile> | null | undefined,
+) {
+  return (
+    user?.employeeActive !== false &&
+    user?.status !== "disabled" &&
+    user?.role !== "pending"
+  );
+}
+
+function getDeliveryDriverName(
+  user: Partial<UserProfile> | null | undefined,
+) {
+  return String(user?.driverName || getProfileDisplayName(user) || "").trim();
+}
+
 const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
   driver: [
     "dashboard",
@@ -2038,6 +2054,16 @@ export default function App() {
       .map(getProfileDisplayName),
     ...(isActiveEmployee(userProfile) ? [getProfileDisplayName(userProfile)] : []),
   ]);
+  const deliveryDriverOptions = isSuperAdmin
+    ? getUniqueNames([
+        ...users
+          .filter(isAssignableDeliveryDriver)
+          .map(getDeliveryDriverName),
+        ...(isAssignableDeliveryDriver(userProfile)
+          ? [getDeliveryDriverName(userProfile)]
+          : []),
+      ])
+    : approvedEmployeeNames;
   const currentSalesMonth = new Date().toISOString().slice(0, 7);
   const currentSalesReport = salesReports.find(
     (salesReport) => salesReport.month === currentSalesMonth,
@@ -6023,7 +6049,7 @@ export default function App() {
             deliveries={visibleDeliveries}
             onUpdateDelivery={handleUpdateDelivery}
             canEditDeliveries={canEditDeliveryDetails}
-            employeeOptions={approvedEmployeeNames}
+            employeeOptions={deliveryDriverOptions}
             onEditDelivery={handleEditDelivery}
             onDeleteDelivery={handleDeleteDelivery}
             onPageChange={navigateToPage}
@@ -6039,7 +6065,7 @@ export default function App() {
           <DeliveryDispatchPage
             deliveries={deliveries}
             vehicleOptions={southVehicleOptions}
-            employeeOptions={approvedEmployeeNames}
+            employeeOptions={deliveryDriverOptions}
             deliveryOriginOptions={deliveryOriginOptions}
             canEditDeliveries={canEditDeliveryDetails}
             onUpdateDelivery={handleUpdateDelivery}

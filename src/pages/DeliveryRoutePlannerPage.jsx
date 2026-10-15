@@ -131,6 +131,14 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
   });
   const googleMapsApiKey = getGoogleMapsApiKey();
   const googleMapsRouteUrl = useMemo(() => getGoogleMapsRouteUrl(stops), [stops]);
+  const deliveryTimeMinutes = stops.length * DELIVERY_SERVICE_MINUTES;
+  const driveTimeMinutes = Number(routeState.route?.durationSeconds)
+    ? Math.max(1, Math.round(Number(routeState.route.durationSeconds) / 60))
+    : null;
+  const totalRouteMinutes =
+    driveTimeMinutes === null
+      ? null
+      : driveTimeMinutes + deliveryTimeMinutes;
 
   useEffect(() => {
     try {
@@ -291,6 +299,21 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
     setStops((currentStops) =>
       currentStops.filter((stop) => stop.id !== stopId),
     );
+  }
+
+  function clearAllStops() {
+    const shouldClear = globalThis.confirm(
+      `Clear all ${stops.length} saved ${stops.length === 1 ? "address" : "addresses"}?`,
+    );
+
+    if (!shouldClear) {
+      return;
+    }
+
+    setStops([]);
+    setAddress("");
+    setError("");
+    setOptimizationStatus({ status: "idle", message: "" });
   }
 
   async function getBrowserOptimizedOrder(routeStops) {
@@ -542,6 +565,16 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                 <span className="rounded-full bg-white px-3 py-1.5 text-sm font-black text-slate-700 shadow-sm">
                   {stops.length} {stops.length === 1 ? "stop" : "stops"}
                 </span>
+                {stops.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={clearAllStops}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2.5 text-sm font-black text-[#FC2C38] transition hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    Clear all
+                  </button>
+                ) : null}
               </div>
             </div>
 
@@ -584,7 +617,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                       </p>
                       <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-800 ring-1 ring-amber-100">
                         <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                        {DELIVERY_SERVICE_MINUTES} min delivery
+                        {DELIVERY_SERVICE_MINUTES} min on-site delivery time
                       </span>
                     </div>
                     <div className="flex shrink-0 gap-1">
@@ -678,42 +711,71 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
           )}
 
           {stops.length > 0 ? (
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div className="rounded-2xl bg-slate-50 px-3 py-3 text-center">
-                <p className="text-xl font-black text-slate-950">
-                  {stops.length}
-                </p>
-                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                  Stops
+            <div className="mt-4 space-y-3">
+              <div className="rounded-3xl bg-slate-950 p-4 text-white shadow-sm">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-[#FC2C38]" aria-hidden="true" />
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-300">
+                    Route time breakdown
+                  </p>
+                </div>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div className="rounded-2xl bg-white/10 px-3 py-3 text-center">
+                    <p className="text-xl font-black">
+                      {routeState.route?.durationText ||
+                        (routeState.status === "loading" ? "..." : "--")}
+                    </p>
+                    <p className="mt-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-300">
+                      Driving time
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-amber-400 px-3 py-3 text-center text-slate-950">
+                    <p className="text-xl font-black">
+                      {formatDurationMinutes(deliveryTimeMinutes)}
+                    </p>
+                    <p className="mt-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-950/70">
+                      Delivery time
+                    </p>
+                    <p className="mt-1 text-[10px] font-bold text-amber-950/70">
+                      {DELIVERY_SERVICE_MINUTES} min × {stops.length} {stops.length === 1 ? "stop" : "stops"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl bg-[#FC2C38] px-3 py-3 text-center">
+                    <p className="text-xl font-black">
+                      {totalRouteMinutes === null
+                        ? routeState.status === "loading"
+                          ? "..."
+                          : "--"
+                        : formatDurationMinutes(totalRouteMinutes)}
+                    </p>
+                    <p className="mt-1 text-[10px] font-black uppercase tracking-[0.12em] text-red-100">
+                      Total time
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 text-center text-xs font-bold text-slate-300">
+                  Total time = driving time + {DELIVERY_SERVICE_MINUTES} minutes at each stop
                 </p>
               </div>
-              <div className="rounded-2xl bg-red-50 px-3 py-3 text-center">
-                <p className="text-xl font-black text-slate-950">
-                  {routeState.route?.durationText ||
-                    (routeState.status === "loading" ? "..." : "--")}
-                </p>
-                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                  Drive time
-                </p>
-              </div>
-              <div className="rounded-2xl bg-amber-50 px-3 py-3 text-center">
-                <p className="text-xl font-black text-slate-950">
-                  {formatDurationMinutes(
-                    stops.length * DELIVERY_SERVICE_MINUTES,
-                  )}
-                </p>
-                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                  Delivery time
-                </p>
-              </div>
-              <div className="rounded-2xl bg-blue-50 px-3 py-3 text-center">
-                <p className="text-xl font-black text-slate-950">
-                  {routeState.route?.distanceText ||
-                    (routeState.status === "loading" ? "..." : "--")}
-                </p>
-                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                  Distance
-                </p>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl bg-slate-50 px-3 py-3 text-center">
+                  <p className="text-xl font-black text-slate-950">
+                    {stops.length}
+                  </p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                    Stops
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-blue-50 px-3 py-3 text-center">
+                  <p className="text-xl font-black text-slate-950">
+                    {routeState.route?.distanceText ||
+                      (routeState.status === "loading" ? "..." : "--")}
+                  </p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                    Distance
+                  </p>
+                </div>
               </div>
             </div>
           ) : null}
