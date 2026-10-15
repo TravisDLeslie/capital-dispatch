@@ -390,6 +390,7 @@ function HeartbeatCard({
  *     receivingToday?: number;
  *     southNeedsDispatch?: number;
  *     southOpen?: number;
+ *     southScheduled?: number;
  *     deliveryNeedsDispatch?: number;
  *     deliveryOpen?: number;
  *     hardwareOpen?: number;
@@ -657,7 +658,7 @@ export default function DashboardPage({
           title: "South Calendar",
           description: "See scheduled pickup dates.",
           icon: CalendarDays,
-          metric: (operations.southNeedsDispatch || 0) + (operations.southOpen || 0),
+          metric: operations.southScheduled || 0,
           metricLabel: "POs",
         },
         {

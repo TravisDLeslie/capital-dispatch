@@ -12,6 +12,7 @@ import {
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { formatDateInput, getDateInputValue } from "../utils/dateHelpers";
+import { isOpenSupplierRun } from "../utils/supplierRunStatus";
 import { formatCustomerName } from "../utils/textFormatters";
 
 function getDateKeyFromDate(date) {
@@ -684,6 +685,7 @@ export default function POCalendarPage({
     const southItems =
       mode === "all" || mode === "south"
         ? (Array.isArray(supplierRuns) ? supplierRuns : [])
+            .filter(isOpenSupplierRun)
             .map(getSouthCalendarItem)
             .filter((item) => item.date)
         : [];

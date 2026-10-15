@@ -11,14 +11,17 @@ import {
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
+import { getDateInputValue } from "../utils/dateHelpers";
+import {
+  getOpenSupplierRunItemCount,
+  isAssignedOpenSupplierRun,
+  isOpenSupplierRun,
+} from "../utils/supplierRunStatus";
 
 function getOpenItemCount(supplierRuns) {
   return supplierRuns.reduce(
     (count, supplierRun) =>
-      count +
-      (Array.isArray(supplierRun.items)
-        ? supplierRun.items.filter((item) => !item.pickedUp).length
-        : 0),
+      count + getOpenSupplierRunItemCount(supplierRun),
     0,
   );
 }
@@ -231,11 +234,10 @@ export default function SouthHubPage({
       (supplierRun.dispatchStatus === "needsDispatch" ||
         !supplierRun.driver),
   );
-  const assignedOpenRuns = supplierRuns.filter(
-    (supplierRun) =>
-      supplierRun.status !== "complete" &&
-      supplierRun.dispatchStatus !== "needsDispatch" &&
-      supplierRun.driver,
+  const assignedOpenRuns = supplierRuns.filter(isAssignedOpenSupplierRun);
+  const calendarOpenRuns = supplierRuns.filter(isOpenSupplierRun);
+  const todaysAssignedOpenRuns = assignedOpenRuns.filter(
+    (supplierRun) => supplierRun.scheduledDate === getDateInputValue(),
   );
   const completedRuns = supplierRuns.filter(
     (supplierRun) => supplierRun.status === "complete",
@@ -250,9 +252,9 @@ export default function SouthHubPage({
           label: "Driver Board",
           title: "POs To Pick Up",
           description:
-            "Open supplier stops, item checkoffs, and pickup photos.",
-          metric: assignedOpenRuns.length,
-          metricLabel: "Open POs",
+            "Today's supplier stops, item checkoffs, and pickup photos.",
+          metric: todaysAssignedOpenRuns.length,
+          metricLabel: "Today",
           tone: "success",
           variant: "live",
           pageId: "supplier-runs-check",
@@ -265,7 +267,7 @@ export default function SouthHubPage({
           title: "South Calendar",
           description:
             "See scheduled South POs by pickup date before they hit the route.",
-          metric: assignedOpenRuns.length,
+          metric: calendarOpenRuns.length,
           metricLabel: "Scheduled",
           tone: "dispatch",
           variant: "default",
@@ -526,10 +528,10 @@ export default function SouthHubPage({
             Open Pickups
           </p>
           <p className="mt-2 text-2xl font-black text-slate-950 sm:mt-3 sm:text-3xl">
-            {assignedOpenRuns.length}
+            {todaysAssignedOpenRuns.length}
           </p>
           <p className="mt-1 text-xs font-bold leading-tight text-slate-500 sm:text-sm">
-            {getOpenItemCount(assignedOpenRuns)} items left
+            {getOpenItemCount(todaysAssignedOpenRuns)} items left today
           </p>
         </div>
 

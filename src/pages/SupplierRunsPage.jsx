@@ -1540,7 +1540,13 @@ export default function SupplierRunsPage({
     );
   }
 
-  const runsByDate = supplierRuns.reduce((groups, supplierRun) => {
+  const calendarRuns = supplierRuns.filter(
+    (supplierRun) =>
+      supplierRun.status !== "complete" &&
+      Array.isArray(supplierRun.items) &&
+      supplierRun.items.some((item) => !isPickupItemComplete(item)),
+  );
+  const runsByDate = calendarRuns.reduce((groups, supplierRun) => {
     const dateKey = getSupplierRunBoardDateKey(supplierRun);
 
     if (!dateKey) {

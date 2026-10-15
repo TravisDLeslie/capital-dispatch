@@ -9,16 +9,19 @@ import {
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
-import { formatDateInput } from "../utils/dateHelpers";
+import { formatDateInput, getDateInputValue } from "../utils/dateHelpers";
+import {
+  getOpenSupplierRunItemCount,
+  isAssignedOpenSupplierRun,
+  isOpenSupplierRun,
+} from "../utils/supplierRunStatus";
 
 function getTodayDateKey() {
-  return new Date().toISOString().slice(0, 10);
+  return getDateInputValue();
 }
 
 function getOpenItemCount(supplierRun) {
-  return Array.isArray(supplierRun.items)
-    ? supplierRun.items.filter((item) => !item.pickedUp).length
-    : 0;
+  return getOpenSupplierRunItemCount(supplierRun);
 }
 
 function getPickedItemCount(supplierRun) {
@@ -115,12 +118,8 @@ export default function SouthOverviewPage({
       supplierRun.status !== "complete" &&
       (supplierRun.dispatchStatus === "needsDispatch" || !supplierRun.driver),
   );
-  const openRuns = safeSupplierRuns.filter(
-    (supplierRun) =>
-      supplierRun.status !== "complete" &&
-      supplierRun.dispatchStatus !== "needsDispatch" &&
-      supplierRun.driver,
-  );
+  const openRuns = safeSupplierRuns.filter(isAssignedOpenSupplierRun);
+  const calendarOpenRuns = safeSupplierRuns.filter(isOpenSupplierRun);
   const completedRuns = safeSupplierRuns.filter(
     (supplierRun) => supplierRun.status === "complete",
   );
@@ -179,7 +178,7 @@ export default function SouthOverviewPage({
             icon={PackageCheck}
             title="View POs to Pick Up"
             description="Open the driver board and pickup checklists."
-            metric={openRuns.length}
+            metric={todaysRuns.length}
             tone="green"
             onClick={() => onPageChange?.("supplier-runs-check")}
           />
@@ -190,7 +189,7 @@ export default function SouthOverviewPage({
             icon={CalendarDays}
             title="South Calendar"
             description="See scheduled South POs by pickup date."
-            metric={openRuns.length}
+            metric={calendarOpenRuns.length}
             tone="blue"
             onClick={() =>
               onPageChange?.(

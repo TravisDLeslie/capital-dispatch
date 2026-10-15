@@ -46,6 +46,10 @@ import { getFirebaseErrorMessage } from "./utils/firebaseErrorMessages";
 import { auth, isFirebaseConfigured } from "./utils/firebase";
 import { isDeliveryComplete } from "./utils/deliveryStatus";
 import {
+  isAssignedOpenSupplierRun,
+  isOpenSupplierRun,
+} from "./utils/supplierRunStatus";
+import {
   addSupplierRun,
   deleteSupplierRun,
   subscribeToSupplierRuns,
@@ -2083,10 +2087,10 @@ export default function App() {
     ).length,
     southOpen: supplierRuns.filter(
       (supplierRun) =>
-        supplierRun.status !== "complete" &&
-        supplierRun.dispatchStatus !== "needsDispatch" &&
-        supplierRun.driver,
+        isAssignedOpenSupplierRun(supplierRun) &&
+        supplierRun.scheduledDate === getDateInputValue(),
     ).length,
+    southScheduled: supplierRuns.filter(isOpenSupplierRun).length,
     deliveryNeedsDispatch: deliveries.filter(
       (delivery) =>
         !isDeliveryComplete(delivery) &&
@@ -4826,11 +4830,13 @@ export default function App() {
       const needsDispatchRuns = visibleSupplierRuns.filter(
         (supplierRun) => isUnassignedSouthRun(supplierRun),
       );
-      const openRuns = visibleSupplierRuns.filter(
+      const scheduledOpenRuns = visibleSupplierRuns.filter(
+        isOpenSupplierRun,
+      );
+      const openRuns = scheduledOpenRuns.filter(
         (supplierRun) =>
-          supplierRun.status !== "complete" &&
-          supplierRun.dispatchStatus !== "needsDispatch" &&
-          supplierRun.driver,
+          isAssignedOpenSupplierRun(supplierRun) &&
+          supplierRun.scheduledDate === getDateInputValue(),
       );
       const completeRuns = visibleSupplierRuns.filter(
         (supplierRun) => supplierRun.status === "complete",
@@ -4904,7 +4910,7 @@ export default function App() {
                   label: "Schedule",
                   title: "South Calendar",
                   description: "View scheduled South POs by route date.",
-                  metric: openRuns.length,
+                  metric: scheduledOpenRuns.length,
                   metricLabel: "Scheduled",
                   tone: "dispatch",
                   variant: "default",
