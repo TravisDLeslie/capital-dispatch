@@ -2182,32 +2182,26 @@ export default function SupplierRunsPage({
                 const requestBadgeClass = isStockRequest
                   ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                   : "border-blue-200 bg-blue-50 text-blue-800";
-                const requestAccentClass = isStockRequest
-                  ? "border-emerald-100 bg-emerald-50/60"
-                  : "border-blue-100 bg-blue-50/60";
-                const requestIconClass = isStockRequest
-                  ? "text-emerald-700"
-                  : "text-blue-700";
                 const isSelectedForDispatch =
                   selectedDispatchRunIds.includes(supplierRun.id);
 
                 return (
                   <article
                     key={supplierRun.id}
-                    className={`rounded-3xl border bg-white p-6 shadow-sm transition sm:p-7 ${
+                    className={`rounded-3xl border bg-white p-4 shadow-sm transition sm:p-5 ${
                       isSelectedForDispatch
                         ? "border-red-300 ring-4 ring-red-50"
                         : "border-slate-200"
                     }`}
                   >
-                    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.58fr)] lg:items-stretch">
-                      <div className="min-w-0 lg:border-r lg:border-slate-200 lg:pr-5">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+                      <div className="min-w-0">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                             South Request
                           </p>
 
-                          <label className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-slate-600">
+                          <label className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
                             <input
                               type="checkbox"
                               checked={isSelectedForDispatch}
@@ -2220,12 +2214,12 @@ export default function SupplierRunsPage({
                           </label>
                         </div>
                         <div className="mt-2 flex flex-wrap items-center gap-3">
-                          <h3 className="text-3xl font-black leading-none tracking-tight text-slate-950 sm:text-4xl">
+                          <h3 className="text-3xl font-black leading-none tracking-tight text-slate-950">
                             PO {supplierRun.poNumber}
                           </h3>
 
                           <span
-                            className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-2 text-xs font-black uppercase tracking-[0.08em] shadow-sm ${requestBadgeClass}`}
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] ${requestBadgeClass}`}
                           >
                             {isStockRequest ? (
                               <Package
@@ -2244,38 +2238,33 @@ export default function SupplierRunsPage({
                           </span>
                         </div>
 
-                        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm font-bold text-slate-700">
-                          <span className="inline-flex items-center gap-2">
-                            <Home
-                              aria-hidden="true"
-                              className="h-4 w-4 text-slate-700"
-                              strokeWidth={2.4}
-                            />
-                            {supplierRun.vendor || "Unknown Supplier"}
-                          </span>
-                          <span className="text-slate-400">•</span>
-                          <span className="inline-flex items-center gap-2">
-                            <CalendarDays
-                              aria-hidden="true"
-                              className="h-4 w-4 text-slate-700"
-                              strokeWidth={2.4}
-                            />
-                            {formatDateInput(
-                              getSupplierRunDateKey(supplierRun),
-                            )}
-                          </span>
-                          <span className="text-slate-400">•</span>
-                          <span className="inline-flex items-center gap-2">
-                            <Package
-                              aria-hidden="true"
-                              className="h-4 w-4 text-slate-700"
-                              strokeWidth={2.4}
-                            />
-                            {itemCount} {itemCount === 1 ? "Item" : "Items"}
-                          </span>
+                        <div className="mt-4 grid overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+                          <div className="flex min-w-0 items-center gap-3 px-4 py-3">
+                            <Home aria-hidden="true" className="h-5 w-5 shrink-0 text-slate-500" strokeWidth={2.4} />
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Supplier</p>
+                              <p className="mt-0.5 truncate text-sm font-black text-slate-950">{supplierRun.vendor || "Unknown Supplier"}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 border-t border-red-100 bg-red-50 px-4 py-3 sm:border-l sm:border-t-0">
+                            <CalendarDays aria-hidden="true" className="h-5 w-5 shrink-0 text-[#FC2C38]" strokeWidth={2.7} />
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-red-600">Pickup Date</p>
+                              <p className="mt-0.5 whitespace-nowrap text-base font-black text-red-950">
+                                {formatDateInput(getSupplierRunDateKey(supplierRun))}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 border-t border-slate-200 px-4 py-3 sm:border-l sm:border-t-0">
+                            <Package aria-hidden="true" className="h-5 w-5 shrink-0 text-slate-500" strokeWidth={2.4} />
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Items</p>
+                              <p className="mt-0.5 whitespace-nowrap text-sm font-black text-slate-950">{itemCount} to pick up</p>
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white">
                           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2.5 sm:px-4">
                             <div className="flex items-center gap-2.5">
                               <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#FC2C38] text-white shadow-sm">
@@ -2352,100 +2341,38 @@ export default function SupplierRunsPage({
                           ) : null}
                         </div>
 
-                        <div
-                          className={`mt-5 grid gap-0 overflow-hidden rounded-2xl border ${requestAccentClass} sm:grid-cols-2`}
-                        >
-                          {isStockRequest ? (
-                            <>
-                              <div className="flex items-center gap-3 p-4">
-                                <Truck
-                                  aria-hidden="true"
-                                  className={`h-7 w-7 ${requestIconClass}`}
-                                  strokeWidth={2.5}
-                                />
-                                <div>
-                                  <p className="text-sm font-semibold text-slate-600">
-                                    Vendor
-                                  </p>
-                                  <p className="text-xl font-black leading-tight text-slate-950">
-                                    {supplierRun.vendor || "Unknown Supplier"}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-3 border-t border-emerald-100 p-4 sm:border-l sm:border-t-0">
-                                <Package
-                                  aria-hidden="true"
-                                  className={`h-7 w-7 ${requestIconClass}`}
-                                  strokeWidth={2.5}
-                                />
-                                <div>
-                                  <p className="text-sm font-semibold text-slate-600">
-                                    Destination
-                                  </p>
-                                  <p className="text-xl font-black leading-tight text-slate-950">
-                                    Inventory
-                                  </p>
-                                </div>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="flex items-center gap-3 p-4">
-                                <User
-                                  aria-hidden="true"
-                                  className={`h-7 w-7 ${requestIconClass}`}
-                                  strokeWidth={2.5}
-                                />
-                                <div>
-                                  <p className="text-sm font-semibold text-slate-600">
-                                    Customer
-                                  </p>
-                                  <p className="text-xl font-black leading-tight text-slate-950">
-                                    {canViewSouthCustomerName && runCustomerName
-                                      ? runCustomerName
-                                      : "Customer Order"}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-3 border-t border-blue-100 p-4 sm:border-l sm:border-t-0">
-                                <Tag
-                                  aria-hidden="true"
-                                  className={`h-7 w-7 ${requestIconClass}`}
-                                  strokeWidth={2.5}
-                                />
-                                <div>
-                                  <p className="text-sm font-semibold text-slate-600">
-                                    Order #
-                                  </p>
-                                  <p className="text-xl font-black leading-tight text-slate-950">
-                                    {primaryOrderNumber || "Not entered"}
-                                    {remainingOrderCount > 0
-                                      ? ` +${remainingOrderCount}`
-                                      : ""}
-                                  </p>
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-
-                        {!isStockRequest &&
-                        materialSummary.orderNumbers.length > 1 ? (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {materialSummary.orderNumbers.map((orderNumber) => (
-                              <span
-                                key={orderNumber}
-                                className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-orange-700 ring-1 ring-orange-100"
-                              >
-                                Order # {orderNumber}
-                              </span>
-                            ))}
+                        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm">
+                          <div className="flex items-start gap-2">
+                            {isStockRequest ? (
+                              <Package aria-hidden="true" className="mt-0.5 h-4 w-4 text-emerald-700" strokeWidth={2.4} />
+                            ) : (
+                              <User aria-hidden="true" className="mt-0.5 h-4 w-4 text-blue-700" strokeWidth={2.4} />
+                            )}
+                            <div>
+                              <p className="text-slate-500">{isStockRequest ? "Destination" : "Customer"}</p>
+                              <p className="font-black text-slate-950">
+                                {isStockRequest
+                                  ? "Inventory"
+                                  : canViewSouthCustomerName && runCustomerName
+                                    ? runCustomerName
+                                    : "Customer Order"}
+                              </p>
+                            </div>
                           </div>
-                        ) : null}
 
-                        <div className="mt-5 grid gap-3 border-t border-slate-200 pt-4 text-sm sm:grid-cols-3">
+                          {!isStockRequest ? (
+                            <div className="flex items-start gap-2">
+                              <Tag aria-hidden="true" className="mt-0.5 h-4 w-4 text-orange-700" strokeWidth={2.4} />
+                              <div>
+                                <p className="text-slate-500">Order #</p>
+                                <p className="font-black text-slate-950">
+                                  {primaryOrderNumber || "Not entered"}
+                                  {remainingOrderCount > 0 ? ` +${remainingOrderCount}` : ""}
+                                </p>
+                              </div>
+                            </div>
+                          ) : null}
+
                           {supplierRun.orderedBy ? (
                             <div className="flex items-start gap-2">
                               <User
@@ -2496,10 +2423,15 @@ export default function SupplierRunsPage({
                         </div>
                       </div>
 
-                      <div className="grid gap-3 lg:content-start">
-                        <p className="text-sm font-black uppercase tracking-[0.12em] text-slate-950">
-                          Assignment
-                        </p>
+                      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:content-start">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.14em] text-[#FC2C38]">
+                            Assignment
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">
+                            Choose a driver and truck.
+                          </p>
+                        </div>
 
                         <div className="grid gap-3 sm:grid-cols-2">
                         <label className="block">
