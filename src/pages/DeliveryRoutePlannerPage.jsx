@@ -655,7 +655,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
           </section>
         </div>
 
-        <section className="h-fit rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:sticky xl:top-6">
+        <section className="h-fit rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:sticky xl:top-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
@@ -684,10 +684,10 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
               src={staticMapUrl}
               alt="Delivery route from Capital Lumber through the saved stops"
               onError={() => setMapImageError(true)}
-              className="mt-4 aspect-[4/3] w-full rounded-2xl border border-slate-200 object-cover"
+              className="mt-3 h-[clamp(260px,36vh,390px)] w-full rounded-2xl border border-slate-200 object-cover"
             />
           ) : (
-            <div className="mt-4 flex aspect-[4/3] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
+            <div className="mt-3 flex h-[clamp(260px,36vh,390px)] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
               <div>
                 <MapPin className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
                 <p className="mt-3 text-sm font-black text-slate-700">
@@ -711,70 +711,64 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
           )}
 
           {stops.length > 0 ? (
-            <div className="mt-4 space-y-3">
-              <div className="rounded-3xl bg-slate-950 p-4 text-white shadow-sm">
+            <div className="mt-3 space-y-2">
+              <div className="rounded-2xl bg-slate-950 p-3 text-white shadow-sm">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-[#FC2C38]" aria-hidden="true" />
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-300">
                     Route time breakdown
                   </p>
                 </div>
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <div className="rounded-2xl bg-white/10 px-3 py-3 text-center">
-                    <p className="text-xl font-black">
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <div className="rounded-xl bg-white/10 px-2 py-2.5 text-center">
+                    <p className="text-lg font-black sm:text-xl">
                       {routeState.route?.durationText ||
                         (routeState.status === "loading" ? "..." : "--")}
                     </p>
-                    <p className="mt-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-300">
+                    <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-slate-300 sm:text-[10px]">
                       Driving time
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-amber-400 px-3 py-3 text-center text-slate-950">
-                    <p className="text-xl font-black">
+                  <div className="rounded-xl bg-amber-400 px-2 py-2.5 text-center text-slate-950">
+                    <p className="text-lg font-black sm:text-xl">
                       {formatDurationMinutes(deliveryTimeMinutes)}
                     </p>
-                    <p className="mt-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-950/70">
+                    <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-amber-950/70 sm:text-[10px]">
                       Delivery time
                     </p>
-                    <p className="mt-1 text-[10px] font-bold text-amber-950/70">
+                    <p className="mt-0.5 text-[9px] font-bold text-amber-950/70 sm:text-[10px]">
                       {DELIVERY_SERVICE_MINUTES} min × {stops.length} {stops.length === 1 ? "stop" : "stops"}
                     </p>
                   </div>
-                  <div className="rounded-2xl bg-[#FC2C38] px-3 py-3 text-center">
-                    <p className="text-xl font-black">
+                  <div className="rounded-xl bg-[#FC2C38] px-2 py-2.5 text-center">
+                    <p className="text-lg font-black sm:text-xl">
                       {totalRouteMinutes === null
                         ? routeState.status === "loading"
                           ? "..."
                           : "--"
                         : formatDurationMinutes(totalRouteMinutes)}
                     </p>
-                    <p className="mt-1 text-[10px] font-black uppercase tracking-[0.12em] text-red-100">
+                    <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-red-100 sm:text-[10px]">
                       Total time
                     </p>
                   </div>
                 </div>
-                <p className="mt-3 text-center text-xs font-bold text-slate-300">
-                  Total time = driving time + {DELIVERY_SERVICE_MINUTES} minutes at each stop
+                <p className="mt-2 text-center text-[10px] font-bold text-slate-300">
+                  Total = driving + {DELIVERY_SERVICE_MINUTES} minutes at each stop
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-2xl bg-slate-50 px-3 py-3 text-center">
-                  <p className="text-xl font-black text-slate-950">
-                    {stops.length}
-                  </p>
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                    Stops
-                  </p>
+                <div className="flex items-center justify-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-center">
+                  <p className="text-lg font-black text-slate-950">{stops.length}</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Stops</p>
                 </div>
-                <div className="rounded-2xl bg-blue-50 px-3 py-3 text-center">
-                  <p className="text-xl font-black text-slate-950">
+                <div className="flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-center">
+                  <p className="text-lg font-black text-slate-950">
                     {routeState.route?.distanceText ||
                       (routeState.status === "loading" ? "..." : "--")}
                   </p>
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                    Distance
-                  </p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Distance</p>
                 </div>
               </div>
             </div>
