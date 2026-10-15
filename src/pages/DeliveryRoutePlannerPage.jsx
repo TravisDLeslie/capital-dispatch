@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  Clock,
   ExternalLink,
   MapPin,
   Navigation,
@@ -22,6 +23,7 @@ import {
 
 const ROUTE_STOPS_STORAGE_KEY = "dispatch-cl-delivery-route-stops";
 const MAX_ROUTE_STOPS = 10;
+const DELIVERY_SERVICE_MINUTES = 35;
 
 function loadSavedStops() {
   try {
@@ -77,6 +79,21 @@ function getStopMarkerLabel(index) {
   }
 
   return String.fromCharCode(65 + index - 9);
+}
+
+function formatDurationMinutes(totalMinutes) {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0 && minutes > 0) {
+    return `${hours} hr ${minutes} min`;
+  }
+
+  if (hours > 0) {
+    return `${hours} hr`;
+  }
+
+  return `${minutes} min`;
 }
 
 function withTimeout(promise, timeoutMs, message) {
@@ -565,6 +582,10 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                       <p className="mt-1 text-sm font-bold leading-5 text-slate-800">
                         {stop.address}
                       </p>
+                      <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-800 ring-1 ring-amber-100">
+                        <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                        {DELIVERY_SERVICE_MINUTES} min delivery
+                      </span>
                     </div>
                     <div className="flex shrink-0 gap-1">
                       <button
@@ -657,7 +678,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
           )}
 
           {stops.length > 0 ? (
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-2xl bg-slate-50 px-3 py-3 text-center">
                 <p className="text-xl font-black text-slate-950">
                   {stops.length}
@@ -673,6 +694,16 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                 </p>
                 <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
                   Drive time
+                </p>
+              </div>
+              <div className="rounded-2xl bg-amber-50 px-3 py-3 text-center">
+                <p className="text-xl font-black text-slate-950">
+                  {formatDurationMinutes(
+                    stops.length * DELIVERY_SERVICE_MINUTES,
+                  )}
+                </p>
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                  Delivery time
                 </p>
               </div>
               <div className="rounded-2xl bg-blue-50 px-3 py-3 text-center">
