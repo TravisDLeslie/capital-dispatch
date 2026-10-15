@@ -904,6 +904,12 @@ export default function SupplierRunsPage({
   const [dateMoveDraft, setDateMoveDraft] = useState(todayKey);
   const [dateMoveError, setDateMoveError] = useState("");
   const [savingDateMove, setSavingDateMove] = useState(false);
+  const [dispatchDateEdit, setDispatchDateEdit] = useState({
+    supplierRunId: "",
+    date: "",
+    error: "",
+  });
+  const [savingDispatchDateRunId, setSavingDispatchDateRunId] = useState("");
   const [celebratedRouteKey, setCelebratedRouteKey] = useState("");
   const [completingStopKey, setCompletingStopKey] = useState("");
 
@@ -1643,6 +1649,72 @@ export default function SupplierRunsPage({
     }
   }
 
+  function beginDispatchDateEdit(supplierRun) {
+    setDispatchDateEdit({
+      supplierRunId: supplierRun.id,
+      date: getSupplierRunDateKey(supplierRun) || todayKey,
+      error: "",
+    });
+  }
+
+  function cancelDispatchDateEdit() {
+    setDispatchDateEdit({ supplierRunId: "", date: "", error: "" });
+  }
+
+  async function saveDispatchPickupDate(supplierRun) {
+    if (!dispatchDateEdit.date) {
+      setDispatchDateEdit((currentEdit) => ({
+        ...currentEdit,
+        error: "Choose a pickup date.",
+      }));
+      return;
+    }
+
+    if (!canManageSupplierRun(supplierRun)) {
+      setDispatchDateEdit((currentEdit) => ({
+        ...currentEdit,
+        error: "You do not have access to change this date.",
+      }));
+      return;
+    }
+
+    if (supplierRun.status === "complete" || hasPickedUpItems(supplierRun)) {
+      setDispatchDateEdit((currentEdit) => ({
+        ...currentEdit,
+        error: "The date is locked after pickup starts.",
+      }));
+      return;
+    }
+
+    setSavingDispatchDateRunId(supplierRun.id);
+    setDispatchDateEdit((currentEdit) => ({
+      ...currentEdit,
+      error: "",
+    }));
+
+    try {
+      await onUpdateSupplierRun(supplierRun.id, {
+        scheduledDate: dispatchDateEdit.date,
+        rolloverFromScheduledDate: "",
+        rolledOverAt: null,
+      });
+      setSuccessMessage(
+        `PO ${supplierRun.poNumber || ""} pickup date changed to ${formatDateInput(
+          dispatchDateEdit.date,
+        )}.`,
+      );
+      cancelDispatchDateEdit();
+    } catch (dispatchDateError) {
+      console.error("Unable to update South pickup date:", dispatchDateError);
+      setDispatchDateEdit((currentEdit) => ({
+        ...currentEdit,
+        error: "Unable to save the pickup date. Try again.",
+      }));
+    } finally {
+      setSavingDispatchDateRunId("");
+    }
+  }
+
   const dailyRuns = supplierRuns.filter((supplierRun) => {
     const scheduledDateKey = getSupplierRunDateKey(supplierRun);
 
@@ -2184,6 +2256,8 @@ export default function SupplierRunsPage({
                   : "border-blue-200 bg-blue-50 text-blue-800";
                 const isSelectedForDispatch =
                   selectedDispatchRunIds.includes(supplierRun.id);
+                const isEditingPickupDate =
+                  dispatchDateEdit.supplierRunId === supplierRun.id;
 
                 return (
                   <article
@@ -2248,12 +2322,70 @@ export default function SupplierRunsPage({
                           </div>
                           <div className="flex items-center gap-3 border-t border-red-100 bg-red-50 px-4 py-3 sm:border-l sm:border-t-0">
                             <CalendarDays aria-hidden="true" className="h-5 w-5 shrink-0 text-[#FC2C38]" strokeWidth={2.7} />
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-red-600">Pickup Date</p>
-                              <p className="mt-0.5 whitespace-nowrap text-base font-black text-red-950">
-                                {formatDateInput(getSupplierRunDateKey(supplierRun))}
-                              </p>
-                            </div>
+                            {isEditingPickupDate ? (
+                              <div className="min-w-[220px]">
+                                <label className="text-[10px] font-black uppercase tracking-[0.12em] text-red-600">
+                                  Pickup Date
+                                  <input
+                                    type="date"
+                                    value={dispatchDateEdit.date}
+                                    onChange={(event) =>
+                                      setDispatchDateEdit((currentEdit) => ({
+                                        ...currentEdit,
+                                        date: event.target.value,
+                                        error: "",
+                                      }))
+                                    }
+                                    className="mt-1 block w-full rounded-lg border border-red-200 bg-white px-2 py-1.5 text-sm font-black text-slate-950 outline-none focus:border-[#FC2C38] focus:ring-2 focus:ring-red-100"
+                                  />
+                                </label>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => saveDispatchPickupDate(supplierRun)}
+                                    disabled={savingDispatchDateRunId === supplierRun.id}
+                                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#FC2C38] px-2.5 text-xs font-black text-white transition hover:bg-red-600 disabled:bg-red-300"
+                                  >
+                                    <Check aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={3} />
+                                    {savingDispatchDateRunId === supplierRun.id ? "Saving" : "Save"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={cancelDispatchDateEdit}
+                                    disabled={savingDispatchDateRunId === supplierRun.id}
+                                    className="inline-flex h-8 items-center justify-center rounded-lg border border-red-200 bg-white px-2.5 text-red-700 transition hover:bg-red-100 disabled:opacity-50"
+                                    aria-label="Cancel pickup date edit"
+                                  >
+                                    <X aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.8} />
+                                  </button>
+                                </div>
+                                {dispatchDateEdit.error ? (
+                                  <p className="mt-2 text-xs font-bold text-red-700">
+                                    {dispatchDateEdit.error}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <>
+                                <div>
+                                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-red-600">Pickup Date</p>
+                                  <p className="mt-0.5 whitespace-nowrap text-base font-black text-red-950">
+                                    {formatDateInput(getSupplierRunDateKey(supplierRun))}
+                                  </p>
+                                </div>
+                                {canManageSupplierRun(supplierRun) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => beginDispatchDateEdit(supplierRun)}
+                                    className="ml-1 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-700 transition hover:border-[#FC2C38] hover:bg-red-100"
+                                    aria-label={`Edit pickup date for PO ${supplierRun.poNumber || ""}`}
+                                    title="Edit pickup date"
+                                  >
+                                    <Edit3 aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.7} />
+                                  </button>
+                                ) : null}
+                              </>
+                            )}
                           </div>
                           <div className="flex items-center gap-3 border-t border-slate-200 px-4 py-3 sm:border-l sm:border-t-0">
                             <Package aria-hidden="true" className="h-5 w-5 shrink-0 text-slate-500" strokeWidth={2.4} />
