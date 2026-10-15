@@ -309,6 +309,10 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
             })),
             optimizeWaypoints: true,
             travelMode: google.maps.TravelMode.DRIVING,
+            drivingOptions: {
+              departureTime: new Date(),
+              trafficModel: google.maps.TrafficModel.BEST_GUESS,
+            },
           },
           (result, status) => {
             if (status === "OK" && result) {
@@ -367,7 +371,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
     const routeStops = [...stops];
     setOptimizationStatus({
       status: "loading",
-      message: "Finding the closest driving order...",
+      message: "Finding the fastest driving order...",
     });
 
     try {
@@ -395,7 +399,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
       setStops(optimizedStops);
       setOptimizationStatus({
         status: "success",
-        message: "Stops organized with nearby deliveries back-to-back.",
+        message: "Stops organized for the fastest estimated drive time.",
       });
     } catch (optimizationError) {
       console.error("Unable to optimize delivery route:", optimizationError);
@@ -516,7 +520,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                   <Sparkles className="h-4 w-4" aria-hidden="true" />
                   {optimizationStatus.status === "loading"
                     ? "Organizing..."
-                    : "Optimize closest stops"}
+                    : "Optimize fastest route"}
                 </button>
                 <span className="rounded-full bg-white px-3 py-1.5 text-sm font-black text-slate-700 shadow-sm">
                   {stops.length} {stops.length === 1 ? "stop" : "stops"}
