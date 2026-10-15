@@ -5,11 +5,13 @@ import {
   Clock,
   ExternalLink,
   MapPin,
+  Maximize2,
   Navigation,
   Plus,
   Sparkles,
   Trash2,
   Warehouse,
+  X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
@@ -120,6 +122,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
   const [stops, setStops] = useState(loadSavedStops);
   const [error, setError] = useState("");
   const [mapImageError, setMapImageError] = useState(false);
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [optimizationStatus, setOptimizationStatus] = useState({
     status: "idle",
     message: "",
@@ -147,6 +150,28 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
       console.warn("Unable to save delivery route stops:", storageError);
     }
   }, [stops]);
+
+  useEffect(() => {
+    if (!isMapExpanded) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setIsMapExpanded(false);
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMapExpanded]);
 
   useEffect(() => {
     setMapImageError(false);
@@ -666,17 +691,29 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                 All stops map
               </h2>
             </div>
-            {googleMapsRouteUrl ? (
-              <a
-                href={googleMapsRouteUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
-              >
-                Open route
-                <ExternalLink className="h-4 w-4" aria-hidden="true" />
-              </a>
-            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {staticMapUrl && !mapImageError ? (
+                <button
+                  type="button"
+                  onClick={() => setIsMapExpanded(true)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+                >
+                  <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                  Expand map
+                </button>
+              ) : null}
+              {googleMapsRouteUrl ? (
+                <a
+                  href={googleMapsRouteUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+                >
+                  Open route
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                </a>
+              ) : null}
+            </div>
           </div>
 
           {staticMapUrl && !mapImageError ? (
@@ -781,6 +818,76 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
           ) : null}
         </section>
       </div>
+
+      {isMapExpanded && staticMapUrl ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-2 backdrop-blur-sm sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Expanded delivery route map"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsMapExpanded(false);
+            }
+          }}
+        >
+          <div className="flex h-[calc(100dvh-1rem)] w-full max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl sm:h-[calc(100dvh-2rem)]">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                  Route from Capital
+                </p>
+                <h2 className="text-xl font-black text-slate-950 sm:text-2xl">
+                  Expanded route map
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMapExpanded(false)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
+                aria-label="Close expanded map"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
+              <img
+                src={staticMapUrl}
+                alt="Expanded delivery route from Capital Lumber through the saved stops"
+                className="h-full w-full rounded-2xl bg-white object-contain shadow-inner"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-white p-3 sm:grid-cols-4 sm:px-5">
+              <div className="rounded-xl bg-slate-50 px-3 py-2 text-center">
+                <p className="text-base font-black text-slate-950">{stops.length}</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">Stops</p>
+              </div>
+              <div className="rounded-xl bg-red-50 px-3 py-2 text-center">
+                <p className="text-base font-black text-slate-950">
+                  {routeState.route?.durationText || "--"}
+                </p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">Driving</p>
+              </div>
+              <div className="rounded-xl bg-amber-50 px-3 py-2 text-center">
+                <p className="text-base font-black text-slate-950">
+                  {formatDurationMinutes(deliveryTimeMinutes)}
+                </p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">Delivery</p>
+              </div>
+              <div className="rounded-xl bg-slate-950 px-3 py-2 text-center text-white">
+                <p className="text-base font-black">
+                  {totalRouteMinutes === null
+                    ? "--"
+                    : formatDurationMinutes(totalRouteMinutes)}
+                </p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-300">Total time</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }

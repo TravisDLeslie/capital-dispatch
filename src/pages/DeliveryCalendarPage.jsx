@@ -69,8 +69,38 @@ function formatForkliftLabel(value) {
   return "";
 }
 
-function formatDateLabel(dateValue) {
-  if (!dateValue) {
+function getDeliveryDateKey(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    const dateKeyMatch = value.match(/^\d{4}-\d{2}-\d{2}/);
+
+    if (dateKeyMatch) {
+      return dateKeyMatch[0];
+    }
+  }
+
+  let dateValue = value;
+
+  if (typeof value?.toDate === "function") {
+    dateValue = value.toDate();
+  } else if (Number.isFinite(Number(value?.seconds))) {
+    dateValue = new Date(Number(value.seconds) * 1000);
+  }
+
+  const parsedDate = dateValue instanceof Date ? dateValue : new Date(dateValue);
+
+  return Number.isNaN(parsedDate.getTime())
+    ? ""
+    : parsedDate.toISOString().slice(0, 10);
+}
+
+function formatDateLabel(value) {
+  const dateKey = getDeliveryDateKey(value);
+
+  if (!dateKey) {
     return "Unscheduled";
   }
 
@@ -79,7 +109,7 @@ function formatDateLabel(dateValue) {
     month: "long",
     day: "numeric",
     year: "numeric",
-  }).format(new Date(`${dateValue}T12:00:00`));
+  }).format(new Date(`${dateKey}T12:00:00`));
 }
 
 function getScheduledDeliveries(deliveries, selectedDate) {
@@ -88,7 +118,7 @@ function getScheduledDeliveries(deliveries, selectedDate) {
       (delivery) =>
         delivery.status !== "complete" &&
         getDeliveryDrivers(delivery).length > 0 &&
-        delivery.deliveryDate === selectedDate,
+        getDeliveryDateKey(delivery.deliveryDate) === selectedDate,
     )
     .sort(compareDeliveriesByRouteOrder);
 }
@@ -127,18 +157,24 @@ function getFirstScheduledDeliveryDate(deliveries) {
       (delivery) =>
         delivery.status !== "complete" &&
         getDeliveryDrivers(delivery).length > 0 &&
-        delivery.deliveryDate,
+        getDeliveryDateKey(delivery.deliveryDate),
     )
-    .map((delivery) => delivery.deliveryDate)
+    .map((delivery) => getDeliveryDateKey(delivery.deliveryDate))
     .sort((firstDate, secondDate) => firstDate.localeCompare(secondDate))[0];
 }
 
 function getDeliveryDrivers(delivery) {
   const drivers = Array.isArray(delivery.drivers)
-    ? delivery.drivers.filter(Boolean)
+    ? delivery.drivers
     : [];
 
-  return [...new Set([delivery.driver, ...drivers].filter(Boolean))];
+  return [
+    ...new Set(
+      [delivery.driver, ...drivers]
+        .map((driver) => String(driver || "").trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function getDeliveryCalendarDrivers(delivery) {
@@ -169,7 +205,9 @@ function deliveriesShareDriver(firstDelivery, secondDelivery) {
 function findScheduleConflict(candidateDelivery, deliveries) {
   const candidateWindow = getDeliveryTimeWindow(candidateDelivery);
 
-  if (!candidateDelivery.deliveryDate || !candidateWindow) {
+  const candidateDate = getDeliveryDateKey(candidateDelivery.deliveryDate);
+
+  if (!candidateDate || !candidateWindow) {
     return null;
   }
 
@@ -178,7 +216,7 @@ function findScheduleConflict(candidateDelivery, deliveries) {
       delivery.id !== candidateDelivery.id &&
       delivery.status !== "complete" &&
       delivery.dispatchStatus !== "needsDispatch" &&
-      delivery.deliveryDate === candidateDelivery.deliveryDate &&
+      getDeliveryDateKey(delivery.deliveryDate) === candidateDate &&
       deliveriesShareDriver(candidateDelivery, delivery) &&
       scheduleWindowsOverlap(candidateWindow, getDeliveryTimeWindow(delivery)),
   );
@@ -470,7 +508,7 @@ function CompactDeliveryCard({
                   </span>
                   <input
                     type="date"
-                    value={delivery.deliveryDate || ""}
+                    value={getDeliveryDateKey(delivery.deliveryDate)}
                     onChange={(event) =>
                       onUpdateDelivery(delivery, {
                         deliveryDate: event.target.value,
@@ -549,6 +587,15 @@ export default function DeliveryCalendarPage({
   onUpdateDelivery,
   onPageChange,
 }) {
+  const safeDeliveries = useMemo(
+    () =>
+      Array.isArray(deliveries)
+        ? deliveries.filter(
+            (delivery) => delivery && typeof delivery === "object",
+          )
+        : [],
+    [deliveries],
+  );
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
   const [expandedDeliveryIds, setExpandedDeliveryIds] = useState({});
   const [selectedTimelineDeliveryId, setSelectedTimelineDeliveryId] =
@@ -556,13 +603,13 @@ export default function DeliveryCalendarPage({
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
   const [error, setError] = useState("");
   const fallbackScheduledDate = useMemo(
-    () => getFirstScheduledDeliveryDate(deliveries),
-    [deliveries],
+    () => getFirstScheduledDeliveryDate(safeDeliveries),
+    [safeDeliveries],
   );
 
   const scheduledDeliveries = useMemo(
-    () => getScheduledDeliveries(deliveries, selectedDate),
-    [deliveries, selectedDate],
+    () => getScheduledDeliveries(safeDeliveries, selectedDate),
+    [safeDeliveries, selectedDate],
   );
   const deliveriesByDriver = useMemo(
     () => groupDeliveriesByDriver(scheduledDeliveries),
@@ -609,7 +656,7 @@ export default function DeliveryCalendarPage({
       ...delivery,
       ...updates,
     };
-    const conflict = findScheduleConflict(candidateDelivery, deliveries);
+    const conflict = findScheduleConflict(candidateDelivery, safeDeliveries);
 
     if (conflict) {
       setError(
@@ -724,7 +771,7 @@ export default function DeliveryCalendarPage({
             <div className="mt-5 hidden xl:block">
               <CompactDeliveryCard
                 delivery={selectedTimelineDelivery}
-                deliveries={deliveries}
+                deliveries={safeDeliveries}
                 expanded
                 canEditDeliveries={canEditDeliveries}
                 onEditDelivery={onEditDelivery}
@@ -761,7 +808,7 @@ export default function DeliveryCalendarPage({
                     <CompactDeliveryCard
                       key={delivery.id}
                       delivery={delivery}
-                      deliveries={deliveries}
+                      deliveries={safeDeliveries}
                       expanded={Boolean(expandedDeliveryIds[delivery.id])}
                       canEditDeliveries={canEditDeliveries}
                       onEditDelivery={onEditDelivery}
@@ -822,7 +869,7 @@ export default function DeliveryCalendarPage({
                       <CompactDeliveryCard
                         key={delivery.id}
                         delivery={delivery}
-                        deliveries={deliveries}
+                        deliveries={safeDeliveries}
                         expanded={Boolean(expandedDeliveryIds[delivery.id])}
                         canEditDeliveries={canEditDeliveries}
                         onEditDelivery={onEditDelivery}

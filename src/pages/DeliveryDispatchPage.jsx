@@ -124,6 +124,22 @@ function formatDeliveryTypeLabel(value) {
   return "Standard";
 }
 
+function getPickupInstruction(delivery, scopeSummary) {
+  if (delivery.deliveryScope === "shipPartialOrder") {
+    return "Pick up only";
+  }
+
+  if (delivery.deliveryScope === "shipAllExcept") {
+    return "Pick up everything except";
+  }
+
+  if (scopeSummary.usesItems) {
+    return "Custom pickup list";
+  }
+
+  return "Pick up the complete order";
+}
+
 function getRouteMarkerLabel(index) {
   const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -1863,6 +1879,15 @@ export default function DeliveryDispatchPage({
                 )
               : null;
             const scopeSummary = getDeliveryScopeSummary(delivery);
+            const pickupInstruction = getPickupInstruction(
+              delivery,
+              scopeSummary,
+            );
+            const visiblePickupItems = items.slice(0, 4);
+            const hiddenPickupItemCount = Math.max(
+              0,
+              items.length - visiblePickupItems.length,
+            );
             const dispatchPanelOpen = isDeliveryOpen(delivery.id);
             const driverThereLabel = delivery.driverTargetArrivalTime
               ? formatTimeLabel(delivery.driverTargetArrivalTime)
@@ -1951,6 +1976,55 @@ export default function DeliveryDispatchPage({
                         </button>
                       ) : null}
                     </div>
+                  </div>
+
+                  <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-3 sm:p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-amber-900">
+                        <Package className="h-4 w-4 text-[#FC2C38]" aria-hidden="true" />
+                        Items being picked up
+                      </p>
+                      <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-900 shadow-sm">
+                        {scopeSummary.shortLabel}
+                      </span>
+                    </div>
+
+                    {scopeSummary.usesItems && visiblePickupItems.length > 0 ? (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                        {visiblePickupItems.map((item, itemIndex) => (
+                          <div
+                            key={item.id || `${delivery.id}-pickup-${itemIndex}`}
+                            className="flex min-w-0 items-center gap-2 rounded-xl bg-white px-3 py-2.5 shadow-sm ring-1 ring-amber-100"
+                          >
+                            {item.quantity ? (
+                              <span className="flex min-w-8 shrink-0 items-center justify-center rounded-lg bg-[#FC2C38] px-2 py-1 text-xs font-black text-white">
+                                {item.quantity}
+                              </span>
+                            ) : null}
+                            <span className="min-w-0 text-sm font-black leading-5 text-slate-800">
+                              {item.description || "Unnamed item"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-2">
+                        <p className="text-sm font-black text-slate-950">
+                          {pickupInstruction}
+                        </p>
+                        {scopeSummary.detail ? (
+                          <p className="text-sm font-bold text-slate-700">
+                            {scopeSummary.detail}
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {hiddenPickupItemCount > 0 ? (
+                      <p className="mt-2 text-xs font-black text-amber-900">
+                        +{hiddenPickupItemCount} more {hiddenPickupItemCount === 1 ? "item" : "items"} — open the order for the full list
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-1.5 sm:gap-2">
