@@ -41,16 +41,24 @@ function formatDateLabel(dateValue) {
 
 function getDeliveryDrivers(delivery) {
   const dispatchDrivers = Array.isArray(delivery.dispatchAssignments)
-    ? delivery.dispatchAssignments.map((assignment) => assignment.driver)
+    ? delivery.dispatchAssignments.map((assignment) => assignment?.driver)
     : [];
   const legacyDrivers = Array.isArray(delivery.drivers) ? delivery.drivers : [];
 
-  return [...new Set([delivery.driver, ...legacyDrivers, ...dispatchDrivers].filter(Boolean))];
+  return [
+    ...new Set(
+      [delivery.driver, ...legacyDrivers, ...dispatchDrivers]
+        .map((driver) => String(driver || "").trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function getOpenDeliveryList(deliveries) {
-  return deliveries.filter(
+  return (Array.isArray(deliveries) ? deliveries : []).filter(
     (delivery) =>
+      delivery &&
+      typeof delivery === "object" &&
       !isDeliveryComplete(delivery) &&
       delivery.dispatchStatus !== "needsDispatch" &&
       getDeliveryDrivers(delivery).length > 0,
@@ -226,7 +234,7 @@ export default function DeliveryDashboardPage({
     [openDeliveries, selectedDate],
   );
   const upcomingDeliveries = useMemo(
-    () => openDeliveries.sort(sortDeliveriesBySchedule).slice(0, 5),
+    () => [...openDeliveries].sort(sortDeliveriesBySchedule).slice(0, 5),
     [openDeliveries],
   );
   const deliveriesByDriver = useMemo(

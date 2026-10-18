@@ -140,6 +140,61 @@ import {
 import { capitalLumberAddress } from "./data/options";
 import { formatCustomerName } from "./utils/textFormatters";
 
+type LazyPageModule = {
+  default: ComponentType<any>;
+};
+
+function lazyPageWithReload(
+  pageKey: string,
+  importer: () => Promise<LazyPageModule>,
+) {
+  const retryStorageKey = `dispatch-cl-lazy-retry-${pageKey}`;
+
+  return lazy(async () => {
+    try {
+      const pageModule = await importer();
+
+      try {
+        sessionStorage.removeItem(retryStorageKey);
+      } catch {
+        // Ignore storage failures; the page loaded successfully.
+      }
+
+      return pageModule;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error || "");
+      const isStaleDeploymentChunk =
+        /dynamically imported module|failed to fetch|loading chunk|module script/i.test(
+          errorMessage,
+        );
+
+      if (isStaleDeploymentChunk) {
+        let hasRetried = false;
+
+        try {
+          hasRetried = sessionStorage.getItem(retryStorageKey) === "1";
+
+          if (!hasRetried) {
+            sessionStorage.setItem(retryStorageKey, "1");
+          } else {
+            sessionStorage.removeItem(retryStorageKey);
+          }
+        } catch {
+          hasRetried = true;
+        }
+
+        if (!hasRetried) {
+          window.location.reload();
+          return new Promise<LazyPageModule>(() => {});
+        }
+      }
+
+      throw error;
+    }
+  });
+}
+
 const BounciePage = lazy(() => import("./pages/BounciePage"));
 const CheckInPage = lazy(() => import("./pages/CheckInPage"));
 const CustomersPage = lazy(() => import("./pages/CustomersPage"));
@@ -149,7 +204,8 @@ const CustomerPaymentLinksPage = lazy(
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const DriverDashboardPage = lazy(() => import("./pages/DriverDashboardPage"));
 const DeliveryCalendarPage = lazy(() => import("./pages/DeliveryCalendarPage"));
-const DeliveryDashboardPage = lazy(
+const DeliveryDashboardPage = lazyPageWithReload(
+  "delivery-dashboard",
   () => import("./pages/DeliveryDashboardPage"),
 );
 const DeliveryRoutePlannerPage = lazy(
