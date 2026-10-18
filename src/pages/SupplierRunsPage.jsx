@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Search,
   Tag,
+  Trash2,
   Truck,
   User,
   X,
@@ -2708,19 +2709,37 @@ export default function SupplierRunsPage({
                         </button>
 
                         {canManageSupplierRun(supplierRun) ? (
-                          <div className="mt-3 border-t border-slate-200 pt-3">
-                          <button
-                            type="button"
-                            onClick={() => setEditingSupplierRun(supplierRun)}
-                            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-                          >
-                            <Edit3
-                              aria-hidden="true"
-                              className="h-5 w-5"
-                              strokeWidth={2.5}
-                            />
-                            Edit PO
-                          </button>
+                          <div className="mt-3 grid gap-2 border-t border-slate-200 pt-3">
+                            <button
+                              type="button"
+                              onClick={() => setEditingSupplierRun(supplierRun)}
+                              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+                            >
+                              <Edit3
+                                aria-hidden="true"
+                                className="h-5 w-5"
+                                strokeWidth={2.5}
+                              />
+                              Edit PO
+                            </button>
+
+                            {typeof onDeleteSupplierRun === "function" ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onDeleteSupplierRun(supplierRun.id)
+                                }
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-black text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700"
+                                title="Remove this PO from Needs Dispatch"
+                              >
+                                <Trash2
+                                  aria-hidden="true"
+                                  className="h-5 w-5"
+                                  strokeWidth={2.5}
+                                />
+                                Remove PO
+                              </button>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
