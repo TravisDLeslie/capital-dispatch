@@ -154,6 +154,17 @@ service cloud.firestore {
         ]);
     }
 
+    function isSouthReceivingCheckInUpdate() {
+      return isReceiving() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "items",
+          "status",
+          "completedAt",
+          "stopCompletedAt",
+          "updatedAt"
+        ]);
+    }
+
     function isDelivery() {
       return isApproved() && (
         isAdmin() ||
@@ -272,6 +283,7 @@ service cloud.firestore {
       allow create: if canCreateSouthRun();
       allow update: if canManageSouthRun() ||
         isSouthDispatchOnlyUpdate() ||
+        isSouthReceivingCheckInUpdate() ||
         isSouthDriverProgressUpdate();
       allow delete: if canManageSouthRun();
     }

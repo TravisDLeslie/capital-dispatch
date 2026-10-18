@@ -25,6 +25,7 @@ import {
   Package,
   PackageCheck,
   Plus,
+  Route,
   Search,
   ShieldCheck,
   Truck,
@@ -48,6 +49,7 @@ import { isDeliveryComplete } from "./utils/deliveryStatus";
 import {
   isAssignedOpenSupplierRun,
   isOpenSupplierRun,
+  isSupplierRunItemComplete,
 } from "./utils/supplierRunStatus";
 import {
   addSupplierRun,
@@ -1487,6 +1489,110 @@ function isUnassignedSouthRun(supplierRun: SupplierRun) {
   );
 }
 
+function getSouthCheckInCompletionUpdates(
+  supplierRuns: SupplierRun[],
+  checkIns: CheckIn[],
+) {
+  const linkedCheckInsByRunId = checkIns.reduce<Map<string, CheckIn[]>>(
+    (linkedCheckIns, checkIn) => {
+      const sourceSupplierRunId = String(
+        checkIn.sourceSupplierRunId || "",
+      ).trim();
+
+      if (!sourceSupplierRunId) {
+        return linkedCheckIns;
+      }
+
+      linkedCheckIns.set(sourceSupplierRunId, [
+        ...(linkedCheckIns.get(sourceSupplierRunId) || []),
+        checkIn,
+      ]);
+      return linkedCheckIns;
+    },
+    new Map(),
+  );
+
+  return supplierRuns.flatMap((supplierRun) => {
+    const linkedCheckIns = linkedCheckInsByRunId.get(supplierRun.id) || [];
+
+    if (linkedCheckIns.length === 0 || !Array.isArray(supplierRun.items)) {
+      return [];
+    }
+
+    const receivedItemIds = new Set(
+      linkedCheckIns.flatMap((checkIn) => {
+        const sourceItemIds = Array.isArray(checkIn.sourceSupplierRunItemIds)
+          ? checkIn.sourceSupplierRunItemIds
+          : [];
+        const materials = Array.isArray(checkIn.materials)
+          ? checkIn.materials
+          : [];
+
+        return [
+          ...sourceItemIds,
+          ...materials.map((material) =>
+            material && typeof material === "object"
+              ? (material as Record<string, unknown>).sourceItemId
+              : "",
+          ),
+        ]
+          .map((itemId) => String(itemId || "").trim())
+          .filter(Boolean);
+      }),
+    );
+
+    if (receivedItemIds.size === 0) {
+      return [];
+    }
+
+    const checkedInAt = linkedCheckIns
+      .map((checkIn) => String(checkIn.checkedInAt || ""))
+      .filter(Boolean)
+      .sort()
+      .at(-1) || new Date().toISOString();
+    let itemsChanged = false;
+    const reconciledItems = supplierRun.items.map((item) => {
+      if (
+        !receivedItemIds.has(String(item.id || "")) ||
+        isSupplierRunItemComplete(item)
+      ) {
+        return item;
+      }
+
+      itemsChanged = true;
+      return {
+        ...item,
+        pickedUp: true,
+        pickedUpAt: checkedInAt,
+      };
+    });
+    const allItemsReceived =
+      reconciledItems.length > 0 &&
+      reconciledItems.every(isSupplierRunItemComplete);
+    const completionChanged =
+      allItemsReceived &&
+      (supplierRun.status !== "complete" || !supplierRun.stopCompletedAt);
+
+    if (!itemsChanged && !completionChanged) {
+      return [];
+    }
+
+    return [
+      {
+        id: supplierRun.id,
+        ...(itemsChanged ? { items: reconciledItems } : {}),
+        ...(allItemsReceived
+          ? {
+              status: "complete",
+              completedAt: supplierRun.completedAt || checkedInAt,
+              stopCompletedAt: supplierRun.stopCompletedAt || checkedInAt,
+            }
+          : {}),
+      },
+    ];
+  });
+}
+
 function refreshAndRestorePage(pageId: string) {
   try {
     sessionStorage.setItem(REFRESH_PAGE_STORAGE_KEY, pageId);
@@ -1663,6 +1769,7 @@ export default function App() {
     useState<DeliverySettings>(defaultDeliveryScheduleSettings);
   const [vendorSettings, setVendorSettings] =
     useState<VendorSettings>(defaultVendorSettings);
+  const isReconcilingSouthCheckInsRef = useRef(false);
   const [editingDeliveryId, setEditingDeliveryId] =
     useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -2375,6 +2482,44 @@ export default function App() {
   }, [isApproved]);
 
   useEffect(() => {
+    if (
+      !isApproved ||
+      !["superAdmin", "admin"].includes(userRole) ||
+      supplierRuns.length === 0 ||
+      checkIns.length === 0 ||
+      isReconcilingSouthCheckInsRef.current
+    ) {
+      return;
+    }
+
+    const southCompletionUpdates = getSouthCheckInCompletionUpdates(
+      supplierRuns,
+      checkIns,
+    );
+
+    if (southCompletionUpdates.length === 0) {
+      return;
+    }
+
+    isReconcilingSouthCheckInsRef.current = true;
+    updateSupplierRunsBulk(southCompletionUpdates, supplierRuns)
+      .then((updatedSupplierRuns) => {
+        setSupplierRuns(updatedSupplierRuns);
+        setSyncError("");
+      })
+      .catch((error: Error) => {
+        console.error(
+          "Unable to reconcile checked-in South POs:",
+          error,
+        );
+        reportBackgroundSyncError(error);
+      })
+      .finally(() => {
+        isReconcilingSouthCheckInsRef.current = false;
+      });
+  }, [checkIns, isApproved, supplierRuns, userRole]);
+
+  useEffect(() => {
     if (!isApproved || !canMaintainSouthSchedule || supplierRuns.length === 0) {
       return;
     }
@@ -2383,6 +2528,11 @@ export default function App() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayDateKey = getDateInputValue(yesterday);
+    const checkedInCompletionRunIds = new Set(
+      getSouthCheckInCompletionUpdates(supplierRuns, checkIns)
+        .filter((supplierRunUpdate) => supplierRunUpdate.status === "complete")
+        .map((supplierRunUpdate) => supplierRunUpdate.id),
+    );
     const staleUnassignedRuns = supplierRuns.filter((supplierRun) => {
       const scheduledDate =
         typeof supplierRun.scheduledDate === "string"
@@ -2391,6 +2541,7 @@ export default function App() {
 
       return (
         isUnassignedSouthRun(supplierRun) &&
+        !checkedInCompletionRunIds.has(supplierRun.id) &&
         scheduledDate &&
         scheduledDate === yesterdayDateKey
       );
@@ -2417,7 +2568,7 @@ export default function App() {
       .catch((error: Error) => {
         console.error("Unable to roll unassigned South POs forward:", error);
       });
-  }, [canMaintainSouthSchedule, isApproved, supplierRuns]);
+  }, [canMaintainSouthSchedule, checkIns, isApproved, supplierRuns]);
 
   useEffect(() => {
     if (
@@ -3328,6 +3479,34 @@ export default function App() {
   async function handleAddCheckIn(checkIn: CheckIn) {
     const updatedCheckIns = await addCheckIn(checkIn);
     setCheckIns(updatedCheckIns);
+
+    const knownSupplierRuns =
+      supplierRuns.length > 0 ? supplierRuns : receivingSouthLookupRuns;
+    const southCompletionUpdates = getSouthCheckInCompletionUpdates(
+      knownSupplierRuns,
+      [checkIn],
+    );
+
+    if (southCompletionUpdates.length > 0) {
+      try {
+        const updatedSupplierRuns = await updateSupplierRunsBulk(
+          southCompletionUpdates,
+          knownSupplierRuns,
+        );
+
+        if (supplierRuns.length > 0) {
+          setSupplierRuns(updatedSupplierRuns);
+        } else {
+          setReceivingSouthLookupRuns(updatedSupplierRuns);
+        }
+      } catch (error) {
+        console.error(
+          "Check-in saved, but the linked South PO could not be reconciled:",
+          error,
+        );
+      }
+    }
+
     setSyncError("");
   }
 
@@ -3980,68 +4159,6 @@ export default function App() {
     setSyncError("");
   }
 
-  async function handleArriveSupplierStop(supplierRunIds: string[]) {
-    const arrivedAt = new Date().toISOString();
-    const updates = supplierRunIds
-      .map((supplierRunId) =>
-        supplierRuns.find(
-          (supplierRun) => supplierRun.id === supplierRunId,
-        ),
-      )
-      .filter(
-        (supplierRun): supplierRun is SupplierRun =>
-          Boolean(supplierRun) && !supplierRun?.stopArrivedAt,
-      )
-      .map((supplierRun) => ({
-        id: supplierRun.id,
-        stopArrivedAt: arrivedAt,
-      }));
-
-    if (updates.length === 0) {
-      return;
-    }
-
-    const updatedSupplierRuns = await updateSupplierRunsBulk(
-      updates,
-      supplierRuns,
-    );
-
-    setSupplierRuns(updatedSupplierRuns);
-    setSyncError("");
-  }
-
-  async function handleCompleteSupplierStop(supplierRunIds: string[]) {
-    const completedAt = new Date().toISOString();
-    const updates = supplierRunIds
-      .map((supplierRunId) =>
-        supplierRuns.find(
-          (supplierRun) => supplierRun.id === supplierRunId,
-        ),
-      )
-      .filter(
-        (supplierRun): supplierRun is SupplierRun =>
-          Boolean(supplierRun) && !supplierRun?.stopCompletedAt,
-      )
-      .map((supplierRun) => ({
-        id: supplierRun.id,
-        stopCompletedAt: completedAt,
-        status: "complete",
-        completedAt,
-      }));
-
-    if (updates.length === 0) {
-      return;
-    }
-
-    const updatedSupplierRuns = await updateSupplierRunsBulk(
-      updates,
-      supplierRuns,
-    );
-
-    setSupplierRuns(updatedSupplierRuns);
-    setSyncError("");
-  }
-
   async function handleUpdateSupplierRunItemDescription(
     supplierRunId: string,
     itemId: string,
@@ -4135,6 +4252,90 @@ export default function App() {
     const dashboardAllowedPageIds = effectiveAllowedPageIds;
     const dashboardWorkView = forcedWorkView || effectiveWorkView;
     const isForcedWorkView = Boolean(forcedWorkView);
+
+    if (!isForcedWorkView && dashboardWorkView === "dispatch-ops") {
+      const southNeedsDispatch =
+        adminDashboardOperations.southNeedsDispatch || 0;
+      const deliveryNeedsDispatch =
+        adminDashboardOperations.deliveryNeedsDispatch || 0;
+
+      return (
+        <SectionHubPage
+          eyebrow="Employee Dashboard"
+          title="Dispatch Ops"
+          description="See the South workload, assign waiting work, and build the next delivery route."
+          icon={ClipboardCheck}
+          stats={[
+            {
+              icon: ClipboardCheck,
+              label: "Needs Dispatch",
+              value: southNeedsDispatch + deliveryNeedsDispatch,
+              note: "South and deliveries",
+            },
+            {
+              icon: Truck,
+              label: "South Today",
+              value: adminDashboardOperations.southOpen || 0,
+              note: "Assigned open POs",
+            },
+            {
+              icon: PackageCheck,
+              label: "South Scheduled",
+              value: adminDashboardOperations.southScheduled || 0,
+              note: "All open POs",
+            },
+          ]}
+          actionsClassName="grid gap-4 xl:grid-cols-3"
+          actions={[
+            dashboardAllowedPageIds.includes("dispatch")
+              ? {
+                  icon: ClipboardCheck,
+                  label: "Quick Link",
+                  title: "Dispatch",
+                  description:
+                    "Open South and delivery requests that still need a driver or truck.",
+                  metric: southNeedsDispatch + deliveryNeedsDispatch,
+                  metricLabel: "Waiting",
+                  tone:
+                    southNeedsDispatch + deliveryNeedsDispatch > 0
+                      ? "warning"
+                      : "success",
+                  variant: "live",
+                  onClick: () => setCurrentPage("dispatch"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("south-overview") || canReadSouth
+              ? {
+                  icon: Truck,
+                  label: "South Fulfillment",
+                  title: "South Pickups",
+                  description:
+                    "See today’s pickup route, open items, scheduled POs, and South calendar.",
+                  metric: adminDashboardOperations.southOpen || 0,
+                  metricLabel: "Today",
+                  tone: "success",
+                  variant: "live",
+                  onClick: () => setCurrentPage("south-overview"),
+                }
+              : null,
+            dashboardAllowedPageIds.includes("deliveries-route-planner")
+              ? {
+                  icon: Route,
+                  label: "Quick Link",
+                  title: "Route Planner",
+                  description:
+                    "Enter delivery addresses, organize the fastest order, and review the full route.",
+                  metric: "Plan",
+                  metricLabel: "Route",
+                  tone: "dispatch",
+                  variant: "live",
+                  onClick: () => setCurrentPage("deliveries-route-planner"),
+                }
+              : null,
+          ]}
+        />
+      );
+    }
 
     if (
       !isForcedWorkView &&
@@ -5181,8 +5382,6 @@ export default function App() {
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
-            onArriveSupplierStop={handleArriveSupplierStop}
-            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -5907,8 +6106,6 @@ export default function App() {
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
-            onArriveSupplierStop={handleArriveSupplierStop}
-            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -5940,8 +6137,6 @@ export default function App() {
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
-            onArriveSupplierStop={handleArriveSupplierStop}
-            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -5978,8 +6173,6 @@ export default function App() {
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
-            onArriveSupplierStop={handleArriveSupplierStop}
-            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -6015,8 +6208,6 @@ export default function App() {
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
-            onArriveSupplierStop={handleArriveSupplierStop}
-            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }
@@ -6048,8 +6239,6 @@ export default function App() {
             onSaveSupplierRunItemPickupPhoto={
               handleSaveSupplierRunItemPickupPhoto
             }
-            onArriveSupplierStop={handleArriveSupplierStop}
-            onCompleteSupplierStop={handleCompleteSupplierStop}
             onUpdateSupplierRunItemDescription={
               handleUpdateSupplierRunItemDescription
             }

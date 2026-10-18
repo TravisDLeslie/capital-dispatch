@@ -12,12 +12,24 @@ const roles = [
 
 const workViews = [
   { value: "operations", label: "Operations" },
+  { value: "dispatch-ops", label: "Dispatch Ops" },
   { value: "driver", label: "Driver" },
   { value: "sales", label: "Sales" },
   { value: "receiving", label: "Receiving" },
   { value: "south", label: "Fulfillment" },
   { value: "delivery", label: "Delivery" },
   { value: "accounting", label: "Accounting" },
+];
+
+const dispatchOpsPermissionIds = [
+  "dashboard",
+  "dispatch",
+  "south-overview",
+  "supplier-runs-dispatch",
+  "supplier-runs-check",
+  "supplier-runs-calendar",
+  "deliveries-dispatch",
+  "deliveries-route-planner",
 ];
 
 const permissionGroups = [
@@ -397,6 +409,31 @@ export default function UserAdminPage({
     setError("");
   }
 
+  function applyWorkView(userId, workView) {
+    const user = users.find((savedUser) => savedUser.id === userId);
+    const currentDraft = user ? getDraft(user) : { permissions: [] };
+    const nextPermissions =
+      workView === "dispatch-ops"
+        ? [
+            ...new Set([
+              ...(currentDraft.permissions || []),
+              ...dispatchOpsPermissionIds,
+            ]),
+          ]
+        : currentDraft.permissions || [];
+
+    setDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [userId]: {
+        ...(currentDrafts[userId] || {}),
+        workView,
+        permissions: nextPermissions,
+      },
+    }));
+    setMessage("");
+    setError("");
+  }
+
   function togglePermission(userId, permissionId) {
     const user = users.find((savedUser) => savedUser.id === userId);
     const currentDraft = user ? getDraft(user) : { permissions: [] };
@@ -632,9 +669,8 @@ export default function UserAdminPage({
                     <select
                       value={draft.workView}
                       onChange={(event) =>
-                        updateDraft(
+                        applyWorkView(
                           user.id,
-                          "workView",
                           event.target.value,
                         )
                       }

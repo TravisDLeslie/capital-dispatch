@@ -31,7 +31,6 @@ import SupplierRunForm from "../components/SupplierRunForm";
 import { southVendorRouteOrder } from "../data/options";
 import {
   formatDateInput,
-  formatTime,
   getDateInputValue,
   getTodayHeading,
 } from "../utils/dateHelpers";
@@ -344,113 +343,6 @@ function getVendorGroupStatsFromRuns(runs) {
   };
 }
 
-function MobileRouteProgress({ vendorGroups }) {
-  const stops = vendorGroups.map((vendorGroup, stopIndex) => {
-    const isComplete = vendorGroup.runs.some(
-      (supplierRun) => supplierRun.stopCompletedAt,
-    );
-
-    return {
-      vendor: vendorGroup.vendor,
-      number: String(stopIndex + 1).padStart(2, "0"),
-      isComplete,
-    };
-  });
-  const activeStopIndex = Math.max(
-    stops.findIndex((stop) => !stop.isComplete),
-    0,
-  );
-
-  if (stops.length <= 1) {
-    return null;
-  }
-
-  return (
-    <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-5 shadow-sm sm:hidden">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-500">
-          Route Progress
-        </p>
-
-        <p className="text-xs font-black text-slate-400">
-          {stops.filter((stop) => stop.isComplete).length}/{stops.length} stops
-        </p>
-      </div>
-
-      <div className="overflow-x-auto pb-1">
-        <div
-          className="grid min-w-full items-start px-1"
-          style={{
-            gridTemplateColumns: `repeat(${stops.length}, minmax(82px, 1fr))`,
-          }}
-        >
-          {stops.map((stop, stopIndex) => {
-            const isLastStop = stopIndex === stops.length - 1;
-            const isActive = stopIndex === activeStopIndex && !stop.isComplete;
-
-            return (
-              <div
-                key={`${stop.vendor}-${stopIndex}`}
-                className="relative flex flex-col items-center gap-3"
-              >
-                {!isLastStop ? (
-                  <div
-                    className={`absolute left-1/2 top-[18px] h-0.5 w-full border-t-2 ${
-                      stop.isComplete
-                        ? "border-emerald-700"
-                        : "border-dashed border-slate-300"
-                    }`}
-                    aria-hidden="true"
-                  />
-                ) : null}
-
-                <span
-                  className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full border-[3px] text-[11px] font-black shadow-sm ${
-                    stop.isComplete
-                      ? "border-emerald-700 bg-emerald-700 text-white"
-                      : isActive
-                        ? "border-[#FC2C38] bg-red-50 text-[#FC2C38]"
-                      : "border-slate-300 bg-white text-slate-400"
-                  }`}
-                  aria-label={`${stop.vendor} ${
-                    stop.isComplete
-                      ? "completed"
-                      : isActive
-                        ? "current stop"
-                        : "upcoming stop"
-                  }`}
-                >
-                  {stop.isComplete ? (
-                    <Check
-                      aria-hidden="true"
-                      className="h-4 w-4"
-                      strokeWidth={3}
-                    />
-                  ) : (
-                    stop.number
-                  )}
-                </span>
-
-                <p
-                  className={`line-clamp-2 max-w-[104px] text-center text-xs font-bold leading-tight ${
-                    stop.isComplete
-                      ? "text-slate-400"
-                      : isActive
-                        ? "text-[#FC2C38]"
-                        : "text-slate-700"
-                  }`}
-                >
-                  {stop.vendor}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function getSupplierRunCustomerName(supplierRun) {
   return (
     supplierRun.customerName ||
@@ -523,10 +415,6 @@ function getDateKeyFromValue(value) {
   }
 
   return getDateKeyFromDate(new Date(value));
-}
-
-function usesSouthStopWorkflow(supplierRun) {
-  return Number(supplierRun?.stopWorkflowVersion || 0) >= 1;
 }
 
 function getDateKeyDayGap(startDateKey, endDateKey) {
@@ -849,8 +737,6 @@ function groupHistoryRunsByPickupDate(
  *   onUpdateSupplierRunItemDescription?: Function;
  *   onUpdateSupplierRun?: Function;
  *   onDeleteSupplierRun?: Function;
- *   onArriveSupplierStop?: Function;
- *   onCompleteSupplierStop?: Function;
  *   createdBy?: Record<string, unknown>;
  *   vehicleOptions?: any[];
  *   employeeOptions?: string[];
@@ -878,8 +764,6 @@ export default function SupplierRunsPage({
   onUpdateSupplierRunItemDescription,
   onUpdateSupplierRun,
   onDeleteSupplierRun,
-  onArriveSupplierStop,
-  onCompleteSupplierStop,
   createdBy = {},
   vehicleOptions,
   employeeOptions = [],
@@ -950,8 +834,6 @@ export default function SupplierRunsPage({
     error: "",
   });
   const [savingDispatchDateRunId, setSavingDispatchDateRunId] = useState("");
-  const [celebratedRouteKey, setCelebratedRouteKey] = useState("");
-  const [completingStopKey, setCompletingStopKey] = useState("");
 
   useEffect(() => {
     if (!successMessage) {
@@ -1262,90 +1144,6 @@ export default function SupplierRunsPage({
     await saveRouteOrder(driver, nextVendorOrder);
   }
 
-  function getValidDate(value) {
-    const parsedDate = value ? new Date(value) : null;
-
-    return parsedDate && !Number.isNaN(parsedDate.getTime())
-      ? parsedDate
-      : null;
-  }
-
-  function addMinutes(value, minutes) {
-    const date = getValidDate(value);
-
-    if (!date) {
-      return "";
-    }
-
-    return new Date(date.getTime() + minutes * 60000).toISOString();
-  }
-
-  function getVendorGroupTiming(vendorGroup) {
-    const items = vendorGroup.runs.flatMap((supplierRun) =>
-      Array.isArray(supplierRun.items) ? supplierRun.items : [],
-    );
-    const allItemsPickedUp =
-      items.length > 0 && items.every(isPickupItemComplete);
-    const savedCompletedAt =
-      vendorGroup.runs
-        .map((supplierRun) => supplierRun.stopCompletedAt)
-        .filter(Boolean)
-        .sort()
-        .at(-1) || "";
-    const usesStopWorkflow =
-      mode === "check" ||
-      (vendorGroup.runs.length > 0 &&
-        vendorGroup.runs.some((supplierRun) =>
-          usesSouthStopWorkflow(supplierRun),
-        ));
-    const isConfirmedComplete = usesStopWorkflow
-      ? Boolean(savedCompletedAt)
-      : allItemsPickedUp;
-
-    return {
-      completedAt: savedCompletedAt,
-      allItemsPickedUp,
-      usesStopWorkflow,
-      isConfirmedComplete,
-      runIds: vendorGroup.runs.map((supplierRun) => supplierRun.id),
-      canComplete:
-        Boolean(onCompleteSupplierStop) &&
-        usesStopWorkflow &&
-        allItemsPickedUp &&
-        !isConfirmedComplete,
-    };
-  }
-
-  async function handleCompleteStopClick(driver, vendor, timing) {
-    const stopKey = `open::${driver}::${vendor}`;
-
-    if (!timing?.allItemsPickedUp) {
-      setRouteOrderError("Pick up every item at this stop before closing it.");
-      return;
-    }
-
-    if (typeof onCompleteSupplierStop !== "function") {
-      setRouteOrderError("Unable to complete this vendor stop.");
-      return;
-    }
-
-    setCompletingStopKey(stopKey);
-    setRouteOrderError("");
-
-    try {
-      await onCompleteSupplierStop(timing.runIds);
-      setOpenStopKeys((currentOpenStopKeys) => ({
-        ...currentOpenStopKeys,
-        [stopKey]: false,
-      }));
-    } catch (completeError) {
-      console.error("Unable to complete South vendor stop:", completeError);
-      setRouteOrderError("Unable to close this vendor. Check connection and try again.");
-    } finally {
-      setCompletingStopKey("");
-    }
-  }
-
   function getVendorGroupStats(vendorGroup) {
     return getVendorGroupStatsFromRuns(vendorGroup.runs);
   }
@@ -1379,27 +1177,6 @@ export default function SupplierRunsPage({
           ...supplierRun,
           vendor: displayVendor,
         };
-  }
-
-  function getDriverGroupStats(driverGroup) {
-    const items = driverGroup.vendorGroups.flatMap((vendorGroup) =>
-      vendorGroup.runs.flatMap((supplierRun) =>
-        Array.isArray(supplierRun.items) ? supplierRun.items : [],
-      ),
-    );
-    const pickedUpItems = items.filter(isPickupItemComplete).length;
-    const remainingItems = items.length - pickedUpItems;
-    const progressPercent =
-      items.length > 0
-        ? Math.round((pickedUpItems / items.length) * 100)
-        : 0;
-
-    return {
-      itemCount: items.length,
-      pickedUpItems,
-      remainingItems,
-      progressPercent,
-    };
   }
 
   function getDriverGroupVehicleLabel(driverGroup) {
@@ -1808,30 +1585,6 @@ export default function SupplierRunsPage({
           )
         : []
       : visibleRuns;
-  const driverRouteIsComplete =
-    isDriverView &&
-    mode === "check" &&
-    driverScopedRuns.length > 0 &&
-    driverScopedRuns.every((supplierRun) => supplierRun.stopCompletedAt);
-  const routeCompletionKey = [
-    selectedScheduleDate,
-    routeOrderDriverName,
-    driverScopedRuns.map((supplierRun) => supplierRun.id).sort().join("|"),
-  ].join("::");
-  const showRouteCompleteCelebration =
-    driverRouteIsComplete && celebratedRouteKey === routeCompletionKey;
-
-  useEffect(() => {
-    if (!driverRouteIsComplete || !routeCompletionKey) {
-      return;
-    }
-
-    setCelebratedRouteKey((currentRouteKey) =>
-      currentRouteKey === routeCompletionKey
-        ? currentRouteKey
-        : routeCompletionKey,
-    );
-  }, [driverRouteIsComplete, routeCompletionKey]);
   const canViewSouthCustomerName = canEditSupplierRuns;
   const pickupSearchTerm = normalizeSearchText(pickupSearch);
   const filteredVisibleRuns =
@@ -1845,25 +1598,9 @@ export default function SupplierRunsPage({
         )
       : driverScopedRuns;
 
-  const shouldKeepCompletedRunInActiveStop = (supplierRun) =>
-    mode === "check" &&
-    supplierRun.status === "complete" &&
-    !supplierRun.stopCompletedAt;
-
   const openRuns = filteredVisibleRuns.filter(
-    (supplierRun) =>
-      supplierRun.status !== "complete" ||
-      shouldKeepCompletedRunInActiveStop(supplierRun),
+    (supplierRun) => supplierRun.status !== "complete",
   );
-
-  const completeRuns = filteredVisibleRuns.filter(
-    (supplierRun) =>
-      supplierRun.status === "complete" &&
-      !shouldKeepCompletedRunInActiveStop(supplierRun),
-  );
-  const completedPoCount = filteredVisibleRuns.filter(
-    (supplierRun) => supplierRun.status === "complete",
-  ).length;
 
   const routeOrdersByDriver = southRouteOrders
     .filter(
@@ -1888,14 +1625,6 @@ export default function SupplierRunsPage({
     safeVendorDisplayNameMap,
     safeEmployeeAliasMap,
   );
-  const completeRunGroups =
-    groupRunsByDriverAndVendor(
-      completeRuns,
-      mode === "check" ? routeOrdersByDriver : {},
-      safeVendorRouteOrder,
-      safeVendorDisplayNameMap,
-      safeEmployeeAliasMap,
-    );
   const openStopsCount = openRunGroups.reduce(
     (count, driverGroup) =>
       count + driverGroup.vendorGroups.length,
@@ -2037,43 +1766,6 @@ export default function SupplierRunsPage({
           <p className="font-bold text-red-700">
             ✓ {successMessage}
           </p>
-        </div>
-      ) : null}
-
-      {showRouteCompleteCelebration ? (
-        <div className="relative mb-5 overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 shadow-sm">
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-around opacity-80">
-            {["bg-[#FC2C38]", "bg-blue-500", "bg-amber-400", "bg-emerald-500", "bg-violet-500"].map(
-              (colorClass, index) => (
-                <span
-                  key={colorClass}
-                  className={`h-8 w-2 rounded-full ${colorClass}`}
-                  style={{
-                    transform: `translateY(${index % 2 === 0 ? "-10px" : "-2px"}) rotate(${index * 18}deg)`,
-                  }}
-                  aria-hidden="true"
-                />
-              ),
-            )}
-          </div>
-
-          <div className="relative flex items-center gap-3">
-            <span
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white"
-              aria-hidden="true"
-            >
-              <Check className="h-6 w-6" strokeWidth={3} />
-            </span>
-
-            <div className="min-w-0">
-              <p className="text-lg font-black text-emerald-900">
-                South route complete
-              </p>
-              <p className="text-sm font-bold text-emerald-700">
-                Everything assigned for this route has been picked up.
-              </p>
-            </div>
-          </div>
         </div>
       ) : null}
 
@@ -2896,8 +2588,6 @@ export default function SupplierRunsPage({
                               {group.vendorGroups.map((vendorGroup) => {
                                 const stats =
                                   getVendorGroupStats(vendorGroup);
-                                const timing =
-                                  getVendorGroupTiming(vendorGroup);
                                 const stopKey = `${dateGroup.dateKey}::${group.driver}::${vendorGroup.vendor}`;
                                 const stopIsOpen = isStopOpen(
                                   group.driver,
@@ -3253,7 +2943,7 @@ export default function SupplierRunsPage({
           </div>
           ) : null}
 
-          <div className="mb-5 hidden grid-cols-3 gap-2 sm:grid sm:gap-3">
+          <div className="mb-5 hidden grid-cols-2 gap-2 sm:grid sm:gap-3">
             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-2 py-3 text-center sm:px-4 sm:text-left">
               <p className="text-[10px] font-black uppercase tracking-[0.08em] text-blue-700 sm:text-xs sm:tracking-[0.18em]">
                 Open Stops
@@ -3271,16 +2961,6 @@ export default function SupplierRunsPage({
 
               <p className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
                 {openItemsCount}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-2 py-3 text-center sm:px-4 sm:text-left">
-              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-emerald-700 sm:text-xs sm:tracking-[0.18em]">
-                Completed POs
-              </p>
-
-              <p className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
-                {completedPoCount}
               </p>
             </div>
           </div>
@@ -3303,6 +2983,13 @@ export default function SupplierRunsPage({
             />
           ) : null}
 
+          {filteredVisibleRuns.length > 0 && openRuns.length === 0 ? (
+            <EmptyState
+              title="No South POs left to pick up"
+              description="Choose another pickup date or view South History for past POs."
+            />
+          ) : null}
+
           {openRuns.length > 0 ? (
             <div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -3319,7 +3006,6 @@ export default function SupplierRunsPage({
 
               <div className="space-y-5">
                 {openRunGroups.map((driverGroup) => {
-                  const driverStats = getDriverGroupStats(driverGroup);
                   const driverAvatar = getDriverAvatar(
                     driverGroup.driver,
                   );
@@ -3334,23 +3020,6 @@ export default function SupplierRunsPage({
                         count + vendorGroup.runs.length,
                       0,
                     );
-                  const driverStopCount =
-                    driverGroup.vendorGroups.length;
-                  const completedStopCount =
-                    driverGroup.vendorGroups.filter((vendorGroup) =>
-                      getVendorGroupTiming(vendorGroup).isConfirmedComplete,
-                    ).length;
-                  const stopProgressPercent =
-                    driverStopCount > 0
-                      ? Math.round(
-                          (completedStopCount / driverStopCount) * 100,
-                        )
-                      : 0;
-                  const driverCompleteTextClass =
-                    stopProgressPercent >= 100
-                      ? "text-emerald-800"
-                      : "text-slate-900";
-
                   return (
                     <div
                       key={driverGroup.driver}
@@ -3359,7 +3028,7 @@ export default function SupplierRunsPage({
                       <button
                         type="button"
                         onClick={() => toggleDriver(driverGroup.driver)}
-                        className="mb-4 grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 rounded-2xl border border-slate-100 bg-white px-3 py-4 text-left shadow-sm sm:hidden"
+                        className="mb-4 grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-slate-100 bg-white px-3 py-4 text-left shadow-sm sm:hidden"
                         aria-expanded={driverIsOpen}
                       >
                         <div className="flex min-w-0 items-center gap-2">
@@ -3396,33 +3065,6 @@ export default function SupplierRunsPage({
                             </p>
                             <p className="mt-1 text-xs font-semibold leading-tight text-slate-500">
                               {driverPoCount} pickups
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex min-w-[72px] items-center justify-center gap-1.5 border-l border-slate-200 pl-2">
-                          <span
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full p-1 transition-colors"
-                            style={{
-                              background: `conic-gradient(#047857 ${stopProgressPercent}%, #d1fae5 0)`,
-                            }}
-                            aria-label={`${completedStopCount} of ${driverStopCount} stops complete`}
-                          >
-                            <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-emerald-700">
-                              <Check
-                                aria-hidden="true"
-                                className="h-5 w-5"
-                                strokeWidth={3}
-                              />
-                            </span>
-                          </span>
-                          <div>
-                            <p className={`text-sm font-black leading-tight ${driverCompleteTextClass}`}>
-                              {completedStopCount} of{" "}
-                              {driverStopCount}
-                            </p>
-                            <p className="mt-1 text-xs font-semibold leading-tight text-slate-500">
-                              complete
                             </p>
                           </div>
                         </div>
@@ -3494,36 +3136,6 @@ export default function SupplierRunsPage({
                             </span>
                           </div>
                         </div>
-
-                        <div className="mt-4">
-                          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.12em]">
-                            <span className="text-slate-500">
-                              Route Progress
-                            </span>
-
-                            <span className="text-emerald-700">
-                              {driverStats.progressPercent}%
-                            </span>
-                          </div>
-
-                          <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              className="h-full rounded-full bg-emerald-600 transition-all"
-                              style={{
-                                width: `${driverStats.progressPercent}%`,
-                              }}
-                            />
-                          </div>
-
-                          <p className="mt-2 text-xs font-bold text-slate-500">
-                            {driverStats.pickedUpItems}/
-                            {driverStats.itemCount} items picked up
-                            {driverStats.remainingItems > 0
-                              ? ` • ${driverStats.remainingItems} left`
-                              : " • complete"}
-                          </p>
-
-                        </div>
                       </button>
 
                       {routeOrderError ? (
@@ -3531,10 +3143,6 @@ export default function SupplierRunsPage({
                           {routeOrderError}
                         </div>
                       ) : null}
-
-                      <MobileRouteProgress
-                        vendorGroups={driverGroup.vendorGroups}
-                      />
 
                     {driverIsOpen ? (
                     <div className="space-y-3">
@@ -3554,35 +3162,20 @@ export default function SupplierRunsPage({
                         const stats = getVendorGroupStats(vendorGroup);
                         const supplierAddress =
                           getVendorGroupAddress(vendorGroup);
-                        const timing = getVendorGroupTiming(vendorGroup);
-                        const nextStopIndex =
-                          driverGroup.vendorGroups.findIndex(
-                            (group) =>
-                              !getVendorGroupTiming(group)
-                                .isConfirmedComplete,
-                          );
-                        const isCurrentStop = vendorIndex === nextStopIndex;
-                        const isCompleteStop =
-                          timing.isConfirmedComplete;
-                        const isNextStop =
-                          !isCurrentStop &&
-                          !isCompleteStop &&
-                          nextStopIndex !== -1 &&
-                          vendorIndex > nextStopIndex;
+                        const isCurrentStop = vendorIndex === 0;
+                        const isNextStop = vendorIndex === 1;
                         const stopStageLabel = isCurrentStop
                           ? "Current Stop"
-                          : isCompleteStop
-                            ? "Completed Stop"
-                            : isNextStop
-                              ? "Next Stop"
-                              : "Stop";
+                          : isNextStop
+                            ? "Next Stop"
+                            : "Stop";
                         const stopNumber = String(vendorIndex + 1).padStart(
                           2,
                           "0",
                         );
                         const stopDefaultOpen = isDriverView
                           ? isCurrentStop
-                          : !isCompleteStop;
+                          : true;
                         const stopIsOpen = isStopOpen(
                           driverGroup.driver,
                           vendorGroup.vendor,
@@ -3625,9 +3218,7 @@ export default function SupplierRunsPage({
                                 ? "border-blue-300 opacity-60"
                                 : isCurrentStop
                                   ? "border-red-100"
-                                  : isCompleteStop
-                                    ? "border-slate-200 bg-slate-50/70"
-                                    : "border-slate-200"
+                                  : "border-slate-200"
                             }`}
                           >
                             <div className="flex items-stretch gap-2 sm:gap-3">
@@ -3709,8 +3300,6 @@ export default function SupplierRunsPage({
                                     className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-base font-black shadow-sm sm:hidden ${
                                       isCurrentStop
                                         ? "bg-red-50 text-[#FC2C38]"
-                                        : isCompleteStop
-                                          ? "bg-emerald-50 text-emerald-700"
                                         : "bg-slate-100 text-slate-600"
                                     }`}
                                   >
@@ -3732,28 +3321,13 @@ export default function SupplierRunsPage({
                                       className={`mb-1 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] sm:hidden ${
                                         isCurrentStop
                                           ? "text-[#FC2C38]"
-                                          : isCompleteStop
-                                            ? "text-slate-400"
-                                            : "text-slate-500"
+                                          : "text-slate-500"
                                       }`}
                                     >
-                                      {isCompleteStop ? (
-                                        <Check
-                                          aria-hidden="true"
-                                          className="h-3.5 w-3.5 text-emerald-700"
-                                          strokeWidth={3}
-                                        />
-                                      ) : null}
                                       {stopStageLabel}
                                     </p>
 
-                                    <h5
-                                      className={`truncate text-xl font-black leading-tight ${
-                                        isCompleteStop
-                                          ? "text-slate-500"
-                                            : "text-slate-900"
-                                      }`}
-                                    >
+                                    <h5 className="truncate text-xl font-black leading-tight text-slate-900">
                                       {vendorGroup.vendor}
                                     </h5>
 
@@ -3766,17 +3340,15 @@ export default function SupplierRunsPage({
                                       ) : null}
 
                                       <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-black leading-tight text-slate-900">
-                                        {isCompleteStop
-                                          ? "complete"
-                                          : `${stats.remainingItems} ${
-                                              stats.remainingItems === 1
-                                                ? "item"
-                                                : "items"
-                                            } left`}
+                                        {stats.remainingItems}{" "}
+                                        {stats.remainingItems === 1
+                                          ? "item"
+                                          : "items"}{" "}
+                                        left
                                       </span>
                                     </div>
 
-                                    {supplierAddress && !isCompleteStop ? (
+                                    {supplierAddress ? (
                                       <a
                                         href={getDirectionsUrl(
                                           supplierAddress,
@@ -3831,7 +3403,7 @@ export default function SupplierRunsPage({
                               </div>
 
                               <div className="flex shrink-0 flex-col items-end justify-start gap-2.5 py-4 pr-4 sm:flex-row sm:items-center sm:justify-center sm:gap-2 sm:py-0 sm:pr-5">
-                                {supplierAddress && !isCompleteStop ? (
+                                {supplierAddress ? (
                                   <a
                                     href={getDirectionsUrl(
                                       supplierAddress,
@@ -3930,53 +3502,6 @@ export default function SupplierRunsPage({
                                     driverFocused={isDriverView}
                                   />
                                 ))}
-
-                                {timing.canComplete ? (
-                                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 shadow-sm">
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                      <div>
-                                        <p className="text-base font-black text-emerald-950">
-                                          Are you done at{" "}
-                                          {vendorGroup.vendor}?
-                                        </p>
-                                        <p className="mt-1 text-sm font-bold text-emerald-700">
-                                          This closes the vendor stop and moves
-                                          the route to the next supplier.
-                                        </p>
-                                      </div>
-
-                                      <div className="flex flex-wrap gap-2">
-                                        <button
-                                          type="button"
-                                          className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-emerald-200 bg-white px-5 text-sm font-black text-emerald-800 shadow-sm transition hover:bg-emerald-100"
-                                        >
-                                          Not yet
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleCompleteStopClick(
-                                              driverGroup.driver,
-                                              vendorGroup.vendor,
-                                              timing,
-                                            )
-                                          }
-                                          disabled={
-                                            completingStopKey ===
-                                            `open::${driverGroup.driver}::${vendorGroup.vendor}`
-                                          }
-                                          className="inline-flex min-h-[44px] items-center justify-center rounded-xl bg-emerald-700 px-5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-emerald-300"
-                                        >
-                                          {completingStopKey ===
-                                          `open::${driverGroup.driver}::${vendorGroup.vendor}`
-                                            ? "Closing..."
-                                            : "Yes, complete stop"}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ) : null}
                               </div>
                             ) : null}
                           </div>
@@ -3991,230 +3516,6 @@ export default function SupplierRunsPage({
             </div>
           ) : null}
 
-          {completeRuns.length > 0 ? (
-            <div className="mt-8 border-t border-slate-200 pt-6">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-lg font-black tracking-tight text-slate-800">
-                    Completed Today
-                  </h3>
-
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                    Completed South pickups are also saved in History.
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-5">
-                {completeRunGroups.map((driverGroup) => {
-                  const driverAvatar = getDriverAvatar(
-                    driverGroup.driver,
-                  );
-                  const driverIsOpen = isDriverOpen(
-                    driverGroup.driver,
-                    "complete",
-                    isDriverView,
-                  );
-
-                  return (
-                    <div
-                      key={driverGroup.driver}
-                      className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4"
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          toggleDriver(
-                            driverGroup.driver,
-                            "complete",
-                            isDriverView,
-                          )
-                        }
-                        className="mb-3 flex w-full flex-wrap items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition hover:bg-slate-100"
-                        aria-expanded={driverIsOpen}
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-black ${driverAvatar.colorClass}`}
-                            aria-hidden="true"
-                          >
-                            {driverAvatar.initial}
-                          </div>
-
-                          <h4 className="truncate text-lg font-black tracking-tight text-slate-800">
-                            {driverGroup.driver}
-                          </h4>
-                        </div>
-
-                      <div className="flex shrink-0 items-center gap-2">
-                        <div className="rounded-xl bg-white px-3 py-2 text-sm font-black text-slate-600 shadow-sm">
-                          {driverGroup.vendorGroups.reduce(
-                            (count, vendorGroup) =>
-                              count + vendorGroup.runs.length,
-                            0,
-                          )}{" "}
-                          POs
-                        </div>
-
-                        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
-                          <ChevronDown
-                            aria-hidden="true"
-                            className={`h-5 w-5 transition-transform ${
-                              driverIsOpen ? "rotate-180" : ""
-                            }`}
-                            strokeWidth={2.6}
-                          />
-                        </span>
-                      </div>
-                    </button>
-
-                    {driverIsOpen ? (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between gap-3 px-1">
-                        <h5 className="text-sm font-black uppercase tracking-[0.16em] text-slate-600">
-                          Stops
-                        </h5>
-                        <span className="text-xs font-bold text-slate-400">
-                          {driverGroup.vendorGroups.length}{" "}
-                          {driverGroup.vendorGroups.length === 1
-                            ? "stop"
-                            : "stops"}
-                        </span>
-                      </div>
-
-                      {driverGroup.vendorGroups.map((vendorGroup) => {
-                        const stats = getVendorGroupStats(vendorGroup);
-                        const supplierAddress =
-                          getVendorGroupAddress(vendorGroup);
-                        const stopIsOpen = isStopOpen(
-                          driverGroup.driver,
-                          vendorGroup.vendor,
-                          "complete",
-                          isDriverView,
-                        );
-
-                        return (
-                          <div
-                            key={vendorGroup.vendor}
-                            className="overflow-hidden rounded-xl border border-slate-200 bg-white"
-                          >
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  toggleStop(
-                                    driverGroup.driver,
-                                    vendorGroup.vendor,
-                                    "complete",
-                                    isDriverView,
-                                  )
-                                }
-                                className="flex min-w-0 flex-1 flex-col gap-3 px-4 py-3 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between"
-                                aria-expanded={stopIsOpen}
-                              >
-                                <div className="flex min-w-0 items-center gap-3">
-                                  <span
-                                    className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-50 text-[#FC2C38] sm:flex"
-                                  >
-                                    <Home
-                                      aria-hidden="true"
-                                      className="h-7 w-7"
-                                      strokeWidth={2.5}
-                                    />
-                                  </span>
-
-                                  <div className="min-w-0">
-                                    <h5 className="truncate text-lg font-black text-slate-800">
-                                      {vendorGroup.vendor}
-                                    </h5>
-
-                                    <p className="mt-1 text-sm font-bold text-emerald-700">
-                                      {stats.poCount}{" "}
-                                      {stats.poCount === 1 ? "PO" : "POs"} •{" "}
-                                      {stats.itemCount}{" "}
-                                      {stats.itemCount === 1
-                                        ? "item"
-                                        : "items"}{" "}
-                                      complete
-                                    </p>
-                                  </div>
-                                </div>
-
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <span className="inline-flex rounded-lg bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-700 shadow-sm">
-                                    {stats.poCount}{" "}
-                                    {stats.poCount === 1
-                                      ? "PO"
-                                      : "POs"}
-                                  </span>
-
-                                  <span className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
-                                    <ChevronDown
-                                      aria-hidden="true"
-                                      className={`h-5 w-5 transition-transform ${
-                                        stopIsOpen ? "rotate-180" : ""
-                                      }`}
-                                      strokeWidth={2.6}
-                                    />
-                                  </span>
-                                </div>
-                              </button>
-
-                              {supplierAddress ? (
-                                <a
-                                  href={getDirectionsUrl(supplierAddress)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="mx-3 mb-3 inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-[#dc1f2b] sm:mx-0 sm:my-3 sm:mr-3"
-                                >
-                                  Directions
-                                  <ArrowUpRight
-                                    aria-hidden="true"
-                                    className="h-4 w-4"
-                                    strokeWidth={2.6}
-                                  />
-                                </a>
-                              ) : null}
-                            </div>
-
-                            {stopIsOpen ? (
-                              <div className="space-y-3 border-t border-slate-200 bg-slate-50 p-3">
-                                {vendorGroup.runs.map((supplierRun) => (
-                                  <SupplierRunCard
-                                    key={supplierRun.id}
-                                    supplierRun={getDisplaySupplierRun(
-                                      supplierRun,
-                                    )}
-                                    onSavePickupPhoto={
-                                      onSaveSupplierRunItemPickupPhoto
-                                    }
-                                    onUpdateItemDescription={
-                                      onUpdateSupplierRunItemDescription
-                                    }
-                                    onDelete={
-                                      canManageSupplierRun(supplierRun)
-                                        ? onDeleteSupplierRun
-                                        : undefined
-                                    }
-                                    isCompletedSection
-                                    showCustomerName={
-                                      canViewSouthCustomerName
-                                    }
-                                  />
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    ) : null}
-                  </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
           </>
           ) : null}
         </section>
