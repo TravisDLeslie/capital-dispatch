@@ -221,7 +221,46 @@ function groupRunsByVendor(
     ];
   }, []);
 
-  return sortVendorGroups(vendorGroups, manualVendorOrder, vendorRouteOrder);
+  const groupsWithActiveRunsFirst = vendorGroups.map((vendorGroup) => ({
+    ...vendorGroup,
+    runs: [...vendorGroup.runs].sort((firstRun, secondRun) => {
+      const firstIsComplete =
+        firstRun.status === "complete" ||
+        (Array.isArray(firstRun.items) &&
+          firstRun.items.length > 0 &&
+          firstRun.items.every(isPickupItemComplete));
+      const secondIsComplete =
+        secondRun.status === "complete" ||
+        (Array.isArray(secondRun.items) &&
+          secondRun.items.length > 0 &&
+          secondRun.items.every(isPickupItemComplete));
+
+      return Number(firstIsComplete) - Number(secondIsComplete);
+    }),
+  }));
+
+  return sortVendorGroups(
+    groupsWithActiveRunsFirst,
+    manualVendorOrder,
+    vendorRouteOrder,
+  ).sort((firstGroup, secondGroup) => {
+    const firstGroupIsComplete = firstGroup.runs.every(
+      (supplierRun) =>
+        supplierRun.status === "complete" ||
+        (Array.isArray(supplierRun.items) &&
+          supplierRun.items.length > 0 &&
+          supplierRun.items.every(isPickupItemComplete)),
+    );
+    const secondGroupIsComplete = secondGroup.runs.every(
+      (supplierRun) =>
+        supplierRun.status === "complete" ||
+        (Array.isArray(supplierRun.items) &&
+          supplierRun.items.length > 0 &&
+          supplierRun.items.every(isPickupItemComplete)),
+    );
+
+    return Number(firstGroupIsComplete) - Number(secondGroupIsComplete);
+  });
 }
 
 function groupRunsByDriverAndVendor(
@@ -1029,44 +1068,62 @@ export default function SupplierRunsPage({
     setSuccessMessage(`PO ${supplierRun.poNumber} was updated.`);
   }
 
-  function toggleStop(driver, vendor, scope = "open") {
+  function toggleStop(
+    driver,
+    vendor,
+    scope = "open",
+    defaultOpen = scope === "open",
+  ) {
     const stopKey = `${scope}::${driver}::${vendor}`;
 
     setOpenStopKeys((currentOpenStopKeys) => ({
       ...currentOpenStopKeys,
-      [stopKey]: !currentOpenStopKeys[stopKey],
+      [stopKey]:
+        currentOpenStopKeys[stopKey] === undefined
+          ? !defaultOpen
+          : !currentOpenStopKeys[stopKey],
     }));
   }
 
-  function toggleDriver(driver, scope = "open") {
+  function toggleDriver(
+    driver,
+    scope = "open",
+    defaultOpen = scope === "open",
+  ) {
     const driverKey = `${scope}::${driver}`;
 
     setOpenDriverKeys((currentOpenDriverKeys) => ({
       ...currentOpenDriverKeys,
-      [driverKey]: !currentOpenDriverKeys[driverKey],
+      [driverKey]:
+        currentOpenDriverKeys[driverKey] === undefined
+          ? !defaultOpen
+          : !currentOpenDriverKeys[driverKey],
     }));
   }
 
-  function isDriverOpen(driver, scope = "open") {
+  function isDriverOpen(
+    driver,
+    scope = "open",
+    defaultOpen = scope === "open",
+  ) {
     const driverKey = `${scope}::${driver}`;
 
-    if (scope === "open") {
-      return openDriverKeys[driverKey] !== false;
-    }
-
-    return Boolean(openDriverKeys[driverKey]);
+    return openDriverKeys[driverKey] === undefined
+      ? defaultOpen
+      : openDriverKeys[driverKey];
   }
 
-  function isStopOpen(driver, vendor, scope = "open", defaultOpen = true) {
+  function isStopOpen(
+    driver,
+    vendor,
+    scope = "open",
+    defaultOpen = scope === "open",
+  ) {
     const stopKey = `${scope}::${driver}::${vendor}`;
 
-    if (scope === "open") {
-      return defaultOpen
-        ? openStopKeys[stopKey] !== false
-        : openStopKeys[stopKey] === true;
-    }
-
-    return Boolean(openStopKeys[stopKey]);
+    return openStopKeys[stopKey] === undefined
+      ? defaultOpen
+      : openStopKeys[stopKey];
   }
 
   function canManageSupplierRun(supplierRun) {
@@ -1803,6 +1860,9 @@ export default function SupplierRunsPage({
       supplierRun.status === "complete" &&
       !shouldKeepCompletedRunInActiveStop(supplierRun),
   );
+  const completedPoCount = filteredVisibleRuns.filter(
+    (supplierRun) => supplierRun.status === "complete",
+  ).length;
 
   const routeOrdersByDriver = southRouteOrders
     .filter(
@@ -3201,7 +3261,7 @@ export default function SupplierRunsPage({
               </p>
 
               <p className="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
-                {completeRuns.length}
+                {completedPoCount}
               </p>
             </div>
           </div>
@@ -3224,7 +3284,7 @@ export default function SupplierRunsPage({
             />
           ) : null}
 
-          {filteredVisibleRuns.length > 0 ? (
+          {openRuns.length > 0 ? (
             <div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -3501,11 +3561,14 @@ export default function SupplierRunsPage({
                           2,
                           "0",
                         );
+                        const stopDefaultOpen = isDriverView
+                          ? isCurrentStop
+                          : !isCompleteStop;
                         const stopIsOpen = isStopOpen(
                           driverGroup.driver,
                           vendorGroup.vendor,
                           "open",
-                          isDriverView ? isCurrentStop : !isCompleteStop,
+                          stopDefaultOpen,
                         );
                         return (
                           <div
@@ -3615,6 +3678,8 @@ export default function SupplierRunsPage({
                                     toggleStop(
                                       driverGroup.driver,
                                       vendorGroup.vendor,
+                                      "open",
+                                      stopDefaultOpen,
                                     )
                                   }
                                   className="flex w-full min-w-0 flex-col gap-3 px-4 py-4 pr-12 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between sm:py-3 sm:pr-4"
@@ -3724,6 +3789,8 @@ export default function SupplierRunsPage({
                                     toggleStop(
                                       driverGroup.driver,
                                       vendorGroup.vendor,
+                                      "open",
+                                      stopDefaultOpen,
                                     )
                                   }
                                   className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-slate-700 transition hover:bg-slate-100 sm:hidden"
@@ -3780,6 +3847,8 @@ export default function SupplierRunsPage({
                                       toggleStop(
                                         driverGroup.driver,
                                         vendorGroup.vendor,
+                                        "open",
+                                        stopDefaultOpen,
                                       )
                                     }
                                     className="hidden h-9 w-9 items-center justify-center rounded-full border border-blue-100 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 sm:flex"
@@ -3903,7 +3972,7 @@ export default function SupplierRunsPage({
             </div>
           ) : null}
 
-          {!isDriverView && completeRuns.length > 0 ? (
+          {completeRuns.length > 0 ? (
             <div className="mt-8 border-t border-slate-200 pt-6">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -3925,6 +3994,7 @@ export default function SupplierRunsPage({
                   const driverIsOpen = isDriverOpen(
                     driverGroup.driver,
                     "complete",
+                    isDriverView,
                   );
 
                   return (
@@ -3935,7 +4005,11 @@ export default function SupplierRunsPage({
                       <button
                         type="button"
                         onClick={() =>
-                          toggleDriver(driverGroup.driver, "complete")
+                          toggleDriver(
+                            driverGroup.driver,
+                            "complete",
+                            isDriverView,
+                          )
                         }
                         className="mb-3 flex w-full flex-wrap items-center justify-between gap-2 rounded-xl px-2 py-2 text-left transition hover:bg-slate-100"
                         aria-expanded={driverIsOpen}
@@ -3997,6 +4071,7 @@ export default function SupplierRunsPage({
                           driverGroup.driver,
                           vendorGroup.vendor,
                           "complete",
+                          isDriverView,
                         );
 
                         return (
@@ -4012,6 +4087,7 @@ export default function SupplierRunsPage({
                                     driverGroup.driver,
                                     vendorGroup.vendor,
                                     "complete",
+                                    isDriverView,
                                   )
                                 }
                                 className="flex min-w-0 flex-1 flex-col gap-3 px-4 py-3 text-left transition hover:bg-red-50/40 sm:flex-row sm:items-center sm:justify-between"

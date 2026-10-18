@@ -785,10 +785,15 @@ export default function SupplierRunCard({
       ).length;
 
       if (remainingAfterPickup === 0) {
-        setCompletedPOPrompt({
-          poNumber: supplierRun.poNumber || "this PO",
-          vendor: supplierRun.vendor || "this vendor",
-        });
+        if (driverFocused) {
+          setCompletedPOPrompt(null);
+          setIsItemsOpen(false);
+        } else {
+          setCompletedPOPrompt({
+            poNumber: supplierRun.poNumber || "this PO",
+            vendor: supplierRun.vendor || "this vendor",
+          });
+        }
       }
     } catch (photoError) {
       console.error("Unable to save pickup photo:", photoError);
@@ -837,10 +842,15 @@ export default function SupplierRunCard({
       ).length;
 
       if (remainingAfterPickup === 0) {
-        setCompletedPOPrompt({
-          poNumber: supplierRun.poNumber || "this PO",
-          vendor: supplierRun.vendor || "this vendor",
-        });
+        if (driverFocused) {
+          setCompletedPOPrompt(null);
+          setIsItemsOpen(false);
+        } else {
+          setCompletedPOPrompt({
+            poNumber: supplierRun.poNumber || "this PO",
+            vendor: supplierRun.vendor || "this vendor",
+          });
+        }
       }
     } catch (pickupError) {
       console.error("Unable to mark pickup item complete:", pickupError);

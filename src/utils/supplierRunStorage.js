@@ -45,6 +45,12 @@ function saveLocalSupplierRuns(supplierRuns) {
   }
 }
 
+function getSupplierRunsForMutation(knownSupplierRuns) {
+  return Array.isArray(knownSupplierRuns)
+    ? knownSupplierRuns
+    : getLocalSupplierRuns();
+}
+
 function sortSupplierRuns(supplierRuns) {
   return [...supplierRuns].sort(
     (firstRun, secondRun) =>
@@ -126,8 +132,8 @@ export function subscribeToSupplierRuns(
   );
 }
 
-export async function addSupplierRun(supplierRun) {
-  const currentSupplierRuns = getLocalSupplierRuns();
+export async function addSupplierRun(supplierRun, knownSupplierRuns) {
+  const currentSupplierRuns = getSupplierRunsForMutation(knownSupplierRuns);
   const updatedSupplierRuns = sortSupplierRuns([
     supplierRun,
     ...currentSupplierRuns,
@@ -153,8 +159,9 @@ export async function updateSupplierRunItems(
   supplierRunId,
   items,
   supplierRunUpdates = {},
+  knownSupplierRuns,
 ) {
-  const currentSupplierRuns = getLocalSupplierRuns();
+  const currentSupplierRuns = getSupplierRunsForMutation(knownSupplierRuns);
   const currentSupplierRun = currentSupplierRuns.find(
     (supplierRun) => supplierRun.id === supplierRunId,
   );
@@ -202,8 +209,9 @@ export async function updateSupplierRunItems(
 export async function updateSupplierRunItemPhotos(
   supplierRunId,
   items,
+  knownSupplierRuns,
 ) {
-  const currentSupplierRuns = getLocalSupplierRuns();
+  const currentSupplierRuns = getSupplierRunsForMutation(knownSupplierRuns);
   const updatedAt = new Date().toISOString();
   const firestoreItems = removeUndefinedValues(items);
   const updatedSupplierRuns = currentSupplierRuns.map((supplierRun) =>
@@ -234,8 +242,9 @@ export async function updateSupplierRunItemPhotos(
 export async function updateSupplierRun(
   supplierRunId,
   supplierRunUpdates,
+  knownSupplierRuns,
 ) {
-  const currentSupplierRuns = getLocalSupplierRuns();
+  const currentSupplierRuns = getSupplierRunsForMutation(knownSupplierRuns);
   const updatedAt = new Date().toISOString();
   const updates = {
     ...supplierRunUpdates,
@@ -262,8 +271,11 @@ export async function updateSupplierRun(
   return updatedSupplierRuns;
 }
 
-export async function updateSupplierRunsBulk(supplierRunUpdates) {
-  const currentSupplierRuns = getLocalSupplierRuns();
+export async function updateSupplierRunsBulk(
+  supplierRunUpdates,
+  knownSupplierRuns,
+) {
+  const currentSupplierRuns = getSupplierRunsForMutation(knownSupplierRuns);
   const updatedAt = new Date().toISOString();
   const normalizedUpdates = (Array.isArray(supplierRunUpdates)
     ? supplierRunUpdates
@@ -309,8 +321,11 @@ export async function updateSupplierRunsBulk(supplierRunUpdates) {
   return updatedSupplierRuns;
 }
 
-export async function deleteSupplierRun(supplierRunId) {
-  const currentSupplierRuns = getLocalSupplierRuns();
+export async function deleteSupplierRun(
+  supplierRunId,
+  knownSupplierRuns,
+) {
+  const currentSupplierRuns = getSupplierRunsForMutation(knownSupplierRuns);
 
   const updatedSupplierRuns = currentSupplierRuns.filter(
     (supplierRun) => supplierRun.id !== supplierRunId,

@@ -2352,6 +2352,7 @@ export default function App() {
           supplierRun.rolloverFromScheduledDate || supplierRun.scheduledDate,
         rolledOverAt: new Date().toISOString(),
       })),
+      supplierRuns,
     )
       .then((updatedSupplierRuns) => {
         setSupplierRuns(updatedSupplierRuns);
@@ -3309,7 +3310,7 @@ export default function App() {
     supplierRun: SupplierRun,
   ) {
     const updatedSupplierRuns =
-      await addSupplierRun(supplierRun);
+      await addSupplierRun(supplierRun, supplierRuns);
 
     setSupplierRuns(updatedSupplierRuns);
     setSyncError("");
@@ -3322,6 +3323,7 @@ export default function App() {
     const updatedSupplierRuns = await updateSupplierRun(
       supplierRunId,
       supplierRunUpdates,
+      supplierRuns,
     );
 
     setSupplierRuns(updatedSupplierRuns);
@@ -3878,23 +3880,47 @@ export default function App() {
       allItemsPickedUp
         ? supplierRun.completedAt || new Date().toISOString()
         : null;
+    const updatedAt = new Date().toISOString();
 
-    const updatedSupplierRuns = options.markPickedUp
-      ? await updateSupplierRunItems(
-          supplierRunId,
-          updatedItems,
-          {
-            status: allItemsPickedUp ? "complete" : "open",
-            completedAt,
-            stopWorkflowVersion: supplierRun.stopWorkflowVersion || 1,
-          },
-        )
-      : await updateSupplierRunItemPhotos(
-          supplierRunId,
-          updatedItems,
-        );
+    if (options.markPickedUp) {
+      await updateSupplierRunItems(
+        supplierRunId,
+        updatedItems,
+        {
+          status: allItemsPickedUp ? "complete" : "open",
+          completedAt,
+          stopWorkflowVersion: supplierRun.stopWorkflowVersion || 1,
+          updatedAt,
+        },
+        supplierRuns,
+      );
+    } else {
+      await updateSupplierRunItemPhotos(
+        supplierRunId,
+        updatedItems,
+        supplierRuns,
+      );
+    }
 
-    setSupplierRuns(updatedSupplierRuns);
+    setSupplierRuns((currentSupplierRuns) =>
+      currentSupplierRuns.map((currentSupplierRun) =>
+        currentSupplierRun.id === supplierRunId
+          ? {
+              ...currentSupplierRun,
+              items: updatedItems,
+              updatedAt,
+              ...(options.markPickedUp
+                ? {
+                    status: allItemsPickedUp ? "complete" : "open",
+                    completedAt,
+                    stopWorkflowVersion:
+                      supplierRun.stopWorkflowVersion || 1,
+                  }
+                : {}),
+            }
+          : currentSupplierRun,
+      ),
+    );
     setSyncError("");
   }
 
@@ -3919,7 +3945,10 @@ export default function App() {
       return;
     }
 
-    const updatedSupplierRuns = await updateSupplierRunsBulk(updates);
+    const updatedSupplierRuns = await updateSupplierRunsBulk(
+      updates,
+      supplierRuns,
+    );
 
     setSupplierRuns(updatedSupplierRuns);
     setSyncError("");
@@ -3948,7 +3977,10 @@ export default function App() {
       return;
     }
 
-    const updatedSupplierRuns = await updateSupplierRunsBulk(updates);
+    const updatedSupplierRuns = await updateSupplierRunsBulk(
+      updates,
+      supplierRuns,
+    );
 
     setSupplierRuns(updatedSupplierRuns);
     setSyncError("");
@@ -4014,6 +4046,8 @@ export default function App() {
       await updateSupplierRunItems(
         supplierRunId,
         updatedItems,
+        {},
+        supplierRuns,
       );
 
     setSupplierRuns(updatedSupplierRuns);
@@ -4035,7 +4069,7 @@ export default function App() {
     }
 
     const updatedSupplierRuns =
-      await deleteSupplierRun(supplierRunId);
+      await deleteSupplierRun(supplierRunId, supplierRuns);
 
     setSupplierRuns(updatedSupplierRuns);
     setSyncError("");
