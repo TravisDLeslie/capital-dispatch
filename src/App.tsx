@@ -34,6 +34,7 @@ import {
   X,
 } from "lucide-react";
 import AppHeader from "./components/AppHeader";
+import DispatchOpsDailyDeliveries from "./components/DispatchOpsDailyDeliveries";
 import SectionHubPage from "./components/SectionHubPage";
 import LoginPage from "./components/LoginPage";
 import {
@@ -1309,6 +1310,10 @@ function getAllowedPageIds(
   };
   const addWorkViewPageIds = (pageIds: string[]) => {
     const nextPageIds = addParentPageIds(pageIds);
+
+    if (workView === "dispatch-ops") {
+      nextPageIds.push("receiving", "check-in", "today", "search", "trace");
+    }
 
     if (["driver", "receiving"].includes(String(workView || ""))) {
       nextPageIds.push("south");
@@ -4263,76 +4268,83 @@ export default function App() {
         <SectionHubPage
           eyebrow="Employee Dashboard"
           title="Dispatch Ops"
-          description="See the South workload, assign waiting work, and build the next delivery route."
+          description="Assign waiting work, monitor South pickups, and plan delivery routes from one place."
           icon={ClipboardCheck}
-          stats={[
-            {
-              icon: ClipboardCheck,
-              label: "Needs Dispatch",
-              value: southNeedsDispatch + deliveryNeedsDispatch,
-              note: "South and deliveries",
-            },
-            {
-              icon: Truck,
-              label: "South Today",
-              value: adminDashboardOperations.southOpen || 0,
-              note: "Assigned open POs",
-            },
-            {
-              icon: PackageCheck,
-              label: "South Scheduled",
-              value: adminDashboardOperations.southScheduled || 0,
-              note: "All open POs",
-            },
-          ]}
-          actionsClassName="grid gap-4 xl:grid-cols-3"
+          stats={[]}
+          actionsClassName="grid gap-4 lg:grid-cols-3"
           actions={[
             dashboardAllowedPageIds.includes("dispatch")
               ? {
                   icon: ClipboardCheck,
-                  label: "Quick Link",
-                  title: "Dispatch",
+                  label:
+                    southNeedsDispatch + deliveryNeedsDispatch > 0
+                      ? "Action Needed"
+                      : "All Assigned",
+                  title: "Dispatch Queue",
                   description:
-                    "Open South and delivery requests that still need a driver or truck.",
+                    southNeedsDispatch + deliveryNeedsDispatch > 0
+                      ? "Assign a driver and truck to the South and delivery requests waiting below."
+                      : "Nothing is waiting for assignment. Open the board to review dispatched work.",
                   metric: southNeedsDispatch + deliveryNeedsDispatch,
                   metricLabel: "Waiting",
-                  tone:
-                    southNeedsDispatch + deliveryNeedsDispatch > 0
-                      ? "warning"
-                      : "success",
-                  variant: "live",
+                  ctaLabel: "Open Queue",
+                  className: "lg:col-span-3",
+                  solidIcon: true,
+                  tone: "priority",
+                  variant: "priority",
                   onClick: () => setCurrentPage("dispatch"),
                 }
               : null,
             dashboardAllowedPageIds.includes("south-overview") || canReadSouth
               ? {
                   icon: Truck,
-                  label: "South Fulfillment",
-                  title: "South Pickups",
+                  label: "South Route",
+                  title: "Pickup Board",
                   description:
-                    "See today’s pickup route, open items, scheduled POs, and South calendar.",
-                  metric: adminDashboardOperations.southOpen || 0,
-                  metricLabel: "Today",
+                    "View today’s stops, open pickup items, scheduled POs, and the South calendar.",
+                  ctaLabel: "View Pickups",
+                  solidIcon: true,
                   tone: "success",
-                  variant: "live",
+                  variant: "default",
                   onClick: () => setCurrentPage("south-overview"),
                 }
               : null,
             dashboardAllowedPageIds.includes("deliveries-route-planner")
               ? {
                   icon: Route,
-                  label: "Quick Link",
+                  label: "Delivery Planning",
                   title: "Route Planner",
                   description:
-                    "Enter delivery addresses, organize the fastest order, and review the full route.",
-                  metric: "Plan",
-                  metricLabel: "Route",
+                    "Add delivery addresses, find the fastest stop order, and review the full route.",
+                  ctaLabel: "Plan Route",
+                  solidIcon: true,
                   tone: "dispatch",
-                  variant: "live",
+                  variant: "default",
                   onClick: () => setCurrentPage("deliveries-route-planner"),
                 }
               : null,
+            dashboardAllowedPageIds.includes("receiving")
+              ? {
+                  icon: Package,
+                  label: "Inbound Material",
+                  title: "Receiving",
+                  description:
+                    "Check in incoming material, attach photos, and look up PO details.",
+                  ctaLabel: "Open Receiving",
+                  solidIcon: true,
+                  tone: "receiving",
+                  variant: "default",
+                  onClick: () => setCurrentPage("receiving"),
+                }
+              : null,
           ]}
+          topContent={
+            <DispatchOpsDailyDeliveries
+              createdBy={currentUserCreator}
+              driverOptions={approvedEmployeeNames}
+              className="mb-5"
+            />
+          }
         />
       );
     }

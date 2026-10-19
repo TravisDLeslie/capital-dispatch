@@ -30,6 +30,11 @@ const dispatchOpsPermissionIds = [
   "supplier-runs-calendar",
   "deliveries-dispatch",
   "deliveries-route-planner",
+  "receiving",
+  "check-in",
+  "today",
+  "search",
+  "trace",
 ];
 
 const permissionGroups = [
