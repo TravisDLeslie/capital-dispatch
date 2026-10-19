@@ -22,6 +22,7 @@ import {
   getGoogleMapsApiKey,
   loadGooglePlaces,
 } from "../utils/googlePlaces";
+import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 
 const ROUTE_STOPS_STORAGE_KEY = "dispatch-cl-delivery-route-stops";
 const MAX_ROUTE_STOPS = 10;
@@ -530,16 +531,15 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
               </label>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <div className="min-w-0 flex-1">
-                  <input
+                  <AddressAutocompleteInput
                     id="route-planner-address"
-                    type="text"
                     value={address}
-                    onChange={(event) => {
-                      setAddress(event.target.value);
+                    onChange={(nextAddress) => {
+                      setAddress(nextAddress);
                       setError("");
                     }}
-                    autoComplete="street-address"
-                    enterKeyHint="done"
+                    autoComplete="off"
+                    enableLocalFallback
                     placeholder="Start typing a jobsite address..."
                     className="w-full rounded-2xl border border-slate-300 px-4 py-3.5 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                   />
