@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import AppHeader from "./components/AppHeader";
 import DispatchOpsDailyDeliveries from "./components/DispatchOpsDailyDeliveries";
+import FeatureErrorBoundary from "./components/FeatureErrorBoundary";
 import SectionHubPage from "./components/SectionHubPage";
 import LoginPage from "./components/LoginPage";
 import {
@@ -4265,14 +4266,24 @@ export default function App() {
         adminDashboardOperations.deliveryNeedsDispatch || 0;
 
       return (
-        <SectionHubPage
-          eyebrow="Employee Dashboard"
-          title="Dispatch Ops"
-          description="Assign waiting work, monitor South pickups, and plan delivery routes from one place."
-          icon={ClipboardCheck}
-          stats={[]}
-          actionsClassName="grid gap-4 lg:grid-cols-3"
-          actions={[
+        <FeatureErrorBoundary
+          fallback={
+            <div className="mx-auto mt-8 max-w-6xl px-4 sm:px-6 lg:px-8">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
+                Dispatch Ops could not finish loading. Refresh the page and try
+                again.
+              </div>
+            </div>
+          }
+        >
+          <SectionHubPage
+            eyebrow="Employee Dashboard"
+            title="Dispatch Ops"
+            description="Assign waiting work, monitor South pickups, and plan delivery routes from one place."
+            icon={ClipboardCheck}
+            stats={[]}
+            actionsClassName="grid gap-4 lg:grid-cols-3"
+            actions={[
             dashboardAllowedPageIds.includes("dispatch")
               ? {
                   icon: ClipboardCheck,
@@ -4337,15 +4348,25 @@ export default function App() {
                   onClick: () => setCurrentPage("receiving"),
                 }
               : null,
-          ]}
-          topContent={
-            <DispatchOpsDailyDeliveries
-              createdBy={currentUserCreator}
-              driverOptions={approvedEmployeeNames}
-              className="mb-5"
-            />
-          }
-        />
+            ]}
+            topContent={
+              <FeatureErrorBoundary
+                fallback={
+                  <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
+                    Today’s delivery list could not load. The Dispatch Ops links
+                    below are still available.
+                  </div>
+                }
+              >
+                <DispatchOpsDailyDeliveries
+                  createdBy={currentUserCreator}
+                  driverOptions={approvedEmployeeNames}
+                  className="mb-5"
+                />
+              </FeatureErrorBoundary>
+            }
+          />
+        </FeatureErrorBoundary>
       );
     }
 

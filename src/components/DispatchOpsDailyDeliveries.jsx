@@ -195,8 +195,13 @@ export default function DispatchOpsDailyDeliveries({
   const [routeRetryVersion, setRouteRetryVersion] = useState(0);
   const routeAttemptsRef = useRef(new Set());
   const deliveriesRef = useRef(deliveries);
+  const safeDriverOptions = Array.isArray(driverOptions) ? driverOptions : [];
   const normalizedDriverOptions = Array.from(
-    new Set(driverOptions.filter(Boolean).map((driver) => String(driver).trim())),
+    new Set(
+      safeDriverOptions
+        .filter(Boolean)
+        .map((driver) => String(driver).trim()),
+    ),
   ).sort((firstDriver, secondDriver) =>
     firstDriver.localeCompare(secondDriver),
   );
@@ -256,7 +261,7 @@ export default function DispatchOpsDailyDeliveries({
   useEffect(() => {
     const deliveriesNeedingRoutes = deliveries.filter(
       (delivery) =>
-        delivery.address?.trim() &&
+        String(delivery.address || "").trim() &&
         !delivery.distanceText &&
         !routeAttemptsRef.current.has(delivery.id),
     );
@@ -268,7 +273,7 @@ export default function DispatchOpsDailyDeliveries({
         [delivery.id]: "loading",
       }));
 
-      calculateDeliveryRoute(delivery.address.trim())
+      calculateDeliveryRoute(String(delivery.address || "").trim())
         .then(async (routeData) => {
           const latestDelivery =
             deliveriesRef.current.find(
@@ -280,7 +285,8 @@ export default function DispatchOpsDailyDeliveries({
           }
 
           if (
-            latestDelivery.address?.trim() !== delivery.address.trim()
+            String(latestDelivery.address || "").trim() !==
+            String(delivery.address || "").trim()
           ) {
             routeAttemptsRef.current.delete(delivery.id);
             setDeliveryRouteStatuses((currentStatuses) => ({
@@ -465,12 +471,17 @@ export default function DispatchOpsDailyDeliveries({
     setError("");
 
     try {
-      await deleteDispatchOpsDelivery(delivery.id);
+      const deleteResult = await deleteDispatchOpsDelivery(delivery.id);
       setDeliveries((currentDeliveries) =>
         currentDeliveries.filter(
           (currentDelivery) => currentDelivery.id !== delivery.id,
         ),
       );
+      if (deleteResult.syncPending) {
+        setError(
+          "Removed on this device. The shared deletion will sync when the connection is available.",
+        );
+      }
     } catch (deleteError) {
       console.error("Unable to remove Dispatch Ops delivery:", deleteError);
       setError("Unable to remove this delivery. Check the connection and try again.");
