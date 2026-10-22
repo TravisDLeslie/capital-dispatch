@@ -26,7 +26,24 @@ import {
 
 const ROUTE_STOPS_STORAGE_KEY = "dispatch-cl-delivery-route-stops";
 const MAX_ROUTE_STOPS = 10;
-const DELIVERY_SERVICE_MINUTES = 35;
+const DEFAULT_SERVICE_TYPE = "small";
+const STOP_SERVICE_OPTIONS = [
+  { id: "small", label: "Small delivery", minutes: 35 },
+  { id: "large", label: "Large delivery", minutes: 75 },
+  { id: "return", label: "Return", minutes: 90 },
+];
+
+function getStopServiceOption(stopOrServiceType) {
+  const serviceType =
+    typeof stopOrServiceType === "string"
+      ? stopOrServiceType
+      : stopOrServiceType?.serviceType;
+
+  return (
+    STOP_SERVICE_OPTIONS.find((option) => option.id === serviceType) ||
+    STOP_SERVICE_OPTIONS[0]
+  );
+}
 
 function loadSavedStops() {
   try {
@@ -120,6 +137,7 @@ function withTimeout(promise, timeoutMs, message) {
 
 export default function DeliveryRoutePlannerPage({ onPageChange }) {
   const [address, setAddress] = useState("");
+  const [stopServiceType, setStopServiceType] = useState(DEFAULT_SERVICE_TYPE);
   const [stops, setStops] = useState(loadSavedStops);
   const [error, setError] = useState("");
   const [mapImageError, setMapImageError] = useState(false);
@@ -135,7 +153,11 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
   });
   const googleMapsApiKey = getGoogleMapsApiKey();
   const googleMapsRouteUrl = useMemo(() => getGoogleMapsRouteUrl(stops), [stops]);
-  const deliveryTimeMinutes = stops.length * DELIVERY_SERVICE_MINUTES;
+  const deliveryTimeMinutes = stops.reduce(
+    (totalMinutes, stop) =>
+      totalMinutes + getStopServiceOption(stop).minutes,
+    0,
+  );
   const routeLegs = Array.isArray(routeState.route?.legs)
     ? routeState.route.legs
     : [];
@@ -303,11 +325,25 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
       {
         id: createId(),
         address: nextAddress,
+        serviceType: stopServiceType,
         createdAt: new Date().toISOString(),
       },
     ]);
     setAddress("");
+    setStopServiceType(DEFAULT_SERVICE_TYPE);
     setError("");
+  }
+
+  function updateStopServiceType(stopId, serviceType) {
+    if (!STOP_SERVICE_OPTIONS.some((option) => option.id === serviceType)) {
+      return;
+    }
+
+    setStops((currentStops) =>
+      currentStops.map((stop) =>
+        stop.id === stopId ? { ...stop, serviceType } : stop,
+      ),
+    );
   }
 
   function moveStop(stopIndex, direction) {
@@ -344,6 +380,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
 
     setStops([]);
     setAddress("");
+    setStopServiceType(DEFAULT_SERVICE_TYPE);
     setError("");
     setOptimizationStatus({ status: "idle", message: "" });
   }
@@ -510,7 +547,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(440px,1.1fr)]">
+      <div className="grid gap-6 min-[1100px]:max-[1279px]:grid-cols-[minmax(0,0.98fr)_minmax(390px,1.02fr)] xl:grid-cols-[minmax(0,0.9fr)_minmax(440px,1.1fr)]">
         <div className="space-y-5">
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex items-center gap-3">
@@ -558,6 +595,37 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                   Save stop
                 </button>
               </div>
+              <fieldset className="mt-3">
+                <legend className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  Stop type and service time
+                </legend>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {STOP_SERVICE_OPTIONS.map((option) => {
+                    const isSelected = stopServiceType === option.id;
+
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setStopServiceType(option.id)}
+                        aria-pressed={isSelected}
+                        className={`rounded-xl border px-3 py-2.5 text-left transition ${
+                          isSelected
+                            ? "border-[#FC2C38] bg-red-50 ring-2 ring-red-100"
+                            : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span className="block text-sm font-black text-slate-900">
+                          {option.label}
+                        </span>
+                        <span className="mt-0.5 block text-xs font-bold text-slate-500">
+                          {formatDurationMinutes(option.minutes)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
               <p className="mt-2 text-xs font-bold text-slate-500">
                 Stops save automatically on this device.
               </p>
@@ -631,11 +699,14 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
               />
             ) : (
               <div className="space-y-3">
-                {stops.map((stop, stopIndex) => (
-                  <article
-                    key={stop.id}
-                    className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
-                  >
+                {stops.map((stop, stopIndex) => {
+                  const serviceOption = getStopServiceOption(stop);
+
+                  return (
+                    <article
+                      key={stop.id}
+                      className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
+                    >
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FC2C38] text-sm font-black text-white">
                       {stopIndex + 1}
                     </span>
@@ -646,10 +717,25 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                       <p className="mt-1 text-sm font-bold leading-5 text-slate-800">
                         {stop.address}
                       </p>
-                      <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-800 ring-1 ring-amber-100">
+                      <label className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-800 ring-1 ring-amber-100">
                         <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                        {DELIVERY_SERVICE_MINUTES} min on-site delivery time
-                      </span>
+                        <span className="sr-only">
+                          Service type for stop {stopIndex + 1}
+                        </span>
+                        <select
+                          value={serviceOption.id}
+                          onChange={(event) =>
+                            updateStopServiceType(stop.id, event.target.value)
+                          }
+                          className="cursor-pointer bg-transparent font-black outline-none"
+                        >
+                          {STOP_SERVICE_OPTIONS.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label} · {formatDurationMinutes(option.minutes)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
                     <div className="flex shrink-0 gap-1">
                       <button
@@ -679,8 +765,9 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
                 <article className="flex items-start gap-3 rounded-2xl bg-slate-950 p-3 text-white shadow-sm">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[#FC2C38]">
                     <Warehouse className="h-5 w-5" aria-hidden="true" />
@@ -716,8 +803,8 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
           </section>
         </div>
 
-        <section className="h-fit rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:sticky xl:top-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <section className="h-fit rounded-3xl border border-slate-200 bg-white p-4 shadow-sm min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:max-[1279px]:p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-[1100px]:max-[1279px]:items-stretch">
             <div>
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                 <Navigation className="h-4 w-4" aria-hidden="true" />
@@ -727,7 +814,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                 All stops + return map
               </h2>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 min-[1100px]:max-[1279px]:grid min-[1100px]:max-[1279px]:grid-cols-2">
               {staticMapUrl && !mapImageError ? (
                 <button
                   type="button"
@@ -757,10 +844,10 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
               src={staticMapUrl}
               alt="Round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
               onError={() => setMapImageError(true)}
-              className="mt-3 h-[clamp(320px,44vh,500px)] w-full rounded-2xl border border-slate-200 bg-slate-100 object-contain"
+              className="mt-3 h-[clamp(320px,44vh,500px)] w-full rounded-2xl border border-slate-200 bg-slate-100 object-contain min-[1100px]:max-[1279px]:h-[280px]"
             />
           ) : (
-            <div className="mt-3 flex h-[clamp(320px,44vh,500px)] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
+            <div className="mt-3 flex h-[clamp(320px,44vh,500px)] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center min-[1100px]:max-[1279px]:h-[280px]">
               <div>
                 <MapPin className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
                 <p className="mt-3 text-sm font-black text-slate-700">
@@ -810,7 +897,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                       Delivery time
                     </p>
                     <p className="mt-0.5 text-[9px] font-bold text-amber-950/70 sm:text-[10px]">
-                      {DELIVERY_SERVICE_MINUTES} min × {stops.length} {stops.length === 1 ? "stop" : "stops"}
+                      Based on each saved stop type
                     </p>
                   </div>
                   <div className="rounded-xl bg-[#FC2C38] px-2 py-2.5 text-center">
@@ -827,7 +914,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                   </div>
                 </div>
                 <p className="mt-2 text-center text-[10px] font-bold text-slate-300">
-                  Total includes the drive back to Capital Lumber + {DELIVERY_SERVICE_MINUTES} minutes at each stop
+                  Total includes the drive back to Capital Lumber + the selected service time at each stop
                 </p>
               </div>
 
