@@ -249,7 +249,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
 
     const params = new URLSearchParams({
       key: googleMapsApiKey,
-      size: "640x520",
+      size: "640x640",
       scale: "2",
       maptype: "roadmap",
     });
@@ -757,10 +757,10 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
               src={staticMapUrl}
               alt="Round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
               onError={() => setMapImageError(true)}
-              className="mt-3 h-[clamp(260px,36vh,390px)] w-full rounded-2xl border border-slate-200 object-cover"
+              className="mt-3 h-[clamp(320px,44vh,500px)] w-full rounded-2xl border border-slate-200 bg-slate-100 object-contain"
             />
           ) : (
-            <div className="mt-3 flex h-[clamp(260px,36vh,390px)] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
+            <div className="mt-3 flex h-[clamp(320px,44vh,500px)] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center">
               <div>
                 <MapPin className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
                 <p className="mt-3 text-sm font-black text-slate-700">
