@@ -193,6 +193,7 @@ export default function DeliveryRoutePlannerPage({
     message: "",
   });
   const [sharedRoutes, setSharedRoutes] = useState([]);
+  const [sharedRoutesLoaded, setSharedRoutesLoaded] = useState(false);
   const [sharedRouteSyncError, setSharedRouteSyncError] = useState("");
   const [optimizationStatus, setOptimizationStatus] = useState({
     status: "idle",
@@ -224,6 +225,7 @@ export default function DeliveryRoutePlannerPage({
       ? null
       : driveTimeMinutes + deliveryTimeMinutes;
   const latestSharedRoute = sharedRoutes[0] || null;
+  const isReadOnlyDriverView = Boolean(currentDriverName && !canShareRoute);
   const uniqueDriverOptions = useMemo(
     () =>
       [...new Set(driverOptions.map((option) => String(option || "").trim()))]
@@ -247,24 +249,40 @@ export default function DeliveryRoutePlannerPage({
   useEffect(() => {
     if (!currentDriverName) {
       setSharedRoutes([]);
+      setSharedRoutesLoaded(false);
       setSharedRouteSyncError("");
       return () => {};
     }
+
+    setSharedRoutesLoaded(false);
 
     return subscribeToSharedDeliveryRoutes(
       currentDriverName,
       (nextSharedRoutes) => {
         setSharedRoutes(nextSharedRoutes);
+        setSharedRoutesLoaded(true);
         setSharedRouteSyncError("");
       },
       (syncError) => {
         console.error("Unable to load shared delivery route:", syncError);
+        setSharedRoutesLoaded(true);
         setSharedRouteSyncError(
           "The shared route could not sync. Check your connection and try again.",
         );
       },
     );
   }, [currentDriverName]);
+
+  useEffect(() => {
+    if (!isReadOnlyDriverView || !sharedRoutesLoaded) {
+      return;
+    }
+
+    setStops(latestSharedRoute?.stops || []);
+    setAddress("");
+    setError("");
+    setOptimizationStatus({ status: "idle", message: "" });
+  }, [isReadOnlyDriverView, latestSharedRoute, sharedRoutesLoaded]);
 
   useEffect(() => {
     if (!isMapExpanded) {
@@ -687,14 +705,15 @@ export default function DeliveryRoutePlannerPage({
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
-            Quick Route
+            {isReadOnlyDriverView ? "Driver Route" : "Quick Route"}
           </p>
           <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-            Delivery Route Planner
+            {isReadOnlyDriverView ? "My Delivery Route" : "Delivery Route Planner"}
           </h1>
           <p className="mt-2 max-w-3xl text-lg font-semibold leading-7 text-slate-500">
-            Add jobsite addresses, arrange the stops, and see the full round trip
-            from Capital Lumber back to the yard.
+            {isReadOnlyDriverView
+              ? "View the route shared with you, including every stop and the return to Capital Lumber."
+              : "Add jobsite addresses, arrange the stops, and see the full round trip from Capital Lumber back to the yard."}
           </p>
         </div>
         {canShareRoute ? (
@@ -731,19 +750,40 @@ export default function DeliveryRoutePlannerPage({
                   {latestSharedRoute.createdByName
                     ? `Shared by ${latestSharedRoute.createdByName}. `
                     : ""}
-                  Load it to see the stops, map, and full round-trip time.
+                  {isReadOnlyDriverView
+                    ? "Your stops, map, and full round-trip time are ready below."
+                    : "Load it to see the stops, map, and full round-trip time."}
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => loadSharedRoute(latestSharedRoute)}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700"
-            >
-              <Navigation className="h-4 w-4" aria-hidden="true" />
-              Load shared route
-            </button>
+            {isReadOnlyDriverView ? (
+              <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-100 px-4 py-3 text-sm font-black text-emerald-800">
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                Ready to drive
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => loadSharedRoute(latestSharedRoute)}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700"
+              >
+                <Navigation className="h-4 w-4" aria-hidden="true" />
+                Load shared route
+              </button>
+            )}
           </div>
+        </section>
+      ) : null}
+
+      {isReadOnlyDriverView && sharedRoutesLoaded && !latestSharedRoute ? (
+        <section className="mb-5 rounded-3xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+          <MapPin className="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
+          <h2 className="mt-3 text-xl font-black text-slate-950">
+            No route has been shared with you
+          </h2>
+          <p className="mt-1 text-sm font-bold text-slate-500">
+            Your assigned route will appear here automatically after dispatch shares it.
+          </p>
         </section>
       ) : null}
 
@@ -753,6 +793,7 @@ export default function DeliveryRoutePlannerPage({
         </p>
       ) : null}
 
+      {!isReadOnlyDriverView || latestSharedRoute ? (
       <div className="grid gap-6 min-[1100px]:max-[1279px]:grid-cols-[minmax(0,0.98fr)_minmax(390px,1.02fr)] xl:grid-cols-[minmax(0,0.9fr)_minmax(440px,1.1fr)]">
         <div className="space-y-5">
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -771,6 +812,7 @@ export default function DeliveryRoutePlannerPage({
               </div>
             </div>
 
+            {!isReadOnlyDriverView ? (
             <form onSubmit={handleAddStop} className="mt-5">
               <label
                 htmlFor="route-planner-address"
@@ -841,19 +883,21 @@ export default function DeliveryRoutePlannerPage({
                 </p>
               ) : null}
             </form>
+            ) : null}
           </section>
 
           <section className="rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                  Stop order
+                  {isReadOnlyDriverView ? "Assigned route" : "Stop order"}
                 </p>
                 <h2 className="mt-1 text-2xl font-black text-slate-950">
-                  Saved addresses
+                  {isReadOnlyDriverView ? "Delivery stops" : "Saved addresses"}
                 </h2>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {!isReadOnlyDriverView ? (
                 <button
                   type="button"
                   onClick={optimizeRoute}
@@ -867,10 +911,11 @@ export default function DeliveryRoutePlannerPage({
                     ? "Organizing..."
                     : "Optimize fastest route"}
                 </button>
+                ) : null}
                 <span className="rounded-full bg-white px-3 py-1.5 text-sm font-black text-slate-700 shadow-sm">
                   {stops.length} {stops.length === 1 ? "stop" : "stops"}
                 </span>
-                {stops.length > 0 ? (
+                {stops.length > 0 && !isReadOnlyDriverView ? (
                   <button
                     type="button"
                     onClick={clearAllStops}
@@ -923,6 +968,12 @@ export default function DeliveryRoutePlannerPage({
                       <p className="mt-1 text-sm font-bold leading-5 text-slate-800">
                         {stop.address}
                       </p>
+                      {isReadOnlyDriverView ? (
+                        <span className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-800 ring-1 ring-amber-100">
+                          <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                          {serviceOption.label} · {formatDurationMinutes(serviceOption.minutes)}
+                        </span>
+                      ) : (
                       <label className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-800 ring-1 ring-amber-100">
                         <Clock className="h-3.5 w-3.5" aria-hidden="true" />
                         <span className="sr-only">
@@ -942,7 +993,9 @@ export default function DeliveryRoutePlannerPage({
                           ))}
                         </select>
                       </label>
+                      )}
                     </div>
+                    {!isReadOnlyDriverView ? (
                     <div className="flex shrink-0 gap-1">
                       <button
                         type="button"
@@ -971,6 +1024,7 @@ export default function DeliveryRoutePlannerPage({
                         <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>
+                    ) : null}
                     </article>
                   );
                 })}
@@ -1147,6 +1201,7 @@ export default function DeliveryRoutePlannerPage({
           ) : null}
         </section>
       </div>
+      ) : null}
 
       {isMapExpanded && staticMapUrl ? (
         <div
