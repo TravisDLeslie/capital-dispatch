@@ -94,7 +94,7 @@ export default async function handler(request, response) {
           "X-Goog-Api-Key": apiKey,
           ...(requestReferrer ? { Referer: requestReferrer } : {}),
           "X-Goog-FieldMask":
-            "routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.optimizedIntermediateWaypointIndex",
+            "routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.optimizedIntermediateWaypointIndex,routes.legs.duration,routes.legs.staticDuration,routes.legs.distanceMeters",
         },
         body: JSON.stringify({
           origin: { address: origin },
@@ -142,6 +142,20 @@ export default async function handler(request, response) {
       durationText: formatDuration(durationSeconds),
       distanceMeters: route.distanceMeters || 0,
       distanceText: formatDistance(route.distanceMeters),
+      legs: Array.isArray(route.legs)
+        ? route.legs.map((leg) => {
+            const legDurationSeconds =
+              readRouteDurationSeconds(leg.duration) ||
+              readRouteDurationSeconds(leg.staticDuration);
+
+            return {
+              durationSeconds: legDurationSeconds,
+              durationText: formatDuration(legDurationSeconds),
+              distanceMeters: leg.distanceMeters || 0,
+              distanceText: formatDistance(leg.distanceMeters),
+            };
+          })
+        : [],
       encodedPolyline: route.polyline?.encodedPolyline || "",
       optimizedWaypointOrder: Array.isArray(
         route.optimizedIntermediateWaypointIndex,

@@ -13,6 +13,7 @@ import {
   Warehouse,
   X,
 } from "lucide-react";
+import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
@@ -22,7 +23,6 @@ import {
   getGoogleMapsApiKey,
   loadGooglePlaces,
 } from "../utils/googlePlaces";
-import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 
 const ROUTE_STOPS_STORAGE_KEY = "dispatch-cl-delivery-route-stops";
 const MAX_ROUTE_STOPS = 10;
@@ -64,10 +64,10 @@ function getGoogleMapsRouteUrl(stops) {
   const params = new URLSearchParams({
     api: "1",
     origin: capitalLumberAddress,
-    destination: stops[stops.length - 1].address,
+    destination: capitalLumberAddress,
     travelmode: "driving",
   });
-  const waypointAddresses = stops.slice(0, -1).map((stop) => stop.address);
+  const waypointAddresses = stops.map((stop) => stop.address);
 
   if (waypointAddresses.length > 0) {
     params.set("waypoints", waypointAddresses.join("|"));
@@ -136,6 +136,12 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
   const googleMapsApiKey = getGoogleMapsApiKey();
   const googleMapsRouteUrl = useMemo(() => getGoogleMapsRouteUrl(stops), [stops]);
   const deliveryTimeMinutes = stops.length * DELIVERY_SERVICE_MINUTES;
+  const routeLegs = Array.isArray(routeState.route?.legs)
+    ? routeState.route.legs
+    : [];
+  const returnToYardLeg = routeLegs.length > stops.length
+    ? routeLegs[routeLegs.length - 1]
+    : null;
   const driveTimeMinutes = Number(routeState.route?.durationSeconds)
     ? Math.max(1, Math.round(Number(routeState.route.durationSeconds) / 60))
     : null;
@@ -188,8 +194,8 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
       didTimeOut = true;
       controller.abort();
     }, 8000);
-    const destination = stops[stops.length - 1].address;
-    const waypointAddresses = stops.slice(0, -1).map((stop) => stop.address);
+    const destination = capitalLumberAddress;
+    const waypointAddresses = stops.map((stop) => stop.address);
     const params = new URLSearchParams({
       origin: capitalLumberAddress,
       destination,
@@ -499,8 +505,8 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
           Delivery Route Planner
         </h1>
         <p className="mt-2 max-w-3xl text-lg font-semibold leading-7 text-slate-500">
-          Add jobsite addresses, arrange the stops, and see the full route from
-          Capital Lumber.
+          Add jobsite addresses, arrange the stops, and see the full round trip
+          from Capital Lumber back to the yard.
         </p>
       </div>
 
@@ -675,6 +681,36 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                     </div>
                   </article>
                 ))}
+                <article className="flex items-start gap-3 rounded-2xl bg-slate-950 p-3 text-white shadow-sm">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-[#FC2C38]">
+                    <Warehouse className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+                      Return to yard
+                    </p>
+                    <p className="mt-1 text-sm font-bold leading-5 text-white">
+                      {capitalLumberAddress}
+                    </p>
+                    <p className="mt-2 text-xs font-bold text-slate-300">
+                      Final stop → Capital Lumber · drive only, no delivery time
+                    </p>
+                  </div>
+                  <div className="shrink-0 rounded-xl bg-white/10 px-3 py-2 text-right">
+                    <p className="text-base font-black text-white">
+                      {returnToYardLeg?.durationText ||
+                        (routeState.status === "loading" ? "..." : "--")}
+                    </p>
+                    <p className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
+                      Drive back
+                    </p>
+                    {returnToYardLeg?.distanceText ? (
+                      <p className="mt-0.5 text-[10px] font-bold text-slate-300">
+                        {returnToYardLeg.distanceText}
+                      </p>
+                    ) : null}
+                  </div>
+                </article>
               </div>
             )}
           </section>
@@ -685,10 +721,10 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
             <div>
               <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                 <Navigation className="h-4 w-4" aria-hidden="true" />
-                Route from Capital
+                Round trip from Capital
               </p>
               <h2 className="mt-1 text-2xl font-black text-slate-950">
-                All stops map
+                All stops + return map
               </h2>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -719,7 +755,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
           {staticMapUrl && !mapImageError ? (
             <img
               src={staticMapUrl}
-              alt="Delivery route from Capital Lumber through the saved stops"
+              alt="Round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
               onError={() => setMapImageError(true)}
               className="mt-3 h-[clamp(260px,36vh,390px)] w-full rounded-2xl border border-slate-200 object-cover"
             />
@@ -763,7 +799,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                         (routeState.status === "loading" ? "..." : "--")}
                     </p>
                     <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-slate-300 sm:text-[10px]">
-                      Driving time
+                      Round-trip drive
                     </p>
                   </div>
                   <div className="rounded-xl bg-amber-400 px-2 py-2.5 text-center text-slate-950">
@@ -791,7 +827,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
                   </div>
                 </div>
                 <p className="mt-2 text-center text-[10px] font-bold text-slate-300">
-                  Total = driving + {DELIVERY_SERVICE_MINUTES} minutes at each stop
+                  Total includes the drive back to Capital Lumber + {DELIVERY_SERVICE_MINUTES} minutes at each stop
                 </p>
               </div>
 
@@ -835,7 +871,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                  Route from Capital
+                  Round trip from Capital
                 </p>
                 <h2 className="text-xl font-black text-slate-950 sm:text-2xl">
                   Expanded route map
@@ -854,7 +890,7 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
             <div className="min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
               <img
                 src={staticMapUrl}
-                alt="Expanded delivery route from Capital Lumber through the saved stops"
+                alt="Expanded round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
                 className="h-full w-full rounded-2xl bg-white object-contain shadow-inner"
               />
             </div>
