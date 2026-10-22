@@ -185,6 +185,22 @@ service cloud.firestore {
       );
     }
 
+    function canManageDeliveryRoutes() {
+      return isApproved() && (
+        isAdmin() ||
+        (
+          userProfile().workView != "driver" &&
+          (
+            userProfile().workView == "dispatch-ops" ||
+            hasAnyPermission([
+              "deliveries-dispatch",
+              "deliveries-route-planner"
+            ])
+          )
+        )
+      );
+    }
+
     function isSales() {
       return isApproved() && (
         isAdmin() ||
@@ -222,12 +238,16 @@ service cloud.firestore {
     function isDriverFor(driverName) {
       return isApproved() &&
         userProfile().driverName == driverName &&
-        hasAnyPermission([
-          "supplier-runs-check",
-          "supplier-runs-calendar",
-          "south-calendar",
-          "deliveries-queue"
-        ]);
+        (
+          userProfile().workView == "driver" ||
+          hasAnyPermission([
+            "supplier-runs-check",
+            "supplier-runs-calendar",
+            "south-calendar",
+            "deliveries-queue",
+            "deliveries-route-planner"
+          ])
+        );
     }
 
     match /users/{userId} {
@@ -251,7 +271,7 @@ service cloud.firestore {
         isSuperAdmin()
       );
 
-      allow list: if isSuperAdmin();
+      allow list: if isSuperAdmin() || canManageDeliveryRoutes();
 
       allow update: if isSuperAdmin() ||
         (
@@ -331,6 +351,12 @@ service cloud.firestore {
       allow read: if isDelivery() || isDriverFor(resource.data.driver);
       allow create, delete: if isDelivery();
       allow update: if isDelivery() || isDriverFor(resource.data.driver);
+    }
+
+    match /sharedDeliveryRoutes/{routeId} {
+      allow read: if canManageDeliveryRoutes() ||
+        isDriverFor(resource.data.assignedDriverName);
+      allow create, update, delete: if canManageDeliveryRoutes();
     }
 
     match /bouncieVehicleSettings/{vehicleSettingId} {

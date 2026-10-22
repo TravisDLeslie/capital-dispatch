@@ -1324,6 +1324,10 @@ function getAllowedPageIds(
         nextPageIds.push(
           "supplier-runs-calendar",
           "south-calendar",
+          "deliveries",
+          "deliveries-queue",
+          "deliveries-calendar",
+          "deliveries-route-planner",
         );
       }
     }
@@ -2101,6 +2105,12 @@ export default function App() {
     hasDriverName &&
     !["superAdmin", "admin"].includes(effectiveUserRole) &&
     canReadDeliveries;
+  const canShareDeliveryRoutes =
+    !isDeliveryDriverScopedView &&
+    (isSuperAdmin ||
+      ["superAdmin", "admin"].includes(effectiveUserRole) ||
+      effectiveWorkView === "dispatch-ops" ||
+      effectiveAllowedPageIds.includes("deliveries-dispatch"));
   const shouldShowDriverDashboard =
     isDriverWorkView ||
     (hasDriverName &&
@@ -2416,7 +2426,7 @@ export default function App() {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!isSuperAdmin) {
+    if (!isSuperAdmin && !canShareDeliveryRoutes) {
       setUsers([]);
       return;
     }
@@ -2431,7 +2441,7 @@ export default function App() {
         reportBackgroundSyncError(error);
       },
     );
-  }, [isSuperAdmin]);
+  }, [canShareDeliveryRoutes, isSuperAdmin]);
 
   useEffect(() => {
     if (!isApproved || !canAssignSouthRoutes) {
@@ -6376,7 +6386,15 @@ export default function App() {
         );
 
       case "deliveries-route-planner":
-        return <DeliveryRoutePlannerPage onPageChange={navigateToPage} />;
+        return (
+          <DeliveryRoutePlannerPage
+            onPageChange={navigateToPage}
+            driverOptions={deliveryDriverOptions}
+            currentDriverName={driverName}
+            canShareRoute={canShareDeliveryRoutes}
+            createdBy={currentUserCreator}
+          />
+        );
 
       case "deliveries-dispatch":
         return (

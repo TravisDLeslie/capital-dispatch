@@ -2,14 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  CheckCircle2,
   Clock,
   ExternalLink,
   MapPin,
   Maximize2,
   Navigation,
   Plus,
+  Send,
+  Share2,
   Sparkles,
   Trash2,
+  UserRound,
   Warehouse,
   X,
 } from "lucide-react";
@@ -20,6 +24,11 @@ import PageContainer from "../components/PageContainer";
 import { capitalLumberAddress } from "../data/options";
 import { createId } from "../utils/idHelpers";
 import {
+  getSharedDeliveryRouteId,
+  saveSharedDeliveryRoute,
+  subscribeToSharedDeliveryRoutes,
+} from "../utils/deliveryRouteStorage";
+import {
   getGoogleMapsApiKey,
   loadGooglePlaces,
 } from "../utils/googlePlaces";
@@ -27,6 +36,7 @@ import {
 const ROUTE_STOPS_STORAGE_KEY = "dispatch-cl-delivery-route-stops";
 const MAX_ROUTE_STOPS = 10;
 const DEFAULT_SERVICE_TYPE = "small";
+const EMPTY_DRIVER_OPTIONS = /** @type {string[]} */ ([]);
 const STOP_SERVICE_OPTIONS = [
   { id: "small", label: "Small delivery", minutes: 35 },
   { id: "large", label: "Large delivery", minutes: 75 },
@@ -116,6 +126,33 @@ function formatDurationMinutes(totalMinutes) {
   return `${minutes} min`;
 }
 
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatRouteDate(dateKey) {
+  if (!dateKey) {
+    return "Shared route";
+  }
+
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const routeDate = new Date(year, month - 1, day);
+
+  if (Number.isNaN(routeDate.getTime())) {
+    return dateKey;
+  }
+
+  return routeDate.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function withTimeout(promise, timeoutMs, message) {
   return new Promise((resolve, reject) => {
     const timeoutId = globalThis.setTimeout(() => {
@@ -135,13 +172,28 @@ function withTimeout(promise, timeoutMs, message) {
   });
 }
 
-export default function DeliveryRoutePlannerPage({ onPageChange }) {
+export default function DeliveryRoutePlannerPage({
+  onPageChange,
+  driverOptions = EMPTY_DRIVER_OPTIONS,
+  currentDriverName = "",
+  canShareRoute = false,
+  createdBy = {},
+}) {
   const [address, setAddress] = useState("");
   const [stopServiceType, setStopServiceType] = useState(DEFAULT_SERVICE_TYPE);
   const [stops, setStops] = useState(loadSavedStops);
   const [error, setError] = useState("");
   const [mapImageError, setMapImageError] = useState(false);
   const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareDriverName, setShareDriverName] = useState("");
+  const [shareRouteDate, setShareRouteDate] = useState(getLocalDateKey);
+  const [shareStatus, setShareStatus] = useState({
+    status: "idle",
+    message: "",
+  });
+  const [sharedRoutes, setSharedRoutes] = useState([]);
+  const [sharedRouteSyncError, setSharedRouteSyncError] = useState("");
   const [optimizationStatus, setOptimizationStatus] = useState({
     status: "idle",
     message: "",
@@ -171,6 +223,18 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
     driveTimeMinutes === null
       ? null
       : driveTimeMinutes + deliveryTimeMinutes;
+  const latestSharedRoute = sharedRoutes[0] || null;
+  const uniqueDriverOptions = useMemo(
+    () =>
+      [...new Set(driverOptions.map((option) => String(option || "").trim()))]
+        .filter(Boolean)
+        .sort((firstOption, secondOption) =>
+          firstOption.localeCompare(secondOption, undefined, {
+            sensitivity: "base",
+          }),
+        ),
+    [driverOptions],
+  );
 
   useEffect(() => {
     try {
@@ -179,6 +243,28 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
       console.warn("Unable to save delivery route stops:", storageError);
     }
   }, [stops]);
+
+  useEffect(() => {
+    if (!currentDriverName) {
+      setSharedRoutes([]);
+      setSharedRouteSyncError("");
+      return () => {};
+    }
+
+    return subscribeToSharedDeliveryRoutes(
+      currentDriverName,
+      (nextSharedRoutes) => {
+        setSharedRoutes(nextSharedRoutes);
+        setSharedRouteSyncError("");
+      },
+      (syncError) => {
+        console.error("Unable to load shared delivery route:", syncError);
+        setSharedRouteSyncError(
+          "The shared route could not sync. Check your connection and try again.",
+        );
+      },
+    );
+  }, [currentDriverName]);
 
   useEffect(() => {
     if (!isMapExpanded) {
@@ -385,6 +471,70 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
     setOptimizationStatus({ status: "idle", message: "" });
   }
 
+  function openShareModal() {
+    setShareDriverName("");
+    setShareRouteDate(getLocalDateKey());
+    setShareStatus({ status: "idle", message: "" });
+    setIsShareModalOpen(true);
+  }
+
+  async function shareRoute(event) {
+    event.preventDefault();
+
+    if (!shareDriverName) {
+      setShareStatus({
+        status: "error",
+        message: "Choose a driver to share this route with.",
+      });
+      return;
+    }
+
+    setShareStatus({ status: "loading", message: "Sharing route..." });
+
+    try {
+      await saveSharedDeliveryRoute({
+        id: getSharedDeliveryRouteId(shareDriverName, shareRouteDate),
+        assignedDriverName: shareDriverName,
+        routeDate: shareRouteDate,
+        stops,
+        distanceText: routeState.route?.distanceText || "",
+        driveTimeText: routeState.route?.durationText || "",
+        deliveryTimeMinutes,
+        totalRouteMinutes: totalRouteMinutes || 0,
+        createdById: createdBy.id || "",
+        createdByName: createdBy.name || "",
+        createdByEmail: createdBy.email || "",
+      });
+
+      setShareStatus({
+        status: "success",
+        message: `Route shared with ${shareDriverName}.`,
+      });
+    } catch (shareError) {
+      console.error("Unable to share delivery route:", shareError);
+      setShareStatus({
+        status: "error",
+        message:
+          shareError?.message ||
+          "The route could not be shared. Check your connection and try again.",
+      });
+    }
+  }
+
+  function loadSharedRoute(route) {
+    if (!Array.isArray(route?.stops) || route.stops.length === 0) {
+      return;
+    }
+
+    setStops(route.stops);
+    setAddress("");
+    setError("");
+    setOptimizationStatus({
+      status: "success",
+      message: `Loaded the route shared for ${formatRouteDate(route.routeDate)}.`,
+    });
+  }
+
   async function getBrowserOptimizedOrder(routeStops) {
     const google = await withTimeout(
       loadGooglePlaces(),
@@ -534,18 +684,74 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
         ]}
       />
 
-      <div className="mb-6">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
-          Quick Route
-        </p>
-        <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-          Delivery Route Planner
-        </h1>
-        <p className="mt-2 max-w-3xl text-lg font-semibold leading-7 text-slate-500">
-          Add jobsite addresses, arrange the stops, and see the full round trip
-          from Capital Lumber back to the yard.
-        </p>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
+            Quick Route
+          </p>
+          <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
+            Delivery Route Planner
+          </h1>
+          <p className="mt-2 max-w-3xl text-lg font-semibold leading-7 text-slate-500">
+            Add jobsite addresses, arrange the stops, and see the full round trip
+            from Capital Lumber back to the yard.
+          </p>
+        </div>
+        {canShareRoute ? (
+          <button
+            type="button"
+            onClick={openShareModal}
+            disabled={stops.length === 0}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Share2 className="h-4 w-4" aria-hidden="true" />
+            Share route
+          </button>
+        ) : null}
       </div>
+
+      {latestSharedRoute ? (
+        <section className="mb-5 rounded-3xl border border-blue-200 bg-blue-50 p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white">
+                <Send className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                  Route shared with you · {formatRouteDate(latestSharedRoute.routeDate)}
+                </p>
+                <h2 className="mt-1 text-xl font-black text-slate-950">
+                  {latestSharedRoute.stops.length} {latestSharedRoute.stops.length === 1 ? "stop" : "stops"}
+                  {latestSharedRoute.distanceText
+                    ? ` · ${latestSharedRoute.distanceText}`
+                    : ""}
+                </h2>
+                <p className="mt-1 text-sm font-bold text-slate-600">
+                  {latestSharedRoute.createdByName
+                    ? `Shared by ${latestSharedRoute.createdByName}. `
+                    : ""}
+                  Load it to see the stops, map, and full round-trip time.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadSharedRoute(latestSharedRoute)}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700"
+            >
+              <Navigation className="h-4 w-4" aria-hidden="true" />
+              Load shared route
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      {sharedRouteSyncError ? (
+        <p className="mb-5 rounded-xl bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+          {sharedRouteSyncError}
+        </p>
+      ) : null}
 
       <div className="grid gap-6 min-[1100px]:max-[1279px]:grid-cols-[minmax(0,0.98fr)_minmax(390px,1.02fr)] xl:grid-cols-[minmax(0,0.9fr)_minmax(440px,1.1fr)]">
         <div className="space-y-5">
@@ -1009,6 +1215,158 @@ export default function DeliveryRoutePlannerPage({ onPageChange }) {
               </div>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {isShareModalOpen ? (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="share-route-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsShareModalOpen(false);
+            }
+          }}
+        >
+          <form
+            onSubmit={shareRoute}
+            className="w-full max-w-lg rounded-3xl bg-white p-5 shadow-2xl sm:p-6"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
+                  <Share2 className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                    Send to the driver app
+                  </p>
+                  <h2
+                    id="share-route-title"
+                    className="mt-1 text-2xl font-black text-slate-950"
+                  >
+                    Share this route
+                  </h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(false)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-100"
+                aria-label="Close share route dialog"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="block sm:col-span-2">
+                <span className="mb-2 flex items-center gap-2 text-sm font-black text-slate-800">
+                  <UserRound className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                  Driver
+                </span>
+                {uniqueDriverOptions.length > 0 ? (
+                  <select
+                    value={shareDriverName}
+                    onChange={(event) => {
+                      setShareDriverName(event.target.value);
+                      setShareStatus({ status: "idle", message: "" });
+                    }}
+                    autoFocus
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                  >
+                    <option value="">Choose a driver...</option>
+                    {uniqueDriverOptions.map((driverOption) => (
+                      <option key={driverOption} value={driverOption}>
+                        {driverOption}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={shareDriverName}
+                    onChange={(event) => {
+                      setShareDriverName(event.target.value);
+                      setShareStatus({ status: "idle", message: "" });
+                    }}
+                    placeholder="Type the driver's exact app name"
+                    autoFocus
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                  />
+                )}
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-black text-slate-800">
+                  Route date
+                </span>
+                <input
+                  type="date"
+                  value={shareRouteDate}
+                  onChange={(event) => setShareRouteDate(event.target.value)}
+                  required
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-base font-bold text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+              </label>
+
+              <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  Route snapshot
+                </p>
+                <p className="mt-1 text-lg font-black text-slate-950">
+                  {stops.length} {stops.length === 1 ? "stop" : "stops"}
+                </p>
+                <p className="text-xs font-bold text-slate-500">
+                  {routeState.route?.distanceText || "Distance calculating"}
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-4 rounded-xl bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800">
+              The driver will see this route inside Route Planner after signing in.
+            </p>
+
+            {shareStatus.message ? (
+              <p
+                className={`mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold ${
+                  shareStatus.status === "success"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : shareStatus.status === "error"
+                      ? "bg-red-50 text-red-700"
+                      : "bg-slate-50 text-slate-700"
+                }`}
+              >
+                {shareStatus.status === "success" ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+                ) : null}
+                {shareStatus.message}
+              </p>
+            ) : null}
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(false)}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+              >
+                {shareStatus.status === "success" ? "Done" : "Cancel"}
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  !shareDriverName.trim() ||
+                  !shareRouteDate ||
+                  shareStatus.status === "loading"
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Send className="h-4 w-4" aria-hidden="true" />
+                {shareStatus.status === "loading" ? "Sharing..." : "Share with driver"}
+              </button>
+            </div>
+          </form>
         </div>
       ) : null}
     </PageContainer>
