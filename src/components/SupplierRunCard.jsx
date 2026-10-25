@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Check, FileText, MessageSquareText, X } from "lucide-react";
+import {
+  Camera,
+  Check,
+  FileText,
+  Images,
+  MessageSquareText,
+  X,
+} from "lucide-react";
 import CustomerNameBadge from "./CustomerNameBadge";
 import capitalLumberLogo from "../assets/capital-lumber-logo-black-text.png";
 import {
@@ -1114,6 +1121,8 @@ export default function SupplierRunCard({
               {activePickupItem ? (() => {
                 const item = activePickupItem;
                 const pickupPhotoInputId = `pickup-photo-${supplierRun.id}-${item.id}`;
+                const pickupCameraInputId = `${pickupPhotoInputId}-camera`;
+                const pickupLibraryInputId = `${pickupPhotoInputId}-library`;
                 const materialUseClasses = getMaterialUseClasses(
                   item.materialUse,
                   isPickupItemComplete(item),
@@ -1184,32 +1193,61 @@ export default function SupplierRunCard({
                       </div>
                     ) : null}
 
-                    <div
-                      className={`relative mt-4 flex min-h-[54px] w-full items-center justify-center gap-3 overflow-hidden rounded-xl px-4 py-3 text-base font-black text-white shadow-sm transition ${
-                        processingPhotoItemId
-                          ? "cursor-not-allowed bg-slate-400 opacity-70"
-                          : "cursor-pointer bg-slate-950 hover:bg-slate-800"
-                      }`}
-                    >
-                      <input
-                        id={pickupPhotoInputId}
-                        type="file"
-                        accept="image/*"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setPhotoError("");
-                        }}
-                        onChange={(event) =>
-                          handlePickupPhotoChange(item, event)
-                        }
-                        disabled={Boolean(processingPhotoItemId)}
-                        className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-                      />
-                      {processingPhotoItemId === item.id
-                        ? "Saving photo..."
-                        : latestPickupPhoto
-                          ? "Add another pickup photo"
-                          : "Take pickup photo"}
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <label
+                        htmlFor={pickupCameraInputId}
+                        className={`flex min-h-[58px] items-center justify-center gap-2 rounded-xl px-3 py-3 text-center text-sm font-black text-white shadow-sm transition ${
+                          processingPhotoItemId
+                            ? "cursor-not-allowed bg-slate-400 opacity-70"
+                            : "cursor-pointer bg-slate-950 hover:bg-slate-800"
+                        }`}
+                      >
+                        <Camera className="h-5 w-5 shrink-0" aria-hidden="true" />
+                        {processingPhotoItemId === item.id
+                          ? "Saving..."
+                          : "Take Photo"}
+                        <input
+                          id={pickupCameraInputId}
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setPhotoError("");
+                          }}
+                          onChange={(event) =>
+                            handlePickupPhotoChange(item, event)
+                          }
+                          disabled={Boolean(processingPhotoItemId)}
+                          className="sr-only"
+                        />
+                      </label>
+
+                      <label
+                        htmlFor={pickupLibraryInputId}
+                        className={`flex min-h-[58px] items-center justify-center gap-2 rounded-xl border px-3 py-3 text-center text-sm font-black shadow-sm transition ${
+                          processingPhotoItemId
+                            ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 opacity-70"
+                            : "cursor-pointer border-slate-300 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50"
+                        }`}
+                      >
+                        <Images className="h-5 w-5 shrink-0" aria-hidden="true" />
+                        Choose Photos
+                        <input
+                          id={pickupLibraryInputId}
+                          type="file"
+                          accept="image/*"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setPhotoError("");
+                          }}
+                          onChange={(event) =>
+                            handlePickupPhotoChange(item, event)
+                          }
+                          disabled={Boolean(processingPhotoItemId)}
+                          className="sr-only"
+                        />
+                      </label>
                     </div>
 
                     {getPhotoUrl(latestPickupPhoto) ? (
@@ -1243,20 +1281,13 @@ export default function SupplierRunCard({
                     ) : null}
 
                     {pickupPhotos.length === 0 ? (
-                      <label
-                        htmlFor={pickupPhotoInputId}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setPhotoError("");
-                        }}
-                        className="mt-3 flex min-h-[54px] w-full cursor-pointer items-center justify-between gap-3 rounded-xl border border-blue-200 bg-white px-4 py-3 text-left text-sm font-black uppercase tracking-[0.08em] text-blue-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
-                      >
-                        <span>Photo required - tap to take photo</span>
+                      <div className="mt-3 flex min-h-[54px] w-full items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-left text-sm font-black uppercase tracking-[0.08em] text-blue-700">
+                        <span>Photo required — take one or choose from photos above</span>
                         <span
                           className="flex h-7 w-7 shrink-0 items-center justify-center rounded border-2 border-blue-300 bg-blue-50"
                           aria-hidden="true"
                         />
-                      </label>
+                      </div>
                     ) : (
                       <button
                         type="button"
