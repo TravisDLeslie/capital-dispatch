@@ -535,6 +535,13 @@ function getPhotoSaveErrorMessage(error) {
   const code = String(error?.code || "");
 
   if (
+    code.includes("storage/quota-exceeded") ||
+    message.toLowerCase().includes("quota for bucket")
+  ) {
+    return "Photo storage is temporarily unavailable. This stop is allowed, but an admin needs to enable Firebase Storage billing before photos can be saved.";
+  }
+
+  if (
     code.includes("storage/unauthorized") ||
     code.includes("permission-denied")
   ) {
