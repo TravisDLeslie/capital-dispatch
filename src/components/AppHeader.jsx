@@ -205,7 +205,14 @@ function getCurrentPageLabel(currentPage) {
     return "Sales";
   }
 
-  if (["documents", "stocking-handbook"].includes(currentPage)) {
+  if (
+    [
+      "documents",
+      "stocking-handbook",
+      "trex-price-book",
+      "timbertech-price-book",
+    ].includes(currentPage)
+  ) {
     return "Documents";
   }
 
@@ -309,7 +316,14 @@ function getCurrentPageGroup(currentPage) {
     return "Sales";
   }
 
-  if (["documents", "stocking-handbook"].includes(currentPage)) {
+  if (
+    [
+      "documents",
+      "stocking-handbook",
+      "trex-price-book",
+      "timbertech-price-book",
+    ].includes(currentPage)
+  ) {
     return "Documents";
   }
 
@@ -785,7 +799,12 @@ export default function AppHeader({
             )) ||
           (item.id === "documents" &&
             allowedPageIds.some((pageId) =>
-              ["documents", "stocking-handbook"].includes(pageId),
+              [
+                "documents",
+                "stocking-handbook",
+                "trex-price-book",
+                "timbertech-price-book",
+              ].includes(pageId),
             )) ||
           (item.id === "accounting" &&
             allowedPageIds.some((pageId) =>

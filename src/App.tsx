@@ -24,6 +24,7 @@ import {
   MailCheck,
   Package,
   PackageCheck,
+  Percent,
   Plus,
   Route,
   Search,
@@ -238,6 +239,10 @@ const SalesConverterPage = lazy(() => import("./pages/SalesConverterPage"));
 const SalesOrdersPage = lazy(() => import("./pages/SalesOrdersPage"));
 const SalesReportPage = lazy(() => import("./pages/SalesReportPage"));
 const StockingHandbookPage = lazy(() => import("./pages/StockingHandbookPage"));
+const TrexPriceBookPage = lazy(() => import("./pages/TrexPriceBookPage"));
+const TimberTechPriceBookPage = lazy(
+  () => import("./pages/TimberTechPriceBookPage"),
+);
 const SouthHubPage = lazy(() => import("./pages/SouthHubPage"));
 const SouthOverviewPage = lazy(() => import("./pages/SouthOverviewPage"));
 const SupplierRunsPage = lazy(() => import("./pages/SupplierRunsPage"));
@@ -258,6 +263,8 @@ const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
 const SOUTH_PICKUP_AUTO_REFRESH_MS = 5 * 60 * 1000;
 const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
+const TREX_PRICE_BOOK_ITEM_COUNT = 686;
+const TIMBERTECH_COLLECTION_COUNT = 12;
 
 function getProfileDisplayName(user: Partial<UserProfile> | null | undefined) {
   const emailName = String(user?.email || "").split("@")[0] || "";
@@ -756,6 +763,8 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "sales-converter",
     "documents",
     "stocking-handbook",
+    "trex-price-book",
+    "timbertech-price-book",
   ],
   accounting: [
     "dashboard",
@@ -1224,6 +1233,8 @@ function getAllowedPageIdsForRole(role: string) {
       "sales-converter",
       "trace",
       "stocking-handbook",
+      "trex-price-book",
+      "timbertech-price-book",
       "accounting",
       "accounting-customers",
       "customer-payment-links",
@@ -1282,6 +1293,8 @@ function getAllowedPageIdsForRole(role: string) {
       "sales-converter",
       "trace",
       "stocking-handbook",
+      "trex-price-book",
+      "timbertech-price-book",
       "accounting",
       "accounting-customers",
       "customer-payment-links",
@@ -1426,7 +1439,9 @@ function getAllowedPageIds(
     }
 
     if (
-      pageIds.includes("stocking-handbook") &&
+      (pageIds.includes("stocking-handbook") ||
+        pageIds.includes("trex-price-book") ||
+        pageIds.includes("timbertech-price-book")) &&
       !pageIds.includes("documents")
     ) {
       pageIds.push("documents");
@@ -2110,7 +2125,12 @@ export default function App() {
     ].includes(pageId),
   );
   const canReadDocuments = effectiveAllowedPageIds.some((pageId) =>
-    ["documents", "stocking-handbook"].includes(pageId),
+    [
+      "documents",
+      "stocking-handbook",
+      "trex-price-book",
+      "timbertech-price-book",
+    ].includes(pageId),
   );
   const canReadAccounting = effectiveAllowedPageIds.some((pageId) =>
     ["accounting", "accounting-customers", "customer-payment-links"].includes(
@@ -5905,6 +5925,18 @@ export default function App() {
               value: stockingHandbookItems.length,
               note: "Stock items",
             },
+            {
+              icon: Percent,
+              label: "Trex",
+              value: TREX_PRICE_BOOK_ITEM_COUNT,
+              note: "Priced products",
+            },
+            {
+              icon: Package,
+              label: "TimberTech",
+              value: TIMBERTECH_COLLECTION_COUNT,
+              note: "Collections",
+            },
           ]}
           actions={[
             effectiveAllowedPageIds.includes("stocking-handbook")
@@ -5919,6 +5951,34 @@ export default function App() {
                   tone: "dispatch",
                   variant: "compact",
                   onClick: () => setCurrentPage("stocking-handbook"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("trex-price-book")
+              ? {
+                  icon: Percent,
+                  label: "Price Book",
+                  title: "Trex",
+                  description:
+                    "Search Job Pack pricing and see sell prices at 22.5%, 25%, and 30% margin.",
+                  metric: TREX_PRICE_BOOK_ITEM_COUNT,
+                  metricLabel: "Products",
+                  tone: "success",
+                  variant: "compact",
+                  onClick: () => setCurrentPage("trex-price-book"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("timbertech-price-book")
+              ? {
+                  icon: Package,
+                  label: "Price Book",
+                  title: "TimberTech",
+                  description:
+                    "Compare decking collections and see sell prices at 22.5%, 25%, and 30% margin.",
+                  metric: TIMBERTECH_COLLECTION_COUNT,
+                  metricLabel: "Collections",
+                  tone: "receiving",
+                  variant: "compact",
+                  onClick: () => setCurrentPage("timbertech-price-book"),
                 }
               : null,
           ].filter(Boolean)}
@@ -6827,6 +6887,18 @@ export default function App() {
                 value: stockingHandbookItems.length,
                 note: "Stock items",
               },
+              {
+                icon: Percent,
+                label: "Trex",
+                value: TREX_PRICE_BOOK_ITEM_COUNT,
+                note: "Priced products",
+              },
+              {
+                icon: Package,
+                label: "TimberTech",
+                value: TIMBERTECH_COLLECTION_COUNT,
+                note: "Collections",
+              },
             ]}
             actions={[
               effectiveAllowedPageIds.includes("stocking-handbook")
@@ -6843,6 +6915,34 @@ export default function App() {
                     onClick: () => setCurrentPage("stocking-handbook"),
                   }
                 : null,
+              effectiveAllowedPageIds.includes("trex-price-book")
+                ? {
+                    icon: Percent,
+                    label: "Price Book",
+                    title: "Trex",
+                    description:
+                      "Search Job Pack pricing and see sell prices at 22.5%, 25%, and 30% margin.",
+                    metric: TREX_PRICE_BOOK_ITEM_COUNT,
+                    metricLabel: "Products",
+                    tone: "success",
+                    variant: "compact",
+                    onClick: () => setCurrentPage("trex-price-book"),
+                  }
+                : null,
+              effectiveAllowedPageIds.includes("timbertech-price-book")
+                ? {
+                    icon: Package,
+                    label: "Price Book",
+                    title: "TimberTech",
+                    description:
+                      "Compare decking collections and see sell prices at 22.5%, 25%, and 30% margin.",
+                    metric: TIMBERTECH_COLLECTION_COUNT,
+                    metricLabel: "Collections",
+                    tone: "receiving",
+                    variant: "compact",
+                    onClick: () => setCurrentPage("timbertech-price-book"),
+                  }
+                : null,
             ].filter(Boolean)}
           />
         ) : null;
@@ -6857,6 +6957,16 @@ export default function App() {
             onDeleteItem={handleDeleteStockingHandbookItem}
             onPageChange={setCurrentPage}
           />
+        ) : null;
+
+      case "trex-price-book":
+        return canReadDocuments ? (
+          <TrexPriceBookPage onPageChange={setCurrentPage} />
+        ) : null;
+
+      case "timbertech-price-book":
+        return canReadDocuments ? (
+          <TimberTechPriceBookPage onPageChange={setCurrentPage} />
         ) : null;
 
       case "sales-report":
