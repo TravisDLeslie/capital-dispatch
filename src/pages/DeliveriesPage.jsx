@@ -5,6 +5,7 @@ import PageContainer from "../components/PageContainer";
 export default function DeliveriesPage({
   deliveries,
   customers,
+  orders,
   deliverySettings,
   deliveryOriginOptions,
   canEditDeliveries = false,
@@ -45,6 +46,7 @@ export default function DeliveriesPage({
         key={editingDelivery?.id || "new-delivery"}
         initialDelivery={editingDelivery || null}
         customers={customers || []}
+        orders={orders || []}
         deliverySettings={deliverySettings}
         deliveryOriginOptions={deliveryOriginOptions}
         onSubmit={

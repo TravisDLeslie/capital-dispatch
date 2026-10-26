@@ -1348,7 +1348,6 @@ export default function OrderFlowPage({
                       value={deliveryAddress}
                       onChange={setDeliveryAddress}
                       autoComplete="off"
-                      useUncontrolledValue
                       enableLocalFallback
                       placeholder="Start typing the delivery address..."
                       showStatus={false}

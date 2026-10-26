@@ -2133,6 +2133,7 @@ export default function App() {
   const canReadEmailList = effectiveAllowedPageIds.includes("email-list");
   const canReadSalesReport = effectiveAllowedPageIds.includes("sales-report");
   const canReadSalesOrders = effectiveAllowedPageIds.includes("sales-orders");
+  const canReadSalesOrderData = canReadSalesOrders || canReadDeliveries;
   const canReadCustomerPaymentLinks =
     canReadAccounting &&
     effectiveAllowedPageIds.includes("customer-payment-links");
@@ -2941,7 +2942,7 @@ export default function App() {
         setCustomerStatements([]);
       }
 
-      if (canReadSalesOrders) {
+      if (canReadSalesOrderData) {
         unsubscribeFromSalesOrders = subscribeToSalesOrders(
           (savedSalesOrders: SalesOrder[]) => {
             if (isMounted) {
@@ -3231,7 +3232,7 @@ export default function App() {
         setCustomerStatements([]);
       }
 
-      if (canReadSalesOrders) {
+      if (canReadSalesOrderData) {
         subscribeToSalesOrders(
           (savedSalesOrders: SalesOrder[]) => {
             if (isMounted) {
@@ -3352,6 +3353,7 @@ export default function App() {
     canReadCustomerPaymentLinks,
     canReadSales,
     canReadSalesOrders,
+    canReadSalesOrderData,
     canReadSalesReport,
     canReadOrderBuilds,
     canReadOrderLifecycle,
@@ -3864,6 +3866,11 @@ export default function App() {
       handoffType: String(orderPayload.orderMethod || "willCall"),
       deliveryAddress: String(orderPayload.deliveryAddress || "").trim(),
       deliveryDate: String(orderPayload.deliveryDate || "").trim(),
+      hasHardware: Boolean(orderPayload.hasHardware),
+      needsTarp: Boolean(orderPayload.needsTarp),
+      unloadType: String(orderPayload.unloadType || "Forklift"),
+      deliveryNotes: String(orderPayload.deliveryNotes || "").trim(),
+      phoneNumber: String(orderPayload.phoneNumber || "").trim(),
       poNumbers,
       items: cleanItems,
       status: "processed",
@@ -6655,6 +6662,7 @@ export default function App() {
           <DeliveriesPage
             deliveries={deliveries}
             customers={customers}
+            orders={salesOrders}
             deliverySettings={deliverySettings}
             deliveryOriginOptions={deliveryOriginOptions}
             canEditDeliveries={canEditDeliveryDetails}

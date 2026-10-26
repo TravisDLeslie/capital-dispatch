@@ -67,6 +67,24 @@ function createItemsFromDelivery(delivery) {
   }));
 }
 
+function createItemsFromOrder(order) {
+  if (!Array.isArray(order?.items)) {
+    return [];
+  }
+
+  return order.items
+    .map((item) => ({
+      id: item.id || createId(),
+      quantity: String(item.quantity || "").trim(),
+      description: String(
+        item.description || item.name || item.productName || "",
+      ).trim(),
+      delivered: false,
+      saved: true,
+    }))
+    .filter((item) => item.description);
+}
+
 function formatOrderNumber(value) {
   const numbersOnly = value.replace(/\D/g, "").slice(0, 6);
 
@@ -263,6 +281,7 @@ export default function DeliveryOrderForm({
   onCancel,
   onDelete,
   customers = [],
+  orders = [],
   deliveryOriginOptions,
 }) {
   const safeDeliveryOriginOptions =
@@ -271,6 +290,8 @@ export default function DeliveryOrderForm({
       : fallbackDeliveryOriginOptions;
   const isEditing = Boolean(initialDelivery);
   const [orderNumber, setOrderNumber] = useState("");
+  const [isOrderLookupOpen, setIsOrderLookupOpen] = useState(false);
+  const [orderLookupMessage, setOrderLookupMessage] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [address, setAddress] = useState("");
   const [contactName, setContactName] = useState("");
@@ -301,6 +322,24 @@ export default function DeliveryOrderForm({
   const [routeEtaStatus, setRouteEtaStatus] = useState("idle");
   const [routeEtaMessage, setRouteEtaMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const normalizedOrderSearch = normalizeLookup(orderNumber);
+  const matchingOrders = (Array.isArray(orders) ? orders : [])
+    .filter((order) => {
+      if (!normalizedOrderSearch) {
+        return true;
+      }
+
+      return [
+        order.orderNumber,
+        order.customerName,
+        order.businessName,
+        order.accountNumber,
+        ...(Array.isArray(order.poNumbers) ? order.poNumbers : []),
+      ].some((value) =>
+        normalizeLookup(value).includes(normalizedOrderSearch),
+      );
+    })
+    .slice(0, 8);
 
   useEffect(() => {
     if (!initialDelivery) {
@@ -398,6 +437,108 @@ export default function DeliveryOrderForm({
     }
   }
 
+  function findOrderCustomer(order) {
+    const customerId = String(order?.customerId || "").trim();
+
+    if (customerId) {
+      const customerById = customers.find(
+        (customer) => String(customer.id || "") === customerId,
+      );
+
+      if (customerById) {
+        return customerById;
+      }
+    }
+
+    return findMatchingCustomer(
+      order?.businessName || order?.customerName || order?.accountNumber || "",
+    );
+  }
+
+  function applyOrderDetails(order) {
+    if (!order) {
+      return;
+    }
+
+    const matchedCustomer = findOrderCustomer(order);
+    const primaryContact = getPrimaryCustomerContact(matchedCustomer);
+    const nextCustomerName = formatCustomerName(
+      order.businessName ||
+        order.customerName ||
+        getCustomerDisplayName(matchedCustomer),
+    );
+    const nextAddress = String(
+      order.deliveryAddress || order.address || getCustomerAddress(matchedCustomer),
+    ).trim();
+    const nextContactName = String(
+      order.contactName || order.customerName || primaryContact?.name || "",
+    ).trim();
+    const nextPhone = String(
+      order.contactPhone ||
+        order.phoneNumber ||
+        order.phone ||
+        primaryContact?.phone ||
+        "",
+    ).trim();
+    const nextItems = createItemsFromOrder(order);
+
+    setOrderNumber(formatOrderNumber(String(order.orderNumber || "")));
+
+    if (nextCustomerName) {
+      setCustomerName(nextCustomerName);
+    }
+
+    if (nextAddress) {
+      setAddress(nextAddress);
+      setRouteEtaStatus("idle");
+      setRouteEtaMessage("");
+    }
+
+    if (nextContactName) {
+      setContactName(nextContactName);
+    }
+
+    if (nextPhone) {
+      setContactPhone(formatPhoneNumber(nextPhone));
+    }
+
+    if (order.deliveryDate) {
+      setDeliveryDate(String(order.deliveryDate));
+    }
+
+    if (deliveryUnloadTypes.includes(order.unloadType)) {
+      setUnloadType(order.unloadType);
+    }
+
+    if (order.deliveryType) {
+      setDeliveryType(String(order.deliveryType).toLowerCase());
+    }
+
+    if (Object.prototype.hasOwnProperty.call(order, "hasHardware")) {
+      setHasHardware(Boolean(order.hasHardware));
+    }
+
+    if (Object.prototype.hasOwnProperty.call(order, "needsTarp")) {
+      setNeedsTarp(Boolean(order.needsTarp));
+    }
+
+    const nextNotes = String(order.deliveryNotes || order.notes || "").trim();
+
+    if (nextNotes) {
+      setGeneralNotes(nextNotes);
+    }
+
+    if (nextItems.length > 0) {
+      setItems(nextItems);
+    }
+
+    setOrderLookupMessage(
+      `Loaded order ${order.orderNumber}${nextCustomerName ? ` for ${nextCustomerName}` : ""}.`,
+    );
+    setIsOrderLookupOpen(false);
+    clearError();
+  }
+
   function updateItem(itemId, field, value) {
     setItems((currentItems) =>
       currentItems.map((item) =>
@@ -478,6 +619,8 @@ export default function DeliveryOrderForm({
 
   function resetForm() {
     setOrderNumber("");
+    setIsOrderLookupOpen(false);
+    setOrderLookupMessage("");
     setCustomerName("");
     setAddress("");
     setContactName("");
@@ -931,21 +1074,85 @@ export default function DeliveryOrderForm({
               Order Number
             </label>
 
-            <input
-              id="delivery-order-number"
-              type="text"
-              autoComplete="off"
-              value={orderNumber}
-              onChange={(event) => {
-                setOrderNumber(formatOrderNumber(event.target.value));
-                clearError();
-              }}
-              disabled={isSubmitting}
-              inputMode="numeric"
-              maxLength={7}
-              placeholder="123-456"
-              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-xl font-black tracking-[0.12em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-            />
+            <div className="relative">
+              <input
+                id="delivery-order-number"
+                type="text"
+                autoComplete="off"
+                value={orderNumber}
+                onChange={(event) => {
+                  setOrderNumber(formatOrderNumber(event.target.value));
+                  setOrderLookupMessage("");
+                  setIsOrderLookupOpen(true);
+                  clearError();
+                }}
+                onFocus={() => setIsOrderLookupOpen(true)}
+                onBlur={() =>
+                  window.setTimeout(() => setIsOrderLookupOpen(false), 150)
+                }
+                disabled={isSubmitting}
+                inputMode="numeric"
+                maxLength={7}
+                placeholder="123-456"
+                className="w-full rounded-xl border border-slate-300 px-4 py-4 text-xl font-black tracking-[0.12em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              />
+
+              {isOrderLookupOpen && Array.isArray(orders) && orders.length > 0 ? (
+                <div className="absolute inset-x-0 top-full z-40 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+                  {matchingOrders.length > 0 ? (
+                    matchingOrders.map((order) => {
+                      const displayCustomer = formatCustomerName(
+                        order.businessName || order.customerName || "",
+                      );
+
+                      return (
+                        <button
+                          key={order.id || order.orderNumber}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => applyOrderDetails(order)}
+                          className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-red-50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-sm font-black tracking-[0.08em] text-slate-950">
+                              Order {order.orderNumber || "No number"}
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
+                              {[displayCustomer, order.deliveryAddress || order.address]
+                                .filter(Boolean)
+                                .join(" • ") || "Saved order"}
+                            </span>
+                          </span>
+                          <span className="shrink-0 rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+                            Select
+                          </span>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="px-3 py-4">
+                      <p className="text-sm font-black text-slate-700">
+                        No saved order matches {orderNumber || "that number"}.
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        You can keep entering this delivery manually.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {orderLookupMessage ? (
+              <p className="mt-2 flex items-center gap-1.5 text-xs font-black text-emerald-700">
+                <Check className="h-4 w-4" aria-hidden="true" />
+                {orderLookupMessage}
+              </p>
+            ) : Array.isArray(orders) && orders.length > 0 ? (
+              <p className="mt-2 text-xs font-semibold text-slate-500">
+                Start typing, then select a saved order to fill this form.
+              </p>
+            ) : null}
           </div>
 
           <div>
