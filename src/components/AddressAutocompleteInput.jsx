@@ -48,10 +48,7 @@ export default function AddressAutocompleteInput({
   const onChangeRef = useRef(onChange);
   const onPlaceSelectedRef = useRef(onPlaceSelected);
   const hasGooglePlacesKey = Boolean(getGoogleMapsApiKey());
-  const isLocalFallbackEnabled =
-    enableLocalFallback &&
-    typeof window !== "undefined" &&
-    ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  const isLocalFallbackEnabled = Boolean(enableLocalFallback);
   const [inputValue, setInputValue] = useState(value || "");
   const [fallbackSuggestions, setFallbackSuggestions] = useState([]);
   const [fallbackStatus, setFallbackStatus] = useState("idle");
