@@ -93,6 +93,7 @@ import {
   subscribeToPodPickups,
 } from "./utils/podPickupStorage";
 import {
+  deleteOrderBuild,
   saveOrderBuild,
   subscribeToOrderBuilds,
 } from "./utils/orderBuildStorage";
@@ -746,6 +747,8 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "their-truck-history",
     "trace",
     "sales",
+    "order-flow",
+    "order-builds",
     "sales-orders",
     "customers-add",
     "customers-view",
@@ -1063,6 +1066,14 @@ type VendorSetting = {
   id: string;
   name: string;
   address?: string;
+  phone?: string;
+  contacts?: Array<{
+    id: string;
+    name?: string;
+    products?: string;
+    phone?: string;
+    email?: string;
+  }>;
   deliveryCadence?: string;
   routeOrder?: number;
   active?: boolean;
@@ -1086,6 +1097,23 @@ function canDeleteRecord(label: string) {
 
   if (enteredCode.trim() !== DELETE_PO_CODE) {
     window.alert("Incorrect delete code. Nothing was deleted.");
+    return false;
+  }
+
+  return true;
+}
+
+function canArchiveRecord(label: string) {
+  const enteredCode = window.prompt(
+    `Enter the internal archive code to archive ${label}.`,
+  );
+
+  if (enteredCode === null) {
+    return false;
+  }
+
+  if (enteredCode.trim() !== DELETE_PO_CODE) {
+    window.alert("Incorrect archive code. Nothing was archived.");
     return false;
   }
 
@@ -1187,6 +1215,8 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-route-planner",
       "deliveries-history",
       "sales",
+      "order-flow",
+      "order-builds",
       "sales-orders",
       "customers-add",
       "customers-view",
@@ -1203,8 +1233,6 @@ function getAllowedPageIdsForRole(role: string) {
       "email-list",
       "delivery-settings",
       "vendor-settings",
-      "order-flow",
-      "order-builds",
       "pod-pickups",
       "sales-report",
       "bouncie",
@@ -1245,6 +1273,8 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-route-planner",
       "deliveries-history",
       "sales",
+      "order-flow",
+      "order-builds",
       "sales-orders",
       "customers-add",
       "customers-view",
@@ -1307,13 +1337,42 @@ function getAllowedPageIds(
       nextPageIds.push("receiving");
     }
 
+    if (
+      pageIds.some((pageId) =>
+        [
+          "sales-orders",
+          "customers-add",
+          "customers-view",
+          "sales-tools",
+          "sales-converter",
+        ].includes(pageId),
+      )
+    ) {
+      nextPageIds.push("sales");
+    }
+
     return nextPageIds;
   };
   const addWorkViewPageIds = (pageIds: string[]) => {
     const nextPageIds = addParentPageIds(pageIds);
 
+    if (nextPageIds.includes("order-flow")) {
+      nextPageIds.push("order-builds");
+    }
+
     if (workView === "dispatch-ops") {
       nextPageIds.push("receiving", "check-in", "today", "search", "trace");
+    }
+
+    if (workView === "main") {
+      nextPageIds.push(
+        "order-flow",
+        "order-builds",
+        "trace",
+        "sales",
+        "sales-tools",
+        "sales-converter",
+      );
     }
 
     if (["driver", "receiving"].includes(String(workView || ""))) {
@@ -2016,6 +2075,7 @@ export default function App() {
     ].includes(pageId),
   );
   const canReadOrderBuilds = effectiveAllowedPageIds.includes("order-builds");
+  const canReadOrderLifecycle = canReadOrderBuilds;
   const canAssignSouthRoutes = effectiveAllowedPageIds.includes(
     "supplier-runs-dispatch",
   );
@@ -2041,6 +2101,7 @@ export default function App() {
   const canReadSales = effectiveAllowedPageIds.some((pageId) =>
     [
       "sales",
+      "order-flow",
       "sales-orders",
       "customers-add",
       "customers-view",
@@ -2063,8 +2124,6 @@ export default function App() {
       "email-list",
       "delivery-settings",
       "vendor-settings",
-      "order-flow",
-      "order-builds",
       "sales-report",
     ].includes(pageId),
   );
@@ -2726,7 +2785,7 @@ export default function App() {
         setYardTasks([]);
       }
 
-      if (canReadSouth) {
+      if (canReadSouth || canReadOrderLifecycle) {
         unsubscribeFromSupplierRuns = subscribeToSupplierRuns(
           (savedSupplierRuns: SupplierRun[]) => {
             if (isMounted) {
@@ -2749,7 +2808,7 @@ export default function App() {
         setSupplierRuns([]);
       }
 
-      if (canReadSouth || canReadReceiving) {
+      if (canReadSouth || canReadReceiving || canReadOrderLifecycle) {
         unsubscribeFromTheirTruckPOs = subscribeToTheirTruckPOs(
           (savedTheirTruckPOs: TheirTruckPO[]) => {
             if (isMounted) {
@@ -2793,7 +2852,7 @@ export default function App() {
         setReceivingSouthLookupRuns([]);
       }
 
-      if (canReadDeliveries) {
+      if (canReadDeliveries || canReadOrderLifecycle) {
         unsubscribeFromDeliveries = subscribeToDeliveries(
           (savedDeliveries: Delivery[]) => {
             if (isMounted) {
@@ -2904,7 +2963,7 @@ export default function App() {
         setSalesOrders([]);
       }
 
-      if (canReadSouth) {
+      if (canReadSouth || canReadOrderLifecycle) {
         unsubscribeFromPodPickups = subscribeToPodPickups(
           (savedPodPickups: Array<Record<string, unknown>>) => {
             if (isMounted) {
@@ -3053,7 +3112,7 @@ export default function App() {
         setYardTasks([]);
       }
 
-      if (canReadSouth) {
+      if (canReadSouth || canReadOrderLifecycle) {
         unsubscribeFromSupplierRuns = subscribeToSupplierRuns(
           (savedSupplierRuns: SupplierRun[]) => {
             if (isMounted) {
@@ -3070,7 +3129,7 @@ export default function App() {
         setSupplierRuns([]);
       }
 
-      if (canReadSouth || canReadReceiving) {
+      if (canReadSouth || canReadReceiving || canReadOrderLifecycle) {
         unsubscribeFromTheirTruckPOs = subscribeToTheirTruckPOs(
           (savedTheirTruckPOs: TheirTruckPO[]) => {
             if (isMounted) {
@@ -3108,7 +3167,7 @@ export default function App() {
         setReceivingSouthLookupRuns([]);
       }
 
-      if (canReadDeliveries) {
+      if (canReadDeliveries || canReadOrderLifecycle) {
         subscribeToDeliveries(
           (savedDeliveries: Delivery[]) => {
             if (isMounted) {
@@ -3188,7 +3247,7 @@ export default function App() {
         setSalesOrders([]);
       }
 
-      if (canReadSouth) {
+      if (canReadSouth || canReadOrderLifecycle) {
         unsubscribeFromPodPickups = subscribeToPodPickups(
           (savedPodPickups: Array<Record<string, unknown>>) => {
             if (isMounted) {
@@ -3295,6 +3354,7 @@ export default function App() {
     canReadSalesOrders,
     canReadSalesReport,
     canReadOrderBuilds,
+    canReadOrderLifecycle,
     canReadDocuments,
     canManageCustomerStatements,
     currentUser,
@@ -3405,6 +3465,27 @@ export default function App() {
     setSyncError("");
   }
 
+  async function handleCompletePodPickup(podPickupId: string) {
+    const podPickup = podPickups.find(
+      (currentPodPickup) => currentPodPickup.id === podPickupId,
+    );
+
+    if (!podPickup) {
+      return;
+    }
+
+    const completedAt = new Date().toISOString();
+    const updatedPodPickups = await savePodPickup({
+      ...podPickup,
+      status: "complete",
+      completedAt,
+      completedBy: currentUserCreator,
+    });
+
+    setPodPickups(updatedPodPickups);
+    setSyncError("");
+  }
+
   async function handleDeletePodPickup(podPickupId: string) {
     const podPickup = podPickups.find(
       (currentPodPickup) => currentPodPickup.id === podPickupId,
@@ -3425,6 +3506,70 @@ export default function App() {
 
   async function handleSaveOrderBuild(orderBuild: Record<string, unknown>) {
     const updatedOrderBuilds = await saveOrderBuild(orderBuild);
+    setOrderBuilds(updatedOrderBuilds);
+    setSyncError("");
+  }
+
+  async function handleArchiveOrderBuild(orderBuildId: string) {
+    const orderBuild = orderBuilds.find(
+      (currentOrderBuild) => currentOrderBuild.id === orderBuildId,
+    );
+    const orderLabel = orderBuild?.orderNumber
+      ? `order ${String(orderBuild.orderNumber)}`
+      : "this order";
+
+    if (!canArchiveRecord(orderLabel)) {
+      return;
+    }
+
+    const updatedOrderBuilds = await saveOrderBuild({
+      ...orderBuild,
+      id: orderBuildId,
+      status: "archived",
+      archived: true,
+      archivedAt: new Date().toISOString(),
+      archivedBy: currentUserCreator,
+    });
+
+    setOrderBuilds(updatedOrderBuilds);
+    setSyncError("");
+  }
+
+  async function handleDeleteOrderBuild(orderBuildId: string) {
+    const orderBuild = orderBuilds.find(
+      (currentOrderBuild) => currentOrderBuild.id === orderBuildId,
+    );
+    const orderLabel = orderBuild?.orderNumber
+      ? `order ${String(orderBuild.orderNumber)}`
+      : "this order";
+
+    if (!canDeleteRecord(orderLabel)) {
+      return;
+    }
+
+    const updatedOrderBuilds = await deleteOrderBuild(orderBuildId);
+
+    setOrderBuilds(updatedOrderBuilds);
+    setSyncError("");
+  }
+
+  async function handleCompleteOrderBuild(orderBuildId: string) {
+    const orderBuild = orderBuilds.find(
+      (currentOrderBuild) => currentOrderBuild.id === orderBuildId,
+    );
+
+    if (!orderBuild) {
+      return;
+    }
+
+    const completedAt = new Date().toISOString();
+    const updatedOrderBuilds = await saveOrderBuild({
+      ...orderBuild,
+      status: "complete",
+      completedAt,
+      completedBy: currentUserCreator,
+    });
+
     setOrderBuilds(updatedOrderBuilds);
     setSyncError("");
   }
@@ -3523,6 +3668,32 @@ export default function App() {
       }
     }
 
+    const linkedTheirTruckPOId = String(
+      checkIn.sourceTheirTruckPOId || "",
+    ).trim();
+    const linkedTheirTruckPO = theirTruckPOs.find(
+      (theirTruckPO) => theirTruckPO.id === linkedTheirTruckPOId,
+    );
+
+    if (linkedTheirTruckPO) {
+      try {
+        const completedAt = String(checkIn.checkedInAt || new Date().toISOString());
+        const updatedTheirTruckPOs = await saveTheirTruckPO({
+          ...linkedTheirTruckPO,
+          status: "complete",
+          completedAt,
+          receivedCheckInId: checkIn.id,
+        });
+
+        setTheirTruckPOs(updatedTheirTruckPOs);
+      } catch (error) {
+        console.error(
+          "Check-in saved, but the linked Their Truck PO could not be completed:",
+          error,
+        );
+      }
+    }
+
     setSyncError("");
   }
 
@@ -3615,6 +3786,10 @@ export default function App() {
         routeDate: String(item.routeDate || "").trim(),
         supplierDate: String(item.supplierDate || "").trim(),
         supplierNote: String(item.supplierNote || "").trim(),
+        driverNotes: item.driverNotesEnabled
+          ? String(item.driverNotes || "").trim()
+          : "",
+        easilyDamaged: Boolean(item.easilyDamaged),
         sequence: index + 1,
       }));
   }
@@ -3714,6 +3889,9 @@ export default function App() {
 
     for (const group of southGroups) {
       const firstItem = group.items[0];
+      const driverNotes = Array.from(
+        new Set(group.items.map((item) => item.driverNotes).filter(Boolean)),
+      ).join("\n");
       const supplierRun: SupplierRun = {
         id: createId(),
         poNumber: firstItem.poNumber,
@@ -3735,6 +3913,7 @@ export default function App() {
         vehicleBadge: "",
         dispatchStatus: "needsDispatch",
         status: "open",
+        notes: driverNotes,
         sourceOrderId: orderId,
         sourceOrderNumber,
         stopWorkflowVersion: 2,
@@ -3743,6 +3922,7 @@ export default function App() {
           quantity: item.quantity,
           description: item.description,
           materialUse: "order",
+          easilyDamaged: Boolean(item.easilyDamaged),
           orderNumber: sourceOrderNumber,
           customerName: customerDisplayName,
           pickedUp: false,
@@ -3928,6 +4108,93 @@ export default function App() {
       deliveryCreated: Boolean(createdDelivery),
       buildCreated: true,
     };
+  }
+
+  async function handleProcessStockPO(stockPayload: Record<string, unknown>) {
+    const now = new Date().toISOString();
+    const poNumber = String(stockPayload.poNumber || "").trim();
+    const vendor = String(stockPayload.vendor || "").trim();
+    const scheduledDate = String(stockPayload.scheduledDate || "").trim();
+    const quantity = String(stockPayload.quantity || "").trim();
+    const description = String(stockPayload.description || "").trim();
+    const notes = String(stockPayload.notes || "").trim();
+    const easilyDamaged = Boolean(stockPayload.easilyDamaged);
+    const fulfillmentMethod = String(
+      stockPayload.fulfillmentMethod || "wePickup",
+    );
+    const stockItem = {
+      id: createId(),
+      quantity,
+      description,
+      materialUse: "stock",
+      easilyDamaged,
+      orderNumber: "",
+      customerName: "Capital Lumber Stock",
+    };
+
+    if (fulfillmentMethod === "wePickup") {
+      const supplierRun: SupplierRun = {
+        id: createId(),
+        poNumber,
+        vendor,
+        scheduledDate,
+        pickupDate: scheduledDate,
+        orderedBy: currentUserCreator.name,
+        customerName: "Capital Lumber Stock",
+        orderNumber: "",
+        driver: "",
+        supplierAddress: "",
+        createdByName: currentUserCreator.name,
+        createdByEmail: currentUserCreator.email,
+        createdById: currentUserCreator.id,
+        vehicleId: "",
+        vehicleTitle: "",
+        vehicleBadge: "",
+        dispatchStatus: "needsDispatch",
+        status: "open",
+        source: "stock-order",
+        stopWorkflowVersion: 2,
+        items: [
+          {
+            ...stockItem,
+            pickedUp: false,
+            pickedUpAt: null,
+            pickupPhoto: null,
+            pickupPhotos: [],
+          },
+        ],
+        notes,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await handleAddSupplierRun(supplierRun);
+      return { destination: "South", poNumber };
+    }
+
+    const theirTruckPO: TheirTruckPO = {
+      id: createId(),
+      poNumber,
+      deliveryDate: scheduledDate,
+      vendor,
+      customerName: "Capital Lumber Stock",
+      businessName: "Capital Lumber",
+      orderNumber: "",
+      isStock: true,
+      status: "scheduled",
+      source: "stock-order",
+      createdByName: currentUserCreator.name,
+      createdByEmail: currentUserCreator.email,
+      createdById: currentUserCreator.id,
+      orderedBy: currentUserCreator.name,
+      supplierNote: notes,
+      items: [stockItem],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await handleSaveTheirTruckPO(theirTruckPO);
+    return { destination: "Their Truck", poNumber };
   }
 
   async function handleAddCustomer(customer: Customer) {
@@ -4375,6 +4642,37 @@ export default function App() {
                 />
               </FeatureErrorBoundary>
             }
+          />
+        </FeatureErrorBoundary>
+      );
+    }
+
+    if (!isForcedWorkView && dashboardWorkView === "main") {
+      return (
+        <FeatureErrorBoundary
+          fallback={
+            <div className="mx-auto mt-8 max-w-6xl px-4 sm:px-6 lg:px-8">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
+                The Main dashboard could not finish loading. Refresh the page
+                and try again.
+              </div>
+            </div>
+          }
+        >
+          <SalesConverterPage
+            dashboardMode
+            onPageChange={setCurrentPage}
+            onTraceSearch={handleTraceSearch}
+            searchSources={{
+              supplierRuns: southLookupSupplierRuns,
+              theirTruckPOs,
+              checkIns,
+              deliveries:
+                canReadDeliveries || canReadOrderLifecycle ? deliveries : [],
+              orderBuilds,
+              customers,
+              vendors: activeVendors,
+            }}
           />
         </FeatureErrorBoundary>
       );
@@ -5773,19 +6071,6 @@ export default function App() {
                   onClick: () => setCurrentPage("vendor-settings"),
                 }
               : null,
-            effectiveAllowedPageIds.includes("order-flow") && isSuperAdmin
-              ? {
-                  icon: ClipboardList,
-                  label: "Workflow",
-                  title: "Order Flow",
-                  description:
-                    "Prototype the order-first flow and yard build handoff.",
-                  metric: "Lab",
-                  metricLabel: "Super",
-                  tone: "dispatch",
-                  onClick: () => setCurrentPage("order-flow"),
-                }
-              : null,
             canReadSalesReport
               ? {
                   icon: DollarSign,
@@ -5982,9 +6267,16 @@ export default function App() {
         ) : null;
 
       case "order-builds":
-        return isSuperAdmin ? (
+        return effectiveAllowedPageIds.includes("order-builds") ? (
           <OrderBuildsPage
             builds={orderBuilds}
+            deliveries={deliveries}
+            podPickups={podPickups}
+            supplierRuns={supplierRuns}
+            theirTruckPOs={theirTruckPOs}
+            onArchiveOrder={handleArchiveOrderBuild}
+            onCompleteOrder={handleCompleteOrderBuild}
+            onDeleteOrder={handleDeleteOrderBuild}
             onPageChange={navigateToPage}
           />
         ) : null;
@@ -6042,10 +6334,12 @@ export default function App() {
         );
 
       case "order-flow":
-        return isSuperAdmin ? (
+        return effectiveAllowedPageIds.includes("order-flow") ? (
           <OrderFlowPage
             currentUser={currentUserCreator}
+            vendorOptions={vendorOptions}
             onProcessOrder={handleProcessOrderFlow}
+            onProcessStockPO={handleProcessStockPO}
             onPageChange={navigateToPage}
           />
         ) : null;
@@ -6054,6 +6348,7 @@ export default function App() {
         return canReadSouth ? (
           <PodPickupsPage
             podPickups={podPickups}
+            onCompletePodPickup={handleCompletePodPickup}
             onDeletePodPickup={
               isSuperAdmin ? handleDeletePodPickup : undefined
             }
@@ -6123,7 +6418,9 @@ export default function App() {
             checkIns={checkIns}
             supplierRuns={southLookupSupplierRuns}
             theirTruckPOs={theirTruckPOs}
-            deliveries={canReadDeliveries ? deliveries : []}
+            deliveries={
+              canReadDeliveries || canReadOrderLifecycle ? deliveries : []
+            }
             initialSearch={traceInitialSearch}
             onPageChange={navigateToPage}
           />

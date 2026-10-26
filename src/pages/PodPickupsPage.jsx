@@ -1,4 +1,10 @@
-import { CalendarDays, Package, ShoppingBag, Trash2 } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  Package,
+  ShoppingBag,
+  Trash2,
+} from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 
@@ -24,12 +30,14 @@ function formatDate(value) {
 /**
  * @param {{
  *   podPickups?: Array<Record<string, any>>;
+ *   onCompletePodPickup?: (podPickupId: string) => void;
  *   onDeletePodPickup?: (podPickupId: string) => void;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
 export default function PodPickupsPage({
   podPickups = [],
+  onCompletePodPickup,
   onDeletePodPickup,
   onPageChange,
 }) {
@@ -104,6 +112,21 @@ export default function PodPickupsPage({
                     <CalendarDays className="h-4 w-4" aria-hidden="true" />
                     {formatDate(pickup.podDate)}
                   </span>
+                  {pickup.status === "complete" ? (
+                    <span className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-50 px-4 text-sm font-black text-emerald-700">
+                      <Check className="h-4 w-4" aria-hidden="true" />
+                      Picked Up
+                    </span>
+                  ) : onCompletePodPickup ? (
+                    <button
+                      type="button"
+                      onClick={() => onCompletePodPickup(pickup.id)}
+                      className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-black text-white transition hover:bg-emerald-700"
+                    >
+                      <Check className="h-4 w-4" aria-hidden="true" />
+                      Mark Picked Up
+                    </button>
+                  ) : null}
                   {onDeletePodPickup ? (
                     <button
                       type="button"

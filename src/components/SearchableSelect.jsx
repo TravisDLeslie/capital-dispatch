@@ -15,6 +15,7 @@ export default function SearchableSelect({
   allowCustomValue = false,
   accent = "emerald",
   className = "",
+  inputBackgroundClassName = "bg-white",
 }) {
   const safeOptions = Array.isArray(options) ? options : [];
   const [isOpen, setIsOpen] = useState(false);
@@ -54,7 +55,7 @@ export default function SearchableSelect({
           readOnly={!allowCustomValue}
           disabled={disabled}
           placeholder={placeholder}
-          className={`w-full rounded-xl border border-slate-300 bg-white px-4 py-4 pr-12 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:ring-4 ${focusClasses}`}
+          className={`w-full rounded-xl border border-slate-300 px-4 py-4 pr-12 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:ring-4 ${inputBackgroundClassName} ${focusClasses}`}
         />
 
         <button

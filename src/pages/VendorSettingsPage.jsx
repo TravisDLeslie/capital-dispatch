@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
-import { MapPin, Plus, Save, Trash2, Warehouse, X } from "lucide-react";
+import {
+  ContactRound,
+  Mail,
+  MapPin,
+  PackageSearch,
+  Phone,
+  Plus,
+  Save,
+  Trash2,
+  Warehouse,
+  X,
+} from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
@@ -10,10 +21,171 @@ function createEmptyVendor(routeOrder = 1) {
     id: createId(),
     name: "",
     address: "",
+    phone: "",
+    contacts: [],
     deliveryCadence: "",
     routeOrder,
     active: true,
   };
+}
+
+function createEmptyVendorContact() {
+  return {
+    id: createId(),
+    name: "",
+    products: "",
+    phone: "",
+    email: "",
+  };
+}
+
+function cleanVendorContacts(contacts) {
+  return (Array.isArray(contacts) ? contacts : [])
+    .map((contact) => ({
+      ...contact,
+      id: contact.id || createId(),
+      name: String(contact.name || "").trim(),
+      products: String(contact.products || "").trim(),
+      phone: String(contact.phone || "").trim(),
+      email: String(contact.email || "").trim(),
+    }))
+    .filter(
+      (contact) =>
+        contact.name || contact.products || contact.phone || contact.email,
+    );
+}
+
+function VendorContactsEditor({ contacts, onChange, disabled = false }) {
+  const safeContacts = Array.isArray(contacts) ? contacts : [];
+
+  function updateContact(contactId, field, value) {
+    onChange(
+      safeContacts.map((contact) =>
+        contact.id === contactId ? { ...contact, [field]: value } : contact,
+      ),
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
+            <ContactRound className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-black text-slate-900">Product Contacts</p>
+            <p className="text-xs font-semibold text-slate-500">
+              Record who to call for specific products or departments.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange([...safeContacts, createEmptyVendorContact()])}
+          className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-black text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Add Contact
+        </button>
+      </div>
+
+      {safeContacts.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {safeContacts.map((contact) => (
+            <div
+              key={contact.id}
+              className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-2 xl:grid-cols-[1fr_1.35fr_0.85fr_1fr_auto] xl:items-end"
+            >
+              <label className="block">
+                <span className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                  Contact Name
+                </span>
+                <input
+                  type="text"
+                  value={contact.name || ""}
+                  onChange={(event) =>
+                    updateContact(contact.id, "name", event.target.value)
+                  }
+                  disabled={disabled}
+                  placeholder="Jane Smith"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                  <PackageSearch className="h-3.5 w-3.5" aria-hidden="true" />
+                  Best For / Products
+                </span>
+                <input
+                  type="text"
+                  value={contact.products || ""}
+                  onChange={(event) =>
+                    updateContact(contact.id, "products", event.target.value)
+                  }
+                  disabled={disabled}
+                  placeholder="LVL, I-joists, engineered wood"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                  <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                  Phone
+                </span>
+                <input
+                  type="tel"
+                  value={contact.phone || ""}
+                  onChange={(event) =>
+                    updateContact(contact.id, "phone", event.target.value)
+                  }
+                  disabled={disabled}
+                  placeholder="(208) 555-0100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 flex items-center gap-1 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                  <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                  Email
+                </span>
+                <input
+                  type="email"
+                  value={contact.email || ""}
+                  onChange={(event) =>
+                    updateContact(contact.id, "email", event.target.value)
+                  }
+                  disabled={disabled}
+                  placeholder="jane@supplier.com"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() =>
+                  onChange(
+                    safeContacts.filter(
+                      (currentContact) => currentContact.id !== contact.id,
+                    ),
+                  )
+                }
+                className="inline-flex min-h-[42px] items-center justify-center rounded-xl border border-red-200 bg-white px-3 text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={`Remove ${contact.name || "supplier contact"}`}
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2.5 text-xs font-semibold text-slate-500">
+          No product contacts added yet.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function VendorSettingsPage({
@@ -35,6 +207,8 @@ export default function VendorSettingsPage({
             id: vendor.id || createId(),
             routeOrder: Number(vendor.routeOrder) || index + 1,
             deliveryCadence: vendor.deliveryCadence || "",
+            phone: vendor.phone || "",
+            contacts: cleanVendorContacts(vendor.contacts),
             active: vendor.active !== false,
           }))
         : [],
@@ -86,6 +260,8 @@ export default function VendorSettingsPage({
       ...newVendorDraft,
       name: String(newVendorDraft?.name || "").trim(),
       address: String(newVendorDraft?.address || "").trim(),
+      phone: String(newVendorDraft?.phone || "").trim(),
+      contacts: cleanVendorContacts(newVendorDraft?.contacts),
       deliveryCadence: String(newVendorDraft?.deliveryCadence || "").trim(),
       routeOrder:
         Number(newVendorDraft?.routeOrder) || draftVendors.length + 1,
@@ -119,6 +295,8 @@ export default function VendorSettingsPage({
         ...vendor,
         name: String(vendor.name || "").trim(),
         address: String(vendor.address || "").trim(),
+        phone: String(vendor.phone || "").trim(),
+        contacts: cleanVendorContacts(vendor.contacts),
         deliveryCadence: String(vendor.deliveryCadence || "").trim(),
         routeOrder: Number(vendor.routeOrder) || index + 1,
         active: vendor.active !== false,
@@ -167,7 +345,7 @@ export default function VendorSettingsPage({
         </h1>
 
         <p className="mt-2 max-w-3xl text-base font-semibold text-slate-500 sm:text-lg">
-          Manage supplier names, addresses, delivery cadence, and default South route order.
+          Manage supplier details, product contacts, delivery cadence, and default South route order.
         </p>
       </div>
 
@@ -207,7 +385,7 @@ export default function VendorSettingsPage({
               key={vendor.id}
               className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
             >
-              <div className="grid gap-3 lg:grid-cols-[90px_minmax(180px,0.8fr)_minmax(260px,1.2fr)_minmax(160px,0.7fr)_auto] lg:items-end">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[90px_minmax(170px,0.8fr)_minmax(230px,1.1fr)_minmax(145px,0.65fr)_minmax(145px,0.65fr)_auto] xl:items-end">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
                     Order
@@ -237,6 +415,23 @@ export default function VendorSettingsPage({
                     disabled={isSaving}
                     placeholder="Boise Cascade"
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                    Main Phone
+                  </span>
+                  <input
+                    type="tel"
+                    value={vendor.phone || ""}
+                    onChange={(event) =>
+                      updateVendor(vendor.id, "phone", event.target.value)
+                    }
+                    disabled={isSaving}
+                    placeholder="(208) 555-0100"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                   />
                 </label>
 
@@ -287,6 +482,14 @@ export default function VendorSettingsPage({
                   Remove
                 </button>
               </div>
+
+              <VendorContactsEditor
+                contacts={vendor.contacts}
+                disabled={isSaving}
+                onChange={(contacts) =>
+                  updateVendor(vendor.id, "contacts", contacts)
+                }
+              />
             </section>
           ))}
         </div>
@@ -315,7 +518,7 @@ export default function VendorSettingsPage({
 
       {newVendorDraft ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 px-4 py-4 sm:items-center">
-          <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
+          <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
@@ -394,21 +597,46 @@ export default function VendorSettingsPage({
               />
             </label>
 
-            <label className="mt-4 block">
-              <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                Delivery Cadence
-              </span>
-              <input
-                type="text"
-                value={newVendorDraft.deliveryCadence || ""}
-                onChange={(event) =>
-                  updateNewVendor("deliveryCadence", event.target.value)
-                }
-                disabled={isSaving}
-                placeholder="M-W-F"
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-              />
-            </label>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1.5 flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                  Main Phone
+                </span>
+                <input
+                  type="tel"
+                  value={newVendorDraft.phone || ""}
+                  onChange={(event) =>
+                    updateNewVendor("phone", event.target.value)
+                  }
+                  disabled={isSaving}
+                  placeholder="(208) 555-0100"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  Delivery Cadence
+                </span>
+                <input
+                  type="text"
+                  value={newVendorDraft.deliveryCadence || ""}
+                  onChange={(event) =>
+                    updateNewVendor("deliveryCadence", event.target.value)
+                  }
+                  disabled={isSaving}
+                  placeholder="M-W-F"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+              </label>
+            </div>
+
+            <VendorContactsEditor
+              contacts={newVendorDraft.contacts}
+              disabled={isSaving}
+              onChange={(contacts) => updateNewVendor("contacts", contacts)}
+            />
 
             {error ? (
               <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">

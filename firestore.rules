@@ -109,8 +109,17 @@ service cloud.firestore {
       );
     }
 
+    function canCreateOrders() {
+      return isApproved() && (
+        isAdmin() ||
+        userProfile().workView == "main" ||
+        hasAnyPermission(["order-flow"])
+      );
+    }
+
     function canCreateSouthRun() {
       return isAdmin() ||
+        canCreateOrders() ||
         hasAnyPermission([
           "supplier-runs-add",
           "supplier-runs-dispatch"
@@ -171,6 +180,17 @@ service cloud.firestore {
         ]);
     }
 
+    function isTheirTruckReceivingCompletionUpdate() {
+      return isReceiving() &&
+        request.resource.data.status == "complete" &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "completedAt",
+          "receivedCheckInId",
+          "updatedAt"
+        ]);
+    }
+
     function isDelivery() {
       return isApproved() && (
         isAdmin() ||
@@ -204,6 +224,7 @@ service cloud.firestore {
     function isSales() {
       return isApproved() && (
         isAdmin() ||
+        userProfile().workView == "main" ||
         hasAnyPermission([
           "sales",
           "sales-orders",
@@ -216,11 +237,12 @@ service cloud.firestore {
     }
 
     function canAccessPodPickups() {
-      return isSouth() || isReceiving() || isSales();
+      return isSouth() || isReceiving() || isSales() ||
+        hasAnyPermission(["order-builds"]);
     }
 
     function canAccessOrderBuilds() {
-      return isAdmin() || hasAnyPermission(["order-builds", "order-flow"]);
+      return canCreateOrders() || hasAnyPermission(["order-builds"]);
     }
 
     function isSalesReportViewer() {
@@ -289,8 +311,14 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    match /appSettings/{settingId} {
+      allow read: if isApproved();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /checkIns/{checkInId} {
-      allow read, create, update, delete: if isReceiving();
+      allow read: if isReceiving() || canAccessOrderBuilds();
+      allow create, update, delete: if isReceiving();
     }
 
     match /yardTasks/{yardTaskId} {
@@ -309,7 +337,7 @@ service cloud.firestore {
     }
 
     match /supplierRuns/{supplierRunId} {
-      allow read: if isSouth() || isReceiving() || isDriverFor(resource.data.driver);
+      allow read: if isSouth() || isReceiving() || canAccessOrderBuilds() || isDriverFor(resource.data.driver);
       allow create: if canCreateSouthRun();
       allow update: if canManageSouthRun() ||
         isSouthDispatchOnlyUpdate() ||
@@ -319,8 +347,10 @@ service cloud.firestore {
     }
 
     match /theirTruckPOs/{theirTruckPOId} {
-      allow read: if isSouth() || isReceiving();
-      allow create, update, delete: if isSouth();
+      allow read: if isSouth() || isReceiving() || canAccessOrderBuilds();
+      allow create: if isSouth() || canCreateOrders();
+      allow update: if isSouth() || isTheirTruckReceivingCompletionUpdate();
+      allow delete: if isSouth();
     }
 
     match /podPickups/{podPickupId} {
@@ -336,8 +366,9 @@ service cloud.firestore {
 
     match /orderBuilds/{orderBuildId} {
       allow read: if canAccessOrderBuilds() || isSales();
-      allow create, update: if isSales();
-      allow delete: if isAdmin();
+      allow create: if isSales();
+      allow update: if isSales() || hasAnyPermission(["order-builds"]);
+      allow delete: if isAdmin() || hasAnyPermission(["order-builds"]);
     }
 
     match /southRouteOrders/{routeOrderId} {
@@ -348,8 +379,9 @@ service cloud.firestore {
     }
 
     match /deliveries/{deliveryId} {
-      allow read: if isDelivery() || isDriverFor(resource.data.driver);
-      allow create, delete: if isDelivery();
+      allow read: if isDelivery() || canAccessOrderBuilds() || isDriverFor(resource.data.driver);
+      allow create: if isDelivery() || canCreateOrders();
+      allow delete: if isDelivery();
       allow update: if isDelivery() || isDriverFor(resource.data.driver);
     }
 

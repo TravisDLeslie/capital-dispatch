@@ -23,10 +23,29 @@ function createDefaultVendors() {
     id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || `vendor-${index}`,
     name,
     address: defaultSupplierAddresses[name] || "",
+    phone: "",
+    contacts: [],
     deliveryCadence: defaultDeliveryCadences[name] || "",
     routeOrder: index + 1,
     active: true,
   }));
+}
+
+function normalizeContact(contact, index) {
+  const name = String(contact?.name || "").trim();
+  const products = String(contact?.products || "").trim();
+  const phone = String(contact?.phone || "").trim();
+  const email = String(contact?.email || "").trim();
+
+  return {
+    id:
+      String(contact?.id || "").trim() ||
+      `${name || "contact"}-${index}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    name,
+    products,
+    phone,
+    email,
+  };
 }
 
 export const defaultVendorSettings = {
@@ -44,6 +63,13 @@ function normalizeVendor(vendor, index) {
       `vendor-${index}`,
     name,
     address: String(vendor?.address || "").trim(),
+    phone: String(vendor?.phone || "").trim(),
+    contacts: (Array.isArray(vendor?.contacts) ? vendor.contacts : [])
+      .map(normalizeContact)
+      .filter(
+        (contact) =>
+          contact.name || contact.products || contact.phone || contact.email,
+      ),
     deliveryCadence:
       String(vendor?.deliveryCadence || "").trim() ||
       defaultDeliveryCadences[name] ||
@@ -120,7 +146,12 @@ export function subscribeToVendorSettings(onSettings, onError) {
       saveLocalVendorSettings(settings);
       onSettings(settings);
     },
-    onError,
+    (error) => {
+      // Keep previously loaded vendor data available when Firestore access is
+      // temporarily unavailable instead of dropping the UI to the 13 defaults.
+      onSettings(getLocalVendorSettings());
+      onError?.(error);
+    },
   );
 }
 

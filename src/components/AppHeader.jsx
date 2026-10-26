@@ -30,6 +30,16 @@ const navigationItems = [
     label: "Dashboard",
   },
   {
+    group: "Orders",
+    id: "order-flow",
+    label: "New Order",
+  },
+  {
+    group: "Orders",
+    id: "order-builds",
+    label: "Open Orders",
+  },
+  {
     group: "Yard Tasks",
     id: "yard-tasks",
     label: "Yard Tasks",
@@ -182,6 +192,10 @@ function getCurrentPageLabel(currentPage) {
     return "Deliveries";
   }
 
+  if (["order-flow", "order-builds"].includes(currentPage)) {
+    return "Orders";
+  }
+
   if (
     String(currentPage || "").startsWith("customers-") ||
     currentPage === "sales-orders" ||
@@ -209,7 +223,6 @@ function getCurrentPageLabel(currentPage) {
       "email-list",
       "delivery-settings",
       "vendor-settings",
-      "order-flow",
       "sales-report",
     ].includes(currentPage)
   ) {
@@ -282,6 +295,10 @@ function getCurrentPageGroup(currentPage) {
     return "Deliveries";
   }
 
+  if (["order-flow", "order-builds"].includes(currentPage)) {
+    return "Orders";
+  }
+
   if (
     currentPage === "sales" ||
     String(currentPage || "").startsWith("customers-") ||
@@ -311,7 +328,6 @@ function getCurrentPageGroup(currentPage) {
       "email-list",
       "delivery-settings",
       "vendor-settings",
-      "order-flow",
       "sales-report",
     ].includes(currentPage)
   ) {
@@ -336,6 +352,10 @@ function getNavGroupIcon(group) {
 
   if (group === "Dashboard") {
     return LayoutDashboard;
+  }
+
+  if (group === "Orders") {
+    return ClipboardList;
   }
 
   if (group === "Deliveries") {
@@ -411,6 +431,7 @@ export default function AppHeader({
   const [openNavGroups, setOpenNavGroups] = useState({
     "New Home": false,
     Dashboard: true,
+    Orders: false,
     "Yard Tasks": false,
     Dispatch: false,
     South: false,
@@ -443,6 +464,7 @@ export default function AppHeader({
     setOpenNavGroups({
       "New Home": false,
       Dashboard: false,
+      Orders: false,
       "Yard Tasks": false,
       Dispatch: false,
       South: false,
@@ -485,6 +507,7 @@ export default function AppHeader({
       return {
         "New Home": false,
         Dashboard: false,
+        Orders: false,
         "Yard Tasks": false,
         Dispatch: false,
         South: false,
@@ -568,13 +591,6 @@ export default function AppHeader({
       !allowedPageIds || allowedPageIds.includes(pageId);
 
     return [
-      pageAllowed("sales-orders")
-        ? {
-            id: "sales-orders",
-            label: "Orders",
-            pageId: "sales-orders",
-          }
-        : null,
       pageAllowed("customers-view")
         ? {
             id: "sales-customers",
@@ -733,7 +749,7 @@ export default function AppHeader({
       );
     }
 
-    return ["Dashboard", "Dispatch", "South", "Deliveries", "Yard Tasks", "Sales", "Documents", "Accounting", "Admin", "Fleet", "New Home"].map((group) => {
+    return ["Dashboard", "Orders", "Dispatch", "South", "Deliveries", "Yard Tasks", "Sales", "Documents", "Accounting", "Admin", "Fleet", "New Home"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||
@@ -786,7 +802,6 @@ export default function AppHeader({
                 "email-list",
                 "delivery-settings",
                 "vendor-settings",
-                "order-flow",
                 "sales-report",
               ].includes(pageId),
             )) ||
@@ -903,7 +918,13 @@ export default function AppHeader({
                 />
               </button>
             ) : hasGroupItems && !isSinglePageGroup ? (
-              <span className="pr-4 text-white/70">
+              <button
+                type="button"
+                onClick={() => toggleNavGroup(group)}
+                className="flex h-full min-h-[56px] w-12 shrink-0 items-center justify-center rounded-r-xl text-white/70 transition hover:text-white"
+                aria-label={`${isGroupOpen ? "Collapse" : "Open"} ${group} menu`}
+                aria-expanded={isGroupOpen}
+              >
                 <ChevronDown
                   aria-hidden="true"
                   className={`h-5 w-5 transition-transform ${
@@ -911,7 +932,7 @@ export default function AppHeader({
                   }`}
                   strokeWidth={2.6}
                 />
-              </span>
+              </button>
             ) : null}
           </div>
 

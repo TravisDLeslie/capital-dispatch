@@ -1,4 +1,13 @@
-import { ClipboardList, PackageCheck, Truck, Warehouse } from "lucide-react";
+import { useState } from "react";
+import {
+  Archive,
+  CheckCircle2,
+  ClipboardList,
+  PackageCheck,
+  Trash2,
+  Truck,
+  Warehouse,
+} from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 
@@ -10,61 +19,319 @@ const pathLabels = {
 };
 
 function getWaitingItems(build) {
-  return (build.items || []).filter((item) => item.path !== "inStock");
+  const items = build.waitingItems || build.items || [];
+
+  return items.filter((item) => item.path !== "inStock");
 }
 
 function getStockItems(build) {
+  if (Array.isArray(build.stockItems)) {
+    return build.stockItems;
+  }
+
   return (build.items || []).filter((item) => item.path === "inStock");
+}
+
+function formatArchivedDate(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function isCompleteRecord(record) {
+  const status = String(record?.status || "").toLowerCase();
+
+  return (
+    ["complete", "completed", "delivered", "received"].includes(status) ||
+    Boolean(
+      record?.completedAt ||
+        record?.deliveredAt ||
+        record?.delivered ||
+        record?.pickedUpAt,
+    )
+  );
+}
+
+function isCompleteSouthRun(supplierRun) {
+  if (isCompleteRecord(supplierRun)) {
+    return true;
+  }
+
+  const items = Array.isArray(supplierRun?.items) ? supplierRun.items : [];
+
+  return (
+    items.length > 0 &&
+    items.every(
+      (item) =>
+        item.pickedUp ||
+        item.pickedUpAt ||
+        item.pickupPhoto ||
+        (Array.isArray(item.pickupPhotos) && item.pickupPhotos.length > 0),
+    )
+  );
+}
+
+function getLinkedPendingCount(linkedIds, records, isComplete, fallbackCount) {
+  if (!Array.isArray(linkedIds) || linkedIds.length === 0) {
+    return fallbackCount;
+  }
+
+  return linkedIds.filter((recordId) => {
+    const record = records.find((candidate) => candidate.id === recordId);
+    return !record || !isComplete(record);
+  }).length;
+}
+
+function getOrderLifecycle(
+  build,
+  supplierRuns,
+  theirTruckPOs,
+  podPickups,
+  deliveries,
+) {
+  if (isCompleteRecord(build)) {
+    return {
+      complete: true,
+      label: "Complete",
+      pendingCount: 0,
+      completedAt: build.completedAt,
+    };
+  }
+
+  const waitingItems = getWaitingItems(build);
+  const southPending = getLinkedPendingCount(
+    build.linkedSouthRunIds,
+    supplierRuns,
+    isCompleteSouthRun,
+    waitingItems.filter((item) => item.path === "wePickup").length,
+  );
+  const supplierPending = getLinkedPendingCount(
+    build.linkedTheirTruckPOIds,
+    theirTruckPOs,
+    isCompleteRecord,
+    waitingItems.filter((item) => item.path === "supplierDelivery").length,
+  );
+  const podPending = getLinkedPendingCount(
+    build.linkedPodPickupIds,
+    podPickups,
+    isCompleteRecord,
+    waitingItems.filter((item) => item.path === "pod").length,
+  );
+  const materialPending = southPending + supplierPending + podPending;
+  const linkedDelivery = deliveries.find(
+    (delivery) => delivery.id === build.linkedDeliveryId,
+  );
+  const deliveryPending =
+    build.handoffType === "delivery" &&
+    (!linkedDelivery || !isCompleteRecord(linkedDelivery));
+  const deliveryComplete =
+    build.handoffType === "delivery" &&
+    linkedDelivery &&
+    isCompleteRecord(linkedDelivery);
+  const podComplete = build.handoffType === "pod" && materialPending === 0;
+  const complete = materialPending === 0 && (deliveryComplete || podComplete);
+
+  if (complete) {
+    return {
+      complete: true,
+      label: "Complete",
+      pendingCount: 0,
+      completedAt:
+        linkedDelivery?.deliveredAt || linkedDelivery?.completedAt || "",
+    };
+  }
+
+  if (materialPending > 0) {
+    return {
+      complete: false,
+      label: `Waiting on ${materialPending} PO item${materialPending === 1 ? "" : "s"}`,
+      pendingCount: materialPending,
+      southPending,
+      supplierPending,
+      podPending,
+    };
+  }
+
+  if (deliveryPending) {
+    return {
+      complete: false,
+      label: "Ready for delivery",
+      pendingCount: 1,
+    };
+  }
+
+  return {
+    complete: false,
+    label: "Ready for pickup",
+    pendingCount: 0,
+    canMarkComplete: true,
+  };
 }
 
 /**
  * @param {{
  *   builds?: Array<Record<string, any>>;
+ *   deliveries?: Array<Record<string, any>>;
+ *   podPickups?: Array<Record<string, any>>;
+ *   supplierRuns?: Array<Record<string, any>>;
+ *   theirTruckPOs?: Array<Record<string, any>>;
+ *   onArchiveOrder?: (orderBuildId: string) => Promise<void> | void;
+ *   onCompleteOrder?: (orderBuildId: string) => Promise<void> | void;
+ *   onDeleteOrder?: (orderBuildId: string) => Promise<void> | void;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
-export default function OrderBuildsPage({ builds = [], onPageChange }) {
+export default function OrderBuildsPage({
+  builds = [],
+  deliveries = [],
+  podPickups = [],
+  supplierRuns = [],
+  theirTruckPOs = [],
+  onArchiveOrder,
+  onCompleteOrder,
+  onDeleteOrder,
+  onPageChange,
+}) {
+  const [activeView, setActiveView] = useState("open");
+  const lifecycleBuilds = builds.map((build) => ({
+    build,
+    lifecycle: getOrderLifecycle(
+      build,
+      supplierRuns,
+      theirTruckPOs,
+      podPickups,
+      deliveries,
+    ),
+  }));
+  const activeBuilds = lifecycleBuilds.filter(
+    ({ build }) => !build.archived && build.status !== "archived",
+  );
+  const openBuilds = activeBuilds.filter(({ lifecycle }) => !lifecycle.complete);
+  const completedBuilds = activeBuilds.filter(
+    ({ lifecycle }) => lifecycle.complete,
+  );
+  const archivedBuilds = lifecycleBuilds.filter(
+    ({ build }) => build.archived || build.status === "archived",
+  );
+  const visibleBuilds =
+    activeView === "archived"
+      ? archivedBuilds
+      : activeView === "completed"
+        ? completedBuilds
+        : openBuilds;
+  const isArchivedView = activeView === "archived";
+  const isCompletedView = activeView === "completed";
+
   return (
     <PageContainer>
       <Breadcrumbs
         items={[
-          { label: "New Home", onClick: () => onPageChange?.("new-home") },
-          { label: "Build" },
+          { label: "Orders", onClick: () => onPageChange?.("order-flow") },
+          { label: "Open Orders" },
         ]}
       />
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
-            Build Watch
+            Order Watch
           </p>
           <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-            Orders Waiting on Material
+            {isArchivedView
+              ? "Archived Orders"
+              : isCompletedView
+                ? "Completed Orders"
+                : "Open Orders"}
           </h1>
           <p className="mt-2 max-w-2xl text-lg font-bold text-slate-500">
-            A high-level build view that shows what is ready and what is still
-            waiting on South, Their Truck, or POD material.
+            {isArchivedView
+              ? "Review orders that were removed from the active Open Orders list."
+              : isCompletedView
+                ? "Orders move here automatically when every PO and the final customer handoff are complete."
+              : "See orders that still have POs waiting for South pickup, supplier delivery, customer pickup, or final delivery to the customer."}
           </p>
         </div>
         <span className="inline-flex w-fit items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black uppercase tracking-[0.12em] text-white">
-          <ClipboardList className="h-4 w-4" aria-hidden="true" />
-          {builds.length} orders
+          {isArchivedView ? (
+            <Archive className="h-4 w-4" aria-hidden="true" />
+          ) : isCompletedView ? (
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <ClipboardList className="h-4 w-4" aria-hidden="true" />
+          )}
+          {visibleBuilds.length} orders
         </span>
       </div>
 
+      <div className="mb-5 inline-flex w-full rounded-2xl border border-slate-200 bg-slate-100 p-1 sm:w-auto">
+        <button
+          type="button"
+          onClick={() => setActiveView("open")}
+          className={`flex-1 rounded-xl px-5 py-2.5 text-sm font-black transition sm:flex-none ${
+            activeView === "open"
+              ? "bg-white text-slate-950 shadow-sm"
+              : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          Open ({openBuilds.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveView("completed")}
+          className={`flex-1 rounded-xl px-5 py-2.5 text-sm font-black transition sm:flex-none ${
+            isCompletedView
+              ? "bg-white text-slate-950 shadow-sm"
+              : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          Completed ({completedBuilds.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveView("archived")}
+          className={`flex-1 rounded-xl px-5 py-2.5 text-sm font-black transition sm:flex-none ${
+            isArchivedView
+              ? "bg-white text-slate-950 shadow-sm"
+              : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          Archived ({archivedBuilds.length})
+        </button>
+      </div>
+
       <div className="grid gap-3">
-        {builds.length === 0 ? (
+        {visibleBuilds.length === 0 ? (
           <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center">
             <Warehouse className="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
             <p className="mt-3 text-xl font-black text-slate-950">
-              No builds tracked yet
+              {isArchivedView
+                ? "No archived orders"
+                : isCompletedView
+                  ? "No completed orders yet"
+                  : "No open orders yet"}
             </p>
             <p className="mt-1 text-sm font-bold text-slate-500">
-              Process an order in New Home and it will appear here.
+              {isArchivedView
+                ? "Orders archived with the protected action code will appear here."
+                : isCompletedView
+                  ? "Orders will move here when their PO and customer handoff workflow is finished."
+                : "Create an order and its outstanding POs will appear here."}
             </p>
           </div>
         ) : (
-          builds.map((build) => {
+          visibleBuilds.map(({ build, lifecycle }) => {
             const waitingItems = getWaitingItems(build);
             const stockItems = getStockItems(build);
 
@@ -85,15 +352,64 @@ export default function OrderBuildsPage({ builds = [], onPageChange }) {
                       {build.customerName || "No contact"}
                       {build.phoneNumber ? ` · ${build.phoneNumber}` : ""}
                     </p>
+                    {isArchivedView ? (
+                      <p className="mt-2 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                        Archived {formatArchivedDate(build.archivedAt) || "previously"}
+                        {build.archivedBy?.name
+                          ? ` by ${build.archivedBy.name}`
+                          : ""}
+                      </p>
+                    ) : null}
+                    {isCompletedView ? (
+                      <p className="mt-2 text-xs font-black uppercase tracking-[0.12em] text-emerald-600">
+                        Completed {formatArchivedDate(lifecycle.completedAt) || "from linked workflow"}
+                      </p>
+                    ) : null}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 sm:flex">
-                    <span className="rounded-2xl bg-amber-50 px-4 py-2 text-center text-sm font-black text-amber-800">
-                      {waitingItems.length} waiting
+                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                    <span
+                      className={`rounded-2xl px-4 py-2 text-center text-sm font-black ${
+                        lifecycle.complete
+                          ? "bg-emerald-50 text-emerald-800"
+                          : lifecycle.pendingCount > 0
+                            ? "bg-amber-50 text-amber-800"
+                            : "bg-blue-50 text-blue-800"
+                      }`}
+                    >
+                      {lifecycle.label}
                     </span>
                     <span className="rounded-2xl bg-emerald-50 px-4 py-2 text-center text-sm font-black text-emerald-800">
                       {stockItems.length} stock
                     </span>
+                    {!isArchivedView && lifecycle.canMarkComplete ? (
+                      <button
+                        type="button"
+                        onClick={() => onCompleteOrder?.(build.id)}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-black text-white transition hover:bg-emerald-700"
+                      >
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                        Mark Picked Up
+                      </button>
+                    ) : null}
+                    {!isArchivedView ? (
+                      <button
+                        type="button"
+                        onClick={() => onArchiveOrder?.(build.id)}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
+                      >
+                        <Archive className="h-4 w-4" aria-hidden="true" />
+                        Archive
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => onDeleteOrder?.(build.id)}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2 text-sm font-black text-[#FC2C38] transition hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      Delete
+                    </button>
                   </div>
                 </div>
 
@@ -102,7 +418,9 @@ export default function OrderBuildsPage({ builds = [], onPageChange }) {
                     <div className="flex items-center gap-2 text-amber-800">
                       <Truck className="h-5 w-5" aria-hidden="true" />
                       <p className="text-sm font-black uppercase tracking-[0.12em]">
-                        Waiting On
+                        {lifecycle.complete
+                          ? "Fulfillment Complete"
+                          : "Waiting On"}
                       </p>
                     </div>
                     <div className="mt-3 grid gap-2">

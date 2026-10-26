@@ -19,6 +19,7 @@ import {
 import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
+import SearchableSelect from "../components/SearchableSelect";
 
 const fulfillmentPaths = [
   {
@@ -146,34 +147,15 @@ function createBlankItem(overrides = {}) {
     routeDate: "",
     supplierDate: "",
     supplierNote: "",
+    driverNotesEnabled: false,
+    driverNotes: "",
+    easilyDamaged: false,
     saved: false,
     ...overrides,
   };
 }
 
-const defaultItems = [
-  createBlankItem({
-    id: "item-1",
-    quantity: "10",
-    description: "2x6-16 #2 Doug Fir",
-    path: "wePickup",
-    vendor: "OrePac",
-    poNumber: "441-185",
-    routeDate: "2026-08-28",
-    saved: true,
-  }),
-  createBlankItem({
-    id: "item-2",
-    quantity: "4",
-    description: "4x4-16 Pressure Treat",
-    path: "supplierDelivery",
-    vendor: "Boise Cascade",
-    poNumber: "441-186",
-    supplierDate: "2026-08-29",
-    supplierNote: "Typical cadence: M-W-F",
-    saved: true,
-  }),
-];
+const defaultItems = [createBlankItem({ id: "item-1" })];
 
 function getPath(pathId) {
   return (
@@ -213,7 +195,7 @@ function TextInput({ className = "", ...props }) {
   return (
     <input
       {...props}
-      className={`w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 ${className}`}
+      className={`w-full rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100 ${className}`}
     />
   );
 }
@@ -309,24 +291,27 @@ function ChoiceButton({
 /**
  * @param {{
  *   currentUser?: { id?: string; name?: string; email?: string } | null;
+ *   vendorOptions?: string[];
  *   onProcessOrder?: (orderPayload: Record<string, any>) => Promise<Record<string, any> | void>;
+ *   onProcessStockPO?: (stockPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
 export default function OrderFlowPage({
   currentUser = null,
+  vendorOptions = [],
   onProcessOrder,
+  onProcessStockPO,
   onPageChange,
 }) {
-  const [orderNumber, setOrderNumber] = useState("019-390");
-  const [customerName, setCustomerName] = useState("Zach Peel");
-  const [businessName, setBusinessName] = useState("King Building");
-  const [phoneNumber, setPhoneNumber] = useState("(208) 555-0192");
+  const [orderEntryMode, setOrderEntryMode] = useState("customer");
+  const [orderNumber, setOrderNumber] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [businessName, setBusinessName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [orderMethod, setOrderMethod] = useState("delivery");
-  const [deliveryAddress, setDeliveryAddress] = useState(
-    "1234 W Example St, Boise, ID 83702",
-  );
+  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [items, setItems] = useState(defaultItems);
   const [activeItemId, setActiveItemId] = useState(null);
@@ -342,6 +327,20 @@ export default function OrderFlowPage({
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
   const [processError, setProcessError] = useState("");
   const [processSummary, setProcessSummary] = useState(null);
+  const [stockPoNumber, setStockPoNumber] = useState("");
+  const [stockVendor, setStockVendor] = useState("");
+  const [stockFulfillmentMethod, setStockFulfillmentMethod] =
+    useState("wePickup");
+  const [stockScheduledDate, setStockScheduledDate] = useState("");
+  const [stockQuantity, setStockQuantity] = useState("");
+  const [stockDescription, setStockDescription] = useState("");
+  const [stockDriverNotesEnabled, setStockDriverNotesEnabled] =
+    useState(false);
+  const [stockNotes, setStockNotes] = useState("");
+  const [stockEasilyDamaged, setStockEasilyDamaged] = useState(false);
+  const [isProcessingStockPO, setIsProcessingStockPO] = useState(false);
+  const [stockProcessError, setStockProcessError] = useState("");
+  const [stockProcessSummary, setStockProcessSummary] = useState(null);
 
   const editingItem = items.find((item) => item.id === editingItemId);
   const selectedUnloadType =
@@ -379,6 +378,12 @@ export default function OrderFlowPage({
       customerName &&
       savedItems.length > 0 &&
       (orderMethod !== "delivery" || deliveryAddress),
+  );
+  const canProcessStockPO = Boolean(
+    /^\d{3}-\d{3}$/.test(stockPoNumber) &&
+      stockVendor.trim() &&
+      stockScheduledDate &&
+      stockDescription.trim(),
   );
 
   useEffect(() => {
@@ -535,6 +540,57 @@ export default function OrderFlowPage({
       );
     } finally {
       setIsProcessingOrder(false);
+    }
+  }
+
+  function resetStockPO() {
+    setStockPoNumber("");
+    setStockVendor("");
+    setStockFulfillmentMethod("wePickup");
+    setStockScheduledDate("");
+    setStockQuantity("");
+    setStockDescription("");
+    setStockDriverNotesEnabled(false);
+    setStockNotes("");
+    setStockEasilyDamaged(false);
+    setStockProcessError("");
+    setStockProcessSummary(null);
+  }
+
+  async function processStockPO() {
+    if (!canProcessStockPO || isProcessingStockPO) {
+      return;
+    }
+
+    if (typeof onProcessStockPO !== "function") {
+      setStockProcessError("Stock PO processing is not connected yet.");
+      return;
+    }
+
+    setIsProcessingStockPO(true);
+    setStockProcessError("");
+    setStockProcessSummary(null);
+
+    try {
+      const summary = await onProcessStockPO({
+        poNumber: stockPoNumber,
+        vendor: stockVendor,
+        fulfillmentMethod: stockFulfillmentMethod,
+        scheduledDate: stockScheduledDate,
+        quantity: stockQuantity,
+        description: stockDescription,
+        notes: stockDriverNotesEnabled ? stockNotes : "",
+        easilyDamaged: stockEasilyDamaged,
+        createdBy: currentUser,
+      });
+      setStockProcessSummary(summary || {});
+    } catch (error) {
+      console.error("Unable to process stock PO:", error);
+      setStockProcessError(
+        error?.message || "Unable to save this stock PO. Please try again.",
+      );
+    } finally {
+      setIsProcessingStockPO(false);
     }
   }
 
@@ -838,6 +894,258 @@ export default function OrderFlowPage({
     );
   }
 
+  if (orderEntryMode === "stock") {
+    return (
+      <PageContainer>
+        <Breadcrumbs items={[{ label: "Orders" }, { label: "Stock PO" }]} />
+
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">
+              Internal Stock
+            </p>
+            <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
+              New Stock PO
+            </h1>
+            <p className="mt-2 max-w-2xl text-lg font-bold text-slate-500">
+              Enter one PO for Capital Lumber stock and send it to South pickup
+              or Their Truck delivery.
+            </p>
+          </div>
+
+          <div className="inline-flex w-full rounded-2xl border border-slate-200 bg-slate-100 p-1 lg:w-auto">
+            <button
+              type="button"
+              onClick={() => setOrderEntryMode("customer")}
+              className="flex-1 rounded-xl px-5 py-3 text-sm font-black text-slate-500 transition hover:text-slate-900 lg:flex-none"
+            >
+              Customer Order
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded-xl bg-white px-5 py-3 text-sm font-black text-emerald-700 shadow-sm lg:flex-none"
+            >
+              Stock PO
+            </button>
+          </div>
+        </div>
+
+        <section className="rounded-[2rem] border border-emerald-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="flex items-start gap-3 border-b border-slate-100 pb-5">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+              <Warehouse className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="text-2xl font-black text-slate-950">
+                Stock purchase order
+              </h2>
+              <p className="mt-1 text-sm font-bold text-slate-500">
+                No customer delivery, tarp, hardware, or address details needed.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <Field label="PO Number">
+              <TextInput
+                value={stockPoNumber}
+                onChange={(event) =>
+                  setStockPoNumber(formatOrderNumberInput(event.target.value))
+                }
+                placeholder="123-456"
+                inputMode="numeric"
+                maxLength={7}
+                className="text-xl font-black"
+              />
+            </Field>
+
+            <Field label="Vendor">
+              <SearchableSelect
+                value={stockVendor}
+                options={vendorOptions}
+                onChange={setStockVendor}
+                allowCustomValue
+                placeholder="Start typing a vendor..."
+                accent="green"
+                inputBackgroundClassName="bg-slate-100 focus:bg-white"
+              />
+            </Field>
+          </div>
+
+          <div className="mt-5">
+            <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+              How is it getting here?
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setStockFulfillmentMethod("wePickup")}
+                className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition ${
+                  stockFulfillmentMethod === "wePickup"
+                    ? "border-[#FC2C38] bg-red-50 ring-4 ring-red-100"
+                    : "border-slate-200 bg-slate-50 hover:bg-white"
+                }`}
+              >
+                <Truck className="h-6 w-6 text-[#FC2C38]" aria-hidden="true" />
+                <div>
+                  <p className="font-black text-slate-950">We Pickup</p>
+                  <p className="text-sm font-bold text-slate-500">
+                    Send this PO to the South pickup board.
+                  </p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStockFulfillmentMethod("supplierDelivery")}
+                className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition ${
+                  stockFulfillmentMethod === "supplierDelivery"
+                    ? "border-blue-500 bg-blue-50 ring-4 ring-blue-100"
+                    : "border-slate-200 bg-slate-50 hover:bg-white"
+                }`}
+              >
+                <Package className="h-6 w-6 text-blue-700" aria-hidden="true" />
+                <div>
+                  <p className="font-black text-slate-950">They Deliver</p>
+                  <p className="text-sm font-bold text-slate-500">
+                    Add this PO to Their Truck receiving.
+                  </p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[200px_160px_1fr]">
+            <Field
+              label={
+                stockFulfillmentMethod === "wePickup"
+                  ? "Pickup Date"
+                  : "Delivery Date"
+              }
+            >
+              <TextInput
+                type="date"
+                value={stockScheduledDate}
+                onChange={(event) => setStockScheduledDate(event.target.value)}
+              />
+            </Field>
+            <Field label="Quantity Optional">
+              <TextInput
+                value={stockQuantity}
+                onChange={(event) => setStockQuantity(event.target.value)}
+                placeholder="Qty"
+              />
+            </Field>
+            <Field label="Material">
+              <TextInput
+                value={stockDescription}
+                onChange={(event) => setStockDescription(event.target.value)}
+                placeholder="Material description"
+              />
+            </Field>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={stockDriverNotesEnabled}
+                  onChange={(event) =>
+                    setStockDriverNotesEnabled(event.target.checked)
+                  }
+                  className="mt-1 h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span>
+                  <span className="block text-sm font-black text-slate-950">
+                    Add driver notes for this PO
+                  </span>
+                  <span className="mt-1 block text-sm font-bold text-amber-800">
+                    {stockFulfillmentMethod === "wePickup"
+                      ? "Notes show on the South driver pickup card."
+                      : "Notes stay with the PO for receiving."}
+                  </span>
+                </span>
+              </label>
+
+              {stockDriverNotesEnabled ? (
+                <textarea
+                  value={stockNotes}
+                  onChange={(event) => setStockNotes(event.target.value)}
+                  placeholder="Anything the driver should know about this PO or pickup..."
+                  rows={3}
+                  className="mt-4 w-full resize-none rounded-xl border border-amber-200 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-amber-700/60 focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+                />
+              ) : null}
+            </section>
+
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+              <span>
+                <span className="block text-sm font-black text-slate-950">
+                  Easily damaged?
+                </span>
+                <span className="mt-1 block text-sm font-bold text-amber-800">
+                  Driver will see needs corners/protection.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={stockEasilyDamaged}
+                onChange={(event) =>
+                  setStockEasilyDamaged(event.target.checked)
+                }
+                className="h-6 w-6 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+              />
+            </label>
+          </div>
+
+          <button
+            type="button"
+            onClick={processStockPO}
+            disabled={
+              !canProcessStockPO ||
+              isProcessingStockPO ||
+              Boolean(stockProcessSummary)
+            }
+            className="mt-5 inline-flex min-h-[60px] w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 text-lg font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            <Plus className="h-5 w-5" aria-hidden="true" />
+            {isProcessingStockPO
+              ? "Saving Stock PO..."
+              : `Save to ${
+                  stockFulfillmentMethod === "wePickup"
+                    ? "South"
+                    : "Their Truck"
+                }`}
+          </button>
+
+          {stockProcessError ? (
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
+              {stockProcessError}
+            </div>
+          ) : null}
+
+          {stockProcessSummary ? (
+            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-lg font-black text-emerald-900">
+                PO {stockProcessSummary.poNumber || stockPoNumber} saved
+              </p>
+              <p className="mt-1 text-sm font-bold text-emerald-700">
+                Added to {stockProcessSummary.destination || "fulfillment"}.
+              </p>
+              <button
+                type="button"
+                onClick={resetStockPO}
+                className="mt-3 rounded-xl bg-white px-4 py-2 text-sm font-black text-emerald-800 shadow-sm"
+              >
+                Add Another Stock PO
+              </button>
+            </div>
+          ) : null}
+        </section>
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer>
       <Breadcrumbs items={[{ label: "New Home" }, { label: "Orders" }]} />
@@ -847,49 +1155,59 @@ export default function OrderFlowPage({
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
             Super Admin Lab
           </p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-            New Order
-          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
+              New Order
+            </h1>
+            <button
+              type="button"
+              onClick={() => setOrderEntryMode("stock")}
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100"
+            >
+              <Warehouse className="h-4 w-4" aria-hidden="true" />
+              Stock PO
+            </button>
+          </div>
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white px-4 py-3 shadow-sm lg:min-w-[420px]">
+        <div className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 shadow-sm lg:w-auto lg:min-w-[420px]">
           <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                Current Order
-              </p>
-              <p className="truncate text-sm font-black text-slate-700">
-                {businessName || "Business name"} ·{" "}
-                {customerName || "Customer name"}
-              </p>
-              {accountNumber ? (
-                <p className="mt-1 truncate text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
-                  Account # {accountNumber}
+              <div className="min-w-0">
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+                  Current Order
                 </p>
-              ) : null}
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-black tracking-tight text-slate-950">
-                {orderNumber || "000-000"}
-              </p>
-              <p className="text-xs font-bold text-slate-500">
-                {phoneNumber || "No phone"}
-              </p>
-              <span
-                className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] ${selectedHandoff.tone}`}
-              >
-                <SelectedHandoffIcon
-                  className="h-3.5 w-3.5"
-                  aria-hidden="true"
-                />
-                {selectedHandoff.label}
-              </span>
-              <p className="mt-1 text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
-                {orderMethod === "delivery"
-                  ? `Delivery ${deliveryDateText}`
-                  : selectedHandoff.description}
-              </p>
-            </div>
+                <p className="truncate text-sm font-black text-slate-700">
+                  {businessName || "Business name"} ·{" "}
+                  {customerName || "Customer name"}
+                </p>
+                {accountNumber ? (
+                  <p className="mt-1 truncate text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
+                    Account # {accountNumber}
+                  </p>
+                ) : null}
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-black tracking-tight text-slate-950">
+                  {orderNumber || "000-000"}
+                </p>
+                <p className="text-xs font-bold text-slate-500">
+                  {phoneNumber || "No phone"}
+                </p>
+                <span
+                  className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] ${selectedHandoff.tone}`}
+                >
+                  <SelectedHandoffIcon
+                    className="h-3.5 w-3.5"
+                    aria-hidden="true"
+                  />
+                  {selectedHandoff.label}
+                </span>
+                <p className="mt-1 text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
+                  {orderMethod === "delivery"
+                    ? `Delivery ${deliveryDateText}`
+                    : selectedHandoff.description}
+                </p>
+              </div>
           </div>
         </div>
       </div>
@@ -1029,9 +1347,12 @@ export default function OrderFlowPage({
                     <AddressAutocompleteInput
                       value={deliveryAddress}
                       onChange={setDeliveryAddress}
+                      autoComplete="off"
+                      useUncontrolledValue
+                      enableLocalFallback
                       placeholder="Start typing the delivery address..."
                       showStatus={false}
-                      className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                      className="w-full rounded-2xl border border-slate-300 bg-slate-100 py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
                     />
                   </div>
                 </Field>
@@ -1229,7 +1550,7 @@ export default function OrderFlowPage({
                         onChange={(event) =>
                           updateItem(item.id, { path: event.target.value })
                         }
-                        className="w-full appearance-none rounded-2xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                        className="w-full appearance-none rounded-2xl border border-slate-300 bg-slate-100 py-3 pl-11 pr-4 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
                       >
                         {activeFulfillmentPaths.map((path) => (
                           <option key={path.id} value={path.id}>
@@ -1374,7 +1695,7 @@ export default function OrderFlowPage({
               onChange={(event) => setDeliveryNotes(event.target.value)}
               placeholder="Gate code, placement notes, call before leaving, tarp instructions..."
               rows={3}
-              className="w-full resize-none rounded-2xl border border-slate-300 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              className="w-full resize-none rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
             />
           </Field>
         </div>
@@ -1573,12 +1894,16 @@ export default function OrderFlowPage({
 
             <div className="mt-5 grid gap-4">
               <Field label="Vendor">
-                <TextInput
+                <SearchableSelect
                   value={editingItem.vendor}
-                  onChange={(event) =>
-                    updateItem(editingItem.id, { vendor: event.target.value })
+                  options={vendorOptions}
+                  onChange={(vendor) =>
+                    updateItem(editingItem.id, { vendor })
                   }
-                  placeholder="Vendor"
+                  allowCustomValue
+                  placeholder="Start typing a vendor..."
+                  accent="red"
+                  inputBackgroundClassName="bg-slate-100 focus:bg-white"
                 />
               </Field>
               <Field label="PO Number">
@@ -1586,10 +1911,12 @@ export default function OrderFlowPage({
                   value={editingItem.poNumber}
                   onChange={(event) =>
                     updateItem(editingItem.id, {
-                      poNumber: event.target.value,
+                      poNumber: formatOrderNumberInput(event.target.value),
                     })
                   }
                   placeholder="441-185"
+                  inputMode="numeric"
+                  maxLength={7}
                 />
               </Field>
               <Field
@@ -1637,6 +1964,68 @@ export default function OrderFlowPage({
                     placeholder="Typical cadence: M-W-F"
                   />
                 </Field>
+              ) : null}
+
+              {editingItem.path === "wePickup" ? (
+                <>
+                  <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                    <label className="flex cursor-pointer items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editingItem.driverNotesEnabled)}
+                        onChange={(event) =>
+                          updateItem(editingItem.id, {
+                            driverNotesEnabled: event.target.checked,
+                          })
+                        }
+                        className="mt-1 h-5 w-5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-black text-slate-950">
+                          Add driver notes for this PO
+                        </span>
+                        <span className="mt-1 block text-sm font-bold text-amber-800">
+                          Notes show on the South driver pickup card.
+                        </span>
+                      </span>
+                    </label>
+
+                    {editingItem.driverNotesEnabled ? (
+                      <textarea
+                        value={editingItem.driverNotes || ""}
+                        onChange={(event) =>
+                          updateItem(editingItem.id, {
+                            driverNotes: event.target.value,
+                          })
+                        }
+                        placeholder="Anything the driver should know about this PO or pickup..."
+                        rows={3}
+                        className="mt-4 w-full resize-none rounded-xl border border-amber-200 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-amber-700/60 focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+                      />
+                    ) : null}
+                  </section>
+
+                  <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+                    <span>
+                      <span className="block text-sm font-black text-slate-950">
+                        Easily damaged?
+                      </span>
+                      <span className="mt-1 block text-sm font-bold text-amber-800">
+                        Driver will see needs corners/protection.
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editingItem.easilyDamaged)}
+                      onChange={(event) =>
+                        updateItem(editingItem.id, {
+                          easilyDamaged: event.target.checked,
+                        })
+                      }
+                      className="h-6 w-6 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                    />
+                  </label>
+                </>
               ) : null}
             </div>
 

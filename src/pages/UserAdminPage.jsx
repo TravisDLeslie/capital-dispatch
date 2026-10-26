@@ -12,6 +12,7 @@ const roles = [
 
 const workViews = [
   { value: "operations", label: "Operations" },
+  { value: "main", label: "Main" },
   { value: "dispatch-ops", label: "Dispatch Ops" },
   { value: "driver", label: "Driver" },
   { value: "sales", label: "Sales" },
@@ -35,6 +36,15 @@ const dispatchOpsPermissionIds = [
   "today",
   "search",
   "trace",
+];
+
+const mainPermissionIds = [
+  "dashboard",
+  "order-flow",
+  "order-builds",
+  "sales",
+  "sales-tools",
+  "sales-converter",
 ];
 
 const permissionGroups = [
@@ -94,6 +104,13 @@ const permissionGroups = [
       { id: "deliveries-calendar", label: "Delivery Calendar" },
       { id: "deliveries-queue", label: "To Be Delivered" },
       { id: "deliveries-history", label: "Delivery History" },
+    ],
+  },
+  {
+    title: "Orders",
+    permissions: [
+      { id: "order-flow", label: "Create Orders" },
+      { id: "order-builds", label: "View Open Orders" },
     ],
   },
   {
@@ -417,15 +434,18 @@ export default function UserAdminPage({
   function applyWorkView(userId, workView) {
     const user = users.find((savedUser) => savedUser.id === userId);
     const currentDraft = user ? getDraft(user) : { permissions: [] };
-    const nextPermissions =
+    const presetPermissions =
       workView === "dispatch-ops"
-        ? [
-            ...new Set([
-              ...(currentDraft.permissions || []),
-              ...dispatchOpsPermissionIds,
-            ]),
-          ]
-        : currentDraft.permissions || [];
+        ? dispatchOpsPermissionIds
+        : workView === "main"
+          ? mainPermissionIds
+          : [];
+    const nextPermissions = [
+      ...new Set([
+        ...(currentDraft.permissions || []),
+        ...presetPermissions,
+      ]),
+    ];
 
     setDrafts((currentDrafts) => ({
       ...currentDrafts,

@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -97,6 +98,20 @@ export async function saveOrderBuild(orderBuild) {
       doc(db, ORDER_BUILDS_COLLECTION, savedBuild.id),
       savedBuild,
     );
+  }
+
+  saveLocalOrderBuilds(updatedOrderBuilds);
+
+  return updatedOrderBuilds;
+}
+
+export async function deleteOrderBuild(orderBuildId) {
+  const updatedOrderBuilds = getLocalOrderBuilds().filter(
+    (orderBuild) => orderBuild.id !== orderBuildId,
+  );
+
+  if (db) {
+    await deleteDoc(doc(db, ORDER_BUILDS_COLLECTION, orderBuildId));
   }
 
   saveLocalOrderBuilds(updatedOrderBuilds);
