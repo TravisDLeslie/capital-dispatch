@@ -40,7 +40,63 @@ function getLocationShippingRate(distanceMeters) {
     return { label: "2.5–3.75 mile shipping", normal: "$29", forklift: "$38" };
   }
 
-  return { label: "Over 3.75 miles", normal: "", forklift: "" };
+  if (distance <= METERS_PER_MILE * 6) {
+    return { label: "3.75–6 mile shipping", normal: "$35", forklift: "$50" };
+  }
+
+  if (distance <= METERS_PER_MILE * 8.5) {
+    return { label: "6–8.5 mile shipping", normal: "$43", forklift: "$57" };
+  }
+
+  if (distance <= METERS_PER_MILE * 12) {
+    return { label: "8.5–12 mile shipping", normal: "$47", forklift: "$60" };
+  }
+
+  if (distance <= METERS_PER_MILE * 25) {
+    return { label: "12–25 mile shipping", normal: "$50", forklift: "$75" };
+  }
+
+  if (distance < METERS_PER_MILE * 30) {
+    return { label: "25–30 mile shipping", normal: "$60", forklift: "$85" };
+  }
+
+  if (distance <= METERS_PER_MILE * 45) {
+    return {
+      label: "30–45 mile shipping",
+      normal: "",
+      forklift: "$110",
+      forkliftLabel: "Forklift or dump",
+    };
+  }
+
+  if (distance <= METERS_PER_MILE * 60) {
+    return {
+      label: "45–60 mile shipping",
+      normal: "",
+      forklift: "$150",
+      forkliftLabel: "Forklift or dump",
+    };
+  }
+
+  if (distance <= METERS_PER_MILE * 80) {
+    return {
+      label: "60–80 mile shipping",
+      normal: "",
+      forklift: "$225",
+      forkliftLabel: "Forklift or dump",
+    };
+  }
+
+  if (distance <= METERS_PER_MILE * 110) {
+    return {
+      label: "80–110 mile shipping",
+      normal: "",
+      forklift: "$325",
+      forkliftLabel: "Forklift or dump",
+    };
+  }
+
+  return { label: "Over 110 miles", normal: "", forklift: "" };
 }
 
 function formatDriveTime(seconds) {
@@ -64,10 +120,10 @@ function LocationShippingPrice({ rate, expanded = false }) {
     return null;
   }
 
-  if (!rate.normal || !rate.forklift) {
+  if (!rate.normal && !rate.forklift) {
     return (
       <p className="rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-slate-600">
-        Over 3.75 miles — shipping price not set.
+        Over 110 miles — shipping price not set.
       </p>
     );
   }
@@ -81,24 +137,29 @@ function LocationShippingPrice({ rate, expanded = false }) {
       <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700">
         {rate.label}
       </p>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        <div className="rounded-xl bg-emerald-100 px-3 py-2">
-          <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">
-            Normal
-          </p>
-          <p className={`${expanded ? "text-3xl" : "text-xl"} font-black text-emerald-950`}>
-            {rate.normal}
-          </p>
-        </div>
+      <div className={`mt-2 grid gap-2 ${rate.normal ? "grid-cols-2" : "grid-cols-1"}`}>
+        {rate.normal ? (
+          <div className="rounded-xl bg-emerald-100 px-3 py-2">
+            <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">
+              Normal
+            </p>
+            <p className={`${expanded ? "text-3xl" : "text-xl"} font-black text-emerald-950`}>
+              {rate.normal}
+            </p>
+          </div>
+        ) : null}
         <div className="rounded-xl bg-blue-100 px-3 py-2">
           <p className="text-[10px] font-black uppercase tracking-wide text-blue-700">
-            Forklift
+            {rate.forkliftLabel || "Forklift"}
           </p>
           <p className={`${expanded ? "text-3xl" : "text-xl"} font-black text-blue-950`}>
             {rate.forklift}
           </p>
         </div>
       </div>
+      <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-bold leading-snug text-amber-900">
+        Discount may apply for a large delivery or when we already have a truck going that way.
+      </p>
     </div>
   );
 }
