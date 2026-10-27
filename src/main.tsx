@@ -40,14 +40,22 @@ if (import.meta.env.DEV && "serviceWorker" in navigator) {
 }
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("/service-worker.js")
-      .then((registration) => {
-        registration.update();
-      })
-      .catch((error) => {
-        console.error("Unable to register service worker:", error);
-      });
+  const pageHadServiceWorker = Boolean(navigator.serviceWorker.controller);
+  let isRefreshing = false;
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!pageHadServiceWorker || isRefreshing) {
+      return;
+    }
+
+    isRefreshing = true;
+    window.location.reload();
   });
+
+  navigator.serviceWorker
+    .register("/service-worker.js", { updateViaCache: "none" })
+    .then((registration) => registration.update())
+    .catch((error) => {
+      console.error("Unable to register service worker:", error);
+    });
 }

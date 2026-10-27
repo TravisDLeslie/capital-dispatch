@@ -1,4 +1,4 @@
-const CACHE_NAME = "capital-dispatch-v6";
+const CACHE_NAME = "capital-dispatch-v7";
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -49,6 +49,36 @@ async function staleWhileRevalidate(request, fallbackUrl = "") {
   return Response.error();
 }
 
+async function networkFirst(request, fallbackUrl = "") {
+  const cache = await caches.open(CACHE_NAME);
+
+  try {
+    const networkResponse = await fetch(request);
+
+    if (isCacheableResponse(networkResponse)) {
+      await cache.put(request, networkResponse.clone());
+    }
+
+    return networkResponse;
+  } catch {
+    const cachedResponse = await cache.match(request);
+
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+
+    if (fallbackUrl) {
+      const fallbackResponse = await cache.match(fallbackUrl);
+
+      if (fallbackResponse) {
+        return fallbackResponse;
+      }
+    }
+
+    return Response.error();
+  }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)),
@@ -80,7 +110,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(staleWhileRevalidate(request, "/"));
+    event.respondWith(networkFirst(request, "/"));
     return;
   }
 
