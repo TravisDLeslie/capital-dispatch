@@ -721,6 +721,9 @@ function DeliveryRouteMapPlanner({
   const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
   const [isDraggingMap, setIsDraggingMap] = useState(false);
   const mapDragRef = useRef(null);
+  const selectedDateLabel = selectedDate
+    ? formatDateLabel(selectedDate)
+    : "All";
   const deliveriesWithAddress = useMemo(
     () =>
       deliveries.filter((delivery) => String(delivery.address || "").trim()),
@@ -1112,13 +1115,34 @@ function DeliveryRouteMapPlanner({
                 <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
                   Delivery Date
                 </span>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(event) => onSelectedDateChange(event.target.value)}
-                  className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-                />
+                <span className="relative block">
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(event) =>
+                      onSelectedDateChange(event.target.value)
+                    }
+                    className={`block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 ${
+                      selectedDate ? "text-slate-900" : "text-transparent"
+                    }`}
+                  />
+                  {!selectedDate ? (
+                    <span className="pointer-events-none absolute inset-y-px left-1 right-11 flex items-center rounded-l-[11px] bg-white px-3 text-sm font-black text-slate-900">
+                      All
+                    </span>
+                  ) : null}
+                </span>
               </label>
+
+              {selectedDate ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectedDateChange("")}
+                  className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs font-black uppercase tracking-[0.1em] text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+                >
+                  Show All
+                </button>
+              ) : null}
 
               {staticMapUrl ? (
                 <button
@@ -1139,7 +1163,7 @@ function DeliveryRouteMapPlanner({
 
               <img
                 src={staticMapUrl}
-                alt={`Delivery route map for ${formatDateLabel(selectedDate)}`}
+                alt={`Delivery route map for ${selectedDateLabel}`}
                 className="h-[420px] w-full object-contain sm:h-[560px] xl:h-[680px]"
               />
 
@@ -1243,9 +1267,7 @@ function DeliveryRouteMapPlanner({
           className="fixed inset-0 z-50 bg-slate-950/80 p-3 backdrop-blur-sm sm:p-6"
           role="dialog"
           aria-modal="true"
-          aria-label={`Full delivery route map for ${formatDateLabel(
-            selectedDate,
-          )}`}
+          aria-label={`Full delivery route map for ${selectedDateLabel}`}
         >
           <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-6">
@@ -1254,7 +1276,7 @@ function DeliveryRouteMapPlanner({
                   Route Map
                 </p>
                 <h3 className="text-xl font-black text-slate-950">
-                  {formatDateLabel(selectedDate)} Deliveries
+                  {selectedDateLabel} Deliveries
                 </h3>
               </div>
 
@@ -1303,9 +1325,7 @@ function DeliveryRouteMapPlanner({
                     </div>
                     <img
                       src={staticMapUrl}
-                      alt={`Large delivery route map for ${formatDateLabel(
-                        selectedDate,
-                      )}`}
+                      alt={`Large delivery route map for ${selectedDateLabel}`}
                       draggable="false"
                       className="h-full w-full select-none object-cover"
                       style={{
@@ -1424,7 +1444,7 @@ export default function DeliveryDispatchPage({
   const [openDetailKeys, setOpenDetailKeys] = useState({});
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
   const [error, setError] = useState("");
-  const [routeMapDate, setRouteMapDate] = useState(getTodayDateValue());
+  const [routeMapDate, setRouteMapDate] = useState("");
   const [draftRouteOrders, setDraftRouteOrders] = useState({});
 
   const needsDispatchDeliveries = useMemo(
@@ -1444,9 +1464,11 @@ export default function DeliveryDispatchPage({
   );
   const dateScopedNeedsDispatchDeliveries = useMemo(
     () =>
-      needsDispatchDeliveries.filter(
-        (delivery) => delivery.deliveryDate === routeMapDate,
-      ),
+      routeMapDate
+        ? needsDispatchDeliveries.filter(
+            (delivery) => delivery.deliveryDate === routeMapDate,
+          )
+        : needsDispatchDeliveries,
     [needsDispatchDeliveries, routeMapDate],
   );
   const normalizedSearchQuery = normalizeSearch(searchQuery);
@@ -1496,7 +1518,7 @@ export default function DeliveryDispatchPage({
         .filter(
           (delivery) =>
             delivery.status !== "complete" &&
-            delivery.deliveryDate === routeMapDate,
+            (!routeMapDate || delivery.deliveryDate === routeMapDate),
         )
         .sort((firstDelivery, secondDelivery) => {
           return compareDeliveriesByRouteOrder(firstDelivery, secondDelivery);
@@ -1824,7 +1846,7 @@ export default function DeliveryDispatchPage({
           className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900"
         >
           <Search className="h-4 w-4" aria-hidden="true" />
-          Search {formatDateLabel(routeMapDate)} deliveries
+          Search {routeMapDate ? formatDateLabel(routeMapDate) : "all"} deliveries
         </label>
 
         <input
@@ -1841,12 +1863,16 @@ export default function DeliveryDispatchPage({
         <EmptyState
           title={
             dateScopedNeedsDispatchDeliveries.length === 0
-              ? `No deliveries for ${formatDateLabel(routeMapDate)}`
+              ? routeMapDate
+                ? `No deliveries for ${formatDateLabel(routeMapDate)}`
+                : "No deliveries need dispatch"
               : "No matching delivery orders"
           }
           description={
             dateScopedNeedsDispatchDeliveries.length === 0
-              ? "Choose another date above to review its deliveries."
+              ? routeMapDate
+                ? "Choose another date above or show all deliveries."
+                : "New delivery orders that need assignment will appear here."
               : "Try another order number, customer, address, or item."
           }
         />

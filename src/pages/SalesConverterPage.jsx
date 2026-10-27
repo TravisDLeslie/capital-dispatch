@@ -2,17 +2,106 @@ import {
   ArrowRight,
   Calculator,
   ClipboardList,
+  Clock3,
   Layers,
   Mail,
   MapPin,
+  Maximize2,
   Package,
   Phone,
   Ruler,
   Search,
+  X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
+
+const CAPITAL_LUMBER_ADDRESS = "3105 W State St, Boise, ID 83703";
+const METERS_PER_MILE = 1609.344;
+
+function getLocationShippingRate(distanceMeters) {
+  const distance = Number(distanceMeters);
+
+  if (!Number.isFinite(distance) || distance < 0) {
+    return null;
+  }
+
+  if (distance < METERS_PER_MILE) {
+    return { label: "Under 1 mile shipping", normal: "$15", forklift: "$25" };
+  }
+
+  if (distance <= METERS_PER_MILE * 2.5) {
+    return { label: "1–2.5 mile shipping", normal: "$20", forklift: "$35" };
+  }
+
+  if (distance <= METERS_PER_MILE * 3.75) {
+    return { label: "2.5–3.75 mile shipping", normal: "$29", forklift: "$38" };
+  }
+
+  return { label: "Over 3.75 miles", normal: "", forklift: "" };
+}
+
+function formatDriveTime(seconds) {
+  const minutes = Math.max(1, Math.round(Number(seconds || 0) / 60));
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  if (hours > 0 && remainingMinutes > 0) {
+    return `${hours} hr ${remainingMinutes} min`;
+  }
+
+  if (hours > 0) {
+    return `${hours} hr`;
+  }
+
+  return `${minutes} min`;
+}
+
+function LocationShippingPrice({ rate, expanded = false }) {
+  if (!rate) {
+    return null;
+  }
+
+  if (!rate.normal || !rate.forklift) {
+    return (
+      <p className="rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-slate-600">
+        Over 3.75 miles — shipping price not set.
+      </p>
+    );
+  }
+
+  return (
+    <div
+      className={`rounded-2xl border border-emerald-200 bg-white/80 ${
+        expanded ? "p-4" : "p-3"
+      }`}
+    >
+      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700">
+        {rate.label}
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-emerald-100 px-3 py-2">
+          <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">
+            Normal
+          </p>
+          <p className={`${expanded ? "text-3xl" : "text-xl"} font-black text-emerald-950`}>
+            {rate.normal}
+          </p>
+        </div>
+        <div className="rounded-xl bg-blue-100 px-3 py-2">
+          <p className="text-[10px] font-black uppercase tracking-wide text-blue-700">
+            Forklift
+          </p>
+          <p className={`${expanded ? "text-3xl" : "text-xl"} font-black text-blue-950`}>
+            {rate.forklift}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -364,6 +453,12 @@ export default function SalesConverterPage({
 }) {
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [isDashboardSearchOpen, setIsDashboardSearchOpen] = useState(false);
+  const [locationLookupAddress, setLocationLookupAddress] = useState("");
+  const [locationLookupStatus, setLocationLookupStatus] = useState("idle");
+  const [locationLookupResult, setLocationLookupResult] = useState(null);
+  const [locationLookupError, setLocationLookupError] = useState("");
+  const [isLocationMapOpen, setIsLocationMapOpen] = useState(false);
+  const locationLookupRequestId = useRef(0);
   const [converterType, setConverterType] = useState("boards");
   const [panelQuantity, setPanelQuantity] = useState("1");
   const [panelWidthFeet, setPanelWidthFeet] = useState("4");
@@ -606,6 +701,109 @@ export default function SalesConverterPage({
         .filter((item) => item.searchableText.includes(normalizedDashboardSearch))
     : dashboardSearchItems.filter((item) => item.supplierProfile);
   const dashboardSearchMatches = dashboardSearchAllMatches.slice(0, 40);
+  const locationLookupMapUrl = useMemo(() => {
+    if (
+      locationLookupStatus !== "success" ||
+      !locationLookupAddress ||
+      !locationLookupResult
+    ) {
+      return "";
+    }
+
+    const params = new URLSearchParams({
+      size: "640x640",
+      scale: "2",
+      maptype: "roadmap",
+    });
+    params.append(
+      "markers",
+      `color:0x111827|label:C|${CAPITAL_LUMBER_ADDRESS}`,
+    );
+    params.append(
+      "markers",
+      `color:0xfc2c38|label:D|${locationLookupAddress}`,
+    );
+
+    if (locationLookupResult.encodedPolyline) {
+      params.append(
+        "path",
+        `color:0xfc2c38ff|weight:5|enc:${locationLookupResult.encodedPolyline}`,
+      );
+    }
+
+    return `/api/maps/static?${params.toString()}`;
+  }, [
+    locationLookupAddress,
+    locationLookupResult,
+    locationLookupStatus,
+  ]);
+  const locationShippingRate = getLocationShippingRate(
+    locationLookupResult?.distanceMeters,
+  );
+  const totalLocationDriveTime = locationLookupResult?.durationSeconds
+    ? formatDriveTime(locationLookupResult.durationSeconds * 2)
+    : "--";
+
+  function handleLocationAddressChange(nextAddress) {
+    locationLookupRequestId.current += 1;
+    setLocationLookupAddress(nextAddress);
+    setLocationLookupStatus("idle");
+    setLocationLookupResult(null);
+    setLocationLookupError("");
+    setIsLocationMapOpen(false);
+  }
+
+  async function calculateLocationDriveTime(addressOverride = "") {
+    const destination = String(
+      addressOverride || locationLookupAddress,
+    ).trim();
+
+    if (destination.length < 8) {
+      setLocationLookupStatus("error");
+      setLocationLookupResult(null);
+      setLocationLookupError("Choose or enter a complete address first.");
+      return;
+    }
+
+    const requestId = locationLookupRequestId.current + 1;
+    locationLookupRequestId.current = requestId;
+    setLocationLookupAddress(destination);
+    setLocationLookupStatus("loading");
+    setLocationLookupResult(null);
+    setLocationLookupError("");
+
+    try {
+      const params = new URLSearchParams({
+        origin: CAPITAL_LUMBER_ADDRESS,
+        destination,
+      });
+      const response = await fetch(`/api/maps/route?${params.toString()}`);
+      const routeData = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          routeData?.error || "Drive time is unavailable for that address.",
+        );
+      }
+
+      if (locationLookupRequestId.current !== requestId) {
+        return;
+      }
+
+      setLocationLookupResult(routeData);
+      setLocationLookupStatus("success");
+    } catch (error) {
+      if (locationLookupRequestId.current !== requestId) {
+        return;
+      }
+
+      setLocationLookupResult(null);
+      setLocationLookupStatus("error");
+      setLocationLookupError(
+        error?.message || "Drive time is unavailable for that address.",
+      );
+    }
+  }
 
   if (dashboardMode) {
     return (
@@ -809,6 +1007,248 @@ export default function SalesConverterPage({
             <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2.7} />
           </button>
         </form>
+
+        <section className="mb-5 overflow-visible rounded-[2rem] border border-blue-200 bg-blue-50/50 p-4 shadow-sm sm:p-5">
+          <div
+            className={`grid items-start gap-4 ${
+              locationLookupMapUrl
+                ? "xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.48fr)_320px]"
+                : "lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.42fr)]"
+            }`}
+          >
+            <div>
+              <div className="flex items-start gap-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-700 shadow-sm">
+                  <MapPin aria-hidden="true" className="h-6 w-6" strokeWidth={2.5} />
+                </span>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                    Location Lookup
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">
+                    Drive time from Capital
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">
+                    Start typing an address and select it to see the current one-way drive time.
+                  </p>
+                </div>
+              </div>
+
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  calculateLocationDriveTime();
+                }}
+                className="mt-4 flex flex-col gap-3 sm:flex-row"
+              >
+                <div className="min-w-0 flex-1">
+                  <AddressAutocompleteInput
+                    id="main-dashboard-location-lookup"
+                    value={locationLookupAddress}
+                    onChange={handleLocationAddressChange}
+                    onPlaceSelected={(_place, selectedAddress) =>
+                      calculateLocationDriveTime(selectedAddress)
+                    }
+                    enableLocalFallback
+                    showStatus={false}
+                    autoComplete="off"
+                    placeholder="Start typing an address..."
+                    className="min-h-[52px] w-full rounded-2xl border border-blue-200 bg-white px-4 py-3 text-base font-bold text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={locationLookupStatus === "loading"}
+                  className="inline-flex min-h-[52px] shrink-0 items-center justify-center gap-2 rounded-2xl bg-blue-700 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-wait disabled:bg-blue-400"
+                >
+                  {locationLookupStatus === "loading"
+                    ? "Calculating..."
+                    : "Get drive time"}
+                  <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2.7} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLocationAddressChange("")}
+                  disabled={
+                    !locationLookupAddress && locationLookupStatus === "idle"
+                  }
+                  className="inline-flex min-h-[52px] shrink-0 items-center justify-center rounded-2xl border border-blue-200 bg-white px-5 text-sm font-black text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Clear
+                </button>
+              </form>
+            </div>
+
+            <div
+              className={`flex min-h-[150px] items-center rounded-3xl border p-5 ${
+                locationLookupStatus === "success"
+                  ? "border-emerald-200 bg-emerald-50"
+                  : locationLookupStatus === "error"
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-blue-100 bg-white"
+              }`}
+            >
+              <div className="w-full">
+                <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                  <Clock3 className="h-4 w-4" aria-hidden="true" />
+                  One-way drive time
+                </div>
+
+                {locationLookupStatus === "success" ? (
+                  <>
+                    <p className="mt-2 text-4xl font-black tracking-tight text-emerald-800">
+                      {locationLookupResult?.durationText || "Route ready"}
+                    </p>
+                    <p className="mt-1 text-sm font-black text-emerald-700">
+                      {locationLookupResult?.distanceText || "Distance available"} from Capital Lumber
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-slate-600">
+                      Total drive time (round trip):{" "}
+                      <span className="font-black text-slate-900">
+                        {totalLocationDriveTime}
+                      </span>
+                    </p>
+                    <p className="mt-2 line-clamp-2 text-xs font-semibold text-slate-500">
+                      {locationLookupAddress}
+                    </p>
+                    <div className="mt-4">
+                      <LocationShippingPrice rate={locationShippingRate} />
+                    </div>
+                  </>
+                ) : locationLookupStatus === "loading" ? (
+                  <p className="mt-3 text-lg font-black text-blue-700">
+                    Calculating the live route...
+                  </p>
+                ) : locationLookupStatus === "error" ? (
+                  <p className="mt-3 text-sm font-bold leading-5 text-amber-800">
+                    {locationLookupError}
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-3 text-2xl font-black text-slate-300">--</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      Select an address to calculate the route.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {locationLookupMapUrl ? (
+              <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-blue-200 bg-slate-100 shadow-sm xl:max-w-none">
+                <div className="border-b border-blue-100 bg-white px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">
+                      Route Preview
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsLocationMapOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-white transition hover:bg-slate-800"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      Expand
+                    </button>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-3 text-[10px] font-black uppercase tracking-wide text-slate-500">
+                    <span>C · Capital Lumber</span>
+                    <span className="text-[#FC2C38]">D · Destination</span>
+                  </div>
+                </div>
+                <img
+                  src={locationLookupMapUrl}
+                  alt={`Route from Capital Lumber to ${locationLookupAddress}`}
+                  className="aspect-square w-full object-contain"
+                />
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        {isLocationMapOpen && locationLookupMapUrl ? (
+          <div
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Expanded location route map"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                setIsLocationMapOpen(false);
+              }
+            }}
+          >
+            <div className="flex h-full max-h-[900px] w-full max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-6 sm:py-4">
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                    Full Route
+                  </p>
+                  <h2 className="truncate text-xl font-black text-slate-950 sm:text-2xl">
+                    Capital Lumber to {locationLookupAddress}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLocationMapOpen(false)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+                  aria-label="Close expanded map"
+                >
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="flex min-h-[420px] items-center justify-center bg-slate-100 p-3 sm:p-5 lg:min-h-0">
+                  <img
+                    src={locationLookupMapUrl}
+                    alt={`Expanded route from Capital Lumber to ${locationLookupAddress}`}
+                    className="h-full max-h-full w-full object-contain"
+                  />
+                </div>
+
+                <aside className="overflow-y-auto border-t border-slate-200 bg-slate-50 p-5 lg:border-l lg:border-t-0 sm:p-6">
+                  <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                      <Clock3 className="h-4 w-4" aria-hidden="true" />
+                      One-way drive time
+                    </div>
+                    <p className="mt-2 text-5xl font-black tracking-tight text-emerald-800">
+                      {locationLookupResult?.durationText || "Route ready"}
+                    </p>
+                    <p className="mt-2 text-base font-black text-emerald-700">
+                      {locationLookupResult?.distanceText || "Distance available"} from Capital Lumber
+                    </p>
+                    <p className="mt-2 text-sm font-bold text-slate-600">
+                      Total drive time (round trip):{" "}
+                      <span className="font-black text-slate-950">
+                        {totalLocationDriveTime}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="mt-4">
+                    <LocationShippingPrice
+                      rate={locationShippingRate}
+                      expanded
+                    />
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+                      Destination
+                    </p>
+                    <p className="mt-1 text-sm font-bold leading-5 text-slate-900">
+                      {locationLookupAddress}
+                    </p>
+                    <p className="mt-3 text-xs font-semibold text-slate-500">
+                      Starts at {CAPITAL_LUMBER_ADDRESS}
+                    </p>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid gap-5 md:grid-cols-2">
           <button
