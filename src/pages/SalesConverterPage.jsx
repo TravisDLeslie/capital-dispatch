@@ -651,17 +651,34 @@ export default function SalesConverterPage({
                   <div className="max-h-96 overflow-y-auto p-2">
                     {dashboardSearchMatches.map((result) =>
                       result.supplierProfile ? (
-                        <article
+                        <button
                           key={result.id}
+                          type="button"
                           onMouseDown={(event) => event.preventDefault()}
-                          className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3"
+                          onClick={() => {
+                            setIsDashboardSearchOpen(false);
+                            onTraceSearch?.(result.searchValue);
+                          }}
+                          className="block w-full rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-100"
                         >
-                          <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">
-                            Supplier
+                          <span className="flex items-start justify-between gap-3">
+                            <span>
+                              <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">
+                                Supplier
+                              </span>
+                              <span className="mt-0.5 block text-base font-black text-slate-950">
+                                {result.title}
+                              </span>
+                            </span>
+                            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-black text-blue-700">
+                              View all POs
+                              <ArrowRight
+                                aria-hidden="true"
+                                className="h-3.5 w-3.5"
+                                strokeWidth={2.7}
+                              />
+                            </span>
                           </span>
-                          <p className="mt-0.5 text-base font-black text-slate-950">
-                            {result.title}
-                          </p>
                           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-bold text-slate-600">
                             {result.phone ? (
                               <span className="inline-flex items-center gap-1.5">
@@ -714,11 +731,11 @@ export default function SalesConverterPage({
                               ))}
                             </div>
                           ) : (
-                            <p className="mt-2 text-xs font-semibold text-slate-500">
+                            <span className="mt-2 block text-xs font-semibold text-slate-500">
                               No product contacts have been added yet.
-                            </p>
+                            </span>
                           )}
-                        </article>
+                        </button>
                       ) : (
                         <button
                           key={result.id}

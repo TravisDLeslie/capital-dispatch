@@ -10,6 +10,7 @@ import {
 } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import {
+  Building2,
   Calculator,
   CalendarDays,
   Check,
@@ -1798,6 +1799,8 @@ export default function App() {
   const [previewUserId, setPreviewUserId] =
     useState("");
   const [traceInitialSearch, setTraceInitialSearch] = useState("");
+  const [dispatchDashboardSearch, setDispatchDashboardSearch] =
+    useState("");
   const [receivingDashboardSearch, setReceivingDashboardSearch] =
     useState("");
   const [copiedReceivingQuickPO, setCopiedReceivingQuickPO] =
@@ -4322,6 +4325,15 @@ export default function App() {
     setCurrentPage("trace");
   }
 
+  function handleDispatchDashboardSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextSearch = dispatchDashboardSearch.trim();
+
+    if (nextSearch) {
+      handleTraceSearch(nextSearch);
+    }
+  }
+
   function handleReceivingDashboardSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextSearch = receivingDashboardSearch.trim();
@@ -4654,20 +4666,107 @@ export default function App() {
               : null,
             ]}
             topContent={
-              <FeatureErrorBoundary
-                fallback={
-                  <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
-                    Today’s delivery list could not load. The Dispatch Ops links
-                    below are still available.
+              <>
+                <form
+                  onSubmit={handleDispatchDashboardSearch}
+                  className="mb-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+                >
+                  <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                        Vendor and PO lookup
+                      </p>
+                      <h2 className="mt-1 text-xl font-black text-slate-950">
+                        Find the complete PO chain
+                      </h2>
+                    </div>
+                    <p className="text-sm font-semibold text-slate-500">
+                      See South and Their Truck POs together with all pickup details.
+                    </p>
                   </div>
-                }
-              >
-                <DispatchOpsDailyDeliveries
-                  createdBy={currentUserCreator}
-                  driverOptions={approvedEmployeeNames}
-                  className="mb-5"
-                />
-              </FeatureErrorBoundary>
+
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <label className="relative flex-1">
+                      <span className="sr-only">
+                        Search by PO, vendor, customer, item, or order
+                      </span>
+                      <Search
+                        aria-hidden="true"
+                        className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+                        strokeWidth={2.5}
+                      />
+                      <input
+                        type="search"
+                        value={dispatchDashboardSearch}
+                        onChange={(event) =>
+                          setDispatchDashboardSearch(event.target.value)
+                        }
+                        placeholder="Search PO, vendor, customer, item, or order..."
+                        className="min-h-[52px] w-full rounded-2xl border border-slate-300 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                      />
+                    </label>
+
+                    <button
+                      type="submit"
+                      disabled={!dispatchDashboardSearch.trim()}
+                      className="inline-flex min-h-[52px] items-center justify-center rounded-2xl bg-slate-950 px-6 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      Search POs
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center">
+                    <label
+                      htmlFor="dispatch-vendor-quick-select"
+                      className="flex shrink-0 items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-600"
+                    >
+                      <Building2
+                        aria-hidden="true"
+                        className="h-4 w-4 text-[#FC2C38]"
+                        strokeWidth={2.5}
+                      />
+                      Quick select vendor
+                    </label>
+                    <select
+                      id="dispatch-vendor-quick-select"
+                      defaultValue=""
+                      onChange={(event) => {
+                        const vendorName = event.target.value;
+
+                        if (vendorName) {
+                          handleTraceSearch(vendorName);
+                        }
+                      }}
+                      className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                    >
+                      <option value="">Choose a vendor to see all POs...</option>
+                      {activeVendors.map((vendor) => (
+                        <option key={vendor.id || vendor.name} value={vendor.name}>
+                          {vendor.name}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="shrink-0 text-xs font-bold text-slate-400">
+                      {activeVendors.length} vendors
+                    </span>
+                  </div>
+                </form>
+
+                <FeatureErrorBoundary
+                  fallback={
+                    <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
+                      Today’s delivery list could not load. The Dispatch Ops links
+                      below are still available.
+                    </div>
+                  }
+                >
+                  <DispatchOpsDailyDeliveries
+                    createdBy={currentUserCreator}
+                    driverOptions={approvedEmployeeNames}
+                    className="mb-5"
+                  />
+                </FeatureErrorBoundary>
+              </>
             }
           />
         </FeatureErrorBoundary>
@@ -5188,6 +5287,42 @@ export default function App() {
                 >
                   Full Lookup
                 </button>
+              </div>
+
+              <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center">
+                <label
+                  htmlFor="receiving-vendor-quick-select"
+                  className="flex shrink-0 items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-600"
+                >
+                  <Building2
+                    aria-hidden="true"
+                    className="h-4 w-4 text-[#FC2C38]"
+                    strokeWidth={2.5}
+                  />
+                  Quick select vendor
+                </label>
+                <select
+                  id="receiving-vendor-quick-select"
+                  defaultValue=""
+                  onChange={(event) => {
+                    const vendorName = event.target.value;
+
+                    if (vendorName) {
+                      handleTraceSearch(vendorName);
+                    }
+                  }}
+                  className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                >
+                  <option value="">Choose a vendor to see all POs...</option>
+                  {activeVendors.map((vendor) => (
+                    <option key={vendor.id || vendor.name} value={vendor.name}>
+                      {vendor.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="shrink-0 text-xs font-bold text-slate-400">
+                  {activeVendors.length} vendors
+                </span>
               </div>
 
               {receivingQuickLookupQuery ? (
@@ -6493,6 +6628,7 @@ export default function App() {
             checkIns={checkIns}
             supplierRuns={southLookupSupplierRuns}
             theirTruckPOs={theirTruckPOs}
+            vendors={activeVendors}
             deliveries={
               canReadDeliveries || canReadOrderLifecycle ? deliveries : []
             }
