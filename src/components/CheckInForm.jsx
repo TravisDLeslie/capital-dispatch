@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   locations,
+  receivingLocationGroups,
   vendors as fallbackVendors,
 } from "../data/options";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
@@ -2092,69 +2093,110 @@ export default function CheckInForm({
 
                         <div>
                           <label
-                            htmlFor={`material-location-${material.id}`}
+                            htmlFor={`material-location-search-${material.id}`}
                             className="mb-2 block text-sm font-bold text-slate-700"
                           >
                             Material Location *
                           </label>
-                          <select
-                            id={`material-location-${material.id}`}
-                            value={material.location}
-                            onChange={(event) =>
-                              updateMaterialLocation(
-                                material.id,
-                                event.target.value,
-                              )
-                            }
-                            disabled={isSubmitting}
-                            className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-700 focus:ring-4 focus:ring-blue-100 md:hidden"
+
+                          <div
+                            className={`mb-3 flex min-h-12 items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${
+                              material.location
+                                ? "border-blue-300 bg-blue-50"
+                                : "border-dashed border-slate-300 bg-slate-50"
+                            }`}
                           >
-                            <option value="">Select a material location...</option>
-                            {locations.map((location) => (
-                              <option key={location} value={location}>
-                                {location}
-                              </option>
+                            <span>
+                              <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                                Selected location
+                              </span>
+                              <span className={`mt-0.5 block text-base font-black ${material.location ? "text-blue-900" : "text-slate-500"}`}>
+                                {material.location || "Choose a location below"}
+                              </span>
+                            </span>
+                            {material.location ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  updateMaterialLocation(material.id, "")
+                                }
+                                disabled={isSubmitting}
+                                className="shrink-0 rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-600 shadow-sm transition hover:text-slate-950"
+                              >
+                                Clear
+                              </button>
+                            ) : null}
+                          </div>
+
+                          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                            {receivingLocationGroups.map((group) => (
+                              <section
+                                key={group.id}
+                                className={`rounded-2xl border border-slate-200 bg-slate-50 p-3 ${
+                                  group.id === "general"
+                                    ? "sm:col-span-2 xl:col-span-4"
+                                    : ""
+                                }`}
+                              >
+                                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                                  {group.label}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                  {group.locations.map((location) => {
+                                    const isSelected =
+                                      material.location === location;
+
+                                    return (
+                                      <button
+                                        key={location}
+                                        type="button"
+                                        onClick={() =>
+                                          updateMaterialLocation(
+                                            material.id,
+                                            location,
+                                          )
+                                        }
+                                        disabled={isSubmitting}
+                                        aria-pressed={isSelected}
+                                        className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-black transition ${
+                                          isSelected
+                                            ? "border-blue-700 bg-blue-700 text-white shadow-sm"
+                                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-900"
+                                        }`}
+                                      >
+                                        {location}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </section>
                             ))}
-                          </select>
-                          <input
-                            id={`material-location-search-${material.id}`}
-                            type="text"
-                            list="location-options"
-                            autoComplete="off"
-                            value={material.location}
-                            onChange={(event) =>
-                              updateMaterialLocation(
-                                material.id,
-                                event.target.value,
-                              )
-                            }
-                            disabled={isSubmitting}
-                            placeholder="Where is this material?"
-                            aria-label={`Location for material ${index + 1}`}
-                            className="hidden w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100 md:block"
-                          />
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {[
-                              "Building C - Bay 1 Rack",
-                              "Inner Yard",
-                              "On Street",
-                              "On Truck/Delivery",
-                              "Window/door Rack",
-                            ].map((location) => (
-                                <button
-                                  key={location}
-                                  type="button"
-                                  onClick={() =>
-                                    updateMaterialLocation(
-                                      material.id,
-                                      location,
-                                    )
-                                  }
-                                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-                                >
-                                  {location}
-                                </button>
-                              ))}
+                          </div>
+
+                          <div className="mt-3">
+                            <label
+                              htmlFor={`material-location-search-${material.id}`}
+                              className="mb-1.5 block text-xs font-bold text-slate-500"
+                            >
+                              Or enter another location
+                            </label>
+                            <input
+                              id={`material-location-search-${material.id}`}
+                              type="text"
+                              list="location-options"
+                              autoComplete="off"
+                              value={material.location}
+                              onChange={(event) =>
+                                updateMaterialLocation(
+                                  material.id,
+                                  event.target.value,
+                                )
+                              }
+                              disabled={isSubmitting}
+                              placeholder="Type a custom location..."
+                              aria-label={`Location for material ${index + 1}`}
+                              className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
+                            />
                           </div>
                         </div>
 
