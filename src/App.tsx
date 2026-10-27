@@ -263,7 +263,7 @@ const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
 const SOUTH_PICKUP_AUTO_REFRESH_MS = 5 * 60 * 1000;
 const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
-const TREX_PRICE_BOOK_ITEM_COUNT = 686;
+const TREX_COLLECTION_COUNT = 23;
 const TIMBERTECH_COLLECTION_COUNT = 12;
 
 function getProfileDisplayName(user: Partial<UserProfile> | null | undefined) {
@@ -5927,12 +5927,16 @@ export default function App() {
             },
             {
               icon: Percent,
+              logoSrc: "/brands/trex.png",
+              logoAlt: "Trex",
               label: "Trex",
-              value: TREX_PRICE_BOOK_ITEM_COUNT,
-              note: "Priced products",
+              value: TREX_COLLECTION_COUNT,
+              note: "Collections",
             },
             {
               icon: Package,
+              logoSrc: "/brands/timbertech.png",
+              logoAlt: "TimberTech",
               label: "TimberTech",
               value: TIMBERTECH_COLLECTION_COUNT,
               note: "Collections",
@@ -5956,12 +5960,14 @@ export default function App() {
             effectiveAllowedPageIds.includes("trex-price-book")
               ? {
                   icon: Percent,
+                  logoSrc: "/brands/trex.png",
+                  logoAlt: "Trex",
                   label: "Price Book",
                   title: "Trex",
                   description:
                     "Search Job Pack pricing and see sell prices at 22.5%, 25%, and 30% margin.",
-                  metric: TREX_PRICE_BOOK_ITEM_COUNT,
-                  metricLabel: "Products",
+                  metric: TREX_COLLECTION_COUNT,
+                  metricLabel: "Collections",
                   tone: "success",
                   variant: "compact",
                   onClick: () => setCurrentPage("trex-price-book"),
@@ -5970,6 +5976,8 @@ export default function App() {
             effectiveAllowedPageIds.includes("timbertech-price-book")
               ? {
                   icon: Package,
+                  logoSrc: "/brands/timbertech.png",
+                  logoAlt: "TimberTech",
                   label: "Price Book",
                   title: "TimberTech",
                   description:
@@ -6889,12 +6897,16 @@ export default function App() {
               },
               {
                 icon: Percent,
+                logoSrc: "/brands/trex.png",
+                logoAlt: "Trex",
                 label: "Trex",
-                value: TREX_PRICE_BOOK_ITEM_COUNT,
-                note: "Priced products",
+                value: TREX_COLLECTION_COUNT,
+                note: "Collections",
               },
               {
                 icon: Package,
+                logoSrc: "/brands/timbertech.png",
+                logoAlt: "TimberTech",
                 label: "TimberTech",
                 value: TIMBERTECH_COLLECTION_COUNT,
                 note: "Collections",
@@ -6918,12 +6930,14 @@ export default function App() {
               effectiveAllowedPageIds.includes("trex-price-book")
                 ? {
                     icon: Percent,
+                    logoSrc: "/brands/trex.png",
+                    logoAlt: "Trex",
                     label: "Price Book",
                     title: "Trex",
                     description:
                       "Search Job Pack pricing and see sell prices at 22.5%, 25%, and 30% margin.",
-                    metric: TREX_PRICE_BOOK_ITEM_COUNT,
-                    metricLabel: "Products",
+                    metric: TREX_COLLECTION_COUNT,
+                    metricLabel: "Collections",
                     tone: "success",
                     variant: "compact",
                     onClick: () => setCurrentPage("trex-price-book"),
@@ -6932,6 +6946,8 @@ export default function App() {
               effectiveAllowedPageIds.includes("timbertech-price-book")
                 ? {
                     icon: Package,
+                    logoSrc: "/brands/timbertech.png",
+                    logoAlt: "TimberTech",
                     label: "Price Book",
                     title: "TimberTech",
                     description:

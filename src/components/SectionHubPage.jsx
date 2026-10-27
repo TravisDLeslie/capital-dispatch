@@ -4,6 +4,8 @@ import PageContainer from "./PageContainer";
 
 function StatTile({
   icon: Icon,
+  logoSrc = "",
+  logoAlt = "",
   label,
   value,
   note,
@@ -48,11 +50,19 @@ function StatTile({
     <div className={`rounded-2xl border p-3 shadow-sm sm:p-4 ${selectedTone.tile}`}>
       <div className="flex items-center gap-2">
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
-            solidIcon ? selectedTone.solidIcon : selectedTone.icon
-          }`}
+          className={`flex h-8 shrink-0 items-center justify-center overflow-hidden rounded-xl ${
+            logoSrc ? "w-14 border border-slate-200 bg-white px-1 sm:w-20" : "w-8"
+          } ${logoSrc ? "" : solidIcon ? selectedTone.solidIcon : selectedTone.icon}`}
         >
-          <Icon aria-hidden="true" className="h-4 w-4" strokeWidth={2.4} />
+          {logoSrc ? (
+            <img
+              src={logoSrc}
+              alt={logoAlt || label}
+              className="h-full w-full object-contain"
+            />
+          ) : (
+            <Icon aria-hidden="true" className="h-4 w-4" strokeWidth={2.4} />
+          )}
         </span>
         <p className={`text-[10px] font-black uppercase tracking-[0.1em] sm:text-xs sm:tracking-[0.14em] ${selectedTone.label}`}>
           {label}
@@ -70,6 +80,8 @@ function StatTile({
 
 function ActionRow({
   icon: Icon,
+  logoSrc = "",
+  logoAlt = "",
   label,
   title,
   description,
@@ -261,15 +273,25 @@ function ActionRow({
       ) : null}
 
       <span
-        className={`flex shrink-0 items-center justify-center ${selectedVariant.icon} ${
-          solidIcon ? selectedTone.solidIcon : selectedTone.icon
-        }`}
+        className={`flex shrink-0 items-center justify-center overflow-hidden ${
+          logoSrc
+            ? "h-12 w-24 rounded-xl border border-slate-200 bg-white px-2 shadow-sm sm:h-14 sm:w-32"
+            : selectedVariant.icon
+        } ${logoSrc ? "" : solidIcon ? selectedTone.solidIcon : selectedTone.icon}`}
       >
-        <Icon
-          aria-hidden="true"
-          className={selectedVariant.iconSvg}
-          strokeWidth={2.4}
-        />
+        {logoSrc ? (
+          <img
+            src={logoSrc}
+            alt={logoAlt || title}
+            className="h-full w-full object-contain"
+          />
+        ) : (
+          <Icon
+            aria-hidden="true"
+            className={selectedVariant.iconSvg}
+            strokeWidth={2.4}
+          />
+        )}
       </span>
 
       <span className="min-w-0 flex-1">
@@ -336,6 +358,8 @@ function ActionRow({
  *   } | null;
  *   stats: Array<{
  *     icon: import("lucide-react").LucideIcon;
+ *     logoSrc?: string;
+ *     logoAlt?: string;
  *     label: string;
  *     value: string | number;
  *     note: string;
