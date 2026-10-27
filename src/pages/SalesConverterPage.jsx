@@ -463,35 +463,47 @@ export default function SalesConverterPage({
       Array.isArray(searchSources?.[key]) ? searchSources[key] : [];
     const items = [];
 
-    safeSource("vendors").forEach((record) => {
-      const contacts = Array.isArray(record.contacts) ? record.contacts : [];
-      const contactText = contacts
-        .map((contact) =>
-          [contact.name, contact.products, contact.phone, contact.email]
-            .filter(Boolean)
-            .join(" "),
-        )
-        .join(" ");
-      items.push(
-        createDashboardSearchItem(
-          record,
-          "Supplier",
-          String(record.name || "Supplier"),
-          [record.phone, record.deliveryCadence, record.address]
-            .filter(Boolean)
-            .join(" • "),
-          String(record.name || ""),
+    [...safeSource("vendors")]
+      .sort((firstVendor, secondVendor) =>
+        String(firstVendor.name || "").localeCompare(
+          String(secondVendor.name || ""),
+          undefined,
           {
-            supplierProfile: true,
-            phone: String(record.phone || ""),
-            address: String(record.address || ""),
-            deliveryCadence: String(record.deliveryCadence || ""),
-            contacts,
-            searchText: contactText,
+            sensitivity: "base",
+            ignorePunctuation: true,
+            numeric: true,
           },
         ),
-      );
-    });
+      )
+      .forEach((record) => {
+        const contacts = Array.isArray(record.contacts) ? record.contacts : [];
+        const contactText = contacts
+          .map((contact) =>
+            [contact.name, contact.products, contact.phone, contact.email]
+              .filter(Boolean)
+              .join(" "),
+          )
+          .join(" ");
+        items.push(
+          createDashboardSearchItem(
+            record,
+            "Supplier",
+            String(record.name || "Supplier"),
+            [record.phone, record.deliveryCadence, record.address]
+              .filter(Boolean)
+              .join(" • "),
+            String(record.name || ""),
+            {
+              supplierProfile: true,
+              phone: String(record.phone || ""),
+              address: String(record.address || ""),
+              deliveryCadence: String(record.deliveryCadence || ""),
+              contacts,
+              searchText: contactText,
+            },
+          ),
+        );
+      });
 
     safeSource("supplierRuns").forEach((record) => {
       const poNumber = String(record.poNumber || "").trim();

@@ -6,12 +6,14 @@ import {
   ClipboardCheck,
   Mail,
   MapPin,
+  Maximize2,
   Package,
   Phone,
   Route,
   Search,
   Truck,
   UserRound,
+  X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
@@ -616,11 +618,33 @@ export default function TracePage({
   onPageChange,
 }) {
   const [searchValue, setSearchValue] = useState(initialSearch);
+  const [viewingPhoto, setViewingPhoto] = useState(null);
   const hasSearch = searchValue.trim().length > 0;
 
   useEffect(() => {
     setSearchValue(initialSearch);
   }, [initialSearch]);
+
+  useEffect(() => {
+    if (!viewingPhoto) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setViewingPhoto(null);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [viewingPhoto]);
 
   const vendorDirectory = useMemo(() => {
     const directory = new Map();
@@ -645,6 +669,8 @@ export default function TracePage({
     return [...directory.values()].sort((firstVendor, secondVendor) =>
       firstVendor.name.localeCompare(secondVendor.name, undefined, {
         sensitivity: "base",
+        ignorePunctuation: true,
+        numeric: true,
       }),
     );
   }, [supplierRuns, theirTruckPOs, vendors]);
@@ -1282,7 +1308,11 @@ export default function TracePage({
             {filteredVendorPOCards.length > 0 ? (
               <div className="grid gap-3 xl:grid-cols-2">
                 {filteredVendorPOCards.map((card) => (
-                  <VendorPOCard key={card.id} card={card} />
+                  <VendorPOCard
+                    key={card.id}
+                    card={card}
+                    onViewPhoto={setViewingPhoto}
+                  />
                 ))}
               </div>
             ) : (
@@ -1397,7 +1427,11 @@ export default function TracePage({
                 </h3>
                 <div className="mt-4 space-y-3">
                   {tracePOCards.map((card) => (
-                    <VendorPOCard key={card.id} card={card} />
+                    <VendorPOCard
+                      key={card.id}
+                      card={card}
+                      onViewPhoto={setViewingPhoto}
+                    />
                   ))}
                 </div>
               </div>
@@ -1425,6 +1459,56 @@ export default function TracePage({
               ))}
             </div>
           </section>
+        </div>
+      ) : null}
+
+      {viewingPhoto?.url ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 p-3 backdrop-blur-sm sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label={viewingPhoto.title || "PO photo preview"}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setViewingPhoto(null);
+            }
+          }}
+        >
+          <div className="flex max-h-full w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-slate-950 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-3 text-white sm:px-5">
+              <div className="min-w-0">
+                <p className="truncate text-base font-black">
+                  {viewingPhoto.title || "PO photo"}
+                </p>
+                {viewingPhoto.subtitle ? (
+                  <p className="mt-0.5 truncate text-xs font-semibold text-slate-300">
+                    {viewingPhoto.subtitle}
+                  </p>
+                ) : null}
+                {viewingPhoto.capturedAt ? (
+                  <p className="mt-0.5 text-xs font-semibold text-slate-400">
+                    {formatDateTime(viewingPhoto.capturedAt)}
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingPhoto(null)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Close photo preview"
+              >
+                <X className="h-5 w-5" aria-hidden="true" strokeWidth={2.7} />
+              </button>
+            </div>
+
+            <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-black p-2 sm:p-4">
+              <img
+                src={viewingPhoto.url}
+                alt={viewingPhoto.title || "PO photo enlarged"}
+                className="max-h-[calc(100vh-9rem)] max-w-full object-contain"
+              />
+            </div>
+          </div>
         </div>
       ) : null}
     </PageContainer>
@@ -1536,7 +1620,7 @@ function getCheckInPhotos(checkIn) {
   return photos;
 }
 
-function VendorPOCard({ card }) {
+function VendorPOCard({ card, onViewPhoto }) {
   const isSouth = card.source === "south";
   const SourceIcon = isSouth ? Route : Truck;
   const sourceTone = isSouth
@@ -1695,24 +1779,39 @@ function VendorPOCard({ card }) {
                       </p>
                       <div className="flex gap-2 overflow-x-auto pb-1">
                       {pickupPhotos.map(({ photo, url }, photoIndex) => (
-                        <a
+                        <button
                           key={`${card.id}-${item.id || index}-photo-${photoIndex}`}
-                          href={url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block w-24 shrink-0 overflow-hidden rounded-xl border border-emerald-200 bg-white"
+                          type="button"
+                          onClick={() =>
+                            onViewPhoto?.({
+                              url,
+                              title: `Pickup photo ${photoIndex + 1}`,
+                              subtitle: [
+                                `PO ${card.poNumber}`,
+                                item.description || `Item ${index + 1}`,
+                              ]
+                                .filter(Boolean)
+                                .join(" • "),
+                              capturedAt: photo?.capturedAt || "",
+                            })
+                          }
+                          className="group relative block w-24 shrink-0 overflow-hidden rounded-xl border border-emerald-200 bg-white text-left transition hover:border-emerald-400 hover:shadow-md"
+                          aria-label={`Enlarge pickup photo ${photoIndex + 1} for PO ${card.poNumber}`}
                         >
                           <img
                             src={url}
                             alt={`PO ${card.poNumber} item ${index + 1} pickup ${photoIndex + 1}`}
                             className="h-20 w-full object-cover"
                           />
+                          <span className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-slate-950/75 text-white opacity-90 shadow-sm transition group-hover:bg-slate-950">
+                            <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          </span>
                           {photo?.capturedAt ? (
                             <span className="block px-2 py-1.5 text-[9px] font-bold leading-tight text-slate-500">
                               {formatDateTime(photo.capturedAt)}
                             </span>
                           ) : null}
-                        </a>
+                        </button>
                       ))}
                       </div>
                     </div>
@@ -1833,18 +1932,21 @@ function VendorPOCard({ card }) {
                       </p>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                         {checkInPhotos.map((photo, photoIndex) => (
-                          <a
+                          <button
                             key={`${checkIn.id || checkInIndex}-photo-${photoIndex}`}
-                            href={photo.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="overflow-hidden rounded-xl border border-emerald-200 bg-white"
+                            type="button"
+                            onClick={() => onViewPhoto?.(photo)}
+                            className="group relative overflow-hidden rounded-xl border border-emerald-200 bg-white text-left transition hover:border-emerald-400 hover:shadow-md"
+                            aria-label={`Enlarge ${photo.title} for PO ${card.poNumber}`}
                           >
                             <img
                               src={photo.url}
                               alt={`${photo.title} for PO ${card.poNumber}`}
                               className="h-24 w-full object-cover"
                             />
+                            <span className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-lg bg-slate-950/75 text-white opacity-90 shadow-sm transition group-hover:bg-slate-950">
+                              <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                            </span>
                             <span className="block px-2 py-2">
                               <span className="block text-[10px] font-black text-slate-800">
                                 {photo.title}
@@ -1860,7 +1962,7 @@ function VendorPOCard({ card }) {
                                 </span>
                               ) : null}
                             </span>
-                          </a>
+                          </button>
                         ))}
                       </div>
                     </div>

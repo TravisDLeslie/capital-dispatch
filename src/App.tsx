@@ -4740,9 +4740,9 @@ export default function App() {
                       className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                     >
                       <option value="">Choose a vendor to see all POs...</option>
-                      {activeVendors.map((vendor) => (
-                        <option key={vendor.id || vendor.name} value={vendor.name}>
-                          {vendor.name}
+                      {vendorOptions.map((vendorName) => (
+                        <option key={vendorName} value={vendorName}>
+                          {vendorName}
                         </option>
                       ))}
                     </select>
@@ -5314,9 +5314,9 @@ export default function App() {
                   className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                 >
                   <option value="">Choose a vendor to see all POs...</option>
-                  {activeVendors.map((vendor) => (
-                    <option key={vendor.id || vendor.name} value={vendor.name}>
-                      {vendor.name}
+                  {vendorOptions.map((vendorName) => (
+                    <option key={vendorName} value={vendorName}>
+                      {vendorName}
                     </option>
                   ))}
                 </select>
