@@ -29,7 +29,6 @@ import {
   subscribeToSharedDeliveryRoutes,
 } from "../utils/deliveryRouteStorage";
 import {
-  getGoogleMapsApiKey,
   loadGooglePlaces,
 } from "../utils/googlePlaces";
 
@@ -204,7 +203,6 @@ export default function DeliveryRoutePlannerPage({
     route: null,
     error: "",
   });
-  const googleMapsApiKey = getGoogleMapsApiKey();
   const googleMapsRouteUrl = useMemo(() => getGoogleMapsRouteUrl(stops), [stops]);
   const deliveryTimeMinutes = stops.reduce(
     (totalMinutes, stop) =>
@@ -369,12 +367,11 @@ export default function DeliveryRoutePlannerPage({
   }, [stops]);
 
   const staticMapUrl = useMemo(() => {
-    if (!googleMapsApiKey || stops.length === 0) {
+    if (stops.length === 0) {
       return "";
     }
 
     const params = new URLSearchParams({
-      key: googleMapsApiKey,
       size: "640x640",
       scale: "2",
       maptype: "roadmap",
@@ -398,8 +395,8 @@ export default function DeliveryRoutePlannerPage({
       );
     }
 
-    return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
-  }, [googleMapsApiKey, routeState.route?.encodedPolyline, stops]);
+    return `/api/maps/static?${params.toString()}`;
+  }, [routeState.route?.encodedPolyline, stops]);
 
   function handleAddStop(event) {
     event.preventDefault();

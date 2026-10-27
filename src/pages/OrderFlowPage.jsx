@@ -3,6 +3,8 @@ import {
   ArrowLeft,
   Building2,
   CalendarDays,
+  ChevronDown,
+  CircleHelp,
   ExternalLink,
   Hand,
   MapPin,
@@ -1433,6 +1435,9 @@ export default function OrderFlowPage({
             const itemPath = getPath(item.path);
             const PathIcon = itemPath.icon;
             const isActive = activeItemId === item.id || !item.saved;
+            const supplierSetupComplete = Boolean(
+              item.vendor && item.poNumber && getItemDateValue(item),
+            );
 
             if (!isActive) {
               const itemDate = getItemDateValue(item);
@@ -1549,7 +1554,7 @@ export default function OrderFlowPage({
                         onChange={(event) =>
                           updateItem(item.id, { path: event.target.value })
                         }
-                        className="w-full appearance-none rounded-2xl border border-slate-300 bg-slate-100 py-3 pl-11 pr-4 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
+                        className="w-full cursor-pointer appearance-none rounded-2xl border border-slate-300 bg-slate-100 py-3 pl-11 pr-12 text-base font-black text-slate-900 outline-none transition hover:border-blue-400 hover:bg-white focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
                       >
                         {activeFulfillmentPaths.map((path) => (
                           <option key={path.id} value={path.id}>
@@ -1557,29 +1562,59 @@ export default function OrderFlowPage({
                           </option>
                         ))}
                       </select>
+                      <ChevronDown
+                        className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-700"
+                        strokeWidth={2.75}
+                        aria-hidden="true"
+                      />
                     </div>
                   </Field>
                 </div>
 
-                <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-950">
-                      {item.vendor || "No vendor selected"} · PO{" "}
-                      {item.poNumber || "not entered"}
-                    </p>
-                    <p className="mt-1 text-xs font-bold text-slate-500">
-                      {getItemDateLabel(item.path)}:{" "}
-                      {getItemDateValue(item) || "No date"}
-                    </p>
+                {supplierSetupComplete ? (
+                  <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-slate-950">
+                        {item.vendor} · PO {item.poNumber}
+                      </p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">
+                        {getItemDateLabel(item.path)}: {getItemDateValue(item)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingItemId(item.id)}
+                      className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Edit Supplier / PO
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setEditingItemId(item.id)}
-                    className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-                  >
-                    Supplier / PO
-                  </button>
-                </div>
+                ) : (
+                  <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-700 shadow-sm">
+                        <CircleHelp className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                          Next: Supplier / PO
+                        </p>
+                        <p className="mt-1 text-sm font-bold leading-5 text-slate-700">
+                          Choose <span className="font-black">We Pickup</span> for South or{" "}
+                          <span className="font-black">Supplier Delivery</span> for Their Truck.
+                          Then add the vendor, PO number, and pickup or delivery date.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingItemId(item.id)}
+                      className="inline-flex shrink-0 items-center justify-center rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-800"
+                    >
+                      Open Supplier / PO
+                    </button>
+                  </div>
+                )}
 
                 <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <button

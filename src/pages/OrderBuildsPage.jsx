@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Archive,
+  CalendarDays,
   CheckCircle2,
   ClipboardList,
   PackageCheck,
@@ -30,6 +31,99 @@ function getStockItems(build) {
   }
 
   return (build.items || []).filter((item) => item.path === "inStock");
+}
+
+function formatRoughDate(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? new Date(`${value}T12:00:00`)
+    : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function findLinkedPO(item, linkedIds, records) {
+  const linkedIdSet = new Set(Array.isArray(linkedIds) ? linkedIds : []);
+  const itemPONumber = String(item?.poNumber || "").trim().toLowerCase();
+  const itemVendor = String(item?.vendor || "").trim().toLowerCase();
+  const linkedRecords = records.filter((record) => linkedIdSet.has(record.id));
+
+  return (
+    linkedRecords.find(
+      (record) =>
+        itemPONumber &&
+        String(record.poNumber || "").trim().toLowerCase() === itemPONumber,
+    ) ||
+    linkedRecords.find(
+      (record) =>
+        itemVendor &&
+        String(record.vendor || "").trim().toLowerCase() === itemVendor,
+    ) ||
+    linkedRecords[0]
+  );
+}
+
+function getWaitingItemSchedule(
+  item,
+  build,
+  supplierRuns,
+  theirTruckPOs,
+  podPickups,
+) {
+  if (item.path === "wePickup") {
+    const linkedRun = findLinkedPO(
+      item,
+      build.linkedSouthRunIds,
+      supplierRuns,
+    );
+
+    return {
+      label: "Pickup",
+      date: linkedRun?.pickupDate || linkedRun?.scheduledDate || item.routeDate,
+    };
+  }
+
+  if (item.path === "supplierDelivery") {
+    const linkedPO = findLinkedPO(
+      item,
+      build.linkedTheirTruckPOIds,
+      theirTruckPOs,
+    );
+
+    return {
+      label: "Arrives",
+      date: linkedPO?.deliveryDate || item.supplierDate,
+    };
+  }
+
+  if (item.path === "pod") {
+    const linkedPickup = findLinkedPO(
+      item,
+      build.linkedPodPickupIds,
+      podPickups,
+    );
+
+    return {
+      label: "POD",
+      date:
+        linkedPickup?.podDate ||
+        linkedPickup?.pickupDate ||
+        item.supplierDate,
+    };
+  }
+
+  return { label: "Expected", date: "" };
 }
 
 function formatArchivedDate(value) {
@@ -429,22 +523,54 @@ export default function OrderBuildsPage({
                           No outside material paths on this order.
                         </p>
                       ) : (
-                        waitingItems.map((item) => (
-                          <div
-                            key={item.id}
-                            className="rounded-2xl bg-white px-4 py-3"
-                          >
-                            <p className="font-black text-slate-950">
-                              {item.quantity ? `QTY ${item.quantity} · ` : ""}
-                              {item.description || "Unnamed item"}
-                            </p>
-                            <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                              {pathLabels[item.path] || "Outside"} ·{" "}
-                              {item.vendor || "No vendor"} · PO{" "}
-                              {item.poNumber || "not entered"}
-                            </p>
-                          </div>
-                        ))
+                        waitingItems.map((item) => {
+                          const schedule = getWaitingItemSchedule(
+                            item,
+                            build,
+                            supplierRuns,
+                            theirTruckPOs,
+                            podPickups,
+                          );
+                          const roughDate = formatRoughDate(schedule.date);
+
+                          return (
+                            <div
+                              key={item.id}
+                              className="rounded-2xl bg-white px-4 py-3"
+                            >
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0">
+                                  <p className="font-black text-slate-950">
+                                    {item.quantity
+                                      ? `QTY ${item.quantity} · `
+                                      : ""}
+                                    {item.description || "Unnamed item"}
+                                  </p>
+                                  <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
+                                    {pathLabels[item.path] || "Outside"} ·{" "}
+                                    {item.vendor || "No vendor"} · PO{" "}
+                                    {item.poNumber || "not entered"}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`inline-flex shrink-0 items-center gap-1.5 self-start rounded-full px-3 py-1.5 text-xs font-black ${
+                                    roughDate
+                                      ? "bg-blue-50 text-blue-700"
+                                      : "bg-amber-50 text-amber-700"
+                                  }`}
+                                >
+                                  <CalendarDays
+                                    className="h-3.5 w-3.5"
+                                    aria-hidden="true"
+                                  />
+                                  {roughDate
+                                    ? `${schedule.label} ${roughDate}`
+                                    : "Date not set"}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>

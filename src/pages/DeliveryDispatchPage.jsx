@@ -57,10 +57,6 @@ function getRouteDirectionsUrl(originAddress, destinationAddress) {
   )}&destination=${encodeURIComponent(destinationAddress || "")}`;
 }
 
-function getGoogleMapsApiKey() {
-  return import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
-}
-
 function formatCreatedAt(value) {
   if (!value) {
     return "";
@@ -718,7 +714,6 @@ function DeliveryRouteMapPlanner({
   onOpenDelivery,
   onMoveDelivery,
 }) {
-  const googleMapsApiKey = getGoogleMapsApiKey();
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [highlightedDeliveryId, setHighlightedDeliveryId] = useState("");
   const [mapZoom, setMapZoom] = useState(11);
@@ -743,12 +738,11 @@ function DeliveryRouteMapPlanner({
     [deliveriesWithAddress],
   );
   const staticMapUrl = useMemo(() => {
-    if (!googleMapsApiKey || deliveriesWithAddress.length === 0) {
+    if (deliveriesWithAddress.length === 0) {
       return "";
     }
 
     const params = new URLSearchParams({
-      key: googleMapsApiKey,
       size: "1200x640",
       scale: "2",
       maptype: "roadmap",
@@ -784,10 +778,9 @@ function DeliveryRouteMapPlanner({
       );
     }
 
-    return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
+    return `/api/maps/static?${params.toString()}`;
   }, [
     deliveriesWithAddress,
-    googleMapsApiKey,
     highlightedDeliveryId,
     mapZoom,
   ]);
@@ -1449,9 +1442,16 @@ export default function DeliveryDispatchPage({
         ),
     [deliveries],
   );
+  const dateScopedNeedsDispatchDeliveries = useMemo(
+    () =>
+      needsDispatchDeliveries.filter(
+        (delivery) => delivery.deliveryDate === routeMapDate,
+      ),
+    [needsDispatchDeliveries, routeMapDate],
+  );
   const normalizedSearchQuery = normalizeSearch(searchQuery);
   const visibleDeliveries = normalizedSearchQuery
-    ? needsDispatchDeliveries.filter((delivery) => {
+    ? dateScopedNeedsDispatchDeliveries.filter((delivery) => {
         const items = Array.isArray(delivery.items) ? delivery.items : [];
         const searchableText = [
           delivery.orderNumber,
@@ -1472,7 +1472,7 @@ export default function DeliveryDispatchPage({
           normalizedSearchQuery,
         );
       })
-    : needsDispatchDeliveries;
+    : dateScopedNeedsDispatchDeliveries;
   const routeMapDeliveries = useMemo(
     () =>
       deliveries
@@ -1824,7 +1824,7 @@ export default function DeliveryDispatchPage({
           className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900"
         >
           <Search className="h-4 w-4" aria-hidden="true" />
-          Search needs dispatch
+          Search {formatDateLabel(routeMapDate)} deliveries
         </label>
 
         <input
@@ -1840,13 +1840,13 @@ export default function DeliveryDispatchPage({
       {visibleDeliveries.length === 0 ? (
         <EmptyState
           title={
-            needsDispatchDeliveries.length === 0
-              ? "Nothing needs dispatch"
+            dateScopedNeedsDispatchDeliveries.length === 0
+              ? `No deliveries for ${formatDateLabel(routeMapDate)}`
               : "No matching delivery orders"
           }
           description={
-            needsDispatchDeliveries.length === 0
-              ? "Delivery orders without a driver will appear here."
+            dateScopedNeedsDispatchDeliveries.length === 0
+              ? "Choose another date above to review its deliveries."
               : "Try another order number, customer, address, or item."
           }
         />
@@ -1922,6 +1922,31 @@ export default function DeliveryDispatchPage({
                         <h2 className="mt-1 truncate text-2xl font-black tracking-tight text-slate-900 sm:mt-2">
                           {formatCustomerName(delivery.customerName)}
                         </h2>
+
+                        {delivery.address ? (
+                          <a
+                            href={getDirectionsUrl(delivery.address)}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={delivery.address}
+                            className="mt-2 flex w-fit max-w-full items-start gap-2 text-sm font-bold leading-5 text-slate-600 transition hover:text-[#FC2C38]"
+                          >
+                            <MapPin
+                              className="mt-0.5 h-4 w-4 shrink-0 text-[#FC2C38]"
+                              aria-hidden="true"
+                            />
+                            <span className="line-clamp-2">{delivery.address}</span>
+                            <ExternalLink
+                              className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                              aria-hidden="true"
+                            />
+                          </a>
+                        ) : (
+                          <p className="mt-2 flex items-center gap-2 text-sm font-bold text-amber-700">
+                            <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            No delivery address added
+                          </p>
+                        )}
                       </div>
 
                     <div className="flex min-h-full flex-col justify-center rounded-2xl bg-slate-50 px-4 py-3 text-left">

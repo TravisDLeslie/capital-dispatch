@@ -50,15 +50,6 @@ function readWaypointAddresses(value) {
     .slice(0, 10);
 }
 
-function getRequestReferrer(request) {
-  return String(
-    request.headers?.referer ||
-      request.headers?.referrer ||
-      request.headers?.origin ||
-      "",
-  ).trim();
-}
-
 export default async function handler(request, response) {
   if (request.method !== "GET") {
     response.setHeader("Allow", "GET");
@@ -72,8 +63,6 @@ export default async function handler(request, response) {
   const waypointAddresses = readWaypointAddresses(request.query.waypoints);
   const shouldOptimizeWaypoints =
     String(request.query.optimizeWaypoints || "") === "true";
-  const requestReferrer = getRequestReferrer(request);
-
   if (!apiKey) {
     response.status(500).json({ error: "Missing Google Maps API key." });
     return;
@@ -92,7 +81,6 @@ export default async function handler(request, response) {
         headers: {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": apiKey,
-          ...(requestReferrer ? { Referer: requestReferrer } : {}),
           "X-Goog-FieldMask":
             "routes.duration,routes.staticDuration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.optimizedIntermediateWaypointIndex,routes.legs.duration,routes.legs.staticDuration,routes.legs.distanceMeters",
         },

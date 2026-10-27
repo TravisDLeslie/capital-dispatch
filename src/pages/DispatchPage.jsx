@@ -110,6 +110,12 @@ function getItemCount(items) {
   return Array.isArray(items) ? items.length : 0;
 }
 
+function getDeliveryAddress(delivery) {
+  return String(
+    delivery?.address || delivery?.deliveryAddress || "",
+  ).trim();
+}
+
 function MetricPill({ value, label, tone = "slate" }) {
   const toneClass =
     tone === "red"
@@ -175,7 +181,7 @@ function QueueRow({ label, title, meta, date, tone, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:shadow-sm"
+      className="group flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:shadow-sm"
     >
       <span
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-black ${
@@ -190,20 +196,25 @@ function QueueRow({ label, title, meta, date, tone, onClick }) {
         <span className="block truncate text-base font-black text-slate-950">
           {title}
         </span>
-        <span className="mt-0.5 block truncate text-sm font-bold text-slate-500">
+        <span
+          title={meta}
+          className="mt-0.5 block line-clamp-2 text-sm font-bold leading-5 text-slate-500"
+        >
           {meta}
         </span>
       </span>
-      <span
-        className={`shrink-0 rounded-full px-3 py-1 text-[0.68rem] font-black uppercase tracking-[0.12em] ${dateClass}`}
-      >
-        {getRelativeDateLabel(date)}
+      <span className="flex shrink-0 items-center gap-2">
+        <span
+          className={`max-w-28 whitespace-nowrap rounded-full px-3 py-1 text-center text-[0.68rem] font-black uppercase tracking-[0.1em] ${dateClass}`}
+        >
+          {getRelativeDateLabel(date)}
+        </span>
+        <ArrowRight
+          aria-hidden="true"
+          className="h-5 w-5 shrink-0 text-slate-300 transition group-hover:translate-x-1 group-hover:text-slate-700"
+          strokeWidth={2.5}
+        />
       </span>
-      <ArrowRight
-        aria-hidden="true"
-        className="h-5 w-5 shrink-0 text-slate-300 transition group-hover:translate-x-1 group-hover:text-slate-700"
-        strokeWidth={2.5}
-      />
     </button>
   );
 }
@@ -239,7 +250,7 @@ function QueuePanel({
 
   return (
     <section
-      className={`relative overflow-hidden rounded-[1.75rem] border p-5 shadow-sm transition sm:p-6 ${
+      className={`relative min-w-0 overflow-hidden rounded-[1.75rem] border p-5 shadow-sm transition sm:p-6 ${
         toneStyles.card
       } ${disabled ? "opacity-50" : ""}`}
     >
@@ -276,7 +287,7 @@ function QueuePanel({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-2">
+      <div className="mt-5 grid min-w-0 gap-2">
         {rows.length > 0 ? (
           rows
             .slice(0, 4)
@@ -369,7 +380,7 @@ export default function DispatchPage({
       ? `Order ${delivery.orderNumber}`
       : "Order missing number",
     meta: `${delivery.customerName || "No customer"} · ${
-      delivery.deliveryAddress || "No address"
+      getDeliveryAddress(delivery) || "No address"
     }`,
     date: delivery.deliveryDate,
   }));
@@ -471,36 +482,36 @@ export default function DispatchPage({
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-5 xl:mt-8 xl:grid-cols-2">
+      <div className="mt-5 grid gap-5 xl:mt-8 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         {canDispatchSouth ? (
-          <div className={activePanelId === "south" ? "" : "hidden xl:block"}>
-          <QueuePanel
-            icon={Truck}
-            eyebrow="South"
-            title="South Needs Dispatch"
-            description="Assign a driver and truck before these pickups show cleanly on the driver board."
-            count={southQueue.length}
-            todayCount={southToday}
-            rows={southRows}
-            tone="south"
-            onClick={() => onPageChange?.("supplier-runs-dispatch")}
-          />
+          <div className={`min-w-0 ${activePanelId === "south" ? "" : "hidden xl:block"}`}>
+            <QueuePanel
+              icon={Truck}
+              eyebrow="South"
+              title="South Needs Dispatch"
+              description="Assign a driver and truck before these pickups show cleanly on the driver board."
+              count={southQueue.length}
+              todayCount={southToday}
+              rows={southRows}
+              tone="south"
+              onClick={() => onPageChange?.("supplier-runs-dispatch")}
+            />
           </div>
         ) : null}
 
         {canDispatchDeliveries ? (
-          <div className={activePanelId === "deliveries" ? "" : "hidden xl:block"}>
-          <QueuePanel
-            icon={PackageCheck}
-            eyebrow="Deliveries"
-            title="Delivery Needs Dispatch"
-            description="Put delivery orders onto the board with the right driver, truck, and schedule."
-            count={deliveryQueue.length}
-            todayCount={deliveryToday}
-            rows={deliveryRows}
-            tone="delivery"
-            onClick={() => onPageChange?.("deliveries-dispatch")}
-          />
+          <div className={`min-w-0 ${activePanelId === "deliveries" ? "" : "hidden xl:block"}`}>
+            <QueuePanel
+              icon={PackageCheck}
+              eyebrow="Deliveries"
+              title="Delivery Needs Dispatch"
+              description="Put delivery orders onto the board with the right driver, truck, and schedule."
+              count={deliveryQueue.length}
+              todayCount={deliveryToday}
+              rows={deliveryRows}
+              tone="delivery"
+              onClick={() => onPageChange?.("deliveries-dispatch")}
+            />
           </div>
         ) : null}
       </div>
