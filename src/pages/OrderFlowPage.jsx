@@ -549,7 +549,6 @@ export default function OrderFlowPage({
     try {
       const summary = await onProcessOrder(buildOrderPayload());
       setProcessSummary(summary || {});
-      onPageChange?.("dashboard");
     } catch (error) {
       console.error("Unable to process order flow:", error);
       setProcessError(
@@ -623,7 +622,6 @@ export default function OrderFlowPage({
         createdBy: currentUser,
       });
       setStockProcessSummary(summary || {});
-      onPageChange?.("dashboard");
     } catch (error) {
       console.error("Unable to process stock PO:", error);
       setStockProcessError(
