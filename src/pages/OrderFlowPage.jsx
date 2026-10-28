@@ -1261,10 +1261,10 @@ export default function OrderFlowPage({
             <button
               type="button"
               onClick={() => setOrderEntryMode("stock")}
-              className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-md ring-4 ring-emerald-100 transition hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-lg"
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100"
             >
-              <Warehouse className="h-5 w-5" aria-hidden="true" />
-              New Stock PO
+              <Warehouse className="h-4 w-4" aria-hidden="true" />
+              Stock PO
             </button>
           </div>
         </div>
