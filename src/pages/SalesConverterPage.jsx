@@ -13,11 +13,10 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
-import { loadGooglePlaces } from "../utils/googlePlaces";
 
 const CAPITAL_LUMBER_ADDRESS = "3105 W State St, Boise, ID 83703";
 const METERS_PER_MILE = 1609.344;
@@ -116,127 +115,42 @@ function formatDriveTime(seconds) {
   return `${minutes} min`;
 }
 
-function decodeGooglePolyline(encodedPolyline) {
-  const points = [];
-  let index = 0;
-  let latitude = 0;
-  let longitude = 0;
+function GoogleRouteMap({ destinationAddress, className = "", ariaLabel }) {
+  const mapUrl = useMemo(() => {
+    const destination = String(destinationAddress || "").trim();
 
-  while (index < encodedPolyline.length) {
-    let result = 0;
-    let shift = 0;
-    let byte;
-
-    do {
-      byte = encodedPolyline.charCodeAt(index) - 63;
-      index += 1;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20 && index < encodedPolyline.length);
-
-    latitude += result & 1 ? ~(result >> 1) : result >> 1;
-    result = 0;
-    shift = 0;
-
-    do {
-      byte = encodedPolyline.charCodeAt(index) - 63;
-      index += 1;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20 && index < encodedPolyline.length);
-
-    longitude += result & 1 ? ~(result >> 1) : result >> 1;
-    points.push({ lat: latitude / 1e5, lng: longitude / 1e5 });
-  }
-
-  return points;
-}
-
-function GoogleRouteMap({ encodedPolyline, className = "", ariaLabel }) {
-  const mapElementRef = useRef(null);
-  const [mapError, setMapError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    let routeLine = null;
-    let mapMarkers = [];
-
-    async function renderMap() {
-      setMapError("");
-      const google = await loadGooglePlaces();
-
-      if (google?.maps?.importLibrary) {
-        await google.maps.importLibrary("maps");
-      }
-
-      if (cancelled || !mapElementRef.current || !google?.maps?.Map) {
-        return;
-      }
-
-      const routePath = decodeGooglePolyline(encodedPolyline || "");
-
-      if (routePath.length < 2) {
-        throw new Error("The route line is unavailable.");
-      }
-
-      const map = new google.maps.Map(mapElementRef.current, {
-        center: routePath[0],
-        zoom: 11,
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
-        clickableIcons: false,
-      });
-      routeLine = new google.maps.Polyline({
-        map,
-        path: routePath,
-        strokeColor: "#FC2C38",
-        strokeOpacity: 1,
-        strokeWeight: 5,
-      });
-      mapMarkers = [
-        new google.maps.Marker({
-          map,
-          position: routePath[0],
-          label: { text: "C", color: "#ffffff", fontWeight: "800" },
-          title: "Capital Lumber",
-        }),
-        new google.maps.Marker({
-          map,
-          position: routePath[routePath.length - 1],
-          label: { text: "D", color: "#ffffff", fontWeight: "800" },
-          title: "Destination",
-        }),
-      ];
-
-      const bounds = new google.maps.LatLngBounds();
-      routePath.forEach((point) => bounds.extend(point));
-      map.fitBounds(bounds, 42);
+    if (!destination) {
+      return "";
     }
 
-    renderMap().catch((error) => {
-      if (!cancelled) {
-        console.warn("Unable to render the route map:", error);
-        setMapError("Map preview unavailable. The route time and pricing are still available.");
-      }
+    const params = new URLSearchParams({
+      saddr: CAPITAL_LUMBER_ADDRESS,
+      daddr: destination,
+      output: "embed",
     });
 
-    return () => {
-      cancelled = true;
-      routeLine?.setMap(null);
-      mapMarkers.forEach((marker) => marker.setMap(null));
-    };
-  }, [encodedPolyline]);
+    return `https://maps.google.com/maps?${params.toString()}`;
+  }, [destinationAddress]);
+
+  if (!mapUrl) {
+    return (
+      <div
+        className={`flex items-center justify-center bg-slate-100 p-6 text-center text-sm font-bold text-slate-600 ${className}`}
+      >
+        Select an address to preview the route.
+      </div>
+    );
+  }
 
   return (
-    <div className={`relative overflow-hidden bg-slate-100 ${className}`}>
-      <div ref={mapElementRef} className="h-full w-full" role="img" aria-label={ariaLabel} />
-      {mapError ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-100 p-6 text-center text-sm font-bold text-slate-600">
-          {mapError}
-        </div>
-      ) : null}
-    </div>
+    <iframe
+      src={mapUrl}
+      title={ariaLabel}
+      loading="lazy"
+      referrerPolicy="no-referrer-when-downgrade"
+      className={`border-0 bg-slate-100 ${className}`}
+      allowFullScreen
+    />
   );
 }
 
@@ -889,8 +803,7 @@ export default function SalesConverterPage({
   const dashboardSearchMatches = dashboardSearchAllMatches.slice(0, 40);
   const hasLocationLookupMap = Boolean(
     locationLookupStatus === "success" &&
-      locationLookupAddress &&
-      locationLookupResult?.encodedPolyline,
+      locationLookupAddress,
   );
   const locationShippingRate = getLocationShippingRate(
     locationLookupResult?.distanceMeters,
@@ -1311,7 +1224,7 @@ export default function SalesConverterPage({
                   </div>
                 </div>
                 <GoogleRouteMap
-                  encodedPolyline={locationLookupResult?.encodedPolyline || ""}
+                  destinationAddress={locationLookupAddress}
                   ariaLabel={`Route from Capital Lumber to ${locationLookupAddress}`}
                   className="aspect-square w-full object-contain"
                 />
@@ -1355,7 +1268,7 @@ export default function SalesConverterPage({
               <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <div className="flex min-h-[420px] items-center justify-center bg-slate-100 p-3 sm:p-5 lg:min-h-0">
                   <GoogleRouteMap
-                    encodedPolyline={locationLookupResult?.encodedPolyline || ""}
+                    destinationAddress={locationLookupAddress}
                     ariaLabel={`Expanded route from Capital Lumber to ${locationLookupAddress}`}
                     className="h-full max-h-full w-full object-contain"
                   />
