@@ -1166,7 +1166,7 @@ export default function SalesConverterPage({
         <section className="mb-5 overflow-visible rounded-[2rem] border border-blue-200 bg-blue-50/50 p-4 shadow-sm sm:p-5">
           <div
             className={`grid items-start gap-4 ${
-              locationLookupMapUrl
+              hasLocationLookupMap
                 ? "xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.48fr)_320px]"
                 : "lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.42fr)]"
             }`}
