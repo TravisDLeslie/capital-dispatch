@@ -1,6 +1,5 @@
-const CACHE_NAME = "capital-dispatch-v7";
+const CACHE_NAME = "capital-dispatch-v8";
 const APP_SHELL = [
-  "/",
   "/manifest.webmanifest",
   "/pwa/apple-touch-icon.png",
   "/pwa/icon-192.png",
@@ -53,7 +52,11 @@ async function networkFirst(request, fallbackUrl = "") {
   const cache = await caches.open(CACHE_NAME);
 
   try {
-    const networkResponse = await fetch(request);
+    const networkRequest =
+      request.mode === "navigate"
+        ? new Request(request, { cache: "no-store" })
+        : request;
+    const networkResponse = await fetch(networkRequest);
 
     if (isCacheableResponse(networkResponse)) {
       await cache.put(request, networkResponse.clone());
