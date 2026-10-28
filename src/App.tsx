@@ -4145,22 +4145,41 @@ export default function App() {
     const poNumber = String(stockPayload.poNumber || "").trim();
     const vendor = String(stockPayload.vendor || "").trim();
     const scheduledDate = String(stockPayload.scheduledDate || "").trim();
-    const quantity = String(stockPayload.quantity || "").trim();
-    const description = String(stockPayload.description || "").trim();
     const notes = String(stockPayload.notes || "").trim();
-    const easilyDamaged = Boolean(stockPayload.easilyDamaged);
     const fulfillmentMethod = String(
       stockPayload.fulfillmentMethod || "wePickup",
     );
-    const stockItem = {
-      id: createId(),
-      quantity,
-      description,
-      materialUse: "stock",
-      easilyDamaged,
-      orderNumber: "",
-      customerName: "Capital Lumber Stock",
-    };
+    const rawItems = Array.isArray(stockPayload.items)
+      ? stockPayload.items
+      : [
+          {
+            quantity: stockPayload.quantity,
+            description: stockPayload.description,
+            easilyDamaged: stockPayload.easilyDamaged,
+          },
+        ];
+    const stockItems = rawItems
+      .map((item) => {
+        const stockItem =
+          item && typeof item === "object"
+            ? (item as Record<string, unknown>)
+            : {};
+
+        return {
+          id: createId(),
+          quantity: String(stockItem.quantity || "").trim(),
+          description: String(stockItem.description || "").trim(),
+          materialUse: "stock",
+          easilyDamaged: Boolean(stockItem.easilyDamaged),
+          orderNumber: "",
+          customerName: "Capital Lumber Stock",
+        };
+      })
+      .filter((item) => item.description);
+
+    if (stockItems.length === 0) {
+      throw new Error("Add at least one material item to this Stock PO.");
+    }
 
     if (fulfillmentMethod === "wePickup") {
       const supplierRun: SupplierRun = {
@@ -4184,22 +4203,20 @@ export default function App() {
         status: "open",
         source: "stock-order",
         stopWorkflowVersion: 2,
-        items: [
-          {
-            ...stockItem,
-            pickedUp: false,
-            pickedUpAt: null,
-            pickupPhoto: null,
-            pickupPhotos: [],
-          },
-        ],
+        items: stockItems.map((stockItem) => ({
+          ...stockItem,
+          pickedUp: false,
+          pickedUpAt: null,
+          pickupPhoto: null,
+          pickupPhotos: [],
+        })),
         notes,
         createdAt: now,
         updatedAt: now,
       };
 
       await handleAddSupplierRun(supplierRun);
-      return { destination: "South", poNumber };
+      return { destination: "South", poNumber, itemCount: stockItems.length };
     }
 
     const theirTruckPO: TheirTruckPO = {
@@ -4218,13 +4235,17 @@ export default function App() {
       createdById: currentUserCreator.id,
       orderedBy: currentUserCreator.name,
       supplierNote: notes,
-      items: [stockItem],
+      items: stockItems,
       createdAt: now,
       updatedAt: now,
     };
 
     await handleSaveTheirTruckPO(theirTruckPO);
-    return { destination: "Their Truck", poNumber };
+    return {
+      destination: "Their Truck",
+      poNumber,
+      itemCount: stockItems.length,
+    };
   }
 
   async function handleAddCustomer(customer: Customer) {
