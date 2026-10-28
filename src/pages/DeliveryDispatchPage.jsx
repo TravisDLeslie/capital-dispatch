@@ -8,6 +8,7 @@ import {
   CloudRain,
   Edit3,
   ExternalLink,
+  FileText,
   MapPin,
   Maximize2,
   Package,
@@ -17,6 +18,7 @@ import {
   ShieldAlert,
   StickyNote,
   Truck,
+  Upload,
   UserRound,
   X,
 } from "lucide-react";
@@ -40,6 +42,7 @@ import {
   timeToMinutes,
 } from "../utils/deliverySchedule";
 import { formatCustomerName } from "../utils/textFormatters";
+import { uploadDeliveryOrderFiles } from "../utils/deliveryOrderStorage";
 
 function normalizeSearch(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -68,6 +71,49 @@ function formatCreatedAt(value) {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function getDeliveryOrderDocuments(delivery) {
+  return Array.isArray(delivery?.deliveryOrderDocuments)
+    ? delivery.deliveryOrderDocuments.filter((document) => document?.url)
+    : [];
+}
+
+function formatDocumentSize(value) {
+  const size = Number(value);
+
+  if (!Number.isFinite(size) || size <= 0) {
+    return "";
+  }
+
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${Math.max(1, Math.round(size / 1024))} KB`;
+}
+
+function getDeliveryOrderUploadError(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "");
+
+  if (code.includes("storage/quota-exceeded")) {
+    return "Delivery-order storage is full. An admin needs to check Firebase Storage billing.";
+  }
+
+  if (code.includes("storage/unauthorized")) {
+    return "Firebase blocked this upload. Publish Storage rules that allow delivery-order files.";
+  }
+
+  if (code.includes("storage/retry-limit-exceeded")) {
+    return "The upload timed out. Check the connection and try again.";
+  }
+
+  if (message.includes("15 MB") || message.includes("photo, image, or PDF")) {
+    return message;
+  }
+
+  return "Unable to upload that delivery order. Try again.";
 }
 
 function formatDateLabel(value) {
@@ -1443,9 +1489,11 @@ export default function DeliveryDispatchPage({
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
   const [openDetailKeys, setOpenDetailKeys] = useState({});
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
+  const [uploadingDeliveryId, setUploadingDeliveryId] = useState("");
   const [error, setError] = useState("");
   const [routeMapDate, setRouteMapDate] = useState("");
   const [draftRouteOrders, setDraftRouteOrders] = useState({});
+  const deliveryOrderInputRefs = useRef({});
 
   const needsDispatchDeliveries = useMemo(
     () =>
@@ -1792,6 +1840,45 @@ export default function DeliveryDispatchPage({
     }
   }
 
+  async function handleDeliveryOrderUpload(delivery, selectedFiles) {
+    const files = Array.from(selectedFiles || []);
+
+    if (files.length === 0) {
+      return;
+    }
+
+    const currentDocuments = getDeliveryOrderDocuments(delivery);
+
+    if (currentDocuments.length + files.length > 8) {
+      setError(
+        `Order ${delivery.orderNumber} can have up to 8 delivery-order files.`,
+      );
+      return;
+    }
+
+    setUploadingDeliveryId(delivery.id);
+    setError("");
+
+    try {
+      const uploadedDocuments = await uploadDeliveryOrderFiles({
+        deliveryId: delivery.id,
+        files,
+      });
+
+      await onUpdateDelivery(delivery.id, {
+        deliveryOrderDocuments: [
+          ...currentDocuments,
+          ...uploadedDocuments,
+        ],
+      });
+    } catch (uploadError) {
+      console.error("Unable to upload delivery order:", uploadError);
+      setError(getDeliveryOrderUploadError(uploadError));
+    } finally {
+      setUploadingDeliveryId("");
+    }
+  }
+
   return (
     <PageContainer>
       <Breadcrumbs
@@ -1915,6 +2002,9 @@ export default function DeliveryDispatchPage({
               items.length - visiblePickupItems.length,
             );
             const dispatchPanelOpen = isDeliveryOpen(delivery.id);
+            const deliveryOrderDocuments = getDeliveryOrderDocuments(delivery);
+            const isUploadingDeliveryOrder =
+              uploadingDeliveryId === delivery.id;
             const driverThereLabel = delivery.driverTargetArrivalTime
               ? formatTimeLabel(delivery.driverTargetArrivalTime)
               : getDeliverySiteArrivalLabel(scheduledDelivery);
@@ -2026,8 +2116,100 @@ export default function DeliveryDispatchPage({
                           Edit
                         </button>
                       ) : null}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          deliveryOrderInputRefs.current[delivery.id]?.click()
+                        }
+                        disabled={isUploadingDeliveryOrder}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                      >
+                        <Upload className="h-4 w-4" aria-hidden="true" />
+                        {isUploadingDeliveryOrder
+                          ? "Uploading..."
+                          : deliveryOrderDocuments.length > 0
+                            ? "Add Another Order"
+                            : "Upload Delivery Order"}
+                      </button>
+
+                      <input
+                        ref={(inputElement) => {
+                          if (inputElement) {
+                            deliveryOrderInputRefs.current[delivery.id] =
+                              inputElement;
+                          }
+                        }}
+                        type="file"
+                        accept="image/*,application/pdf,.pdf"
+                        multiple
+                        disabled={isUploadingDeliveryOrder}
+                        onChange={(event) => {
+                          handleDeliveryOrderUpload(
+                            delivery,
+                            event.target.files,
+                          );
+                          event.target.value = "";
+                        }}
+                        className="sr-only"
+                      />
                     </div>
                   </div>
+
+                  {deliveryOrderDocuments.length > 0 ? (
+                    <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50/70 p-3 sm:p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-blue-900">
+                          <FileText className="h-4 w-4" aria-hidden="true" />
+                          Delivery Order
+                        </p>
+                        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-blue-700 shadow-sm">
+                          {deliveryOrderDocuments.length}{" "}
+                          {deliveryOrderDocuments.length === 1
+                            ? "file"
+                            : "files"}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                        {deliveryOrderDocuments.map((document, documentIndex) => (
+                          <a
+                            key={
+                              document.id ||
+                              document.path ||
+                              `${delivery.id}-delivery-order-${documentIndex}`
+                            }
+                            href={document.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-blue-100 transition hover:ring-blue-300"
+                          >
+                            <span className="flex min-w-0 items-center gap-3">
+                              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+                                <FileText
+                                  className="h-5 w-5"
+                                  aria-hidden="true"
+                                />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-black text-slate-900">
+                                  {document.name || "Delivery order"}
+                                </span>
+                                <span className="block text-xs font-bold text-slate-500">
+                                  {formatDocumentSize(document.size) ||
+                                    "Uploaded file"}
+                                </span>
+                              </span>
+                            </span>
+                            <ExternalLink
+                              className="h-4 w-4 shrink-0 text-blue-700"
+                              aria-hidden="true"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-3 sm:p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">

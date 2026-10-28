@@ -11,6 +11,7 @@ import {
   CloudRain,
   Edit3,
   ExternalLink,
+  FileText,
   Images,
   MapPin,
   MessageSquare,
@@ -120,6 +121,12 @@ function formatForkliftLabel(value) {
   }
 
   return "";
+}
+
+function getDeliveryOrderDocuments(delivery) {
+  return Array.isArray(delivery?.deliveryOrderDocuments)
+    ? delivery.deliveryOrderDocuments.filter((document) => document?.url)
+    : [];
 }
 
 function getPhotoList(delivery, photoField, photosField) {
@@ -715,6 +722,7 @@ function MobileDeliveryFlowCard({
   const deliveryCardRef = useRef(null);
   const [loadedDeliveryKeys, setLoadedDeliveryKeys] = useState({});
   const items = Array.isArray(delivery.items) ? delivery.items : [];
+  const deliveryOrderDocuments = getDeliveryOrderDocuments(delivery);
   const originAddress =
     delivery.deliveryOriginAddress || "3105 W State St, Boise, ID 83703";
   const isMaterialLoaded = Boolean(loadedDeliveryKeys[delivery.id]);
@@ -896,6 +904,44 @@ function MobileDeliveryFlowCard({
                 {scopeSummary.shortLabel || scopeSummary.label}
               </div>
             </div>
+
+            {deliveryOrderDocuments.length > 0 ? (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="flex items-center gap-2 text-sm font-black text-blue-900">
+                    <FileText className="h-5 w-5" aria-hidden="true" />
+                    Delivery Order
+                  </p>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-blue-700">
+                    {deliveryOrderDocuments.length}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid gap-2">
+                  {deliveryOrderDocuments.map((document, documentIndex) => (
+                    <a
+                      key={
+                        document.id ||
+                        document.path ||
+                        `${delivery.id}-delivery-order-${documentIndex}`
+                      }
+                      href={document.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-white px-3 py-3 text-sm font-black text-slate-900 shadow-sm ring-1 ring-blue-100"
+                    >
+                      <span className="min-w-0 truncate">
+                        {document.name || "View delivery order"}
+                      </span>
+                      <ExternalLink
+                        className="h-4 w-4 shrink-0 text-blue-700"
+                        aria-hidden="true"
+                      />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {delivery.hasHardware ? (
               <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-center">
