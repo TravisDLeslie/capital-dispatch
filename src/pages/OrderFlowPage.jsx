@@ -159,15 +159,6 @@ function createBlankItem(overrides = {}) {
 
 const defaultItems = [createBlankItem({ id: "item-1" })];
 
-function createBlankStockItem() {
-  return {
-    id: `stock-item-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    quantity: "",
-    description: "",
-    easilyDamaged: false,
-  };
-}
-
 function getPath(pathId) {
   return (
     fulfillmentPaths.find((path) => path.id === pathId) ||
@@ -343,12 +334,12 @@ export default function OrderFlowPage({
   const [stockFulfillmentMethod, setStockFulfillmentMethod] =
     useState("wePickup");
   const [stockScheduledDate, setStockScheduledDate] = useState("");
-  const [stockItems, setStockItems] = useState(() => [
-    createBlankStockItem(),
-  ]);
+  const [stockQuantity, setStockQuantity] = useState("");
+  const [stockDescription, setStockDescription] = useState("");
   const [stockDriverNotesEnabled, setStockDriverNotesEnabled] =
     useState(false);
   const [stockNotes, setStockNotes] = useState("");
+  const [stockEasilyDamaged, setStockEasilyDamaged] = useState(false);
   const [isProcessingStockPO, setIsProcessingStockPO] = useState(false);
   const [stockProcessError, setStockProcessError] = useState("");
   const [stockProcessSummary, setStockProcessSummary] = useState(null);
@@ -390,16 +381,11 @@ export default function OrderFlowPage({
       savedItems.length > 0 &&
       (orderMethod !== "delivery" || deliveryAddress),
   );
-  const validStockItems = useMemo(
-    () =>
-      stockItems.filter((item) => String(item.description || "").trim()),
-    [stockItems],
-  );
   const canProcessStockPO = Boolean(
     /^\d{3}-\d{3}$/.test(stockPoNumber) &&
       stockVendor.trim() &&
       stockScheduledDate &&
-      validStockItems.length > 0,
+      stockDescription.trim(),
   );
 
   useEffect(() => {
@@ -564,33 +550,13 @@ export default function OrderFlowPage({
     setStockVendor("");
     setStockFulfillmentMethod("wePickup");
     setStockScheduledDate("");
-    setStockItems([createBlankStockItem()]);
+    setStockQuantity("");
+    setStockDescription("");
     setStockDriverNotesEnabled(false);
     setStockNotes("");
+    setStockEasilyDamaged(false);
     setStockProcessError("");
     setStockProcessSummary(null);
-  }
-
-  function updateStockItem(itemId, updates) {
-    setStockItems((currentItems) =>
-      currentItems.map((item) =>
-        item.id === itemId ? { ...item, ...updates } : item,
-      ),
-    );
-  }
-
-  function addStockItem() {
-    setStockItems((currentItems) => [
-      ...currentItems,
-      createBlankStockItem(),
-    ]);
-  }
-
-  function deleteStockItem(itemId) {
-    setStockItems((currentItems) => {
-      const nextItems = currentItems.filter((item) => item.id !== itemId);
-      return nextItems.length > 0 ? nextItems : [createBlankStockItem()];
-    });
   }
 
   async function processStockPO() {
@@ -613,12 +579,10 @@ export default function OrderFlowPage({
         vendor: stockVendor,
         fulfillmentMethod: stockFulfillmentMethod,
         scheduledDate: stockScheduledDate,
-        items: validStockItems.map((item) => ({
-          quantity: String(item.quantity || "").trim(),
-          description: String(item.description || "").trim(),
-          easilyDamaged: Boolean(item.easilyDamaged),
-        })),
+        quantity: stockQuantity,
+        description: stockDescription,
         notes: stockDriverNotesEnabled ? stockNotes : "",
+        easilyDamaged: stockEasilyDamaged,
         createdBy: currentUser,
       });
       setStockProcessSummary(summary || {});
@@ -1052,7 +1016,7 @@ export default function OrderFlowPage({
             </div>
           </div>
 
-          <div className="mt-5 max-w-xs">
+          <div className="mt-5 grid gap-4 lg:grid-cols-[200px_160px_1fr]">
             <Field
               label={
                 stockFulfillmentMethod === "wePickup"
@@ -1066,103 +1030,23 @@ export default function OrderFlowPage({
                 onChange={(event) => setStockScheduledDate(event.target.value)}
               />
             </Field>
+            <Field label="Quantity Optional">
+              <TextInput
+                value={stockQuantity}
+                onChange={(event) => setStockQuantity(event.target.value)}
+                placeholder="Qty"
+              />
+            </Field>
+            <Field label="Material">
+              <TextInput
+                value={stockDescription}
+                onChange={(event) => setStockDescription(event.target.value)}
+                placeholder="Material description"
+              />
+            </Field>
           </div>
 
-          <section className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700">
-                  PO Items
-                </p>
-                <h3 className="mt-1 text-xl font-black text-slate-950">
-                  Material on this PO
-                </h3>
-                <p className="mt-1 text-sm font-bold text-slate-500">
-                  Add every item before saving. They will stay together under PO {stockPoNumber || "000-000"}.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={addStockItem}
-                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Add Item
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {stockItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                >
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-sm font-black text-slate-950">
-                      Item {index + 1}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => deleteStockItem(item.id)}
-                      disabled={stockItems.length === 1}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 px-3 text-xs font-black text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      Remove
-                    </button>
-                  </div>
-
-                  <div className="grid gap-3 lg:grid-cols-[160px_minmax(0,1fr)]">
-                    <Field label="Quantity Optional">
-                      <TextInput
-                        value={item.quantity}
-                        onChange={(event) =>
-                          updateStockItem(item.id, {
-                            quantity: event.target.value,
-                          })
-                        }
-                        placeholder="Qty"
-                      />
-                    </Field>
-                    <Field label="Material">
-                      <TextInput
-                        value={item.description}
-                        onChange={(event) =>
-                          updateStockItem(item.id, {
-                            description: event.target.value,
-                          })
-                        }
-                        placeholder="Material description"
-                      />
-                    </Field>
-                  </div>
-
-                  <label className="mt-3 flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
-                    <span>
-                      <span className="block text-sm font-black text-slate-950">
-                        Easily damaged?
-                      </span>
-                      <span className="mt-0.5 block text-xs font-bold text-amber-800">
-                        Driver will see needs corners/protection for this item.
-                      </span>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={item.easilyDamaged}
-                      onChange={(event) =>
-                        updateStockItem(item.id, {
-                          easilyDamaged: event.target.checked,
-                        })
-                      }
-                      className="h-6 w-6 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-                    />
-                  </label>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <div className="mt-5">
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
             <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
               <label className="flex cursor-pointer items-start gap-3">
                 <input
@@ -1195,6 +1079,25 @@ export default function OrderFlowPage({
                 />
               ) : null}
             </section>
+
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-4">
+              <span>
+                <span className="block text-sm font-black text-slate-950">
+                  Easily damaged?
+                </span>
+                <span className="mt-1 block text-sm font-bold text-amber-800">
+                  Driver will see needs corners/protection.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={stockEasilyDamaged}
+                onChange={(event) =>
+                  setStockEasilyDamaged(event.target.checked)
+                }
+                className="h-6 w-6 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+              />
+            </label>
           </div>
 
           <button
@@ -1229,7 +1132,7 @@ export default function OrderFlowPage({
                 PO {stockProcessSummary.poNumber || stockPoNumber} saved
               </p>
               <p className="mt-1 text-sm font-bold text-emerald-700">
-                Added {stockProcessSummary.itemCount || validStockItems.length} item{(stockProcessSummary.itemCount || validStockItems.length) === 1 ? "" : "s"} to {stockProcessSummary.destination || "fulfillment"}.
+                Added to {stockProcessSummary.destination || "fulfillment"}.
               </p>
               <button
                 type="button"
