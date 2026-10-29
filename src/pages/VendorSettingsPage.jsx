@@ -39,6 +39,20 @@ function createEmptyVendorContact() {
   };
 }
 
+function formatVendorPhoneNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 10);
+
+  if (digits.length <= 3) {
+    return digits ? `(${digits}` : "";
+  }
+
+  if (digits.length <= 6) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  }
+
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 function cleanVendorContacts(contacts) {
   return (Array.isArray(contacts) ? contacts : [])
     .map((contact) => ({
@@ -46,7 +60,7 @@ function cleanVendorContacts(contacts) {
       id: contact.id || createId(),
       name: String(contact.name || "").trim(),
       products: String(contact.products || "").trim(),
-      phone: String(contact.phone || "").trim(),
+      phone: formatVendorPhoneNumber(contact.phone),
       email: String(contact.email || "").trim(),
     }))
     .filter(
@@ -61,7 +75,13 @@ function VendorContactsEditor({ contacts, onChange, disabled = false }) {
   function updateContact(contactId, field, value) {
     onChange(
       safeContacts.map((contact) =>
-        contact.id === contactId ? { ...contact, [field]: value } : contact,
+        contact.id === contactId
+          ? {
+              ...contact,
+              [field]:
+                field === "phone" ? formatVendorPhoneNumber(value) : value,
+            }
+          : contact,
       ),
     );
   }
@@ -136,12 +156,14 @@ function VendorContactsEditor({ contacts, onChange, disabled = false }) {
                 </span>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
                   value={contact.phone || ""}
                   onChange={(event) =>
                     updateContact(contact.id, "phone", event.target.value)
                   }
                   disabled={disabled}
-                  placeholder="(208) 555-0100"
+                  placeholder="(208) 284-6163"
                   className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                 />
               </label>
@@ -207,7 +229,7 @@ export default function VendorSettingsPage({
             id: vendor.id || createId(),
             routeOrder: Number(vendor.routeOrder) || index + 1,
             deliveryCadence: vendor.deliveryCadence || "",
-            phone: vendor.phone || "",
+            phone: formatVendorPhoneNumber(vendor.phone),
             contacts: cleanVendorContacts(vendor.contacts),
             active: vendor.active !== false,
           }))
@@ -224,6 +246,8 @@ export default function VendorSettingsPage({
               [field]:
                 field === "routeOrder"
                   ? value.replace(/\D/g, "").slice(0, 3)
+                  : field === "phone"
+                    ? formatVendorPhoneNumber(value)
                   : value,
             }
           : vendor,
@@ -247,6 +271,8 @@ export default function VendorSettingsPage({
             [field]:
               field === "routeOrder"
                 ? value.replace(/\D/g, "").slice(0, 3)
+                : field === "phone"
+                  ? formatVendorPhoneNumber(value)
                 : value,
           }
         : currentVendor,
@@ -260,7 +286,7 @@ export default function VendorSettingsPage({
       ...newVendorDraft,
       name: String(newVendorDraft?.name || "").trim(),
       address: String(newVendorDraft?.address || "").trim(),
-      phone: String(newVendorDraft?.phone || "").trim(),
+      phone: formatVendorPhoneNumber(newVendorDraft?.phone),
       contacts: cleanVendorContacts(newVendorDraft?.contacts),
       deliveryCadence: String(newVendorDraft?.deliveryCadence || "").trim(),
       routeOrder:
@@ -295,7 +321,7 @@ export default function VendorSettingsPage({
         ...vendor,
         name: String(vendor.name || "").trim(),
         address: String(vendor.address || "").trim(),
-        phone: String(vendor.phone || "").trim(),
+        phone: formatVendorPhoneNumber(vendor.phone),
         contacts: cleanVendorContacts(vendor.contacts),
         deliveryCadence: String(vendor.deliveryCadence || "").trim(),
         routeOrder: Number(vendor.routeOrder) || index + 1,
@@ -425,12 +451,14 @@ export default function VendorSettingsPage({
                   </span>
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel"
                     value={vendor.phone || ""}
                     onChange={(event) =>
                       updateVendor(vendor.id, "phone", event.target.value)
                     }
                     disabled={isSaving}
-                    placeholder="(208) 555-0100"
+                    placeholder="(208) 284-6163"
                     className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                   />
                 </label>
@@ -605,12 +633,14 @@ export default function VendorSettingsPage({
                 </span>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
                   value={newVendorDraft.phone || ""}
                   onChange={(event) =>
                     updateNewVendor("phone", event.target.value)
                   }
                   disabled={isSaving}
-                  placeholder="(208) 555-0100"
+                  placeholder="(208) 284-6163"
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                 />
               </label>
