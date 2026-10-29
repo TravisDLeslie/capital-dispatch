@@ -102,6 +102,26 @@ function getGoogleMapsRouteUrl(stops) {
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
+function getEmbeddedGoogleMapsRouteUrl(stops) {
+  if (stops.length === 0) {
+    return "";
+  }
+
+  const destinationRoute = [
+    ...stops.map((stop, index) =>
+      index === 0 ? stop.address : `to:${stop.address}`,
+    ),
+    `to:${capitalLumberAddress}`,
+  ].join(" ");
+  const params = new URLSearchParams({
+    saddr: capitalLumberAddress,
+    daddr: destinationRoute,
+    output: "embed",
+  });
+
+  return `https://maps.google.com/maps?${params.toString()}`;
+}
+
 function getStopMarkerLabel(index) {
   if (index < 9) {
     return String(index + 1);
@@ -123,6 +143,32 @@ function formatDurationMinutes(totalMinutes) {
   }
 
   return `${minutes} min`;
+}
+
+function getCurrentTimeInputValue(date = new Date()) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(
+    date.getMinutes(),
+  ).padStart(2, "0")}`;
+}
+
+function formatTimeAfterMinutes(timeValue, minutesToAdd) {
+  if (!timeValue || !Number.isFinite(minutesToAdd)) {
+    return "";
+  }
+
+  const [hours, minutes] = timeValue.split(":").map(Number);
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return "";
+  }
+
+  const result = new Date();
+  result.setHours(hours, minutes + minutesToAdd, 0, 0);
+
+  return result.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function getLocalDateKey(date = new Date()) {
@@ -180,6 +226,9 @@ export default function DeliveryRoutePlannerPage({
 }) {
   const [address, setAddress] = useState("");
   const [stopServiceType, setStopServiceType] = useState(DEFAULT_SERVICE_TYPE);
+  const [routeStartTime, setRouteStartTime] = useState(
+    getCurrentTimeInputValue,
+  );
   const [stops, setStops] = useState(loadSavedStops);
   const [error, setError] = useState("");
   const [mapImageError, setMapImageError] = useState(false);
@@ -204,6 +253,10 @@ export default function DeliveryRoutePlannerPage({
     error: "",
   });
   const googleMapsRouteUrl = useMemo(() => getGoogleMapsRouteUrl(stops), [stops]);
+  const embeddedGoogleMapsRouteUrl = useMemo(
+    () => getEmbeddedGoogleMapsRouteUrl(stops),
+    [stops],
+  );
   const deliveryTimeMinutes = stops.reduce(
     (totalMinutes, stop) =>
       totalMinutes + getStopServiceOption(stop).minutes,
@@ -222,6 +275,10 @@ export default function DeliveryRoutePlannerPage({
     driveTimeMinutes === null
       ? null
       : driveTimeMinutes + deliveryTimeMinutes;
+  const backToYardTime =
+    totalRouteMinutes === null
+      ? ""
+      : formatTimeAfterMinutes(routeStartTime, totalRouteMinutes);
   const latestSharedRoute = sharedRoutes[0] || null;
   const isReadOnlyDriverView = Boolean(currentDriverName && !canShareRoute);
   const uniqueDriverOptions = useMemo(
@@ -277,6 +334,9 @@ export default function DeliveryRoutePlannerPage({
     }
 
     setStops(latestSharedRoute?.stops || []);
+    setRouteStartTime(
+      latestSharedRoute?.departureTime || getCurrentTimeInputValue(),
+    );
     setAddress("");
     setError("");
     setOptimizationStatus({ status: "idle", message: "" });
@@ -516,6 +576,7 @@ export default function DeliveryRoutePlannerPage({
         driveTimeText: routeState.route?.durationText || "",
         deliveryTimeMinutes,
         totalRouteMinutes: totalRouteMinutes || 0,
+        departureTime: routeStartTime,
         createdById: createdBy.id || "",
         createdByName: createdBy.name || "",
         createdByEmail: createdBy.email || "",
@@ -542,6 +603,7 @@ export default function DeliveryRoutePlannerPage({
     }
 
     setStops(route.stops);
+    setRouteStartTime(route.departureTime || getCurrentTimeInputValue());
     setAddress("");
     setError("");
     setOptimizationStatus({
@@ -809,6 +871,21 @@ export default function DeliveryRoutePlannerPage({
               </div>
             </div>
 
+            <label className="mt-4 block max-w-xs">
+              <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                Leave yard
+              </span>
+              <input
+                type="time"
+                value={routeStartTime}
+                onChange={(event) => setRouteStartTime(event.target.value)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              />
+              <span className="mt-1.5 block text-xs font-bold text-slate-500">
+                Used to calculate the exact return time.
+              </span>
+            </label>
+
             {!isReadOnlyDriverView ? (
             <form onSubmit={handleAddStop} className="mt-5">
               <label
@@ -1042,15 +1119,18 @@ export default function DeliveryRoutePlannerPage({
                   </div>
                   <div className="shrink-0 rounded-xl bg-white/10 px-3 py-2 text-right">
                     <p className="text-base font-black text-white">
-                      {returnToYardLeg?.durationText ||
+                      {backToYardTime ||
                         (routeState.status === "loading" ? "..." : "--")}
                     </p>
                     <p className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">
-                      Drive back
+                      Back to yard
                     </p>
-                    {returnToYardLeg?.distanceText ? (
+                    {returnToYardLeg?.durationText ? (
                       <p className="mt-0.5 text-[10px] font-bold text-slate-300">
-                        {returnToYardLeg.distanceText}
+                        {returnToYardLeg.durationText} drive back
+                        {returnToYardLeg.distanceText
+                          ? ` · ${returnToYardLeg.distanceText}`
+                          : ""}
                       </p>
                     ) : null}
                   </div>
@@ -1072,7 +1152,7 @@ export default function DeliveryRoutePlannerPage({
               </h2>
             </div>
             <div className="flex flex-wrap gap-2 min-[1100px]:max-[1279px]:grid min-[1100px]:max-[1279px]:grid-cols-2">
-              {staticMapUrl && !mapImageError ? (
+              {stops.length > 0 ? (
                 <button
                   type="button"
                   onClick={() => setIsMapExpanded(true)}
@@ -1103,6 +1183,15 @@ export default function DeliveryRoutePlannerPage({
               onError={() => setMapImageError(true)}
               className="mt-3 h-[clamp(320px,44vh,500px)] w-full rounded-2xl border border-slate-200 bg-slate-100 object-contain min-[1100px]:max-[1279px]:h-[280px]"
             />
+          ) : embeddedGoogleMapsRouteUrl ? (
+            <iframe
+              src={embeddedGoogleMapsRouteUrl}
+              title="Round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              className="mt-3 h-[clamp(320px,44vh,500px)] w-full rounded-2xl border border-slate-200 bg-slate-100 min-[1100px]:max-[1279px]:h-[280px]"
+              allowFullScreen
+            />
           ) : (
             <div className="mt-3 flex h-[clamp(320px,44vh,500px)] items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 text-center min-[1100px]:max-[1279px]:h-[280px]">
               <div>
@@ -1110,7 +1199,7 @@ export default function DeliveryRoutePlannerPage({
                 <p className="mt-3 text-sm font-black text-slate-700">
                   {stops.length === 0
                     ? "Add an address to build the map."
-                    : "Map preview needs the Google Maps key."}
+                    : "The route preview is temporarily unavailable."}
                 </p>
                 {googleMapsRouteUrl ? (
                   <a
@@ -1168,6 +1257,11 @@ export default function DeliveryRoutePlannerPage({
                     <p className="mt-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-red-100 sm:text-[10px]">
                       Total time
                     </p>
+                    {backToYardTime ? (
+                      <p className="mt-0.5 text-[9px] font-bold text-red-100 sm:text-[10px]">
+                        Back {backToYardTime}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <p className="mt-2 text-center text-[10px] font-bold text-slate-300">
@@ -1200,7 +1294,7 @@ export default function DeliveryRoutePlannerPage({
       </div>
       ) : null}
 
-      {isMapExpanded && staticMapUrl ? (
+      {isMapExpanded && (staticMapUrl || embeddedGoogleMapsRouteUrl) ? (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-2 backdrop-blur-sm sm:p-4"
           role="dialog"
@@ -1233,11 +1327,23 @@ export default function DeliveryRoutePlannerPage({
             </div>
 
             <div className="min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
-              <img
-                src={staticMapUrl}
-                alt="Expanded round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
-                className="h-full w-full rounded-2xl bg-white object-contain shadow-inner"
-              />
+              {staticMapUrl && !mapImageError ? (
+                <img
+                  src={staticMapUrl}
+                  alt="Expanded round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
+                  onError={() => setMapImageError(true)}
+                  className="h-full w-full rounded-2xl bg-white object-contain shadow-inner"
+                />
+              ) : (
+                <iframe
+                  src={embeddedGoogleMapsRouteUrl}
+                  title="Expanded round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="h-full w-full rounded-2xl border-0 bg-white shadow-inner"
+                  allowFullScreen
+                />
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-white p-3 sm:grid-cols-4 sm:px-5">
@@ -1259,11 +1365,14 @@ export default function DeliveryRoutePlannerPage({
               </div>
               <div className="rounded-xl bg-slate-950 px-3 py-2 text-center text-white">
                 <p className="text-base font-black">
-                  {totalRouteMinutes === null
-                    ? "--"
-                    : formatDurationMinutes(totalRouteMinutes)}
+                  {backToYardTime || "--"}
                 </p>
-                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-300">Total time</p>
+                <p className="text-[9px] font-black uppercase tracking-[0.12em] text-slate-300">Back to yard</p>
+                {totalRouteMinutes !== null ? (
+                  <p className="mt-0.5 text-[9px] font-bold text-slate-300">
+                    {formatDurationMinutes(totalRouteMinutes)} total
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>

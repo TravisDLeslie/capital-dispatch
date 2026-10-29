@@ -30,6 +30,7 @@ function normalizeSharedRoute(route) {
     createdByEmail: normalizeText(savedRoute.createdByEmail),
     distanceText: normalizeText(savedRoute.distanceText),
     driveTimeText: normalizeText(savedRoute.driveTimeText),
+    departureTime: normalizeText(savedRoute.departureTime),
     deliveryTimeMinutes: Number(savedRoute.deliveryTimeMinutes || 0),
     totalRouteMinutes: Number(savedRoute.totalRouteMinutes || 0),
     stops: Array.isArray(savedRoute.stops)
