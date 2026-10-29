@@ -3648,6 +3648,224 @@ export default function App() {
     setSyncError("");
   }
 
+  async function handleUpdateOpenOrder(
+    orderBuildId: string,
+    orderUpdates: Record<string, unknown>,
+  ) {
+    const orderBuild = orderBuilds.find(
+      (currentOrderBuild) => currentOrderBuild.id === orderBuildId,
+    );
+
+    if (!orderBuild) {
+      throw new Error("That open order could not be found.");
+    }
+
+    const now = new Date().toISOString();
+    const orderNumber = String(orderUpdates.orderNumber || "").trim();
+    const customerName = String(orderUpdates.customerName || "").trim();
+    const businessName = String(orderUpdates.businessName || "").trim();
+    const phoneNumber = String(orderUpdates.phoneNumber || "").trim();
+    const deliveryDate = String(orderUpdates.deliveryDate || "").trim();
+    const deliveryAddress = String(orderUpdates.deliveryAddress || "").trim();
+    const customerDisplayName = businessName || customerName || "New customer";
+    const waitingItems = normalizeOrderFlowItems(
+      orderUpdates.waitingItems as Array<Record<string, unknown>>,
+    ).filter((item) => item.path !== "inStock");
+    const stockItems = normalizeOrderFlowItems(
+      orderUpdates.stockItems as Array<Record<string, unknown>>,
+    ).map((item) => ({ ...item, path: "inStock" }));
+    const allItems = [...waitingItems, ...stockItems];
+    const editedItemsById = new Map(allItems.map((item) => [item.id, item]));
+
+    function mergeLinkedItems(
+      recordItems: Array<Record<string, unknown>> = [],
+    ) {
+      return recordItems.map((recordItem) => {
+        const editedItem = editedItemsById.get(String(recordItem.id || ""));
+
+        return editedItem
+          ? {
+              ...recordItem,
+              quantity: editedItem.quantity,
+              description: editedItem.description,
+              orderNumber,
+              customerName: customerDisplayName,
+              easilyDamaged:
+                editedItem.easilyDamaged ?? recordItem.easilyDamaged,
+            }
+          : recordItem;
+      });
+    }
+
+    function findRecordItem(
+      recordItems: Array<Record<string, unknown>> = [],
+    ) {
+      return recordItems
+        .map((recordItem) => editedItemsById.get(String(recordItem.id || "")))
+        .find(Boolean);
+    }
+
+    const savedBuild = {
+      ...orderBuild,
+      orderNumber,
+      customerName,
+      businessName,
+      phoneNumber,
+      deliveryDate,
+      deliveryAddress,
+      waitingItems,
+      stockItems,
+      updatedAt: now,
+    };
+    const updatedOrderBuilds = await saveOrderBuild(savedBuild);
+    setOrderBuilds(updatedOrderBuilds);
+
+    const linkedSalesOrder = salesOrders.find(
+      (salesOrder) => salesOrder.id === orderBuild.orderId,
+    );
+
+    if (linkedSalesOrder) {
+      const updatedSalesOrders = await saveSalesOrder({
+        ...linkedSalesOrder,
+        orderNumber,
+        customerName,
+        businessName,
+        phone: phoneNumber,
+        phoneNumber,
+        deliveryDate,
+        deliveryAddress,
+        poNumbers: Array.from(
+          new Set(allItems.map((item) => item.poNumber).filter(Boolean)),
+        ),
+        items: allItems,
+        updatedAt: now,
+      });
+      setSalesOrders(updatedSalesOrders);
+    }
+
+    const linkedSouthRunIds = new Set(
+      Array.isArray(orderBuild.linkedSouthRunIds)
+        ? orderBuild.linkedSouthRunIds.map(String)
+        : [],
+    );
+    const southRunUpdates = supplierRuns
+      .filter((supplierRun) => linkedSouthRunIds.has(supplierRun.id))
+      .map((supplierRun) => {
+        const recordItems = Array.isArray(supplierRun.items)
+          ? supplierRun.items
+          : [];
+        const firstEditedItem = findRecordItem(recordItems);
+
+        return {
+          id: supplierRun.id,
+          orderNumber,
+          sourceOrderNumber: orderNumber,
+          customerName: customerDisplayName,
+          poNumber: firstEditedItem?.poNumber ?? supplierRun.poNumber ?? "",
+          vendor: firstEditedItem?.vendor ?? supplierRun.vendor ?? "",
+          supplierAddress:
+            firstEditedItem?.supplierAddress ?? supplierRun.supplierAddress ?? "",
+          scheduledDate:
+            firstEditedItem?.routeDate ?? supplierRun.scheduledDate ?? "",
+          pickupDate:
+            firstEditedItem?.routeDate ?? supplierRun.pickupDate ?? "",
+          items: mergeLinkedItems(recordItems),
+        };
+      });
+
+    if (southRunUpdates.length > 0) {
+      const updatedSupplierRuns = await updateSupplierRunsBulk(
+        southRunUpdates,
+        supplierRuns,
+      );
+      setSupplierRuns(updatedSupplierRuns);
+    }
+
+    const linkedTheirTruckPOIds = new Set(
+      Array.isArray(orderBuild.linkedTheirTruckPOIds)
+        ? orderBuild.linkedTheirTruckPOIds.map(String)
+        : [],
+    );
+
+    for (const theirTruckPO of theirTruckPOs.filter((po) =>
+      linkedTheirTruckPOIds.has(po.id),
+    )) {
+      const recordItems = Array.isArray(theirTruckPO.items)
+        ? theirTruckPO.items
+        : [];
+      const firstEditedItem = findRecordItem(recordItems);
+      const updatedTheirTruckPOs = await saveTheirTruckPO({
+        ...theirTruckPO,
+        orderNumber,
+        sourceOrderNumber: orderNumber,
+        customerName: customerDisplayName,
+        businessName,
+        poNumber: firstEditedItem?.poNumber ?? theirTruckPO.poNumber ?? "",
+        vendor: firstEditedItem?.vendor ?? theirTruckPO.vendor ?? "",
+        vendorAddress:
+          firstEditedItem?.supplierAddress ?? theirTruckPO.vendorAddress ?? "",
+        deliveryDate:
+          firstEditedItem?.supplierDate ?? theirTruckPO.deliveryDate ?? "",
+        items: mergeLinkedItems(recordItems),
+        updatedAt: now,
+      });
+      setTheirTruckPOs(updatedTheirTruckPOs);
+    }
+
+    const linkedPodPickupIds = new Set(
+      Array.isArray(orderBuild.linkedPodPickupIds)
+        ? orderBuild.linkedPodPickupIds.map(String)
+        : [],
+    );
+
+    for (const podPickup of podPickups.filter((pickup) =>
+      linkedPodPickupIds.has(String(pickup.id || "")),
+    )) {
+      const recordItems = Array.isArray(podPickup.items)
+        ? (podPickup.items as Array<Record<string, unknown>>)
+        : [];
+      const firstEditedItem = findRecordItem(recordItems);
+      const updatedPodPickups = await savePodPickup({
+        ...podPickup,
+        orderNumber,
+        sourceOrderNumber: orderNumber,
+        customerName: customerDisplayName,
+        businessName,
+        poNumber: firstEditedItem?.poNumber ?? podPickup.poNumber ?? "",
+        vendor: firstEditedItem?.vendor ?? podPickup.vendor ?? "",
+        vendorAddress:
+          firstEditedItem?.supplierAddress ?? podPickup.vendorAddress ?? "",
+        podDate: firstEditedItem?.supplierDate ?? podPickup.podDate ?? "",
+        items: mergeLinkedItems(recordItems),
+        updatedAt: now,
+      });
+      setPodPickups(updatedPodPickups);
+    }
+
+    const linkedDelivery = deliveries.find(
+      (delivery) => delivery.id === orderBuild.linkedDeliveryId,
+    );
+
+    if (linkedDelivery) {
+      const updatedDeliveries = await updateDelivery(linkedDelivery.id, {
+        orderNumber,
+        sourceOrderNumber: orderNumber,
+        customerName: customerDisplayName,
+        contactName: customerName,
+        contactPhone: phoneNumber,
+        phoneNumber,
+        address: deliveryAddress,
+        deliveryDate,
+        items: mergeLinkedItems(
+          linkedDelivery.items as Array<Record<string, unknown>>,
+        ),
+      });
+      setDeliveries(updatedDeliveries);
+    }
+
+    setSyncError("");
+  }
+
   async function handleArchiveOrderBuild(orderBuildId: string) {
     const orderBuild = orderBuilds.find(
       (currentOrderBuild) => currentOrderBuild.id === orderBuildId,
@@ -6651,9 +6869,12 @@ export default function App() {
             podPickups={podPickups}
             supplierRuns={supplierRuns}
             theirTruckPOs={theirTruckPOs}
+            vendorOptions={vendorOptions}
+            supplierAddressMap={supplierAddressMap}
             onArchiveOrder={handleArchiveOrderBuild}
             onCompleteOrder={handleCompleteOrderBuild}
             onDeleteOrder={handleDeleteOrderBuild}
+            onUpdateOrder={handleUpdateOpenOrder}
             onPageChange={navigateToPage}
           />
         ) : null;

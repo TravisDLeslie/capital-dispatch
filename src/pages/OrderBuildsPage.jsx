@@ -5,12 +5,15 @@ import {
   CheckCircle2,
   ClipboardList,
   PackageCheck,
+  Pencil,
   Trash2,
   Truck,
   Warehouse,
+  X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
+import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 
 const pathLabels = {
   wePickup: "South pickup",
@@ -31,6 +34,39 @@ function getStockItems(build) {
   }
 
   return (build.items || []).filter((item) => item.path === "inStock");
+}
+
+function formatOrderNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 6);
+
+  return digits.length > 3 ? `${digits.slice(0, 3)}-${digits.slice(3)}` : digits;
+}
+
+function formatPhoneNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 10);
+
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+function createEditDraft(build, deliveries) {
+  const linkedDelivery = deliveries.find(
+    (delivery) => delivery.id === build.linkedDeliveryId,
+  );
+
+  return {
+    id: build.id,
+    orderNumber: build.orderNumber || "",
+    customerName: build.customerName || "",
+    businessName: build.businessName || "",
+    phoneNumber: build.phoneNumber || "",
+    handoffType: build.handoffType || "willCall",
+    deliveryDate: build.deliveryDate || linkedDelivery?.deliveryDate || "",
+    deliveryAddress: build.deliveryAddress || linkedDelivery?.address || "",
+    waitingItems: getWaitingItems(build).map((item) => ({ ...item })),
+    stockItems: getStockItems(build).map((item) => ({ ...item })),
+  };
 }
 
 function formatRoughDate(value) {
@@ -281,9 +317,12 @@ function getOrderLifecycle(
  *   podPickups?: Array<Record<string, any>>;
  *   supplierRuns?: Array<Record<string, any>>;
  *   theirTruckPOs?: Array<Record<string, any>>;
+ *   vendorOptions?: string[];
+ *   supplierAddressMap?: Record<string, string>;
  *   onArchiveOrder?: (orderBuildId: string) => Promise<void> | void;
  *   onCompleteOrder?: (orderBuildId: string) => Promise<void> | void;
  *   onDeleteOrder?: (orderBuildId: string) => Promise<void> | void;
+ *   onUpdateOrder?: (orderBuildId: string, updates: Record<string, any>) => Promise<void> | void;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
@@ -293,12 +332,18 @@ export default function OrderBuildsPage({
   podPickups = [],
   supplierRuns = [],
   theirTruckPOs = [],
+  vendorOptions = [],
+  supplierAddressMap = {},
   onArchiveOrder,
   onCompleteOrder,
   onDeleteOrder,
+  onUpdateOrder,
   onPageChange,
 }) {
   const [activeView, setActiveView] = useState("open");
+  const [editDraft, setEditDraft] = useState(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState("");
   const lifecycleBuilds = builds.map((build) => ({
     build,
     lifecycle: getOrderLifecycle(
@@ -327,6 +372,43 @@ export default function OrderBuildsPage({
         : openBuilds;
   const isArchivedView = activeView === "archived";
   const isCompletedView = activeView === "completed";
+
+  function openEditor(build) {
+    setEditDraft(createEditDraft(build, deliveries));
+    setEditError("");
+  }
+
+  function updateDraftItem(section, itemIndex, field, value) {
+    setEditDraft((currentDraft) => ({
+      ...currentDraft,
+      [section]: currentDraft[section].map((item, index) =>
+        index === itemIndex ? { ...item, [field]: value } : item,
+      ),
+    }));
+  }
+
+  async function saveEdit(event) {
+    event.preventDefault();
+
+    if (!editDraft) return;
+    if (!String(editDraft.orderNumber || "").trim()) {
+      setEditError("Enter the order number before saving.");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    setEditError("");
+
+    try {
+      await onUpdateOrder?.(editDraft.id, editDraft);
+      setEditDraft(null);
+    } catch (error) {
+      console.error("Unable to update open order:", error);
+      setEditError(error?.message || "Unable to save the order changes.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
 
   return (
     <PageContainer>
@@ -486,6 +568,16 @@ export default function OrderBuildsPage({
                         Mark Picked Up
                       </button>
                     ) : null}
+                    {!isArchivedView && !isCompletedView ? (
+                      <button
+                        type="button"
+                        onClick={() => openEditor(build)}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white transition hover:bg-slate-800"
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden="true" />
+                        Edit
+                      </button>
+                    ) : null}
                     {!isArchivedView ? (
                       <button
                         type="button"
@@ -608,6 +700,262 @@ export default function OrderBuildsPage({
           })
         )}
       </div>
+
+      {editDraft ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-open-order-title"
+        >
+          <form
+            onSubmit={saveEdit}
+            className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-7">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                  Open Order
+                </p>
+                <h2 id="edit-open-order-title" className="mt-1 text-2xl font-black text-slate-950 sm:text-3xl">
+                  Edit order details
+                </h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">
+                  Updates also carry into the linked pickup, PO, and delivery records.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditDraft(null)}
+                className="rounded-2xl border border-slate-200 p-3 text-slate-500 transition hover:bg-slate-100 hover:text-slate-950"
+                aria-label="Close edit order"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-5 sm:px-7">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  Order #
+                  <input
+                    value={editDraft.orderNumber}
+                    onChange={(event) =>
+                      setEditDraft((draft) => ({
+                        ...draft,
+                        orderNumber: formatOrderNumber(event.target.value),
+                      }))
+                    }
+                    placeholder="027-000"
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-black normal-case tracking-normal text-slate-950 outline-none focus:border-blue-500 focus:bg-white"
+                  />
+                </label>
+                <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  Business / job
+                  <input
+                    value={editDraft.businessName}
+                    onChange={(event) =>
+                      setEditDraft((draft) => ({ ...draft, businessName: event.target.value }))
+                    }
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-bold normal-case tracking-normal text-slate-950 outline-none focus:border-blue-500 focus:bg-white"
+                  />
+                </label>
+                <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  Customer / contact
+                  <input
+                    value={editDraft.customerName}
+                    onChange={(event) =>
+                      setEditDraft((draft) => ({ ...draft, customerName: event.target.value }))
+                    }
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-bold normal-case tracking-normal text-slate-950 outline-none focus:border-blue-500 focus:bg-white"
+                  />
+                </label>
+                <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                  Phone
+                  <input
+                    value={editDraft.phoneNumber}
+                    onChange={(event) =>
+                      setEditDraft((draft) => ({
+                        ...draft,
+                        phoneNumber: formatPhoneNumber(event.target.value),
+                      }))
+                    }
+                    placeholder="(208) 284-6163"
+                    inputMode="tel"
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base font-bold normal-case tracking-normal text-slate-950 outline-none focus:border-blue-500 focus:bg-white"
+                  />
+                </label>
+              </div>
+
+              {editDraft.handoffType === "delivery" ? (
+                <div className="mt-4 grid gap-4 rounded-3xl border border-blue-100 bg-blue-50/50 p-4 sm:grid-cols-[1fr_12rem]">
+                  <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+                    Delivery address
+                    <AddressAutocompleteInput
+                      id="edit-open-order-delivery-address"
+                      value={editDraft.deliveryAddress}
+                      onChange={(deliveryAddress) =>
+                        setEditDraft((draft) => ({ ...draft, deliveryAddress }))
+                      }
+                      autoComplete="off"
+                      enableLocalFallback
+                      showStatus={false}
+                      placeholder="Start typing the delivery address..."
+                      className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-base font-bold normal-case tracking-normal text-slate-950 outline-none focus:border-blue-500"
+                    />
+                  </label>
+                  <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+                    Delivery date
+                    <input
+                      type="date"
+                      value={editDraft.deliveryDate}
+                      onChange={(event) =>
+                        setEditDraft((draft) => ({ ...draft, deliveryDate: event.target.value }))
+                      }
+                      className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-base font-bold normal-case tracking-normal text-slate-950 outline-none focus:border-blue-500"
+                    />
+                  </label>
+                </div>
+              ) : null}
+
+              <div className="mt-6">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Outside material</p>
+                    <h3 className="mt-1 text-xl font-black text-slate-950">PO items</h3>
+                  </div>
+                  <p className="text-xs font-bold text-slate-500">Fulfillment paths stay fixed while editing.</p>
+                </div>
+                <div className="mt-3 grid gap-3">
+                  {editDraft.waitingItems.map((item, itemIndex) => {
+                    const dateField = item.path === "wePickup" ? "routeDate" : "supplierDate";
+
+                    return (
+                      <div key={item.id || itemIndex} className="rounded-3xl border border-amber-100 bg-amber-50/40 p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-amber-800">
+                            {pathLabels[item.path] || "Outside"}
+                          </span>
+                          <span className="text-xs font-black text-slate-400">Item {itemIndex + 1}</span>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-[7rem_1fr]">
+                          <input
+                            value={item.quantity || ""}
+                            onChange={(event) => updateDraftItem("waitingItems", itemIndex, "quantity", event.target.value)}
+                            placeholder="Qty"
+                            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
+                          />
+                          <input
+                            value={item.description || ""}
+                            onChange={(event) => updateDraftItem("waitingItems", itemIndex, "description", event.target.value)}
+                            placeholder="Item description"
+                            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
+                          />
+                        </div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                          <select
+                            value={item.vendor || ""}
+                            onChange={(event) => {
+                              const vendor = event.target.value;
+                              setEditDraft((currentDraft) => ({
+                                ...currentDraft,
+                                waitingItems: currentDraft.waitingItems.map(
+                                  (currentItem, index) =>
+                                    index === itemIndex
+                                      ? {
+                                          ...currentItem,
+                                          vendor,
+                                          supplierAddress:
+                                            supplierAddressMap[vendor] || "",
+                                        }
+                                      : currentItem,
+                                ),
+                              }));
+                            }}
+                            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
+                          >
+                            <option value="">Select vendor</option>
+                            {item.vendor &&
+                            !vendorOptions.some(
+                              (vendorName) =>
+                                vendorName.toLowerCase() === item.vendor.toLowerCase(),
+                            ) ? (
+                              <option value={item.vendor}>{item.vendor}</option>
+                            ) : null}
+                            {vendorOptions.map((vendorName) => (
+                              <option key={vendorName} value={vendorName}>
+                                {vendorName}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            value={item.poNumber || ""}
+                            onChange={(event) => updateDraftItem("waitingItems", itemIndex, "poNumber", formatOrderNumber(event.target.value))}
+                            placeholder="PO #"
+                            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
+                          />
+                          <input
+                            type="date"
+                            value={item[dateField] || ""}
+                            onChange={(event) => updateDraftItem("waitingItems", itemIndex, dateField, event.target.value)}
+                            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {editDraft.stockItems.length > 0 ? (
+                <div className="mt-6">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">From stock</p>
+                  <h3 className="mt-1 text-xl font-black text-slate-950">Stock items</h3>
+                  <div className="mt-3 grid gap-3">
+                    {editDraft.stockItems.map((item, itemIndex) => (
+                      <div key={item.id || itemIndex} className="grid gap-3 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-4 sm:grid-cols-[7rem_1fr]">
+                        <input
+                          value={item.quantity || ""}
+                          onChange={(event) => updateDraftItem("stockItems", itemIndex, "quantity", event.target.value)}
+                          placeholder="Qty"
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
+                        />
+                        <input
+                          value={item.description || ""}
+                          onChange={(event) => updateDraftItem("stockItems", itemIndex, "description", event.target.value)}
+                          placeholder="Item description"
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {editError ? (
+                <p className="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-700">{editError}</p>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-7">
+              <button
+                type="button"
+                onClick={() => setEditDraft(null)}
+                className="rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black text-slate-600"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingEdit}
+                className="rounded-2xl bg-[#FC2C38] px-6 py-3 font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-wait disabled:opacity-60"
+              >
+                {isSavingEdit ? "Saving changes…" : "Save changes"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }
