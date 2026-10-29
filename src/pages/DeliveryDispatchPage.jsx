@@ -28,9 +28,11 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import {
+  capitalLumberAddress,
   deliveryOriginOptions as fallbackDeliveryOriginOptions,
 } from "../data/options";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
+import { getCompassDirection } from "../utils/routeDirection";
 import {
   getDeliveryBackAroundLabel,
   getDeliveryBlockSummary,
@@ -862,6 +864,7 @@ function DispatchDetailSection({
 function DeliveryDispatchOverview({
   deliveries,
   totalDeliveries,
+  routeMetrics,
   selectedDate,
   onSelectedDateChange,
   searchQuery,
@@ -1037,6 +1040,7 @@ function DeliveryDispatchOverview({
               const scheduleLabel = delivery.deliveryTimeSlot
                 ? getDeliveryTimeRange(delivery)
                 : "Time not set";
+              const routeMetric = routeMetrics[String(delivery.id || "")];
 
               return (
                 <article
@@ -1094,6 +1098,18 @@ function DeliveryDispatchOverview({
                     {delivery.contactPhone || delivery.phoneNumber ? (
                       <p className="mt-1 pl-6 text-xs font-bold text-slate-500">
                         {delivery.contactPhone || delivery.phoneNumber}
+                      </p>
+                    ) : null}
+                    {routeMetric?.status === "ready" ? (
+                      <p className="mt-1 pl-6 text-xs font-black text-blue-700">
+                        {routeMetric.direction
+                          ? `${routeMetric.direction} of Capital · `
+                          : ""}
+                        {routeMetric.distanceText}
+                      </p>
+                    ) : routeMetric?.status === "loading" ? (
+                      <p className="mt-1 pl-6 text-xs font-bold text-slate-400">
+                        Checking distance...
                       </p>
                     ) : null}
                   </div>
@@ -1935,6 +1951,7 @@ export default function DeliveryDispatchPage({
   const [error, setError] = useState("");
   const [routeMapDate, setRouteMapDate] = useState("");
   const [draftRouteOrders, setDraftRouteOrders] = useState({});
+  const [routeMetrics, setRouteMetrics] = useState({});
   const deliveryOrderInputRefs = useRef({});
 
   useEffect(() => {
@@ -2032,6 +2049,93 @@ export default function DeliveryDispatchPage({
       safeDeliveryOriginOptions,
     ],
   );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const deliveriesByAddress = new Map();
+
+    routeMapDeliveries.forEach((delivery) => {
+      const address = String(delivery.address || "").trim();
+      const deliveryId = String(delivery.id || "");
+
+      if (!deliveryId || !address) {
+        return;
+      }
+
+      const addressKey = normalizeSearch(address);
+      const currentEntry = deliveriesByAddress.get(addressKey) || {
+        address,
+        deliveryIds: [],
+      };
+
+      currentEntry.deliveryIds.push(deliveryId);
+      deliveriesByAddress.set(addressKey, currentEntry);
+    });
+
+    setRouteMetrics(
+      Object.fromEntries(
+        routeMapDeliveries.map((delivery) => {
+          const deliveryId = String(delivery.id || "");
+          const hasAddress = Boolean(String(delivery.address || "").trim());
+
+          return [deliveryId, { status: hasAddress ? "loading" : "missing" }];
+        }),
+      ),
+    );
+
+    deliveriesByAddress.forEach(({ address, deliveryIds }) => {
+      const params = new URLSearchParams({
+        origin: capitalLumberAddress,
+        destination: address,
+      });
+
+      fetch(`/api/maps/route?${params.toString()}`, {
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          const routeData = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(
+              routeData?.error || "Unable to calculate the delivery route.",
+            );
+          }
+
+          setRouteMetrics((currentMetrics) => {
+            const nextMetrics = { ...currentMetrics };
+
+            deliveryIds.forEach((deliveryId) => {
+              nextMetrics[deliveryId] = {
+                status: "ready",
+                direction: getCompassDirection(routeData.encodedPolyline),
+                distanceText: routeData.distanceText || "Miles unavailable",
+              };
+            });
+
+            return nextMetrics;
+          });
+        })
+        .catch((routeError) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          console.warn("Unable to load dispatch delivery route:", routeError);
+          setRouteMetrics((currentMetrics) => {
+            const nextMetrics = { ...currentMetrics };
+
+            deliveryIds.forEach((deliveryId) => {
+              nextMetrics[deliveryId] = { status: "error" };
+            });
+
+            return nextMetrics;
+          });
+        });
+    });
+
+    return () => controller.abort();
+  }, [routeMapDeliveries]);
+
   const visibleRouteMapDeliveries = normalizedSearchQuery
     ? routeMapDeliveries.filter((delivery) =>
         deliveryMatchesSearch(delivery, normalizedSearchQuery),
@@ -2486,6 +2590,7 @@ export default function DeliveryDispatchPage({
       <DeliveryDispatchOverview
         deliveries={visibleRouteMapDeliveries}
         totalDeliveries={routeMapDeliveries}
+        routeMetrics={routeMetrics}
         selectedDate={routeMapDate}
         onSelectedDateChange={setRouteMapDate}
         searchQuery={searchQuery}
@@ -2570,6 +2675,7 @@ export default function DeliveryDispatchPage({
             const leaveByLabel = schedule.deliveryTimeSlot
               ? getTimeSlotLabel(schedule.deliveryTimeSlot)
               : "Not scheduled";
+            const routeMetric = routeMetrics[String(delivery.id || "")];
 
             return (
               <article
@@ -2605,23 +2711,37 @@ export default function DeliveryDispatchPage({
                         </h2>
 
                         {delivery.address ? (
-                          <a
-                            href={getDirectionsUrl(delivery.address)}
-                            target="_blank"
-                            rel="noreferrer"
-                            title={delivery.address}
-                            className="mt-2 flex w-fit max-w-full items-start gap-2 text-sm font-bold leading-5 text-slate-600 transition hover:text-[#FC2C38]"
-                          >
-                            <MapPin
-                              className="mt-0.5 h-4 w-4 shrink-0 text-[#FC2C38]"
-                              aria-hidden="true"
-                            />
-                            <span className="line-clamp-2">{delivery.address}</span>
-                            <ExternalLink
-                              className="mt-0.5 h-3.5 w-3.5 shrink-0"
-                              aria-hidden="true"
-                            />
-                          </a>
+                          <>
+                            <a
+                              href={getDirectionsUrl(delivery.address)}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={delivery.address}
+                              className="mt-2 flex w-fit max-w-full items-start gap-2 text-sm font-bold leading-5 text-slate-600 transition hover:text-[#FC2C38]"
+                            >
+                              <MapPin
+                                className="mt-0.5 h-4 w-4 shrink-0 text-[#FC2C38]"
+                                aria-hidden="true"
+                              />
+                              <span className="line-clamp-2">{delivery.address}</span>
+                              <ExternalLink
+                                className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                                aria-hidden="true"
+                              />
+                            </a>
+                            {routeMetric?.status === "ready" ? (
+                              <p className="mt-2 inline-flex items-center rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
+                                {routeMetric.direction
+                                  ? `${routeMetric.direction} of Capital · `
+                                  : ""}
+                                {routeMetric.distanceText}
+                              </p>
+                            ) : routeMetric?.status === "loading" ? (
+                              <p className="mt-2 text-xs font-bold text-slate-400">
+                                Checking distance from Capital...
+                              </p>
+                            ) : null}
+                          </>
                         ) : (
                           <p className="mt-2 flex items-center gap-2 text-sm font-bold text-amber-700">
                             <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
