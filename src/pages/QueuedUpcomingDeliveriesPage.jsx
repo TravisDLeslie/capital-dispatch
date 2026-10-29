@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
+  Clock3,
   MapPin,
   Package,
   Search,
@@ -10,6 +11,7 @@ import {
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
+import { capitalLumberAddress } from "../data/options";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
 import { formatCustomerName } from "../utils/textFormatters";
 
@@ -52,6 +54,92 @@ function formatDate(value) {
     month: "short",
     day: "numeric",
   }).format(date);
+}
+
+function getPolylineEndpoints(encodedPolyline) {
+  const encoded = String(encodedPolyline || "");
+
+  if (!encoded) {
+    return null;
+  }
+
+  let index = 0;
+  let latitude = 0;
+  let longitude = 0;
+  let firstPoint = null;
+  let lastPoint = null;
+
+  function readCoordinateDelta() {
+    let result = 0;
+    let shift = 0;
+    let byte = 0;
+
+    do {
+      if (index >= encoded.length) {
+        return null;
+      }
+
+      byte = encoded.charCodeAt(index) - 63;
+      index += 1;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    return result & 1 ? ~(result >> 1) : result >> 1;
+  }
+
+  while (index < encoded.length) {
+    const latitudeDelta = readCoordinateDelta();
+    const longitudeDelta = readCoordinateDelta();
+
+    if (latitudeDelta === null || longitudeDelta === null) {
+      return null;
+    }
+
+    latitude += latitudeDelta;
+    longitude += longitudeDelta;
+
+    const point = {
+      latitude: latitude / 1e5,
+      longitude: longitude / 1e5,
+    };
+
+    firstPoint ||= point;
+    lastPoint = point;
+  }
+
+  return firstPoint && lastPoint ? { firstPoint, lastPoint } : null;
+}
+
+function getCompassDirection(encodedPolyline) {
+  const endpoints = getPolylineEndpoints(encodedPolyline);
+
+  if (!endpoints) {
+    return "";
+  }
+
+  const toRadians = (degrees) => (degrees * Math.PI) / 180;
+  const startLatitude = toRadians(endpoints.firstPoint.latitude);
+  const endLatitude = toRadians(endpoints.lastPoint.latitude);
+  const longitudeDifference = toRadians(
+    endpoints.lastPoint.longitude - endpoints.firstPoint.longitude,
+  );
+  const y = Math.sin(longitudeDifference) * Math.cos(endLatitude);
+  const x =
+    Math.cos(startLatitude) * Math.sin(endLatitude) -
+    Math.sin(startLatitude) *
+      Math.cos(endLatitude) *
+      Math.cos(longitudeDifference);
+
+  if (Math.abs(x) < Number.EPSILON && Math.abs(y) < Number.EPSILON) {
+    return "";
+  }
+
+  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
+  const normalizedBearing = (bearing + 360) % 360;
+  const compassPoints = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+  return compassPoints[Math.round(normalizedBearing / 45) % 8];
 }
 
 function getDeliveryOrderBuild(delivery, orderBuilds) {
@@ -162,7 +250,7 @@ function ShipmentBadge({ shipmentType }) {
   );
 }
 
-function DeliveryCard({ delivery, orderBuilds }) {
+function DeliveryCard({ delivery, orderBuilds, routeMetric }) {
   const build = getDeliveryOrderBuild(delivery, orderBuilds);
   const buildItems = getBuildItems(build);
   const items = Array.isArray(delivery.items) ? delivery.items : [];
@@ -192,6 +280,18 @@ function DeliveryCard({ delivery, orderBuilds }) {
           <span className="inline-flex min-w-0 items-center gap-2">
             <MapPin className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
             <span className="truncate">{delivery.address || "Address not entered"}</span>
+          </span>
+          <span className="inline-flex min-w-0 items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-blue-800">
+            <Clock3 className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
+            <span className="truncate">
+              {routeMetric?.status === "ready"
+                ? `${routeMetric.direction ? `${routeMetric.direction} of Capital · ` : ""}${routeMetric.durationText} · ${routeMetric.distanceText}`
+                : routeMetric?.status === "loading"
+                  ? "Calculating time and miles from Capital..."
+                  : routeMetric?.status === "missing"
+                    ? "Add an address for time and miles"
+                    : "Time and miles from Capital unavailable"}
+            </span>
           </span>
         </div>
 
@@ -272,10 +372,109 @@ export default function QueuedUpcomingDeliveriesPage({
   onPageChange,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [routeMetrics, setRouteMetrics] = useState({});
   const queuedDeliveries = useMemo(
     () => getQueuedDeliveries(deliveries),
     [deliveries],
   );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const deliveriesByAddress = new Map();
+
+    queuedDeliveries.forEach((delivery) => {
+      const address = String(delivery.address || "").trim();
+      const deliveryId = String(delivery.id || "");
+
+      if (!deliveryId || !address) {
+        return;
+      }
+
+      const addressKey = normalizeValue(address);
+      const currentEntry = deliveriesByAddress.get(addressKey) || {
+        address,
+        deliveryIds: [],
+      };
+
+      currentEntry.deliveryIds.push(deliveryId);
+      deliveriesByAddress.set(addressKey, currentEntry);
+    });
+
+    setRouteMetrics(
+      Object.fromEntries(
+        queuedDeliveries.map((delivery) => {
+          const deliveryId = String(delivery.id || "");
+          const hasAddress = Boolean(String(delivery.address || "").trim());
+
+          return [
+            deliveryId,
+            {
+              status: hasAddress ? "loading" : "missing",
+              durationText: "",
+              distanceText: "",
+            },
+          ];
+        }),
+      ),
+    );
+
+    deliveriesByAddress.forEach(({ address, deliveryIds }) => {
+      const params = new URLSearchParams({
+        origin: capitalLumberAddress,
+        destination: address,
+      });
+
+      fetch(`/api/maps/route?${params.toString()}`, {
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          const routeData = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(
+              routeData?.error || "Unable to calculate the delivery route.",
+            );
+          }
+
+          setRouteMetrics((currentMetrics) => {
+            const nextMetrics = { ...currentMetrics };
+
+            deliveryIds.forEach((deliveryId) => {
+              nextMetrics[deliveryId] = {
+                status: "ready",
+                direction: getCompassDirection(routeData.encodedPolyline),
+                durationText: routeData.durationText || "Time unavailable",
+                distanceText: routeData.distanceText || "Miles unavailable",
+              };
+            });
+
+            return nextMetrics;
+          });
+        })
+        .catch((routeError) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          console.warn("Unable to load queued delivery route:", routeError);
+          setRouteMetrics((currentMetrics) => {
+            const nextMetrics = { ...currentMetrics };
+
+            deliveryIds.forEach((deliveryId) => {
+              nextMetrics[deliveryId] = {
+                status: "error",
+                durationText: "",
+                distanceText: "",
+              };
+            });
+
+            return nextMetrics;
+          });
+        });
+    });
+
+    return () => controller.abort();
+  }, [queuedDeliveries]);
   const visibleDeliveries = useMemo(() => {
     const query = normalizeValue(searchTerm);
 
@@ -406,6 +605,7 @@ export default function QueuedUpcomingDeliveriesPage({
               key={delivery.id}
               delivery={delivery}
               orderBuilds={orderBuilds}
+              routeMetric={routeMetrics[String(delivery.id || "")]}
             />
           ))
         ) : (
