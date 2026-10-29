@@ -347,9 +347,20 @@ export default function DispatchPage({
   onPageChange,
 }) {
   const [activeMobileQueue, setActiveMobileQueue] = useState("south");
+  const safeSupplierRuns = Array.isArray(supplierRuns)
+    ? supplierRuns.filter(Boolean)
+    : [];
+  const safeDeliveries = Array.isArray(deliveries)
+    ? deliveries.filter(Boolean)
+    : [];
+  const safeAllowedPageIds = Array.isArray(allowedPageIds)
+    ? allowedPageIds
+    : [];
   const today = getTodayValue();
-  const southQueue = supplierRuns.filter(needsSouthDispatch).sort(sortByDateThenCreated);
-  const deliveryQueue = deliveries
+  const southQueue = safeSupplierRuns
+    .filter(needsSouthDispatch)
+    .sort(sortByDateThenCreated);
+  const deliveryQueue = safeDeliveries
     .filter(needsDeliveryDispatch)
     .sort(sortByDateThenCreated);
   const southToday = southQueue.filter(
@@ -358,8 +369,12 @@ export default function DispatchPage({
   const deliveryToday = deliveryQueue.filter(
     (delivery) => getDateValue(delivery.deliveryDate) === today,
   ).length;
-  const canDispatchSouth = allowedPageIds.includes("supplier-runs-dispatch");
-  const canDispatchDeliveries = allowedPageIds.includes("deliveries-dispatch");
+  const canDispatchSouth = safeAllowedPageIds.includes(
+    "supplier-runs-dispatch",
+  );
+  const canDispatchDeliveries = safeAllowedPageIds.includes(
+    "deliveries-dispatch",
+  );
   const oldestWaitingDate = [southQueue[0], deliveryQueue[0]]
     .map((item) => item?.pickupDate || item?.scheduledDate || item?.deliveryDate)
     .filter(Boolean)

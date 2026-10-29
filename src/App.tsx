@@ -219,7 +219,8 @@ const DeliveryRoutePlannerPage = lazy(
   () => import("./pages/DeliveryRoutePlannerPage"),
 );
 const DeliveryDispatchPage = lazy(() => import("./pages/DeliveryDispatchPage"));
-const DispatchPage = lazy(
+const DispatchPage = lazyPageWithReload(
+  "dispatch",
   () =>
     import("./pages/DispatchPage") as Promise<{
       default: ComponentType<any>;
@@ -6606,12 +6607,23 @@ export default function App() {
 
       case "dispatch":
         return canReadDispatch ? (
-          <DispatchPage
-            supplierRuns={supplierRuns}
-            deliveries={deliveries}
-            allowedPageIds={effectiveAllowedPageIds}
-            onPageChange={navigateToPage}
-          />
+          <FeatureErrorBoundary
+            fallback={
+              <div className="mx-auto mt-8 max-w-6xl px-4 sm:px-6 lg:px-8">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
+                  Dispatch could not finish loading. Refresh the page and try
+                  again.
+                </div>
+              </div>
+            }
+          >
+            <DispatchPage
+              supplierRuns={supplierRuns}
+              deliveries={deliveries}
+              allowedPageIds={effectiveAllowedPageIds}
+              onPageChange={navigateToPage}
+            />
+          </FeatureErrorBoundary>
         ) : null;
 
       case "today":

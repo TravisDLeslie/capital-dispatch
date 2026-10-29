@@ -49,6 +49,33 @@ function normalizeSearch(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function deliveryMatchesSearch(delivery, normalizedSearchQuery) {
+  if (!normalizedSearchQuery) {
+    return true;
+  }
+
+  const items = Array.isArray(delivery.items) ? delivery.items : [];
+  const searchableText = [
+    delivery.orderNumber,
+    delivery.customerName,
+    delivery.address,
+    delivery.contactName,
+    delivery.contactPhone,
+    delivery.phoneNumber,
+    delivery.unloadType,
+    delivery.deliveryScope,
+    delivery.deliveryScopeNotes,
+    delivery.driver,
+    delivery.vehicleTitle,
+    ...(Array.isArray(delivery.drivers) ? delivery.drivers : []),
+    ...items.map(
+      (item) => `${item.quantity || ""} ${item.description || ""}`,
+    ),
+  ].join(" ");
+
+  return normalizeSearch(searchableText).includes(normalizedSearchQuery);
+}
+
 function getDirectionsUrl(address) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
     address,
@@ -782,10 +809,340 @@ function DispatchDetailSection({
   );
 }
 
+function DeliveryDispatchOverview({
+  deliveries,
+  totalDeliveries,
+  selectedDate,
+  onSelectedDateChange,
+  searchQuery,
+  onSearchQueryChange,
+  onOpenDelivery,
+}) {
+  const needsAssignmentCount = totalDeliveries.filter(
+    (delivery) =>
+      delivery.dispatchStatus === "needsDispatch" || !delivery.driver,
+  ).length;
+  const assignedCount = Math.max(
+    0,
+    totalDeliveries.length - needsAssignmentCount,
+  );
+
+  function getDriverSummary(delivery) {
+    const assignmentDrivers = Array.isArray(delivery.dispatchAssignments)
+      ? delivery.dispatchAssignments
+          .map((assignment) => assignment?.driver)
+          .filter(Boolean)
+      : [];
+    const drivers = assignmentDrivers.length
+      ? assignmentDrivers
+      : Array.isArray(delivery.drivers) && delivery.drivers.length
+        ? delivery.drivers.filter(Boolean)
+        : [delivery.driver].filter(Boolean);
+
+    return drivers.length ? drivers.join(", ") : "Needs driver";
+  }
+
+  function getTruckSummary(delivery) {
+    const assignmentTrucks = Array.isArray(delivery.dispatchAssignments)
+      ? delivery.dispatchAssignments
+          .map(
+            (assignment) =>
+              assignment?.vehicleTitle || assignment?.vehicleBadge,
+          )
+          .filter(Boolean)
+      : [];
+
+    if (assignmentTrucks.length) {
+      return assignmentTrucks.join(", ");
+    }
+
+    return delivery.vehicleTitle || delivery.vehicleBadge || "Needs truck";
+  }
+
+  function handleDeliverySelect(delivery) {
+    onOpenDelivery(delivery.id);
+  }
+
+  return (
+    <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
+              Delivery Lineup
+            </p>
+            <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+              See the day before assigning it
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-slate-500">
+              Review every destination, time, driver, truck, and load from one place.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 sm:min-w-[360px]">
+            <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-center shadow-sm">
+              <p className="text-2xl font-black text-slate-950">
+                {totalDeliveries.length}
+              </p>
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                Total
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-center">
+              <p className="text-2xl font-black text-amber-800">
+                {needsAssignmentCount}
+              </p>
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">
+                Need dispatch
+              </p>
+            </div>
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-center">
+              <p className="text-2xl font-black text-emerald-800">
+                {assignedCount}
+              </p>
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                Assigned
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+              Delivery Date
+            </span>
+            <span className="relative block">
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) =>
+                  onSelectedDateChange(event.target.value)
+                }
+                className={`block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 ${
+                  selectedDate ? "text-slate-900" : "text-transparent"
+                }`}
+              />
+              {!selectedDate ? (
+                <span className="pointer-events-none absolute inset-y-px left-1 right-11 flex items-center rounded-l-[11px] bg-white px-3 text-sm font-black text-slate-900">
+                  All delivery dates
+                </span>
+              ) : null}
+            </span>
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+              Find a delivery
+            </span>
+            <span className="relative block">
+              <Search
+                className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => onSearchQueryChange(event.target.value)}
+                placeholder="Search order, customer, address, driver, or item..."
+                className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              />
+            </span>
+          </label>
+        </div>
+
+        {selectedDate ? (
+          <button
+            type="button"
+            onClick={() => onSelectedDateChange("")}
+            className="mt-3 inline-flex min-h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-[0.1em] text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
+          >
+            Show all delivery dates
+          </button>
+        ) : null}
+      </div>
+
+      <div className="p-3 sm:p-4">
+        <div className="hidden grid-cols-[minmax(170px,1.1fr)_minmax(220px,1.35fr)_minmax(155px,0.8fr)_minmax(170px,0.95fr)_minmax(120px,0.6fr)_100px] gap-3 px-3 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
+          <span>Delivery</span>
+          <span>Destination</span>
+          <span>Schedule</span>
+          <span>Driver / Truck</span>
+          <span>Load</span>
+          <span className="text-right">Action</span>
+        </div>
+
+        {deliveries.length > 0 ? (
+          <div className="space-y-2">
+            {deliveries.map((delivery, index) => {
+              const needsAssignment =
+                delivery.dispatchStatus === "needsDispatch" ||
+                !delivery.driver;
+              const routeIndex = totalDeliveries.findIndex(
+                (routeDelivery) => routeDelivery.id === delivery.id,
+              );
+              const items = Array.isArray(delivery.items)
+                ? delivery.items
+                : [];
+              const scheduleLabel = delivery.deliveryTimeSlot
+                ? getDeliveryTimeRange(delivery)
+                : "Time not set";
+
+              return (
+                <article
+                  key={delivery.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleDeliverySelect(delivery)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    handleDeliverySelect(delivery);
+                  }}
+                  className="grid cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-[#FC2C38]/40 hover:bg-red-50/30 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-red-100 xl:grid-cols-[minmax(170px,1.1fr)_minmax(220px,1.35fr)_minmax(155px,0.8fr)_minmax(170px,0.95fr)_minmax(120px,0.6fr)_100px] xl:items-center"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-[#FC2C38]">
+                      {getRouteMarkerLabel(
+                        routeIndex >= 0 ? routeIndex : index,
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+                          Order {delivery.orderNumber}
+                        </p>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] ${
+                            needsAssignment
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-emerald-100 text-emerald-700"
+                          }`}
+                        >
+                          {needsAssignment ? "Needs dispatch" : "Assigned"}
+                        </span>
+                      </div>
+                      <p className="mt-1 truncate text-sm font-black text-slate-950">
+                        {formatCustomerName(delivery.customerName)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 xl:bg-transparent xl:px-0 xl:py-0">
+                    <p className="flex items-start gap-2 text-sm font-bold text-slate-700">
+                      <MapPin
+                        className="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
+                        aria-hidden="true"
+                      />
+                      <span className="line-clamp-2">
+                        {delivery.address || "Address not entered"}
+                      </span>
+                    </p>
+                    {delivery.contactPhone || delivery.phoneNumber ? (
+                      <p className="mt-1 pl-6 text-xs font-bold text-slate-500">
+                        {delivery.contactPhone || delivery.phoneNumber}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 xl:block">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 xl:hidden">
+                        Date
+                      </p>
+                      <p className="mt-0.5 text-sm font-black text-slate-800">
+                        {delivery.deliveryDate
+                          ? formatDateLabel(delivery.deliveryDate)
+                          : "Date not set"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 xl:hidden">
+                        Time
+                      </p>
+                      <p className="mt-0.5 text-xs font-bold text-slate-500">
+                        {scheduleLabel}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 xl:block">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 xl:hidden">
+                        Driver
+                      </p>
+                      <p className="mt-0.5 truncate text-sm font-black text-slate-800">
+                        {getDriverSummary(delivery)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 xl:hidden">
+                        Truck
+                      </p>
+                      <p className="mt-0.5 truncate text-xs font-bold text-slate-500">
+                        {getTruckSummary(delivery)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 xl:block">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-700">
+                      {items.length} {items.length === 1 ? "item" : "items"}
+                    </span>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                      {delivery.unloadType || "Normal"}
+                    </p>
+                    {items[0]?.description ? (
+                      <p className="mt-1 line-clamp-1 text-xs font-semibold text-slate-400">
+                        {items[0].description}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleDeliverySelect(delivery);
+                    }}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    className={`inline-flex min-h-10 items-center justify-center rounded-xl px-3 text-xs font-black transition ${
+                      needsAssignment
+                        ? "bg-slate-950 text-white hover:bg-slate-800"
+                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {needsAssignment ? "Assign" : "Open"}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
+            <Package
+              className="mx-auto h-7 w-7 text-slate-400"
+              aria-hidden="true"
+            />
+            <p className="mt-3 text-sm font-black text-slate-700">
+              No deliveries match this view.
+            </p>
+            <p className="mt-1 text-sm font-semibold text-slate-500">
+              Try another date or clear the search.
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function DeliveryRouteMapPlanner({
   deliveries,
   selectedDate,
-  onSelectedDateChange,
   onOpenDelivery,
   onMoveDelivery,
 }) {
@@ -1194,40 +1551,10 @@ function DeliveryRouteMapPlanner({
               </p>
             </div>
 
-            <div className="flex flex-col gap-2 sm:min-w-52">
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-                  Delivery Date
-                </span>
-                <span className="relative block">
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(event) =>
-                      onSelectedDateChange(event.target.value)
-                    }
-                    className={`block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 ${
-                      selectedDate ? "text-slate-900" : "text-transparent"
-                    }`}
-                  />
-                  {!selectedDate ? (
-                    <span className="pointer-events-none absolute inset-y-px left-1 right-11 flex items-center rounded-l-[11px] bg-white px-3 text-sm font-black text-slate-900">
-                      All
-                    </span>
-                  ) : null}
-                </span>
-              </label>
-
-              {selectedDate ? (
-                <button
-                  type="button"
-                  onClick={() => onSelectedDateChange("")}
-                  className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs font-black uppercase tracking-[0.1em] text-slate-600 transition hover:border-slate-300 hover:bg-slate-100"
-                >
-                  Show All
-                </button>
-              ) : null}
-
+            <div className="flex flex-col items-stretch gap-2 sm:min-w-52 sm:items-end">
+              <span className="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 text-xs font-black uppercase tracking-[0.1em] text-slate-600">
+                {selectedDateLabel}
+              </span>
               {staticMapUrl ? (
                 <button
                   type="button"
@@ -1249,7 +1576,7 @@ function DeliveryRouteMapPlanner({
                   title={`Delivery route map for ${selectedDateLabel}`}
                   loading="lazy"
                   referrerPolicy="no-referrer-when-downgrade"
-                  className="h-[420px] w-full border-0 bg-slate-100 sm:h-[560px] xl:h-[680px]"
+                  className="h-[380px] w-full border-0 bg-slate-100 sm:h-[460px] xl:h-[540px]"
                   allowFullScreen
                 />
               ) : (
@@ -1259,7 +1586,7 @@ function DeliveryRouteMapPlanner({
                     src={staticMapUrl}
                     alt={`Delivery route map for ${selectedDateLabel}`}
                     onError={() => setStaticMapFailed(true)}
-                    className="h-[420px] w-full object-contain sm:h-[560px] xl:h-[680px]"
+                    className="h-[380px] w-full object-contain sm:h-[460px] xl:h-[540px]"
                   />
                 </>
               )}
@@ -1557,54 +1884,7 @@ export default function DeliveryDispatchPage({
   const [draftRouteOrders, setDraftRouteOrders] = useState({});
   const deliveryOrderInputRefs = useRef({});
 
-  const needsDispatchDeliveries = useMemo(
-    () =>
-      deliveries
-        .filter(
-          (delivery) =>
-            delivery.status !== "complete" &&
-            (delivery.dispatchStatus === "needsDispatch" || !delivery.driver),
-        )
-        .sort((firstDelivery, secondDelivery) =>
-          String(firstDelivery.createdAt || "").localeCompare(
-            String(secondDelivery.createdAt || ""),
-          ),
-        ),
-    [deliveries],
-  );
-  const dateScopedNeedsDispatchDeliveries = useMemo(
-    () =>
-      routeMapDate
-        ? needsDispatchDeliveries.filter(
-            (delivery) => delivery.deliveryDate === routeMapDate,
-          )
-        : needsDispatchDeliveries,
-    [needsDispatchDeliveries, routeMapDate],
-  );
   const normalizedSearchQuery = normalizeSearch(searchQuery);
-  const visibleDeliveries = normalizedSearchQuery
-    ? dateScopedNeedsDispatchDeliveries.filter((delivery) => {
-        const items = Array.isArray(delivery.items) ? delivery.items : [];
-        const searchableText = [
-          delivery.orderNumber,
-          delivery.customerName,
-          delivery.address,
-          delivery.contactName,
-          delivery.contactPhone,
-          delivery.phoneNumber,
-          delivery.unloadType,
-          delivery.deliveryScope,
-          delivery.deliveryScopeNotes,
-          ...items.map(
-            (item) => `${item.quantity || ""} ${item.description || ""}`,
-          ),
-        ].join(" ");
-
-        return normalizeSearch(searchableText).includes(
-          normalizedSearchQuery,
-        );
-      })
-    : dateScopedNeedsDispatchDeliveries;
   const routeMapDeliveries = useMemo(
     () =>
       deliveries
@@ -1641,6 +1921,11 @@ export default function DeliveryDispatchPage({
       safeDeliveryOriginOptions,
     ],
   );
+  const visibleRouteMapDeliveries = normalizedSearchQuery
+    ? routeMapDeliveries.filter((delivery) =>
+        deliveryMatchesSearch(delivery, normalizedSearchQuery),
+      )
+    : routeMapDeliveries;
 
   function getAssignments(delivery) {
     return draftAssignments[delivery.id] || getInitialAssignments(delivery);
@@ -1966,6 +2251,9 @@ export default function DeliveryDispatchPage({
         deliveryCompletionSource: "dispatchOverride",
         deliveryOverrideAt: deliveredAt,
       });
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
     } catch (updateError) {
       console.error("Unable to mark delivery delivered:", updateError);
       setError(
@@ -2016,58 +2304,51 @@ export default function DeliveryDispatchPage({
         </div>
       ) : null}
 
+      <DeliveryDispatchOverview
+        deliveries={visibleRouteMapDeliveries}
+        totalDeliveries={routeMapDeliveries}
+        selectedDate={routeMapDate}
+        onSelectedDateChange={setRouteMapDate}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        onOpenDelivery={openDeliveryForDispatch}
+      />
+
       <DeliveryRouteMapPlanner
         deliveries={routeMapDeliveries}
         selectedDate={routeMapDate}
-        onSelectedDateChange={setRouteMapDate}
         onOpenDelivery={openDeliveryForDispatch}
         onMoveDelivery={handleMoveRouteDelivery}
       />
 
-      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <label
-          htmlFor="delivery-dispatch-search"
-          className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900"
-        >
-          <Search className="h-4 w-4" aria-hidden="true" />
-          Search {routeMapDate ? formatDateLabel(routeMapDate) : "all"} deliveries
-        </label>
-
-        <input
-          id="delivery-dispatch-search"
-          type="search"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search order, customer, address, contact, or item..."
-          className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-        />
-      </div>
-
-      {visibleDeliveries.length === 0 ? (
+      {visibleRouteMapDeliveries.length === 0 ? (
         <EmptyState
           title={
-            dateScopedNeedsDispatchDeliveries.length === 0
+            routeMapDeliveries.length === 0
               ? routeMapDate
                 ? `No deliveries for ${formatDateLabel(routeMapDate)}`
-                : "No deliveries need dispatch"
+                : "No active deliveries"
               : "No matching delivery orders"
           }
           description={
-            dateScopedNeedsDispatchDeliveries.length === 0
+            routeMapDeliveries.length === 0
               ? routeMapDate
                 ? "Choose another date above or show all deliveries."
-                : "New delivery orders that need assignment will appear here."
+                : "New delivery orders will appear here."
               : "Try another order number, customer, address, or item."
           }
         />
       ) : (
         <div className="space-y-4">
-          {visibleDeliveries.map((delivery) => {
+          {visibleRouteMapDeliveries.map((delivery) => {
             const items = Array.isArray(delivery.items)
               ? delivery.items
               : [];
             const contactPhone =
               delivery.contactPhone || delivery.phoneNumber || "";
+            const needsAssignment =
+              delivery.dispatchStatus === "needsDispatch" ||
+              !delivery.driver;
             const isSaving = savingDeliveryId === delivery.id;
             const isMarkingDelivered =
               markingDeliveredId === delivery.id;
@@ -2129,8 +2410,14 @@ export default function DeliveryDispatchPage({
                             Order {delivery.orderNumber}
                           </p>
 
-                          <span className="rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800 sm:text-xs">
-                            Needs Dispatch
+                          <span
+                            className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] sm:text-xs ${
+                              needsAssignment
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}
+                          >
+                            {needsAssignment ? "Needs Dispatch" : "Assigned"}
                           </span>
                         </div>
 
@@ -2196,7 +2483,11 @@ export default function DeliveryDispatchPage({
                         className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 sm:w-auto"
                         aria-expanded={dispatchPanelOpen}
                       >
-                        {dispatchPanelOpen ? "Close" : "Open / Assign"}
+                        {dispatchPanelOpen
+                          ? "Close"
+                          : needsAssignment
+                            ? "Open / Assign"
+                            : "Open Details"}
                         <ChevronDown
                           className={`h-4 w-4 transition-transform ${
                             dispatchPanelOpen ? "rotate-180" : ""
