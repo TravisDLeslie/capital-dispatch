@@ -1143,6 +1143,23 @@ function canArchiveRecord(label: string) {
   return true;
 }
 
+function canEditRecord(label: string) {
+  const enteredCode = window.prompt(
+    `Enter the internal edit code to change ${label}.`,
+  );
+
+  if (enteredCode === null) {
+    return false;
+  }
+
+  if (enteredCode.trim() !== DELETE_PO_CODE) {
+    window.alert("Incorrect edit code. Nothing was changed.");
+    return false;
+  }
+
+  return true;
+}
+
 function isSuperAdminProfile(userProfile: UserProfile | null) {
   return Boolean(
     userProfile?.email &&
@@ -6986,6 +7003,9 @@ export default function App() {
             mode="theirTruck"
             onSaveTheirTruckPO={handleSaveTheirTruckPO}
             onDeleteTheirTruckPO={handleDeleteTheirTruckPO}
+            onAuthorizeTheirTruckPOEdit={(theirTruckPO: TheirTruckPO) =>
+              canEditRecord(`PO ${theirTruckPO.poNumber || "number"}`)
+            }
             onPageChange={setCurrentPage}
           />
         ) : null;

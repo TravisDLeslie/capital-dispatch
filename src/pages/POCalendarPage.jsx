@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   PackageCheck,
+  PencilLine,
   Trash2,
   Truck,
   Warehouse,
@@ -212,14 +213,25 @@ function groupItemsByDate(items) {
   }, {});
 }
 
-function CalendarItemCard({ item, onSelect }) {
+function CalendarItemCard({ item, onSelect, onEditPONumber }) {
   const isSouth = item.type === "south";
   const Icon = isSouth ? Truck : Warehouse;
 
   return (
-    <button
-      type="button"
+    <article
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(item)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) {
+          return;
+        }
+
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(item);
+        }
+      }}
       className={`w-full rounded-2xl border p-4 text-left shadow-sm transition ${
         isSouth
           ? "border-red-200 bg-red-50/70 hover:border-[#FC2C38] hover:bg-red-50"
@@ -244,9 +256,29 @@ function CalendarItemCard({ item, onSelect }) {
             >
               {isSouth ? "South Pickup" : "Their Truck"}
             </p>
-            <h3 className="mt-1 truncate text-2xl font-black text-slate-950">
-              {item.poNumber}
-            </h3>
+            <div className="mt-1 flex min-w-0 items-center gap-2">
+              <h3 className="truncate text-2xl font-black text-slate-950">
+                {item.poNumber}
+              </h3>
+              {!isSouth && onEditPONumber ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onEditPONumber(item);
+                  }}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white text-blue-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
+                  aria-label={`Edit PO number ${item.poNumber}`}
+                  title="Edit PO number"
+                >
+                  <PencilLine
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                    strokeWidth={2.5}
+                  />
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -290,7 +322,131 @@ function CalendarItemCard({ item, onSelect }) {
       <p className="mt-4 rounded-xl bg-white/80 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
         {item.itemCount} {item.itemCount === 1 ? "item" : "items"}
       </p>
-    </button>
+    </article>
+  );
+}
+
+function formatPONumberInput(value) {
+  const digits = String(value || "")
+    .replace(/\D/g, "")
+    .slice(0, 6);
+
+  return digits.length > 3
+    ? `${digits.slice(0, 3)}-${digits.slice(3)}`
+    : digits;
+}
+
+function TheirTruckPONumberEditor({ theirTruckPO, onClose, onSave }) {
+  const [poNumber, setPONumber] = useState(
+    formatPONumberInput(theirTruckPO.poNumber),
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    if (!/^\d{3}-\d{3}$/.test(poNumber)) {
+      setError("Enter a six-digit PO number, such as 123-456.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError("");
+
+    try {
+      await onSave({
+        ...theirTruckPO,
+        poNumber,
+      });
+      onClose();
+    } catch (saveError) {
+      console.error("Unable to update Their Truck PO number:", saveError);
+      setError("Unable to update the PO number. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-6">
+      <button
+        type="button"
+        className="absolute inset-0"
+        aria-label="Close PO number editor"
+        onClick={onClose}
+      />
+
+      <form
+        onSubmit={handleSubmit}
+        className="relative w-full rounded-t-3xl border border-blue-200 bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">
+              Password Approved
+            </p>
+            <h2 className="mt-1 text-2xl font-black text-slate-950">
+              Correct PO Number
+            </h2>
+            <p className="mt-2 text-sm font-semibold text-slate-500">
+              This only changes the PO number. The vendor, date, and items stay
+              the same.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+            aria-label="Close PO number editor"
+          >
+            <X aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
+          </button>
+        </div>
+
+        <label className="mt-5 block">
+          <span className="mb-2 block text-sm font-bold text-slate-700">
+            PO Number
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoFocus
+            value={poNumber}
+            onChange={(event) => {
+              setPONumber(formatPONumberInput(event.target.value));
+              setError("");
+            }}
+            placeholder="123-456"
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-xl font-black tracking-wide text-slate-950 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+          />
+        </label>
+
+        {error ? (
+          <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-700 transition hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="rounded-xl bg-blue-700 px-4 py-3 font-black text-white transition hover:bg-blue-800 disabled:bg-slate-300"
+          >
+            {isSaving ? "Saving..." : "Save PO Number"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -662,6 +818,7 @@ function TheirTruckCalendarEditor({
  *   onEditSouthPO?: (supplierRunId: string) => void;
  *   onSaveTheirTruckPO?: (theirTruckPO: { id: string; [key: string]: any }) => Promise<void>;
  *   onDeleteTheirTruckPO?: (theirTruckPOId: string) => Promise<void>;
+ *   onAuthorizeTheirTruckPOEdit?: (theirTruckPO: { id: string; [key: string]: any }) => boolean;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
@@ -672,6 +829,7 @@ export default function POCalendarPage({
   onEditSouthPO,
   onSaveTheirTruckPO,
   onDeleteTheirTruckPO,
+  onAuthorizeTheirTruckPOEdit,
   onPageChange,
 }) {
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -680,6 +838,8 @@ export default function POCalendarPage({
   });
   const [selectedDate, setSelectedDate] = useState(getDateInputValue());
   const [editingTheirTruckPO, setEditingTheirTruckPO] = useState(null);
+  const [editingTheirTruckPONumber, setEditingTheirTruckPONumber] =
+    useState(null);
   const calendarDays = getCalendarDays(calendarMonth);
   const allCalendarItems = useMemo(() => {
     const southItems =
@@ -733,6 +893,18 @@ export default function POCalendarPage({
     }
 
     setEditingTheirTruckPO(item.source);
+  }
+
+  function handleEditPONumber(item) {
+    if (
+      item.type !== "theirTruck" ||
+      !onSaveTheirTruckPO ||
+      !onAuthorizeTheirTruckPOEdit?.(item.source)
+    ) {
+      return;
+    }
+
+    setEditingTheirTruckPONumber(item.source);
   }
 
   return (
@@ -960,6 +1132,9 @@ export default function POCalendarPage({
                     key={item.id}
                     item={item}
                     onSelect={handleSelectItem}
+                    onEditPONumber={
+                      mode === "theirTruck" ? handleEditPONumber : undefined
+                    }
                   />
                 ))
               )}
@@ -974,6 +1149,14 @@ export default function POCalendarPage({
           onClose={() => setEditingTheirTruckPO(null)}
           onSave={onSaveTheirTruckPO}
           onDelete={onDeleteTheirTruckPO}
+        />
+      ) : null}
+
+      {editingTheirTruckPONumber ? (
+        <TheirTruckPONumberEditor
+          theirTruckPO={editingTheirTruckPONumber}
+          onClose={() => setEditingTheirTruckPONumber(null)}
+          onSave={onSaveTheirTruckPO}
         />
       ) : null}
     </PageContainer>
