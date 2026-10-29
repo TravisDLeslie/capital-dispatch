@@ -736,14 +736,25 @@ export default function DeliveryCalendarPage({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => onPageChange?.("deliveries-dispatch")}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
-          >
-            <Truck className="h-4 w-4" aria-hidden="true" />
-            Needs Dispatch
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => onPageChange?.("deliveries-queue")}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+            >
+              <Package className="h-4 w-4" aria-hidden="true" />
+              Upcoming Deliveries
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onPageChange?.("deliveries-dispatch")}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+            >
+              <Truck className="h-4 w-4" aria-hidden="true" />
+              Needs Dispatch
+            </button>
+          </div>
         </div>
       </section>
 

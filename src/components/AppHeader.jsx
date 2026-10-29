@@ -680,25 +680,18 @@ export default function AppHeader({
             pageId: "deliveries-route-planner",
           }
         : null,
+      pageAllowed("deliveries-queued-upcoming")
+        ? {
+            id: "deliveries-queued-upcoming",
+            label: "View Upcoming",
+            pageId: "deliveries-queued-upcoming",
+          }
+        : null,
       pageAllowed("deliveries-calendar")
         ? {
             id: "deliveries-calendar",
             label: "Delivery Calendar",
             pageId: "deliveries-calendar",
-          }
-        : null,
-      pageAllowed("deliveries-queued-upcoming")
-        ? {
-            id: "deliveries-queued-upcoming",
-            label: "Queued Upcoming Deliveries",
-            pageId: "deliveries-queued-upcoming",
-          }
-        : null,
-      pageAllowed("deliveries-queue")
-        ? {
-            id: "deliveries-upcoming",
-            label: "View Upcoming Deliveries",
-            pageId: "deliveries-queue",
           }
         : null,
       pageAllowed("deliveries-history")
