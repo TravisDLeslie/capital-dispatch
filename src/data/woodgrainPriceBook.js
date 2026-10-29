@@ -393,6 +393,7 @@ const rows = [
 ["MDF","Mdf Primed Mouldings","42093117","TM931","Casing","11/16 X 3-1/2","4","17'",93.0,117.0,"CLF",3,"Stocking Dealer",null],
 ["MDF","Mdf Primed Mouldings","42030414","TM304","Casing/Chair Rail","5/8 X 3","6","14'",49.0,62.0,"CLF",3,"Stocking Dealer",null],
 ["MDF","Mdf Primed Mouldings","42039016","TM390","Chair Rail","5/8 X 2-5/8","6","16'",44.0,55.0,"CLF",3,"Stocking Dealer",null],
+["MDF","Mdf Primed Mouldings","42040316","TM403","MDF Primed Moulding","1/2 X 4","","16'",null,50.0,"CLF",3,"Capital Net",1],
 ["MDF","Mdf Primed Mouldings","42044416","TM444","Colonial Base","5/8 X 3-1/4","6","16'",49.0,62.0,"CLF",3,"Stocking Dealer",null],
 ["MDF","Mdf Primed Mouldings","42035616","TM356","Colonial Casing","5/8 X 2-1/4","6","16'",35.0,44.0,"CLF",3,"Stocking Dealer",null],
 ["MDF","Mdf Primed Mouldings","42043716","TM437","Cove","11/16 X 4-3/16","6","16'",77.0,97.0,"CLF",3,"Stocking Dealer",null],

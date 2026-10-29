@@ -138,6 +138,16 @@ function getHandoffOption(orderMethod) {
   );
 }
 
+function getVendorAddress(vendorName, supplierAddressMap) {
+  const normalizedVendorName = String(vendorName || "").trim().toLowerCase();
+  const matchedVendorName = Object.keys(supplierAddressMap || {}).find(
+    (currentVendorName) =>
+      currentVendorName.trim().toLowerCase() === normalizedVendorName,
+  );
+
+  return matchedVendorName ? supplierAddressMap[matchedVendorName] || "" : "";
+}
+
 function createBlankItem(overrides = {}) {
   return {
     id: `item-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -145,6 +155,7 @@ function createBlankItem(overrides = {}) {
     description: "",
     path: "supplierDelivery",
     vendor: "",
+    supplierAddress: "",
     poNumber: "",
     routeDate: "",
     supplierDate: "",
@@ -303,6 +314,7 @@ function ChoiceButton({
  * @param {{
  *   currentUser?: { id?: string; name?: string; email?: string } | null;
  *   vendorOptions?: string[];
+ *   supplierAddressMap?: Record<string, string>;
  *   onProcessOrder?: (orderPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onProcessStockPO?: (stockPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onPageChange?: (pageId: string) => void;
@@ -311,6 +323,7 @@ function ChoiceButton({
 export default function OrderFlowPage({
   currentUser = null,
   vendorOptions = [],
+  supplierAddressMap = {},
   onProcessOrder,
   onProcessStockPO,
   onPageChange,
@@ -340,6 +353,7 @@ export default function OrderFlowPage({
   const [processSummary, setProcessSummary] = useState(null);
   const [stockPoNumber, setStockPoNumber] = useState("");
   const [stockVendor, setStockVendor] = useState("");
+  const [stockVendorAddress, setStockVendorAddress] = useState("");
   const [stockFulfillmentMethod, setStockFulfillmentMethod] =
     useState("wePickup");
   const [stockScheduledDate, setStockScheduledDate] = useState("");
@@ -472,6 +486,7 @@ export default function OrderFlowPage({
       path: previousItem?.path || "supplierDelivery",
       poNumber: previousItem?.poNumber || "",
       vendor: previousItem?.vendor || "",
+      supplierAddress: previousItem?.supplierAddress || "",
     });
 
     setItems((currentItems) => [...currentItems, nextItem]);
@@ -498,6 +513,8 @@ export default function OrderFlowPage({
               path: currentItems[currentItems.length - 1]?.path || "supplierDelivery",
               poNumber: currentItems[currentItems.length - 1]?.poNumber || "",
               vendor: currentItems[currentItems.length - 1]?.vendor || "",
+              supplierAddress:
+                currentItems[currentItems.length - 1]?.supplierAddress || "",
             }),
           ];
     });
@@ -512,6 +529,8 @@ export default function OrderFlowPage({
   }
 
   function buildOrderPayload() {
+    const isDeliveryOrder = orderMethod === "delivery";
+
     return {
       orderNumber,
       customerName,
@@ -521,12 +540,12 @@ export default function OrderFlowPage({
       orderMethod,
       deliveryAddress,
       deliveryDate,
-      hasHardware,
-      needsTarp,
-      unloadType,
-      deliveryNotes,
-      routeEta,
-      routeEtaStatus,
+      hasHardware: isDeliveryOrder ? hasHardware : false,
+      needsTarp: isDeliveryOrder ? needsTarp : false,
+      unloadType: isDeliveryOrder ? unloadType : "",
+      deliveryNotes: isDeliveryOrder ? deliveryNotes : "",
+      routeEta: isDeliveryOrder ? routeEta : null,
+      routeEtaStatus: isDeliveryOrder ? routeEtaStatus : "idle",
       items: savedItems,
       createdBy: currentUser,
     };
@@ -563,6 +582,7 @@ export default function OrderFlowPage({
   function resetStockPO() {
     setStockPoNumber("");
     setStockVendor("");
+    setStockVendorAddress("");
     setStockFulfillmentMethod("wePickup");
     setStockScheduledDate("");
     setStockItems([createBlankStockItem()]);
@@ -570,6 +590,11 @@ export default function OrderFlowPage({
     setStockNotes("");
     setStockProcessError("");
     setStockProcessSummary(null);
+  }
+
+  function updateStockVendor(vendor) {
+    setStockVendor(vendor);
+    setStockVendorAddress(getVendorAddress(vendor, supplierAddressMap));
   }
 
   function updateStockItem(itemId, updates) {
@@ -612,6 +637,7 @@ export default function OrderFlowPage({
       const summary = await onProcessStockPO({
         poNumber: stockPoNumber,
         vendor: stockVendor,
+        vendorAddress: stockVendorAddress,
         fulfillmentMethod: stockFulfillmentMethod,
         scheduledDate: stockScheduledDate,
         items: validStockItems.map((item) => ({
@@ -694,14 +720,18 @@ export default function OrderFlowPage({
             ) : null}
           </div>
 
-          <div className="mt-6 grid gap-4 xl:grid-cols-[1fr_1fr]">
+          <div
+            className={`mt-6 grid gap-4 ${
+              orderMethod === "delivery" ? "xl:grid-cols-[1fr_1fr]" : ""
+            }`}
+          >
             {orderMethod === "delivery" ? (
+            <>
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
                 Customer Handoff
               </p>
-              {orderMethod === "delivery" ? (
-                <div className="mt-4 grid gap-3">
+              <div className="mt-4 grid gap-3">
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
                       From
@@ -758,25 +788,8 @@ export default function OrderFlowPage({
                       ) : null}
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div
-                  className={`mt-4 rounded-2xl border p-4 ${
-                    orderMethod === "pod"
-                      ? "border-amber-100 bg-amber-50 text-amber-900"
-                      : "border-blue-100 bg-blue-50 text-blue-900"
-                  }`}
-                >
-                  <p className="text-lg font-black">
-                    {selectedHandoff.label}
-                  </p>
-                  <p className="mt-1 text-sm font-bold">
-                    {selectedHandoff.description}
-                  </p>
-                </div>
-              )}
+              </div>
             </div>
-            ) : null}
 
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
@@ -833,6 +846,33 @@ export default function OrderFlowPage({
                 </div>
               ) : null}
             </div>
+            </>
+            ) : (
+              <div
+                className={`rounded-3xl border p-5 ${
+                  orderMethod === "pod"
+                    ? "border-amber-200 bg-amber-50 text-amber-900"
+                    : "border-blue-200 bg-blue-50 text-blue-900"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm">
+                    <SelectedHandoffIcon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] opacity-70">
+                      Customer Handoff
+                    </p>
+                    <p className="mt-1 text-xl font-black">
+                      {selectedHandoff.label}
+                    </p>
+                    <p className="mt-1 text-sm font-bold">
+                      {selectedHandoff.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4">
@@ -1003,13 +1043,23 @@ export default function OrderFlowPage({
               <SearchableSelect
                 value={stockVendor}
                 options={vendorOptions}
-                onChange={setStockVendor}
+                onChange={updateStockVendor}
                 allowCustomValue
                 placeholder="Start typing a vendor..."
                 accent="green"
                 inputBackgroundClassName="bg-slate-100 focus:bg-white"
               />
             </Field>
+
+            <div className="lg:col-span-2">
+              <Field label="Vendor Address">
+                <TextInput
+                  value={stockVendorAddress}
+                  onChange={(event) => setStockVendorAddress(event.target.value)}
+                  placeholder="Select a saved vendor to fill its address..."
+                />
+              </Field>
+            </div>
           </div>
 
           <div className="mt-5">
@@ -2031,12 +2081,29 @@ export default function OrderFlowPage({
                   value={editingItem.vendor}
                   options={vendorOptions}
                   onChange={(vendor) =>
-                    updateItem(editingItem.id, { vendor })
+                    updateItem(editingItem.id, {
+                      vendor,
+                      supplierAddress: getVendorAddress(
+                        vendor,
+                        supplierAddressMap,
+                      ),
+                    })
                   }
                   allowCustomValue
                   placeholder="Start typing a vendor..."
                   accent="red"
                   inputBackgroundClassName="bg-slate-100 focus:bg-white"
+                />
+              </Field>
+              <Field label="Vendor Address">
+                <TextInput
+                  value={editingItem.supplierAddress || ""}
+                  onChange={(event) =>
+                    updateItem(editingItem.id, {
+                      supplierAddress: event.target.value,
+                    })
+                  }
+                  placeholder="Select a saved vendor to fill its address..."
                 />
               </Field>
               <Field label="PO Number">

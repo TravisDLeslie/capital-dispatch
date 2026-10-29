@@ -3894,6 +3894,7 @@ export default function App() {
         description: String(item.description || "").trim(),
         path: String(item.path || "supplierDelivery"),
         vendor: String(item.vendor || "").trim(),
+        supplierAddress: String(item.supplierAddress || "").trim(),
         poNumber: String(item.poNumber || "").trim(),
         routeDate: String(item.routeDate || "").trim(),
         supplierDate: String(item.supplierDate || "").trim(),
@@ -3957,6 +3958,8 @@ export default function App() {
     const businessName = String(orderPayload.businessName || "").trim();
     const customerDisplayName = businessName || customerName || "New customer";
     const sourceOrderNumber = String(orderPayload.orderNumber || "").trim();
+    const handoffType = String(orderPayload.orderMethod || "willCall");
+    const isDeliveryOrder = handoffType === "delivery";
     const poNumbers = Array.from(
       new Set(cleanItems.map((item) => item.poNumber).filter(Boolean)),
     );
@@ -3973,13 +3976,17 @@ export default function App() {
       businessName,
       phone: String(orderPayload.phoneNumber || "").trim(),
       accountNumber: String(orderPayload.accountNumber || "").trim(),
-      handoffType: String(orderPayload.orderMethod || "willCall"),
+      handoffType,
       deliveryAddress: String(orderPayload.deliveryAddress || "").trim(),
       deliveryDate: String(orderPayload.deliveryDate || "").trim(),
-      hasHardware: Boolean(orderPayload.hasHardware),
-      needsTarp: Boolean(orderPayload.needsTarp),
-      unloadType: String(orderPayload.unloadType || "Forklift"),
-      deliveryNotes: String(orderPayload.deliveryNotes || "").trim(),
+      hasHardware: isDeliveryOrder && Boolean(orderPayload.hasHardware),
+      needsTarp: isDeliveryOrder && Boolean(orderPayload.needsTarp),
+      unloadType: isDeliveryOrder
+        ? String(orderPayload.unloadType || "Forklift")
+        : "",
+      deliveryNotes: isDeliveryOrder
+        ? String(orderPayload.deliveryNotes || "").trim()
+        : "",
       phoneNumber: String(orderPayload.phoneNumber || "").trim(),
       poNumbers,
       items: cleanItems,
@@ -4021,7 +4028,7 @@ export default function App() {
         customerName: customerDisplayName,
         orderNumber: sourceOrderNumber,
         driver: "",
-        supplierAddress: "",
+        supplierAddress: firstItem.supplierAddress,
         createdByName: creator.name,
         createdByEmail: creator.email,
         createdById: creator.id,
@@ -4068,6 +4075,7 @@ export default function App() {
         deliveryDate:
           firstItem.supplierDate || String(orderPayload.deliveryDate || ""),
         vendor: firstItem.vendor,
+        vendorAddress: firstItem.supplierAddress,
         customerName: customerDisplayName,
         businessName,
         orderNumber: sourceOrderNumber,
@@ -4108,6 +4116,7 @@ export default function App() {
         id: createId(),
         poNumber: firstItem.poNumber,
         vendor: firstItem.vendor,
+        vendorAddress: firstItem.supplierAddress,
         podDate: firstItem.supplierDate || String(orderPayload.deliveryDate || ""),
         customerName: customerDisplayName,
         businessName,
@@ -4233,6 +4242,7 @@ export default function App() {
     const vendor = String(stockPayload.vendor || "").trim();
     const scheduledDate = String(stockPayload.scheduledDate || "").trim();
     const notes = String(stockPayload.notes || "").trim();
+    const vendorAddress = String(stockPayload.vendorAddress || "").trim();
     const fulfillmentMethod = String(
       stockPayload.fulfillmentMethod || "wePickup",
     );
@@ -4279,7 +4289,7 @@ export default function App() {
         customerName: "Capital Lumber Stock",
         orderNumber: "",
         driver: "",
-        supplierAddress: "",
+        supplierAddress: vendorAddress,
         createdByName: currentUserCreator.name,
         createdByEmail: currentUserCreator.email,
         createdById: currentUserCreator.id,
@@ -4311,6 +4321,7 @@ export default function App() {
       poNumber,
       deliveryDate: scheduledDate,
       vendor,
+      vendorAddress,
       customerName: "Capital Lumber Stock",
       businessName: "Capital Lumber",
       orderNumber: "",
@@ -6676,6 +6687,7 @@ export default function App() {
           <OrderFlowPage
             currentUser={currentUserCreator}
             vendorOptions={vendorOptions}
+            supplierAddressMap={supplierAddressMap}
             onProcessOrder={handleProcessOrderFlow}
             onProcessStockPO={handleProcessStockPO}
             onPageChange={navigateToPage}
