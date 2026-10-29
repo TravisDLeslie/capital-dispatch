@@ -40,22 +40,47 @@ if (import.meta.env.DEV && "serviceWorker" in navigator) {
 }
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  const pageHadServiceWorker = Boolean(navigator.serviceWorker.controller);
-  let isRefreshing = false;
+  const SERVICE_WORKER_CLEANUP_KEY = "dispatch-cl-sw-cleanup-v1";
 
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (!pageHadServiceWorker || isRefreshing) {
-      return;
-    }
+  window.addEventListener("load", () => {
+    const pageHadServiceWorker = Boolean(navigator.serviceWorker.controller);
 
-    isRefreshing = true;
-    window.location.reload();
+    Promise.all([
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) =>
+          Promise.all(
+            registrations.map((registration) => registration.unregister()),
+          ),
+        ),
+      "caches" in window
+        ? caches
+            .keys()
+            .then((cacheNames) =>
+              Promise.all(
+                cacheNames
+                  .filter((cacheName) =>
+                    cacheName.startsWith("capital-dispatch-"),
+                  )
+                  .map((cacheName) => caches.delete(cacheName)),
+              ),
+            )
+        : Promise.resolve([]),
+    ])
+      .then(() => {
+        if (
+          pageHadServiceWorker &&
+          sessionStorage.getItem(SERVICE_WORKER_CLEANUP_KEY) !== "done"
+        ) {
+          sessionStorage.setItem(SERVICE_WORKER_CLEANUP_KEY, "done");
+          window.location.reload();
+          return;
+        }
+
+        sessionStorage.removeItem(SERVICE_WORKER_CLEANUP_KEY);
+      })
+      .catch((error) => {
+        console.error("Unable to clear the old app cache:", error);
+      });
   });
-
-  navigator.serviceWorker
-    .register("/service-worker.js", { updateViaCache: "none" })
-    .then((registration) => registration.update())
-    .catch((error) => {
-      console.error("Unable to register service worker:", error);
-    });
 }

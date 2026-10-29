@@ -263,6 +263,8 @@ const YardTasksPage = lazy(() => import("./pages/YardTasksPage"));
 
 const DELETE_PO_CODE = "3105";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
+const LOGIN_RESTORE_TIMEOUT_MS = 12_000;
+const PROFILE_RESTORE_TIMEOUT_MS = 12_000;
 const SOUTH_PICKUP_AUTO_REFRESH_MS = 5 * 60 * 1000;
 const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
 const TREX_COLLECTION_COUNT = 23;
@@ -2438,10 +2440,48 @@ export default function App() {
       return;
     }
 
-    return onAuthStateChanged(auth, (firebaseUser) => {
-      setCurrentUser(firebaseUser);
+    const firebaseAuth = auth;
+    let isMounted = true;
+    let authStateResolved = false;
+    const restoreTimeout = window.setTimeout(() => {
+      if (!isMounted || authStateResolved) {
+        return;
+      }
+
+      console.warn("Saved login took too long to restore.");
+      setCurrentUser(firebaseAuth.currentUser);
       setIsAuthLoading(false);
-    });
+    }, LOGIN_RESTORE_TIMEOUT_MS);
+    const unsubscribeFromAuth = onAuthStateChanged(
+      firebaseAuth,
+      (firebaseUser) => {
+        if (!isMounted) {
+          return;
+        }
+
+        authStateResolved = true;
+        window.clearTimeout(restoreTimeout);
+        setCurrentUser(firebaseUser);
+        setIsAuthLoading(false);
+      },
+      (error) => {
+        console.error("Unable to restore saved login:", error);
+
+        if (isMounted) {
+          authStateResolved = true;
+          window.clearTimeout(restoreTimeout);
+          setCurrentUser(firebaseAuth.currentUser);
+          setSyncError(getFirebaseErrorMessage(error));
+          setIsAuthLoading(false);
+        }
+      },
+    );
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(restoreTimeout);
+      unsubscribeFromAuth();
+    };
   }, []);
 
   useEffect(() => {
@@ -2453,14 +2493,46 @@ export default function App() {
 
     let isMounted = true;
     let unsubscribeFromUserProfile = () => {};
+    let profileResolved = false;
 
     setIsProfileLoading(true);
 
+    const profileRestoreTimeout = window.setTimeout(() => {
+      if (!isMounted || profileResolved) {
+        return;
+      }
+
+      console.warn("Employee profile took too long to restore.");
+
+      if (isSuperAdminEmail(currentUser.email)) {
+        setUserProfile({
+          id: currentUser.uid,
+          uid: currentUser.uid,
+          email: currentUser.email || "",
+          displayName: currentUser.displayName || "",
+          photoURL: currentUser.photoURL || "",
+          role: "superAdmin",
+          status: "approved",
+        });
+      } else {
+        setSyncError(
+          "Your employee profile is taking longer than expected. Refresh the page to try again.",
+        );
+      }
+
+      setIsProfileLoading(false);
+    }, PROFILE_RESTORE_TIMEOUT_MS);
+
     ensureUserProfile(currentUser, SUPER_ADMIN_EMAILS)
-      .then(() => {
+      .then((savedUserProfile) => {
         if (!isMounted) {
           return;
         }
+
+        profileResolved = true;
+        window.clearTimeout(profileRestoreTimeout);
+        setUserProfile(savedUserProfile);
+        setIsProfileLoading(false);
 
         unsubscribeFromUserProfile = subscribeToUserProfile(
           currentUser.uid,
@@ -2485,6 +2557,9 @@ export default function App() {
         console.error("Unable to create user profile:", error);
 
         if (isMounted) {
+          profileResolved = true;
+          window.clearTimeout(profileRestoreTimeout);
+
           if (isSuperAdminEmail(currentUser.email)) {
             setUserProfile({
               id: currentUser.uid,
@@ -2505,6 +2580,7 @@ export default function App() {
 
     return () => {
       isMounted = false;
+      window.clearTimeout(profileRestoreTimeout);
       unsubscribeFromUserProfile();
     };
   }, [currentUser]);
