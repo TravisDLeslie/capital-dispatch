@@ -687,6 +687,13 @@ export default function AppHeader({
             pageId: "deliveries-calendar",
           }
         : null,
+      pageAllowed("deliveries-queued-upcoming")
+        ? {
+            id: "deliveries-queued-upcoming",
+            label: "Queued Upcoming Deliveries",
+            pageId: "deliveries-queued-upcoming",
+          }
+        : null,
       pageAllowed("deliveries-queue")
         ? {
             id: "deliveries-upcoming",

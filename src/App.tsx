@@ -229,6 +229,9 @@ const DispatchPage = lazyPageWithReload(
 );
 const DeliveryHistoryPage = lazy(() => import("./pages/DeliveryHistoryPage"));
 const DeliveryQueuePage = lazy(() => import("./pages/DeliveryQueuePage"));
+const QueuedUpcomingDeliveriesPage = lazy(
+  () => import("./pages/QueuedUpcomingDeliveriesPage"),
+);
 const DeliverySettingsPage = lazy(() => import("./pages/DeliverySettingsPage"));
 const DeliveriesPage = lazy(() => import("./pages/DeliveriesPage"));
 const EmailListPage = lazy(() => import("./pages/EmailListPage"));
@@ -746,6 +749,7 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "deliveries-add",
     "deliveries-dispatch",
     "deliveries-calendar",
+    "deliveries-queued-upcoming",
     "deliveries-queue",
     "deliveries-route-planner",
     "deliveries-history",
@@ -1230,6 +1234,7 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-add",
       "deliveries-dispatch",
       "deliveries-calendar",
+      "deliveries-queued-upcoming",
       "deliveries-queue",
       "deliveries-route-planner",
       "deliveries-history",
@@ -1291,6 +1296,7 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-add",
       "deliveries-dispatch",
       "deliveries-calendar",
+      "deliveries-queued-upcoming",
       "deliveries-queue",
       "deliveries-route-planner",
       "deliveries-history",
@@ -1438,6 +1444,7 @@ function getAllowedPageIds(
 
     if (
       pageIds.includes("deliveries") ||
+      pageIds.includes("deliveries-queued-upcoming") ||
       pageIds.includes("deliveries-queue") ||
       pageIds.includes("deliveries-calendar") ||
       pageIds.includes("deliveries-route-planner")
@@ -1445,6 +1452,7 @@ function getAllowedPageIds(
       pageIds.push("deliveries");
       pageIds.push(
         "deliveries-queue",
+        "deliveries-queued-upcoming",
         "deliveries-calendar",
         "deliveries-route-planner",
       );
@@ -2120,6 +2128,7 @@ export default function App() {
       "deliveries-add",
       "deliveries-dispatch",
       "deliveries-calendar",
+      "deliveries-queued-upcoming",
       "deliveries-queue",
       "deliveries-route-planner",
       "deliveries-history",
@@ -4172,6 +4181,8 @@ export default function App() {
           id: String(item.id || createId()),
           quantity: item.quantity,
           description: item.description,
+          vendor: item.vendor,
+          fulfillmentPath: item.path,
           delivered: false,
         })),
         deliveryPhoto: null,
@@ -7042,6 +7053,15 @@ export default function App() {
             onDeleteDelivery={handleDeleteDelivery}
             onPageChange={navigateToPage}
             isDriverView={isDeliveryDriverScopedView}
+          />
+        );
+
+      case "deliveries-queued-upcoming":
+        return (
+          <QueuedUpcomingDeliveriesPage
+            deliveries={deliveries}
+            orderBuilds={orderBuilds}
+            onPageChange={navigateToPage}
           />
         );
 

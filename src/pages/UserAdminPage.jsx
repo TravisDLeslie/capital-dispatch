@@ -102,6 +102,10 @@ const permissionGroups = [
       { id: "deliveries-add", label: "Add Deliveries" },
       { id: "deliveries-route-planner", label: "Delivery Route Planner" },
       { id: "deliveries-calendar", label: "Delivery Calendar" },
+      {
+        id: "deliveries-queued-upcoming",
+        label: "Queued Upcoming Deliveries",
+      },
       { id: "deliveries-queue", label: "To Be Delivered" },
       { id: "deliveries-history", label: "Delivery History" },
     ],
@@ -244,6 +248,7 @@ const legacyRolePermissionPresets = {
     "deliveries-add",
     "deliveries-dispatch",
     "deliveries-calendar",
+    "deliveries-queued-upcoming",
     "deliveries-queue",
     "deliveries-route-planner",
     "deliveries-history",
