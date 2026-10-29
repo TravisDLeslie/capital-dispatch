@@ -61,6 +61,34 @@ function getRouteDirectionsUrl(originAddress, destinationAddress) {
   )}&destination=${encodeURIComponent(destinationAddress || "")}`;
 }
 
+function getEmbeddedDeliveryRouteUrl(deliveries) {
+  const routeDeliveries = deliveries
+    .filter((delivery) => String(delivery?.address || "").trim())
+    .slice(0, 10);
+
+  if (routeDeliveries.length === 0) {
+    return "";
+  }
+
+  const originAddress =
+    routeDeliveries.find((delivery) => delivery.deliveryOriginAddress)
+      ?.deliveryOriginAddress ||
+    fallbackDeliveryOriginOptions[0]?.address ||
+    "3105 W State St, Boise, ID 83703";
+  const destinationRoute = routeDeliveries
+    .map((delivery, index) =>
+      index === 0 ? delivery.address : `to:${delivery.address}`,
+    )
+    .join(" ");
+  const params = new URLSearchParams({
+    saddr: originAddress,
+    daddr: destinationRoute,
+    output: "embed",
+  });
+
+  return `https://maps.google.com/maps?${params.toString()}`;
+}
+
 function formatCreatedAt(value) {
   if (!value) {
     return "";
@@ -767,6 +795,7 @@ function DeliveryRouteMapPlanner({
   const [segmentRoutes, setSegmentRoutes] = useState({});
   const [mapPan, setMapPan] = useState({ x: 0, y: 0 });
   const [isDraggingMap, setIsDraggingMap] = useState(false);
+  const [staticMapFailed, setStaticMapFailed] = useState(false);
   const mapDragRef = useRef(null);
   const selectedDateLabel = selectedDate
     ? formatDateLabel(selectedDate)
@@ -785,6 +814,10 @@ function DeliveryRouteMapPlanner({
         fromLabel: getRouteMarkerLabel(index),
         toLabel: getRouteMarkerLabel(index + 1),
       })),
+    [deliveriesWithAddress],
+  );
+  const embeddedRouteMapUrl = useMemo(
+    () => getEmbeddedDeliveryRouteUrl(deliveriesWithAddress),
     [deliveriesWithAddress],
   );
   const staticMapUrl = useMemo(() => {
@@ -838,6 +871,10 @@ function DeliveryRouteMapPlanner({
     deliveries.find((delivery) => delivery.id === highlightedDeliveryId) ||
     deliveries[0] ||
     null;
+
+  useEffect(() => {
+    setStaticMapFailed(false);
+  }, [deliveriesWithAddress]);
 
   useEffect(() => {
     if (routeSegments.length === 0) {
@@ -932,7 +969,7 @@ function DeliveryRouteMapPlanner({
   }
 
   function startMapDrag(event) {
-    if (!isMapOpen || !staticMapUrl) {
+    if (!isMapOpen || !staticMapUrl || staticMapFailed) {
       return;
     }
 
@@ -1206,13 +1243,26 @@ function DeliveryRouteMapPlanner({
 
           {staticMapUrl ? (
             <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
-              {renderZoomControls("left-4 top-4")}
-
-              <img
-                src={staticMapUrl}
-                alt={`Delivery route map for ${selectedDateLabel}`}
-                className="h-[420px] w-full object-contain sm:h-[560px] xl:h-[680px]"
-              />
+              {staticMapFailed && embeddedRouteMapUrl ? (
+                <iframe
+                  src={embeddedRouteMapUrl}
+                  title={`Delivery route map for ${selectedDateLabel}`}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="h-[420px] w-full border-0 bg-slate-100 sm:h-[560px] xl:h-[680px]"
+                  allowFullScreen
+                />
+              ) : (
+                <>
+                  {renderZoomControls("left-4 top-4")}
+                  <img
+                    src={staticMapUrl}
+                    alt={`Delivery route map for ${selectedDateLabel}`}
+                    onError={() => setStaticMapFailed(true)}
+                    className="h-[420px] w-full object-contain sm:h-[560px] xl:h-[680px]"
+                  />
+                </>
+              )}
 
               {highlightedDelivery ? (
                 <div className="absolute bottom-4 left-4 right-4 max-w-xl rounded-2xl border border-white/70 bg-white/95 p-4 shadow-lg backdrop-blur">
@@ -1350,7 +1400,16 @@ function DeliveryRouteMapPlanner({
                 onTouchMove={moveMapDrag}
                 onTouchEnd={endMapDrag}
               >
-                {staticMapUrl ? (
+                {staticMapFailed && embeddedRouteMapUrl ? (
+                  <iframe
+                    src={embeddedRouteMapUrl}
+                    title={`Large delivery route map for ${selectedDateLabel}`}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    className="h-full w-full border-0 bg-slate-100"
+                    allowFullScreen
+                  />
+                ) : staticMapUrl ? (
                   <>
                     {renderZoomControls("left-5 top-5")}
                     <div className="absolute left-5 top-20 z-10 flex flex-wrap items-center gap-2">
@@ -1373,6 +1432,7 @@ function DeliveryRouteMapPlanner({
                     <img
                       src={staticMapUrl}
                       alt={`Large delivery route map for ${selectedDateLabel}`}
+                      onError={() => setStaticMapFailed(true)}
                       draggable="false"
                       className="h-full w-full select-none object-cover"
                       style={{
