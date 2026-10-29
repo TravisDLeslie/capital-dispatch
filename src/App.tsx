@@ -6244,7 +6244,7 @@ export default function App() {
                   label: "Price Book",
                   title: "Woodgrain",
                   description:
-                    "Search the complete stocking catalog, Capital net pricing, and sell prices at 22.5%, 25%, and 30% margin.",
+                    "Search the complete stocking catalog, Capital net pricing, and sell prices at 40%, 45%, and 55% margin.",
                   metric: WOODGRAIN_CATEGORY_COUNT,
                   metricLabel: "Categories",
                   tone: "marketing",
@@ -7246,7 +7246,7 @@ export default function App() {
                     label: "Price Book",
                     title: "Woodgrain",
                     description:
-                      "Search the complete stocking catalog, Capital net pricing, and sell prices at 22.5%, 25%, and 30% margin.",
+                      "Search the complete stocking catalog, Capital net pricing, and sell prices at 40%, 45%, and 55% margin.",
                     metric: WOODGRAIN_CATEGORY_COUNT,
                     metricLabel: "Categories",
                     tone: "marketing",

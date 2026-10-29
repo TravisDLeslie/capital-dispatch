@@ -17,9 +17,9 @@ import {
 } from "../data/woodgrainPriceBook";
 
 const margins = [
-  { value: 0.225, label: "22.5%", tone: "border-orange-200 bg-orange-50 text-orange-950" },
-  { value: 0.25, label: "25%", tone: "border-amber-200 bg-amber-50 text-amber-950" },
-  { value: 0.3, label: "30%", tone: "border-emerald-200 bg-emerald-50 text-emerald-950" },
+  { value: 0.4, label: "40%", tone: "border-orange-200 bg-orange-50 text-orange-950" },
+  { value: 0.45, label: "45%", tone: "border-amber-200 bg-amber-50 text-amber-950" },
+  { value: 0.55, label: "55%", tone: "border-emerald-200 bg-emerald-50 text-emerald-950" },
 ];
 
 const categoryOrder = [
@@ -59,16 +59,17 @@ const getCost = (item, basis) => {
 };
 
 const getCostLabel = (item) => {
-  if (item.unit === "CLF") return "per 100 LF";
+  if (item.unit === "CLF") return "per lineal ft";
   if (item.unit === "CTN") return "per carton";
   if (item.unit === "ROLL") return "per roll";
   return "each";
 };
 
 function PriceCell({ item, cost, margin }) {
-  const price = margin ? sellPrice(cost, margin.value) : cost;
+  const linealFootCost = item.unit === "CLF" ? cost / 100 : cost;
+  const price = margin ? sellPrice(linealFootCost, margin.value) : linealFootCost;
   const lengthFeet = item.unit === "CLF" ? parseLengthFeet(item.length) : null;
-  const boardPrice = lengthFeet ? (price / 100) * lengthFeet : null;
+  const boardPrice = lengthFeet ? price * lengthFeet : null;
   const tone = margin?.tone || "border-slate-200 bg-white text-slate-950";
 
   return (
@@ -92,7 +93,6 @@ function PriceCell({ item, cost, margin }) {
 function ProductRow({ item, basis }) {
   const cost = getCost(item, basis);
   const metadata = [
-    item.pattern ? `Pattern ${item.pattern}` : null,
     item.size || null,
     item.length ? `Length ${item.length}` : null,
     item.piecesPerUnit ? `${item.piecesPerUnit} pcs/unit` : null,
@@ -103,9 +103,11 @@ function ProductRow({ item, basis }) {
       <div className="grid gap-4 xl:grid-cols-[minmax(230px,1.5fr)_repeat(4,minmax(125px,1fr))] xl:items-stretch">
         <div className="min-w-0 rounded-2xl bg-white p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white">
-              #{item.itemCode}
-            </span>
+            {item.pattern ? (
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.1em] text-emerald-800">
+                Profile {item.pattern}
+              </span>
+            ) : null}
             {item.pricingSource === "Capital Net" ? (
               <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-800">
                 Capital net
@@ -115,6 +117,9 @@ function ProductRow({ item, basis }) {
           <h3 className="mt-3 text-base font-black leading-tight text-slate-950 sm:text-lg">
             {item.description}
           </h3>
+          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+            Woodgrain item #{item.itemCode}
+          </p>
           <p className="mt-2 text-xs font-bold leading-relaxed text-slate-500">
             {metadata.join(" · ") || "See source price book for specifications"}
           </p>
