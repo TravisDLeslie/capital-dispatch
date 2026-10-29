@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   Clock,
   CloudRain,
@@ -1489,6 +1490,7 @@ export default function DeliveryDispatchPage({
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
   const [openDetailKeys, setOpenDetailKeys] = useState({});
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
+  const [markingDeliveredId, setMarkingDeliveredId] = useState("");
   const [uploadingDeliveryId, setUploadingDeliveryId] = useState("");
   const [error, setError] = useState("");
   const [routeMapDate, setRouteMapDate] = useState("");
@@ -1879,6 +1881,41 @@ export default function DeliveryDispatchPage({
     }
   }
 
+  async function handleMarkDelivered(delivery) {
+    const orderLabel = delivery.orderNumber
+      ? `order ${delivery.orderNumber}`
+      : "this delivery";
+    const customerLabel = formatCustomerName(delivery.customerName);
+    const confirmed = window.confirm(
+      `Mark ${orderLabel}${customerLabel ? ` for ${customerLabel}` : ""} as delivered?\n\nThis removes it from active Dispatch and keeps it in Delivery History.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const deliveredAt = new Date().toISOString();
+
+    setMarkingDeliveredId(delivery.id);
+    setError("");
+
+    try {
+      await onUpdateDelivery(delivery.id, {
+        status: "complete",
+        deliveredAt,
+        deliveryCompletionSource: "dispatchOverride",
+        deliveryOverrideAt: deliveredAt,
+      });
+    } catch (updateError) {
+      console.error("Unable to mark delivery delivered:", updateError);
+      setError(
+        `Unable to mark ${orderLabel} delivered. Check your connection and try again.`,
+      );
+    } finally {
+      setMarkingDeliveredId("");
+    }
+  }
+
   return (
     <PageContainer>
       <Breadcrumbs
@@ -1972,6 +2009,8 @@ export default function DeliveryDispatchPage({
             const contactPhone =
               delivery.contactPhone || delivery.phoneNumber || "";
             const isSaving = savingDeliveryId === delivery.id;
+            const isMarkingDelivered =
+              markingDeliveredId === delivery.id;
             const assignments = getAssignments(delivery);
             const canScheduleDelivery = assignmentsReady(
               assignments,
@@ -2106,17 +2145,6 @@ export default function DeliveryDispatchPage({
                         />
                       </button>
 
-                      {canEditDeliveries ? (
-                        <button
-                          type="button"
-                          onClick={() => onEditDelivery(delivery.id)}
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100 sm:w-auto"
-                        >
-                          <Edit3 className="h-4 w-4" aria-hidden="true" />
-                          Edit
-                        </button>
-                      ) : null}
-
                       <button
                         type="button"
                         onClick={() =>
@@ -2153,6 +2181,7 @@ export default function DeliveryDispatchPage({
                         }}
                         className="sr-only"
                       />
+
                     </div>
                   </div>
 
@@ -2316,6 +2345,17 @@ export default function DeliveryDispatchPage({
                         <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-500 sm:text-sm">
                           Added {formatCreatedAt(delivery.createdAt)}
                         </span>
+                      ) : null}
+
+                      {canEditDeliveries ? (
+                        <button
+                          type="button"
+                          onClick={() => onEditDelivery(delivery.id)}
+                          className="ml-auto inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-black text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
+                        >
+                          <Edit3 className="h-4 w-4" aria-hidden="true" />
+                          Edit
+                        </button>
                       ) : null}
                   </div>
                 </div>
@@ -2942,6 +2982,25 @@ export default function DeliveryDispatchPage({
 	                  </div>
 	                </div>
 	                ) : null}
+
+                  <div className="flex justify-end border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
+                    <button
+                      type="button"
+                      onClick={() => handleMarkDelivered(delivery)}
+                      disabled={
+                        isSaving ||
+                        isUploadingDeliveryOrder ||
+                        isMarkingDelivered
+                      }
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-800 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                    >
+                      <CheckCircle2
+                        className="h-4 w-4"
+                        aria-hidden="true"
+                      />
+                      {isMarkingDelivered ? "Saving..." : "Mark Delivered"}
+                    </button>
+                  </div>
 	              </article>
             );
           })}
