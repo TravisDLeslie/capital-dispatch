@@ -132,6 +132,7 @@ const permissionGroups = [
       { id: "stocking-handbook", label: "Stocking Handbook" },
       { id: "trex-price-book", label: "Trex Price Book" },
       { id: "timbertech-price-book", label: "TimberTech Price Book" },
+      { id: "woodgrain-price-book", label: "Woodgrain Price Book" },
     ],
   },
   {
@@ -268,6 +269,7 @@ const legacyRolePermissionPresets = {
     "stocking-handbook",
     "trex-price-book",
     "timbertech-price-book",
+    "woodgrain-price-book",
   ],
   accounting: [
     "dashboard",

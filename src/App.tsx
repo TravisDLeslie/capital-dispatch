@@ -30,6 +30,7 @@ import {
   Route,
   Search,
   ShieldCheck,
+  Trees,
   Truck,
   UsersRound,
   Warehouse,
@@ -245,6 +246,9 @@ const TrexPriceBookPage = lazy(() => import("./pages/TrexPriceBookPage"));
 const TimberTechPriceBookPage = lazy(
   () => import("./pages/TimberTechPriceBookPage"),
 );
+const WoodgrainPriceBookPage = lazy(
+  () => import("./pages/WoodgrainPriceBookPage"),
+);
 const SouthHubPage = lazy(() => import("./pages/SouthHubPage"));
 const SouthOverviewPage = lazy(() => import("./pages/SouthOverviewPage"));
 const SupplierRunsPage = lazy(() => import("./pages/SupplierRunsPage"));
@@ -269,6 +273,7 @@ const SOUTH_PICKUP_AUTO_REFRESH_MS = 5 * 60 * 1000;
 const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
 const TREX_COLLECTION_COUNT = 23;
 const TIMBERTECH_COLLECTION_COUNT = 12;
+const WOODGRAIN_CATEGORY_COUNT = 11;
 
 function getProfileDisplayName(user: Partial<UserProfile> | null | undefined) {
   const emailName = String(user?.email || "").split("@")[0] || "";
@@ -769,6 +774,7 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "stocking-handbook",
     "trex-price-book",
     "timbertech-price-book",
+    "woodgrain-price-book",
   ],
   accounting: [
     "dashboard",
@@ -1239,6 +1245,7 @@ function getAllowedPageIdsForRole(role: string) {
       "stocking-handbook",
       "trex-price-book",
       "timbertech-price-book",
+      "woodgrain-price-book",
       "accounting",
       "accounting-customers",
       "customer-payment-links",
@@ -1299,6 +1306,7 @@ function getAllowedPageIdsForRole(role: string) {
       "stocking-handbook",
       "trex-price-book",
       "timbertech-price-book",
+      "woodgrain-price-book",
       "accounting",
       "accounting-customers",
       "customer-payment-links",
@@ -1445,7 +1453,8 @@ function getAllowedPageIds(
     if (
       (pageIds.includes("stocking-handbook") ||
         pageIds.includes("trex-price-book") ||
-        pageIds.includes("timbertech-price-book")) &&
+        pageIds.includes("timbertech-price-book") ||
+        pageIds.includes("woodgrain-price-book")) &&
       !pageIds.includes("documents")
     ) {
       pageIds.push("documents");
@@ -2136,6 +2145,7 @@ export default function App() {
       "stocking-handbook",
       "trex-price-book",
       "timbertech-price-book",
+      "woodgrain-price-book",
     ].includes(pageId),
   );
   const canReadAccounting = effectiveAllowedPageIds.some((pageId) =>
@@ -6174,6 +6184,12 @@ export default function App() {
               value: TIMBERTECH_COLLECTION_COUNT,
               note: "Collections",
             },
+            {
+              icon: Trees,
+              label: "Woodgrain",
+              value: WOODGRAIN_CATEGORY_COUNT,
+              note: "Categories",
+            },
           ]}
           actions={[
             effectiveAllowedPageIds.includes("stocking-handbook")
@@ -6220,6 +6236,20 @@ export default function App() {
                   tone: "receiving",
                   variant: "compact",
                   onClick: () => setCurrentPage("timbertech-price-book"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("woodgrain-price-book")
+              ? {
+                  icon: Trees,
+                  label: "Price Book",
+                  title: "Woodgrain",
+                  description:
+                    "Search the complete stocking catalog, Capital net pricing, and sell prices at 22.5%, 25%, and 30% margin.",
+                  metric: WOODGRAIN_CATEGORY_COUNT,
+                  metricLabel: "Categories",
+                  tone: "marketing",
+                  variant: "compact",
+                  onClick: () => setCurrentPage("woodgrain-price-book"),
                 }
               : null,
           ].filter(Boolean)}
@@ -7156,6 +7186,12 @@ export default function App() {
                 value: TIMBERTECH_COLLECTION_COUNT,
                 note: "Collections",
               },
+              {
+                icon: Trees,
+                label: "Woodgrain",
+                value: WOODGRAIN_CATEGORY_COUNT,
+                note: "Categories",
+              },
             ]}
             actions={[
               effectiveAllowedPageIds.includes("stocking-handbook")
@@ -7204,6 +7240,20 @@ export default function App() {
                     onClick: () => setCurrentPage("timbertech-price-book"),
                   }
                 : null,
+              effectiveAllowedPageIds.includes("woodgrain-price-book")
+                ? {
+                    icon: Trees,
+                    label: "Price Book",
+                    title: "Woodgrain",
+                    description:
+                      "Search the complete stocking catalog, Capital net pricing, and sell prices at 22.5%, 25%, and 30% margin.",
+                    metric: WOODGRAIN_CATEGORY_COUNT,
+                    metricLabel: "Categories",
+                    tone: "marketing",
+                    variant: "compact",
+                    onClick: () => setCurrentPage("woodgrain-price-book"),
+                  }
+                : null,
             ].filter(Boolean)}
           />
         ) : null;
@@ -7229,6 +7279,9 @@ export default function App() {
         return canReadDocuments ? (
           <TimberTechPriceBookPage onPageChange={setCurrentPage} />
         ) : null;
+
+      case "woodgrain-price-book":
+        return canReadDocuments ? <WoodgrainPriceBookPage /> : null;
 
       case "sales-report":
         return canReadSalesReport ? (
