@@ -18,6 +18,7 @@ import {
   Search,
   ShieldAlert,
   StickyNote,
+  Trash2,
   Truck,
   Upload,
   UserRound,
@@ -43,7 +44,37 @@ import {
   timeToMinutes,
 } from "../utils/deliverySchedule";
 import { formatCustomerName } from "../utils/textFormatters";
-import { uploadDeliveryOrderFiles } from "../utils/deliveryOrderStorage";
+import {
+  deleteDeliveryOrderFile,
+  uploadDeliveryOrderFiles,
+} from "../utils/deliveryOrderStorage";
+
+const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
+const DELIVERY_ORDER_UPLOAD_TARGET_KEY =
+  "dispatch-cl-delivery-order-upload-target";
+
+function rememberDeliveryOrderUploadContext(deliveryId) {
+  try {
+    sessionStorage.setItem(
+      REFRESH_PAGE_STORAGE_KEY,
+      "deliveries-dispatch",
+    );
+    sessionStorage.setItem(
+      DELIVERY_ORDER_UPLOAD_TARGET_KEY,
+      String(deliveryId || ""),
+    );
+  } catch (error) {
+    console.warn("Unable to remember delivery-order upload:", error);
+  }
+}
+
+function clearDeliveryOrderUploadTarget() {
+  try {
+    sessionStorage.removeItem(DELIVERY_ORDER_UPLOAD_TARGET_KEY);
+  } catch {
+    // Session storage is optional; the upload still works without it.
+  }
+}
 
 function normalizeSearch(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -135,6 +166,10 @@ function getDeliveryOrderDocuments(delivery) {
     : [];
 }
 
+function getDeliveryOrderDocumentKey(document) {
+  return String(document?.id || document?.path || document?.url || "");
+}
+
 function formatDocumentSize(value) {
   const size = Number(value);
 
@@ -149,6 +184,13 @@ function formatDocumentSize(value) {
   return `${Math.max(1, Math.round(size / 1024))} KB`;
 }
 
+function isPdfDocument(document) {
+  return (
+    document?.type === "application/pdf" ||
+    String(document?.name || "").toLowerCase().endsWith(".pdf")
+  );
+}
+
 function getDeliveryOrderUploadError(error) {
   const code = String(error?.code || "").toLowerCase();
   const message = String(error?.message || "");
@@ -158,7 +200,11 @@ function getDeliveryOrderUploadError(error) {
   }
 
   if (code.includes("storage/unauthorized")) {
-    return "Firebase blocked this upload. Publish Storage rules that allow delivery-order files.";
+    return "Your account does not have permission to upload this Delivery Order Copy.";
+  }
+
+  if (code.includes("storage/unauthenticated")) {
+    return "Your login expired. Refresh the app, sign in, and try the upload again.";
   }
 
   if (code.includes("storage/retry-limit-exceeded")) {
@@ -169,7 +215,11 @@ function getDeliveryOrderUploadError(error) {
     return message;
   }
 
-  return "Unable to upload that delivery order. Try again.";
+  if (message.includes("Firebase Storage is not configured")) {
+    return "Delivery-order storage is not configured for this app.";
+  }
+
+  return "Unable to upload that Delivery Order Copy. Try again.";
 }
 
 function formatDateLabel(value) {
@@ -1879,10 +1929,71 @@ export default function DeliveryDispatchPage({
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
   const [markingDeliveredId, setMarkingDeliveredId] = useState("");
   const [uploadingDeliveryId, setUploadingDeliveryId] = useState("");
+  const [deletingDeliveryOrderId, setDeletingDeliveryOrderId] = useState("");
+  const [attachedDeliveryOrderId, setAttachedDeliveryOrderId] = useState("");
+  const [previewedDeliveryOrder, setPreviewedDeliveryOrder] = useState(null);
   const [error, setError] = useState("");
   const [routeMapDate, setRouteMapDate] = useState("");
   const [draftRouteOrders, setDraftRouteOrders] = useState({});
   const deliveryOrderInputRefs = useRef({});
+
+  useEffect(() => {
+    if (!previewedDeliveryOrder) {
+      return undefined;
+    }
+
+    function handlePreviewKeyDown(event) {
+      if (event.key === "Escape") {
+        setPreviewedDeliveryOrder(null);
+      }
+    }
+
+    window.addEventListener("keydown", handlePreviewKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handlePreviewKeyDown);
+    };
+  }, [previewedDeliveryOrder]);
+
+  useEffect(() => {
+    let uploadTargetId = "";
+
+    try {
+      uploadTargetId =
+        sessionStorage.getItem(DELIVERY_ORDER_UPLOAD_TARGET_KEY) || "";
+    } catch {
+      return;
+    }
+
+    if (!uploadTargetId) {
+      return;
+    }
+
+    const uploadTarget = deliveries.find(
+      (delivery) => delivery.id === uploadTargetId,
+    );
+
+    if (!uploadTarget) {
+      return;
+    }
+
+    setOpenDeliveryKeys((currentOpenDeliveryKeys) => ({
+      ...currentOpenDeliveryKeys,
+      [uploadTargetId]: true,
+    }));
+
+    if (getDeliveryOrderDocuments(uploadTarget).length > 0) {
+      setAttachedDeliveryOrderId(uploadTargetId);
+    }
+
+    window.setTimeout(() => {
+      document
+        .getElementById(`delivery-dispatch-${uploadTargetId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 75);
+
+    clearDeliveryOrderUploadTarget();
+  }, [deliveries]);
 
   const normalizedSearchQuery = normalizeSearch(searchQuery);
   const routeMapDeliveries = useMemo(
@@ -2218,11 +2329,79 @@ export default function DeliveryDispatchPage({
           ...uploadedDocuments,
         ],
       });
+      setAttachedDeliveryOrderId(delivery.id);
+      openDeliveryForDispatch(delivery.id);
+      onPageChange?.("deliveries-dispatch");
     } catch (uploadError) {
       console.error("Unable to upload delivery order:", uploadError);
       setError(getDeliveryOrderUploadError(uploadError));
+      clearDeliveryOrderUploadTarget();
     } finally {
       setUploadingDeliveryId("");
+    }
+  }
+
+  function handleChooseAnotherDeliveryOrder(deliveryId) {
+    rememberDeliveryOrderUploadContext(deliveryId);
+    setPreviewedDeliveryOrder(null);
+
+    window.setTimeout(() => {
+      deliveryOrderInputRefs.current[deliveryId]?.click();
+    }, 0);
+  }
+
+  async function handleDeleteDeliveryOrder(documentToDelete) {
+    const delivery = deliveries.find(
+      (candidate) => candidate.id === documentToDelete?.deliveryId,
+    );
+
+    if (!delivery) {
+      setError("Unable to find that delivery. Refresh the page and try again.");
+      return;
+    }
+
+    const documentName = documentToDelete.name || "this Delivery Order Copy";
+    const confirmed = window.confirm(
+      `Delete ${documentName} from order ${delivery.orderNumber || "delivery"}?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const documentKey = getDeliveryOrderDocumentKey(documentToDelete);
+    const remainingDocuments = getDeliveryOrderDocuments(delivery).filter(
+      (document) => getDeliveryOrderDocumentKey(document) !== documentKey,
+    );
+
+    setDeletingDeliveryOrderId(documentKey);
+    setError("");
+
+    try {
+      await onUpdateDelivery(delivery.id, {
+        deliveryOrderDocuments: remainingDocuments,
+      });
+
+      try {
+        await deleteDeliveryOrderFile(documentToDelete);
+      } catch (storageDeleteError) {
+        // The attachment has already been removed from the delivery. Keep the
+        // dispatch flow moving if Storage cleanup is temporarily unavailable.
+        console.warn(
+          "Unable to remove delivery-order file from Storage:",
+          storageDeleteError,
+        );
+      }
+
+      setPreviewedDeliveryOrder(null);
+      setAttachedDeliveryOrderId("");
+      openDeliveryForDispatch(delivery.id);
+      onPageChange?.("deliveries-dispatch");
+    } catch (deleteError) {
+      console.error("Unable to delete delivery order:", deleteError);
+      setError("Unable to delete that Delivery Order Copy. Try again.");
+    } finally {
+      setDeletingDeliveryOrderId("");
     }
   }
 
@@ -2498,9 +2677,10 @@ export default function DeliveryDispatchPage({
 
                       <button
                         type="button"
-                        onClick={() =>
-                          deliveryOrderInputRefs.current[delivery.id]?.click()
-                        }
+                        onClick={() => {
+                          rememberDeliveryOrderUploadContext(delivery.id);
+                          deliveryOrderInputRefs.current[delivery.id]?.click();
+                        }}
                         disabled={isUploadingDeliveryOrder}
                         className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                       >
@@ -2508,8 +2688,8 @@ export default function DeliveryDispatchPage({
                         {isUploadingDeliveryOrder
                           ? "Uploading..."
                           : deliveryOrderDocuments.length > 0
-                            ? "Add Another Order"
-                            : "Upload Delivery Order"}
+                            ? "Add Another Copy"
+                            : "Upload Delivery Order Copy"}
                       </button>
 
                       <input
@@ -2524,6 +2704,7 @@ export default function DeliveryDispatchPage({
                         multiple
                         disabled={isUploadingDeliveryOrder}
                         onChange={(event) => {
+                          rememberDeliveryOrderUploadContext(delivery.id);
                           handleDeliveryOrderUpload(
                             delivery,
                             event.target.files,
@@ -2541,27 +2722,43 @@ export default function DeliveryDispatchPage({
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-blue-900">
                           <FileText className="h-4 w-4" aria-hidden="true" />
-                          Delivery Order
+                          Delivery Order Copy
                         </p>
-                        <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-blue-700 shadow-sm">
-                          {deliveryOrderDocuments.length}{" "}
-                          {deliveryOrderDocuments.length === 1
-                            ? "file"
-                            : "files"}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {attachedDeliveryOrderId === delivery.id ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                              <CheckCircle2
+                                className="h-3.5 w-3.5"
+                                aria-hidden="true"
+                              />
+                              Attached
+                            </span>
+                          ) : null}
+                          <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-blue-700 shadow-sm">
+                            {deliveryOrderDocuments.length}{" "}
+                            {deliveryOrderDocuments.length === 1
+                              ? "file"
+                              : "files"}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="mt-3 grid gap-2 lg:grid-cols-2">
                         {deliveryOrderDocuments.map((document, documentIndex) => (
-                          <a
+                          <button
+                            type="button"
                             key={
                               document.id ||
                               document.path ||
                               `${delivery.id}-delivery-order-${documentIndex}`
                             }
-                            href={document.url}
-                            target="_blank"
-                            rel="noreferrer"
+                            onClick={() =>
+                              setPreviewedDeliveryOrder({
+                                ...document,
+                                deliveryId: delivery.id,
+                                orderNumber: delivery.orderNumber,
+                              })
+                            }
                             className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-blue-100 transition hover:ring-blue-300"
                           >
                             <span className="flex min-w-0 items-center gap-3">
@@ -2573,7 +2770,7 @@ export default function DeliveryDispatchPage({
                               </span>
                               <span className="min-w-0">
                                 <span className="block truncate text-sm font-black text-slate-900">
-                                  {document.name || "Delivery order"}
+                                  {document.name || "Delivery Order Copy"}
                                 </span>
                                 <span className="block text-xs font-bold text-slate-500">
                                   {formatDocumentSize(document.size) ||
@@ -2581,11 +2778,11 @@ export default function DeliveryDispatchPage({
                                 </span>
                               </span>
                             </span>
-                            <ExternalLink
+                            <Maximize2
                               className="h-4 w-4 shrink-0 text-blue-700"
                               aria-hidden="true"
                             />
-                          </a>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -3357,6 +3554,124 @@ export default function DeliveryDispatchPage({
           })}
         </div>
       )}
+
+      {previewedDeliveryOrder ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-2 backdrop-blur-sm sm:p-5"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delivery-order-preview-title"
+          onClick={() => setPreviewedDeliveryOrder(null)}
+        >
+          <div
+            className="flex h-[min(92vh,900px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl sm:rounded-3xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6 sm:py-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-700 sm:text-xs">
+                  Order {previewedDeliveryOrder.orderNumber || "Delivery"}
+                </p>
+                <h2
+                  id="delivery-order-preview-title"
+                  className="truncate text-lg font-black text-slate-950 sm:text-xl"
+                >
+                  {previewedDeliveryOrder.name || "Delivery Order Copy"}
+                </h2>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleChooseAnotherDeliveryOrder(
+                      previewedDeliveryOrder.deliveryId,
+                    )
+                  }
+                  disabled={
+                    uploadingDeliveryId ===
+                      previewedDeliveryOrder.deliveryId ||
+                    Boolean(deletingDeliveryOrderId)
+                  }
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-black text-blue-700 transition hover:bg-blue-100 disabled:cursor-wait disabled:opacity-50 sm:px-4"
+                  aria-label="Upload another Delivery Order Copy"
+                  title="Upload another Delivery Order Copy"
+                >
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden md:inline">Upload another</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleDeleteDeliveryOrder(previewedDeliveryOrder)
+                  }
+                  disabled={Boolean(deletingDeliveryOrderId)}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 text-sm font-black text-red-700 transition hover:bg-red-100 disabled:cursor-wait disabled:opacity-50 sm:px-4"
+                  aria-label="Delete Delivery Order Copy"
+                  title="Delete Delivery Order Copy"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden md:inline">
+                    {deletingDeliveryOrderId ? "Deleting..." : "Delete"}
+                  </span>
+                </button>
+                <a
+                  href={previewedDeliveryOrder.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition hover:bg-slate-50 sm:inline-flex"
+                >
+                  Open original
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewedDeliveryOrder(null)}
+                  disabled={Boolean(deletingDeliveryOrderId)}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800"
+                  aria-label="Close Delivery Order Copy preview"
+                >
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
+              {isPdfDocument(previewedDeliveryOrder) ? (
+                <iframe
+                  src={previewedDeliveryOrder.url}
+                  title={
+                    previewedDeliveryOrder.name || "Delivery Order Copy PDF"
+                  }
+                  className="h-full w-full rounded-xl border-0 bg-white"
+                />
+              ) : (
+                <img
+                  src={previewedDeliveryOrder.url}
+                  alt={previewedDeliveryOrder.name || "Delivery Order Copy"}
+                  className="h-full w-full rounded-xl bg-white object-contain"
+                />
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 sm:hidden">
+              <span className="text-xs font-bold text-slate-500">
+                {formatDocumentSize(previewedDeliveryOrder.size) ||
+                  "Attached file"}
+              </span>
+              <a
+                href={previewedDeliveryOrder.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-700"
+              >
+                Open original
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }

@@ -1,4 +1,9 @@
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import {
+  deleteObject,
+  getDownloadURL,
+  ref,
+  uploadBytes,
+} from "firebase/storage";
 import { auth, firebaseStorageBucket, storage } from "./firebase";
 import { compressImageFile } from "./photoStorage";
 
@@ -46,7 +51,7 @@ async function prepareDeliveryOrderFile(file) {
   }
 
   if (!isImageFile(file)) {
-    throw new Error("Choose a photo, image, or PDF delivery order.");
+    throw new Error("Choose a photo, image, or PDF Delivery Order Copy.");
   }
 
   try {
@@ -80,11 +85,11 @@ export async function uploadDeliveryOrderFile({ deliveryId, file }) {
   }
 
   if (!file) {
-    throw new Error("Choose a delivery order to upload.");
+    throw new Error("Choose a Delivery Order Copy to upload.");
   }
 
   if (file.size > MAX_DELIVERY_ORDER_FILE_SIZE) {
-    throw new Error("That delivery order is larger than 15 MB.");
+    throw new Error("That Delivery Order Copy is larger than 15 MB.");
   }
 
   const safeDeliveryId = safePathSegment(deliveryId, "delivery ID");
@@ -132,7 +137,7 @@ export async function uploadDeliveryOrderFiles({ deliveryId, files }) {
   const selectedFiles = Array.from(files || []);
 
   if (selectedFiles.length === 0) {
-    throw new Error("Choose a delivery order to upload.");
+    throw new Error("Choose a Delivery Order Copy to upload.");
   }
 
   const uploadedFiles = [];
@@ -147,4 +152,26 @@ export async function uploadDeliveryOrderFiles({ deliveryId, files }) {
   }
 
   return uploadedFiles;
+}
+
+export async function deleteDeliveryOrderFile(document) {
+  if (!storage) {
+    throw new Error("Firebase Storage is not configured.");
+  }
+
+  const path = String(document?.path || "").trim();
+
+  if (!path) {
+    return;
+  }
+
+  try {
+    await deleteObject(ref(storage, path));
+  } catch (error) {
+    if (String(error?.code || "").includes("storage/object-not-found")) {
+      return;
+    }
+
+    throw error;
+  }
 }
