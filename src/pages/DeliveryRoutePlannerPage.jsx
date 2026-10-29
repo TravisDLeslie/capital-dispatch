@@ -31,6 +31,7 @@ import {
 import {
   loadGooglePlaces,
 } from "../utils/googlePlaces";
+import { getCompassDirection } from "../utils/routeDirection";
 
 const ROUTE_STOPS_STORAGE_KEY = "dispatch-cl-delivery-route-stops";
 const MAX_ROUTE_STOPS = 10;
@@ -252,6 +253,7 @@ export default function DeliveryRoutePlannerPage({
     route: null,
     error: "",
   });
+  const [stopRouteMetrics, setStopRouteMetrics] = useState({});
   const googleMapsRouteUrl = useMemo(() => getGoogleMapsRouteUrl(stops), [stops]);
   const embeddedGoogleMapsRouteUrl = useMemo(
     () => getEmbeddedGoogleMapsRouteUrl(stops),
@@ -417,6 +419,72 @@ export default function DeliveryRoutePlannerPage({
               : routeError?.message) ||
             "Route totals are unavailable. You can still open the route in Google Maps.",
         });
+      })
+      .finally(() => globalThis.clearTimeout(timeoutId));
+
+    return () => {
+      globalThis.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [stops]);
+
+  useEffect(() => {
+    if (stops.length === 0) {
+      setStopRouteMetrics({});
+      return () => {};
+    }
+
+    const controller = new AbortController();
+    const timeoutId = globalThis.setTimeout(() => controller.abort(), 8000);
+
+    setStopRouteMetrics(
+      Object.fromEntries(
+        stops.map((stop) => [stop.id, { status: "loading" }]),
+      ),
+    );
+
+    Promise.all(
+      stops.map(async (stop) => {
+        const params = new URLSearchParams({
+          origin: capitalLumberAddress,
+          destination: stop.address,
+        });
+
+        try {
+          const response = await fetch(`/api/maps/route?${params.toString()}`, {
+            signal: controller.signal,
+          });
+          const routeData = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(routeData?.error || "Unable to check direction.");
+          }
+
+          return [
+            stop.id,
+            {
+              status: "ready",
+              direction: getCompassDirection(routeData.encodedPolyline),
+              distanceText: routeData.distanceText || "",
+            },
+          ];
+        } catch (routeError) {
+          if (controller.signal.aborted) {
+            return [stop.id, { status: "idle" }];
+          }
+
+          console.warn(
+            `Unable to calculate the direction for ${stop.address}:`,
+            routeError,
+          );
+          return [stop.id, { status: "error" }];
+        }
+      }),
+    )
+      .then((metricEntries) => {
+        if (!controller.signal.aborted) {
+          setStopRouteMetrics(Object.fromEntries(metricEntries));
+        }
       })
       .finally(() => globalThis.clearTimeout(timeoutId));
 
@@ -1026,6 +1094,7 @@ export default function DeliveryRoutePlannerPage({
               <div className="space-y-3">
                 {stops.map((stop, stopIndex) => {
                   const serviceOption = getStopServiceOption(stop);
+                  const stopRouteMetric = stopRouteMetrics[stop.id];
 
                   return (
                     <article
@@ -1042,6 +1111,23 @@ export default function DeliveryRoutePlannerPage({
                       <p className="mt-1 text-sm font-bold leading-5 text-slate-800">
                         {stop.address}
                       </p>
+                      {stopRouteMetric?.status === "ready" &&
+                      (stopRouteMetric.direction || stopRouteMetric.distanceText) ? (
+                        <span className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-800 ring-1 ring-blue-100">
+                          <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
+                          {stopRouteMetric.direction
+                            ? `${stopRouteMetric.direction} of Capital`
+                            : "From Capital"}
+                          {stopRouteMetric.distanceText
+                            ? ` · ${stopRouteMetric.distanceText}`
+                            : ""}
+                        </span>
+                      ) : stopRouteMetric?.status === "loading" ? (
+                        <span className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-500 ring-1 ring-slate-100">
+                          <Navigation className="h-3.5 w-3.5" aria-hidden="true" />
+                          Checking direction...
+                        </span>
+                      ) : null}
                       {isReadOnlyDriverView ? (
                         <span className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-800 ring-1 ring-amber-100">
                           <Clock className="h-3.5 w-3.5" aria-hidden="true" />
