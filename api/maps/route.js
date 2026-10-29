@@ -50,6 +50,19 @@ function readWaypointAddresses(value) {
     .slice(0, 10);
 }
 
+function readDepartureTime(value) {
+  const departureTime = new Date(String(value || ""));
+
+  if (
+    Number.isNaN(departureTime.getTime()) ||
+    departureTime.getTime() < Date.now() - 60_000
+  ) {
+    return "";
+  }
+
+  return departureTime.toISOString();
+}
+
 export default async function handler(request, response) {
   if (request.method !== "GET") {
     response.setHeader("Allow", "GET");
@@ -61,6 +74,7 @@ export default async function handler(request, response) {
   const origin = String(request.query.origin || "").trim();
   const destination = String(request.query.destination || "").trim();
   const waypointAddresses = readWaypointAddresses(request.query.waypoints);
+  const departureTime = readDepartureTime(request.query.departureTime);
   const shouldOptimizeWaypoints =
     String(request.query.optimizeWaypoints || "") === "true";
   if (!apiKey) {
@@ -97,6 +111,7 @@ export default async function handler(request, response) {
             : {}),
           travelMode: "DRIVE",
           routingPreference: "TRAFFIC_AWARE",
+          ...(departureTime ? { departureTime } : {}),
           computeAlternativeRoutes: false,
           units: "IMPERIAL",
         }),

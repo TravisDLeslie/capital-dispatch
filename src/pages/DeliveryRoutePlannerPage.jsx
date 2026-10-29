@@ -9,6 +9,7 @@ import {
   Maximize2,
   Navigation,
   Plus,
+  RefreshCw,
   Send,
   Share2,
   Sparkles,
@@ -152,6 +153,27 @@ function getCurrentTimeInputValue(date = new Date()) {
   ).padStart(2, "0")}`;
 }
 
+function getRouteDepartureTime(timeValue) {
+  if (!timeValue) {
+    return "";
+  }
+
+  const [hours, minutes] = timeValue.split(":").map(Number);
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return "";
+  }
+
+  const departureTime = new Date();
+  departureTime.setHours(hours, minutes, 0, 0);
+
+  if (departureTime.getTime() < Date.now() - 60_000) {
+    departureTime.setDate(departureTime.getDate() + 1);
+  }
+
+  return departureTime.toISOString();
+}
+
 function formatTimeAfterMinutes(timeValue, minutesToAdd) {
   if (!timeValue || !Number.isFinite(minutesToAdd)) {
     return "";
@@ -230,6 +252,9 @@ export default function DeliveryRoutePlannerPage({
   const [routeStartTime, setRouteStartTime] = useState(
     getCurrentTimeInputValue,
   );
+  const [routeCalculationStartTime, setRouteCalculationStartTime] = useState(
+    routeStartTime,
+  );
   const [stops, setStops] = useState(loadSavedStops);
   const [error, setError] = useState("");
   const [mapImageError, setMapImageError] = useState(false);
@@ -253,6 +278,7 @@ export default function DeliveryRoutePlannerPage({
     route: null,
     error: "",
   });
+  const [routeRefreshKey, setRouteRefreshKey] = useState(0);
   const [stopRouteMetrics, setStopRouteMetrics] = useState({});
   const googleMapsRouteUrl = useMemo(() => getGoogleMapsRouteUrl(stops), [stops]);
   const embeddedGoogleMapsRouteUrl = useMemo(
@@ -336,9 +362,10 @@ export default function DeliveryRoutePlannerPage({
     }
 
     setStops(latestSharedRoute?.stops || []);
-    setRouteStartTime(
-      latestSharedRoute?.departureTime || getCurrentTimeInputValue(),
-    );
+    const sharedDepartureTime =
+      latestSharedRoute?.departureTime || getCurrentTimeInputValue();
+    setRouteStartTime(sharedDepartureTime);
+    setRouteCalculationStartTime(sharedDepartureTime);
     setAddress("");
     setError("");
     setOptimizationStatus({ status: "idle", message: "" });
@@ -386,9 +413,14 @@ export default function DeliveryRoutePlannerPage({
       origin: capitalLumberAddress,
       destination,
     });
+    const departureTime = getRouteDepartureTime(routeCalculationStartTime);
 
     if (waypointAddresses.length > 0) {
       params.set("waypoints", waypointAddresses.join("|"));
+    }
+
+    if (departureTime) {
+      params.set("departureTime", departureTime);
     }
 
     setRouteState({ status: "loading", route: null, error: "" });
@@ -426,7 +458,7 @@ export default function DeliveryRoutePlannerPage({
       globalThis.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [stops]);
+  }, [stops, routeCalculationStartTime, routeRefreshKey]);
 
   useEffect(() => {
     if (stops.length === 0) {
@@ -670,8 +702,11 @@ export default function DeliveryRoutePlannerPage({
       return;
     }
 
+    const sharedDepartureTime =
+      route.departureTime || getCurrentTimeInputValue();
     setStops(route.stops);
-    setRouteStartTime(route.departureTime || getCurrentTimeInputValue());
+    setRouteStartTime(sharedDepartureTime);
+    setRouteCalculationStartTime(sharedDepartureTime);
     setAddress("");
     setError("");
     setOptimizationStatus({
@@ -939,20 +974,45 @@ export default function DeliveryRoutePlannerPage({
               </div>
             </div>
 
-            <label className="mt-4 block max-w-xs">
-              <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+            <div className="mt-4 block max-w-md">
+              <label
+                htmlFor="route-start-time"
+                className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500"
+              >
                 Leave yard
+              </label>
+              <span className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  id="route-start-time"
+                  type="time"
+                  value={routeStartTime}
+                  onChange={(event) => setRouteStartTime(event.target.value)}
+                  className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRouteCalculationStartTime(routeStartTime);
+                    setRouteRefreshKey((currentKey) => currentKey + 1);
+                  }}
+                  disabled={stops.length === 0 || routeState.status === "loading"}
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${
+                      routeState.status === "loading" ? "animate-spin" : ""
+                    }`}
+                  />
+                  Refresh times
+                </button>
               </span>
-              <input
-                type="time"
-                value={routeStartTime}
-                onChange={(event) => setRouteStartTime(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black text-slate-950 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-              />
               <span className="mt-1.5 block text-xs font-bold text-slate-500">
-                Used to calculate the exact return time.
+                {stops.length > 0 &&
+                routeStartTime !== routeCalculationStartTime
+                  ? "Time changed. Refresh to update drive and return times."
+                  : "Used to calculate the exact return time."}
               </span>
-            </label>
+            </div>
 
             {!isReadOnlyDriverView ? (
             <form onSubmit={handleAddStop} className="mt-5">
