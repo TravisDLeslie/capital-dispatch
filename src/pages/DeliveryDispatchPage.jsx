@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -36,11 +36,13 @@ import { getCompassDirection } from "../utils/routeDirection";
 import {
   getDeliveryBackAroundLabel,
   getDeliveryBlockSummary,
+  getDeliveryDurationMinutes,
   getDeliverySiteArrivalLabel,
   getDeliveryTimeRange,
   getDeliveryTimeWindow,
   getTimeSlotLabel,
   getTodayDateValue,
+  deliveryLoadBufferMinutes,
   deliveryTimeSlotOptions,
   scheduleWindowsOverlap,
   timeToMinutes,
@@ -54,6 +56,7 @@ import {
 const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
 const DELIVERY_ORDER_UPLOAD_TARGET_KEY =
   "dispatch-cl-delivery-order-upload-target";
+const SHOW_DELIVERY_DISPATCH_MAP = false;
 
 function rememberDeliveryOrderUploadContext(deliveryId) {
   try {
@@ -242,6 +245,72 @@ function formatDateLabel(value) {
   }).format(date);
 }
 
+function getDeliveryDateGroupKey(delivery) {
+  return String(delivery?.deliveryDate || "").trim();
+}
+
+function getDeliveryDateGroupLabel(dateKey) {
+  if (!dateKey) {
+    return "Unscheduled deliveries";
+  }
+
+  const todayDateKey = getTodayDateValue();
+
+  if (dateKey === todayDateKey) {
+    return `Today · ${formatDateLabel(dateKey)}`;
+  }
+
+  const tomorrow = new Date(`${todayDateKey}T12:00:00`);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowDateKey = `${tomorrow.getFullYear()}-${String(
+    tomorrow.getMonth() + 1,
+  ).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+
+  if (dateKey === tomorrowDateKey) {
+    return `Tomorrow · ${formatDateLabel(dateKey)}`;
+  }
+
+  return formatDateLabel(dateKey);
+}
+
+function DeliveryDateGroupHeader({ dateKey, deliveries }) {
+  const safeDeliveries = Array.isArray(deliveries) ? deliveries : [];
+  const needsDispatchCount = safeDeliveries.filter(
+    (delivery) =>
+      delivery.dispatchStatus === "needsDispatch" || !delivery.driver,
+  ).length;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#FC2C38] shadow-sm">
+          <CalendarDays className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-sm font-black text-slate-950">
+            {getDeliveryDateGroupLabel(dateKey)}
+          </p>
+          <p className="text-xs font-bold text-slate-500">
+            {safeDeliveries.length}{" "}
+            {safeDeliveries.length === 1 ? "delivery" : "deliveries"}
+          </p>
+        </div>
+      </div>
+
+      {needsDispatchCount > 0 ? (
+        <span className="w-fit rounded-full bg-amber-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800">
+          {needsDispatchCount} need{needsDispatchCount === 1 ? "s" : ""}{" "}
+          dispatch
+        </span>
+      ) : (
+        <span className="w-fit rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+          All assigned
+        </span>
+      )}
+    </div>
+  );
+}
+
 function formatTimeLabel(value) {
   if (!value) {
     return "";
@@ -326,6 +395,105 @@ function compareDeliveriesByRouteOrder(firstDelivery, secondDelivery) {
     String(firstDelivery.orderNumber || "").localeCompare(
       String(secondDelivery.orderNumber || ""),
     )
+  );
+}
+
+function compareDeliveriesByDateAndRoute(firstDelivery, secondDelivery) {
+  const firstDate = getDeliveryDateGroupKey(firstDelivery) || "9999-12-31";
+  const secondDate = getDeliveryDateGroupKey(secondDelivery) || "9999-12-31";
+
+  return (
+    firstDate.localeCompare(secondDate) ||
+    compareDeliveriesByRouteOrder(firstDelivery, secondDelivery)
+  );
+}
+
+function formatRoughDuration(minutes) {
+  const safeMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+  const hours = Math.floor(safeMinutes / 60);
+  const remainingMinutes = safeMinutes % 60;
+
+  if (hours > 0 && remainingMinutes > 0) {
+    return `${hours} hr ${remainingMinutes} min`;
+  }
+
+  if (hours > 0) {
+    return `${hours} hr`;
+  }
+
+  return `${remainingMinutes} min`;
+}
+
+function getRoughDeliveryTiming(delivery, routeMetric) {
+  const savedDriveMinutes = Number(delivery?.oneWayDriveMinutes);
+  const liveDriveMinutes = Number(routeMetric?.durationSeconds)
+    ? Math.max(1, Math.round(Number(routeMetric.durationSeconds) / 60))
+    : 0;
+  const oneWayDriveMinutes =
+    Number.isFinite(savedDriveMinutes) && savedDriveMinutes > 0
+      ? Math.round(savedDriveMinutes)
+      : liveDriveMinutes;
+  const deliveryMinutes = getDeliveryDurationMinutes(
+    delivery?.unloadType,
+    delivery?.estimatedDurationMinutes,
+    undefined,
+    delivery?.deliveryType,
+  );
+
+  return {
+    oneWayDriveMinutes,
+    deliveryMinutes,
+    loadMinutes: deliveryLoadBufferMinutes,
+    totalMinutes:
+      oneWayDriveMinutes > 0
+        ? oneWayDriveMinutes * 2 + deliveryMinutes + deliveryLoadBufferMinutes
+        : null,
+  };
+}
+
+function RoughDeliveryTiming({ delivery, routeMetric, className = "" }) {
+  const timing = getRoughDeliveryTiming(delivery, routeMetric);
+
+  return (
+    <div
+      className={`rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 ${className}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[9px] font-black uppercase tracking-[0.12em] text-blue-700">
+          Rough round trip
+        </p>
+        <p className="text-xs font-black text-slate-950">
+          {timing.totalMinutes === null
+            ? "Drive time calculating"
+            : formatRoughDuration(timing.totalMinutes)}
+        </p>
+      </div>
+      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-[10px] font-bold text-slate-600">
+        <span>Yard prep {formatRoughDuration(timing.loadMinutes)}</span>
+        <span className="text-slate-300" aria-hidden="true">
+          •
+        </span>
+        <span>
+          There{" "}
+          {timing.oneWayDriveMinutes > 0
+            ? formatRoughDuration(timing.oneWayDriveMinutes)
+            : "--"}
+        </span>
+        <span className="text-slate-300" aria-hidden="true">
+          •
+        </span>
+        <span>Delivery {formatRoughDuration(timing.deliveryMinutes)}</span>
+        <span className="text-slate-300" aria-hidden="true">
+          •
+        </span>
+        <span>
+          Back{" "}
+          {timing.oneWayDriveMinutes > 0
+            ? formatRoughDuration(timing.oneWayDriveMinutes)
+            : "--"}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -865,10 +1033,14 @@ function DeliveryDispatchOverview({
   deliveries,
   totalDeliveries,
   routeMetrics,
+  driverOptions,
+  vehicleOptions,
   selectedDate,
   onSelectedDateChange,
   searchQuery,
   onSearchQueryChange,
+  onDriverChange,
+  onTruckChange,
   onOpenDelivery,
 }) {
   const needsAssignmentCount = totalDeliveries.filter(
@@ -893,6 +1065,29 @@ function DeliveryDispatchOverview({
         : [delivery.driver].filter(Boolean);
 
     return drivers.length ? drivers.join(", ") : "Needs driver";
+  }
+
+  function getPrimaryDriver(delivery) {
+    const assignmentDriver = Array.isArray(delivery.dispatchAssignments)
+      ? delivery.dispatchAssignments.find((assignment) => assignment?.driver)
+          ?.driver
+      : "";
+
+    return (
+      assignmentDriver ||
+      (Array.isArray(delivery.drivers) ? delivery.drivers.find(Boolean) : "") ||
+      delivery.driver ||
+      ""
+    );
+  }
+
+  function getPrimaryVehicleId(delivery) {
+    const assignmentVehicleId = Array.isArray(delivery.dispatchAssignments)
+      ? delivery.dispatchAssignments.find((assignment) => assignment?.vehicleId)
+          ?.vehicleId
+      : "";
+
+    return assignmentVehicleId || delivery.vehicleId || "";
   }
 
   function getTruckSummary(delivery) {
@@ -1016,7 +1211,7 @@ function DeliveryDispatchOverview({
       </div>
 
       <div className="p-3 sm:p-4">
-        <div className="hidden grid-cols-[minmax(170px,1.1fr)_minmax(220px,1.35fr)_minmax(155px,0.8fr)_minmax(170px,0.95fr)_minmax(120px,0.6fr)_100px] gap-3 px-3 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
+        <div className="hidden grid-cols-[minmax(160px,1fr)_minmax(205px,1.15fr)_minmax(220px,1.1fr)_minmax(170px,0.9fr)_minmax(105px,0.5fr)_90px] gap-3 px-3 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
           <span>Delivery</span>
           <span>Destination</span>
           <span>Schedule</span>
@@ -1041,10 +1236,32 @@ function DeliveryDispatchOverview({
                 ? getDeliveryTimeRange(delivery)
                 : "Time not set";
               const routeMetric = routeMetrics[String(delivery.id || "")];
+              const primaryDriver = getPrimaryDriver(delivery);
+              const primaryVehicleId = getPrimaryVehicleId(delivery);
+              const deliveryDateKey = getDeliveryDateGroupKey(delivery);
+              const previousDeliveryDateKey =
+                index > 0
+                  ? getDeliveryDateGroupKey(deliveries[index - 1])
+                  : null;
+              const startsDateGroup =
+                deliveryDateKey !== previousDeliveryDateKey;
+              const dateGroupDeliveries = startsDateGroup
+                ? deliveries.filter(
+                    (groupDelivery) =>
+                      getDeliveryDateGroupKey(groupDelivery) ===
+                      deliveryDateKey,
+                  )
+                : [];
 
               return (
-                <article
-                  key={delivery.id}
+                <Fragment key={delivery.id}>
+                  {startsDateGroup ? (
+                    <DeliveryDateGroupHeader
+                      dateKey={deliveryDateKey}
+                      deliveries={dateGroupDeliveries}
+                    />
+                  ) : null}
+                  <article
                   role="button"
                   tabIndex={0}
                   onClick={() => handleDeliverySelect(delivery)}
@@ -1056,7 +1273,7 @@ function DeliveryDispatchOverview({
                     event.preventDefault();
                     handleDeliverySelect(delivery);
                   }}
-                  className="grid cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-[#FC2C38]/40 hover:bg-red-50/30 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-red-100 xl:grid-cols-[minmax(170px,1.1fr)_minmax(220px,1.35fr)_minmax(155px,0.8fr)_minmax(170px,0.95fr)_minmax(120px,0.6fr)_100px] xl:items-center"
+                  className="grid cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-[#FC2C38]/40 hover:bg-red-50/30 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-red-100 xl:grid-cols-[minmax(160px,1fr)_minmax(205px,1.15fr)_minmax(220px,1.1fr)_minmax(170px,0.9fr)_minmax(105px,0.5fr)_90px] xl:items-center"
                 >
                   <div className="flex min-w-0 items-start gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-[#FC2C38]">
@@ -1133,6 +1350,11 @@ function DeliveryDispatchOverview({
                         {scheduleLabel}
                       </p>
                     </div>
+                    <RoughDeliveryTiming
+                      delivery={delivery}
+                      routeMetric={routeMetric}
+                      className="col-span-2 mt-1 xl:mt-2"
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 xl:block">
@@ -1140,17 +1362,80 @@ function DeliveryDispatchOverview({
                       <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 xl:hidden">
                         Driver
                       </p>
-                      <p className="mt-0.5 truncate text-sm font-black text-slate-800">
-                        {getDriverSummary(delivery)}
-                      </p>
+                      <select
+                        value={primaryDriver}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        onChange={(event) => {
+                          event.stopPropagation();
+                          onDriverChange(delivery, event.target.value);
+                        }}
+                        className={`mt-0.5 block w-full min-w-0 rounded-lg border px-2.5 py-2 text-sm font-black outline-none transition focus:ring-4 ${
+                          primaryDriver
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-800 focus:border-emerald-400 focus:ring-emerald-100"
+                            : "border-amber-200 bg-amber-50 text-amber-800 focus:border-amber-400 focus:ring-amber-100"
+                        }`}
+                        aria-label={`Driver for order ${delivery.orderNumber}`}
+                      >
+                        <option value="">Needs driver...</option>
+                        {primaryDriver && !driverOptions.includes(primaryDriver) ? (
+                          <option value={primaryDriver}>{primaryDriver}</option>
+                        ) : null}
+                        {driverOptions.map((driverOption) => (
+                          <option key={driverOption} value={driverOption}>
+                            {driverOption}
+                          </option>
+                        ))}
+                      </select>
+                      {getDriverSummary(delivery).includes(",") ? (
+                        <p className="mt-1 truncate text-[10px] font-bold text-slate-500">
+                          {getDriverSummary(delivery)}
+                        </p>
+                      ) : null}
                     </div>
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 xl:hidden">
                         Truck
                       </p>
-                      <p className="mt-0.5 truncate text-xs font-bold text-slate-500">
-                        {getTruckSummary(delivery)}
-                      </p>
+                      <select
+                        value={primaryVehicleId}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        onChange={(event) => {
+                          event.stopPropagation();
+                          onTruckChange(delivery, event.target.value);
+                        }}
+                        disabled={vehicleOptions.length === 0}
+                        className={`mt-0.5 block w-full min-w-0 rounded-lg border px-2.5 py-2 text-sm font-black outline-none transition focus:ring-4 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${
+                          primaryVehicleId
+                            ? "border-blue-200 bg-blue-50 text-blue-800 focus:border-blue-400 focus:ring-blue-100"
+                            : "border-amber-200 bg-amber-50 text-amber-800 focus:border-amber-400 focus:ring-amber-100"
+                        }`}
+                        aria-label={`Truck for order ${delivery.orderNumber}`}
+                      >
+                        <option value="">
+                          {vehicleOptions.length === 0
+                            ? "No trucks configured"
+                            : "Needs truck..."}
+                        </option>
+                        {primaryVehicleId &&
+                        !vehicleOptions.some(
+                          (vehicleOption) =>
+                            vehicleOption.id === primaryVehicleId,
+                        ) ? (
+                          <option value={primaryVehicleId}>
+                            {getTruckSummary(delivery)}
+                          </option>
+                        ) : null}
+                        {vehicleOptions.map((vehicleOption) => (
+                          <option
+                            key={vehicleOption.id}
+                            value={vehicleOption.id}
+                          >
+                            {getVehicleLabel(vehicleOption)}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 
@@ -1183,7 +1468,8 @@ function DeliveryDispatchOverview({
                   >
                     {needsAssignment ? "Assign" : "Open"}
                   </button>
-                </article>
+                  </article>
+                </Fragment>
               );
             })}
           </div>
@@ -2020,6 +2306,8 @@ export default function DeliveryDispatchPage({
           const schedule =
             draftSchedules[delivery.id] ||
             getInitialSchedule(delivery, safeDeliveryOriginOptions);
+          const assignments =
+            draftAssignments[delivery.id] || getInitialAssignments(delivery);
           const draftRouteOrder = Number(
             draftRouteOrders[routeMapDate]?.[delivery.id],
           );
@@ -2027,6 +2315,9 @@ export default function DeliveryDispatchPage({
           return {
             ...delivery,
             ...schedule,
+            driver: assignments[0]?.driver ?? delivery.driver,
+            drivers: assignments.map((assignment) => assignment.driver),
+            dispatchAssignments: assignments,
             deliveryRouteOrder:
               Number.isFinite(draftRouteOrder) && draftRouteOrder > 0
                 ? draftRouteOrder
@@ -2038,11 +2329,10 @@ export default function DeliveryDispatchPage({
             delivery.status !== "complete" &&
             (!routeMapDate || delivery.deliveryDate === routeMapDate),
         )
-        .sort((firstDelivery, secondDelivery) => {
-          return compareDeliveriesByRouteOrder(firstDelivery, secondDelivery);
-        }),
+        .sort(compareDeliveriesByDateAndRoute),
     [
       deliveries,
+      draftAssignments,
       draftRouteOrders,
       draftSchedules,
       routeMapDate,
@@ -2109,6 +2399,8 @@ export default function DeliveryDispatchPage({
                 status: "ready",
                 direction: getCompassDirection(routeData.encodedPolyline),
                 distanceText: routeData.distanceText || "Miles unavailable",
+                durationSeconds: Number(routeData.durationSeconds) || 0,
+                durationText: routeData.durationText || "",
               };
             });
 
@@ -2344,7 +2636,19 @@ export default function DeliveryDispatchPage({
       return;
     }
 
-    const deliveryWithSchedule = getDeliveryWithDraftSchedule(delivery);
+    const deliveryWithDraftSchedule = getDeliveryWithDraftSchedule(delivery);
+    const routeMetric = routeMetrics[String(delivery.id || "")];
+    const roughTiming = getRoughDeliveryTiming(
+      deliveryWithDraftSchedule,
+      routeMetric,
+    );
+    const deliveryWithSchedule = {
+      ...deliveryWithDraftSchedule,
+      oneWayDriveMinutes:
+        Number(deliveryWithDraftSchedule.oneWayDriveMinutes) ||
+        roughTiming.oneWayDriveMinutes ||
+        0,
+    };
     const scheduleConflictDetails = findScheduleConflictDetails(
       deliveryWithSchedule,
       assignments,
@@ -2379,7 +2683,7 @@ export default function DeliveryDispatchPage({
         deliveryTimeSlot: schedule.deliveryTimeSlot,
         deliveryOriginName: schedule.deliveryOriginName,
         deliveryOriginAddress: schedule.deliveryOriginAddress,
-        oneWayDriveMinutes: Number(schedule.oneWayDriveMinutes) || 0,
+        oneWayDriveMinutes: deliveryWithSchedule.oneWayDriveMinutes,
         deliveryRouteOrder:
           getDeliveryRouteOrder(delivery) === Number.POSITIVE_INFINITY
             ? Math.max(
@@ -2591,19 +2895,29 @@ export default function DeliveryDispatchPage({
         deliveries={visibleRouteMapDeliveries}
         totalDeliveries={routeMapDeliveries}
         routeMetrics={routeMetrics}
+        driverOptions={driverOptions}
+        vehicleOptions={vehicleOptions}
         selectedDate={routeMapDate}
         onSelectedDateChange={setRouteMapDate}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
+        onDriverChange={(delivery, driverName) =>
+          updateAssignment(delivery, 0, "driver", driverName)
+        }
+        onTruckChange={(delivery, vehicleId) =>
+          updateAssignment(delivery, 0, "vehicleId", vehicleId)
+        }
         onOpenDelivery={openDeliveryForDispatch}
       />
 
-      <DeliveryRouteMapPlanner
-        deliveries={routeMapDeliveries}
-        selectedDate={routeMapDate}
-        onOpenDelivery={openDeliveryForDispatch}
-        onMoveDelivery={handleMoveRouteDelivery}
-      />
+      {SHOW_DELIVERY_DISPATCH_MAP ? (
+        <DeliveryRouteMapPlanner
+          deliveries={routeMapDeliveries}
+          selectedDate={routeMapDate}
+          onOpenDelivery={openDeliveryForDispatch}
+          onMoveDelivery={handleMoveRouteDelivery}
+        />
+      ) : null}
 
       {visibleRouteMapDeliveries.length === 0 ? (
         <EmptyState
@@ -2624,7 +2938,7 @@ export default function DeliveryDispatchPage({
         />
       ) : (
         <div className="space-y-4">
-          {visibleRouteMapDeliveries.map((delivery) => {
+          {visibleRouteMapDeliveries.map((delivery, index) => {
             const items = Array.isArray(delivery.items)
               ? delivery.items
               : [];
@@ -2647,10 +2961,23 @@ export default function DeliveryDispatchPage({
               driverOptions,
             );
             const schedule = getSchedule(delivery);
+            const routeMetric = routeMetrics[String(delivery.id || "")];
             const scheduledDelivery = getDeliveryWithDraftSchedule(delivery);
+            const roughTiming = getRoughDeliveryTiming(
+              scheduledDelivery,
+              routeMetric,
+            );
+            const timedDelivery =
+              roughTiming.oneWayDriveMinutes > 0 &&
+              !Number(scheduledDelivery.oneWayDriveMinutes)
+                ? {
+                    ...scheduledDelivery,
+                    oneWayDriveMinutes: roughTiming.oneWayDriveMinutes,
+                  }
+                : scheduledDelivery;
             const selectedScheduleConflictDetails = schedule.deliveryTimeSlot
               ? findScheduleConflictDetails(
-                  scheduledDelivery,
+                  timedDelivery,
                   assignments,
                   deliveries,
                 )
@@ -2671,15 +2998,35 @@ export default function DeliveryDispatchPage({
               uploadingDeliveryId === delivery.id;
             const driverThereLabel = delivery.driverTargetArrivalTime
               ? formatTimeLabel(delivery.driverTargetArrivalTime)
-              : getDeliverySiteArrivalLabel(scheduledDelivery);
+              : getDeliverySiteArrivalLabel(timedDelivery);
             const leaveByLabel = schedule.deliveryTimeSlot
               ? getTimeSlotLabel(schedule.deliveryTimeSlot)
               : "Not scheduled";
-            const routeMetric = routeMetrics[String(delivery.id || "")];
+            const deliveryDateKey = getDeliveryDateGroupKey(delivery);
+            const previousDeliveryDateKey =
+              index > 0
+                ? getDeliveryDateGroupKey(
+                    visibleRouteMapDeliveries[index - 1],
+                  )
+                : null;
+            const startsDateGroup =
+              deliveryDateKey !== previousDeliveryDateKey;
+            const dateGroupDeliveries = startsDateGroup
+              ? visibleRouteMapDeliveries.filter(
+                  (groupDelivery) =>
+                    getDeliveryDateGroupKey(groupDelivery) === deliveryDateKey,
+                )
+              : [];
 
             return (
-              <article
-                key={delivery.id}
+              <Fragment key={delivery.id}>
+                {startsDateGroup ? (
+                  <DeliveryDateGroupHeader
+                    dateKey={deliveryDateKey}
+                    deliveries={dateGroupDeliveries}
+                  />
+                ) : null}
+                <article
                 id={`delivery-dispatch-${delivery.id}`}
                 className={`overflow-hidden rounded-3xl border bg-white shadow-sm transition ${
                   dispatchPanelOpen
@@ -2758,8 +3105,13 @@ export default function DeliveryDispatchPage({
                         Leave By {leaveByLabel}
                       </p>
                       <p className="mt-1 text-sm font-black text-emerald-700">
-                        Back around {getDeliveryBackAroundLabel(scheduledDelivery)}
+                        Back around {getDeliveryBackAroundLabel(timedDelivery)}
                       </p>
+                      <RoughDeliveryTiming
+                        delivery={timedDelivery}
+                        routeMetric={routeMetric}
+                        className="mt-3"
+                      />
                     </div>
 
                     <div className="flex min-h-full flex-col justify-center rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-left">
@@ -2771,7 +3123,7 @@ export default function DeliveryDispatchPage({
                           {formatDateLabel(schedule.deliveryDate)}
                         </p>
                         <p className="mt-0.5 text-sm font-black text-slate-600">
-                          {getDeliveryTimeRange(scheduledDelivery)}
+                          {getDeliveryTimeRange(timedDelivery)}
                         </p>
                       </div>
 
@@ -3159,7 +3511,7 @@ export default function DeliveryDispatchPage({
 	                  </section>
 
                   <ScheduleAvailabilityPreview
-                    delivery={scheduledDelivery}
+                    delivery={timedDelivery}
                     assignments={assignments}
                     deliveries={deliveries}
                     schedule={schedule}
@@ -3224,7 +3576,7 @@ export default function DeliveryDispatchPage({
                           Site Around
                         </p>
                         <p className="mt-1 text-lg font-black text-blue-900">
-                          {getDeliverySiteArrivalLabel(scheduledDelivery)}
+                          {getDeliverySiteArrivalLabel(timedDelivery)}
                         </p>
                       </div>
 
@@ -3251,7 +3603,7 @@ export default function DeliveryDispatchPage({
                               : "text-slate-600"
                           }`}
                         >
-                          {getDeliveryBackAroundLabel(scheduledDelivery)}
+                          {getDeliveryBackAroundLabel(timedDelivery)}
                         </p>
                       </div>
                     </div>
@@ -3311,7 +3663,7 @@ export default function DeliveryDispatchPage({
 
                               {deliveryTimeSlotOptions.map((timeSlot) => {
                                 const candidateDelivery = {
-                                  ...scheduledDelivery,
+                                  ...timedDelivery,
                                   deliveryTimeSlot: timeSlot.value,
                                 };
                                 const conflictDetails = findScheduleConflictDetails(
@@ -3372,7 +3724,7 @@ export default function DeliveryDispatchPage({
                           </div>
 
                           <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600">
-                            {getDeliveryBlockSummary(scheduledDelivery)}
+                            {getDeliveryBlockSummary(timedDelivery)}
                           </span>
                         </div>
 
@@ -3472,7 +3824,7 @@ export default function DeliveryDispatchPage({
 	                      id={`delivery-${delivery.id}-route`}
 	                      title="Route & Address"
 	                      summary={`${delivery.address || "No address"} · ${getDeliveryBlockSummary(
-	                        scheduledDelivery,
+	                        timedDelivery,
 	                      )}`}
 	                      icon={MapPin}
 	                      isOpen={isDetailOpen(delivery.id, "route")}
@@ -3670,6 +4022,7 @@ export default function DeliveryDispatchPage({
                     </button>
                   </div>
 	              </article>
+              </Fragment>
             );
           })}
         </div>

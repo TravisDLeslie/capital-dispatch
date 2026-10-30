@@ -13,6 +13,12 @@ import EmptyState from "../components/EmptyState";
 import PageContainer from "../components/PageContainer";
 import { capitalLumberAddress } from "../data/options";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
+import {
+  deliveryLoadBufferMinutes,
+  getDeliveryDurationMinutes,
+  getTimeSlotLabel,
+  getTodayDateValue,
+} from "../utils/deliverySchedule";
 import { getCompassDirection } from "../utils/routeDirection";
 import { formatCustomerName } from "../utils/textFormatters";
 
@@ -55,6 +61,70 @@ function formatDate(value) {
     month: "short",
     day: "numeric",
   }).format(date);
+}
+
+function getDateGroupLabel(value) {
+  if (!value) {
+    return "Unscheduled deliveries";
+  }
+
+  const today = getTodayDateValue();
+
+  if (value === today) {
+    return `Today · ${formatDate(value)}`;
+  }
+
+  const tomorrow = new Date(`${today}T12:00:00`);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowValue = `${tomorrow.getFullYear()}-${String(
+    tomorrow.getMonth() + 1,
+  ).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+
+  return value === tomorrowValue
+    ? `Tomorrow · ${formatDate(value)}`
+    : formatDate(value);
+}
+
+function formatDurationMinutes(value) {
+  const totalMinutes = Math.max(0, Math.round(Number(value) || 0));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours && minutes) {
+    return `${hours} hr ${minutes} min`;
+  }
+
+  if (hours) {
+    return `${hours} hr`;
+  }
+
+  return `${minutes} min`;
+}
+
+function getDeliveryTiming(delivery, routeMetric) {
+  const savedDriveMinutes = Number(delivery?.oneWayDriveMinutes);
+  const liveDriveMinutes = Number(routeMetric?.durationSeconds)
+    ? Math.max(1, Math.round(Number(routeMetric.durationSeconds) / 60))
+    : 0;
+  const driveMinutes =
+    Number.isFinite(savedDriveMinutes) && savedDriveMinutes > 0
+      ? Math.round(savedDriveMinutes)
+      : liveDriveMinutes;
+  const serviceMinutes = getDeliveryDurationMinutes(
+    delivery?.unloadType,
+    delivery?.estimatedDurationMinutes,
+    undefined,
+    delivery?.deliveryType,
+  );
+
+  return {
+    driveMinutes,
+    serviceMinutes,
+    totalMinutes:
+      driveMinutes > 0
+        ? driveMinutes * 2 + serviceMinutes + deliveryLoadBufferMinutes
+        : null,
+  };
 }
 
 function getDeliveryOrderBuild(delivery, orderBuilds) {
@@ -150,7 +220,7 @@ function getQueuedDeliveries(deliveries) {
 function ShipmentBadge({ shipmentType }) {
   if (!shipmentType) {
     return (
-      <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-slate-500">
+      <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-slate-500">
         Source not set
       </span>
     );
@@ -158,10 +228,29 @@ function ShipmentBadge({ shipmentType }) {
 
   return (
     <span
-      className={`rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.1em] ${shipmentType.className}`}
+      className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${shipmentType.className}`}
     >
       {shipmentType.label}
     </span>
+  );
+}
+
+function PlanningStat({ label, value, tone = "slate" }) {
+  const toneClasses = {
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+    blue: "border-blue-200 bg-blue-50 text-blue-800",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  };
+
+  return (
+    <div
+      className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-2.5 py-1.5 ${toneClasses[tone]}`}
+    >
+      <p className="shrink-0 text-[9px] font-black uppercase tracking-[0.12em] opacity-70">
+        {label}
+      </p>
+      <p className="truncate text-xs font-black">{value}</p>
+    </div>
   );
 }
 
@@ -169,34 +258,72 @@ function DeliveryCard({ delivery, orderBuilds, routeMetric }) {
   const build = getDeliveryOrderBuild(delivery, orderBuilds);
   const buildItems = getBuildItems(build);
   const items = Array.isArray(delivery.items) ? delivery.items : [];
+  const itemDetails = items.map((item) => ({
+    item,
+    shipmentType: getShipmentType(item, buildItems),
+    vendor: getItemVendor(item, buildItems),
+  }));
+  const vendors = [
+    ...new Set(itemDetails.map(({ vendor }) => vendor).filter(Boolean)),
+  ];
+  const sourceTypes = [
+    ...new Map(
+      itemDetails
+        .map(({ shipmentType }) => shipmentType)
+        .filter(Boolean)
+        .map((shipmentType) => [shipmentType.label, shipmentType]),
+    ).values(),
+  ];
+  const timing = getDeliveryTiming(delivery, routeMetric);
+  const contactPhone = delivery.contactPhone || delivery.phoneNumber;
+  const scheduleLabel = delivery.deliveryTimeSlot
+    ? getTimeSlotLabel(delivery.deliveryTimeSlot)
+    : "Time not scheduled";
 
   return (
-    <article className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-      <div className="grid gap-4 border-b border-slate-200 bg-slate-50/80 p-5 lg:grid-cols-[1.2fr_1fr] lg:items-center">
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="grid gap-3 border-b border-slate-200 bg-slate-50/80 p-4 lg:grid-cols-[0.95fr_1.15fr_1.1fr] lg:items-start">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
               Order {delivery.orderNumber || "Not entered"}
             </p>
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-amber-800">
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-amber-800">
               Awaiting dispatch
             </span>
           </div>
-          <h2 className="mt-2 truncate text-2xl font-black text-slate-950">
+          <h2 className="mt-1 truncate text-xl font-black text-slate-950">
             {formatCustomerName(delivery.customerName) || "No customer name"}
           </h2>
+          {contactPhone ? (
+            <p className="text-xs font-bold text-slate-500">
+              {contactPhone}
+            </p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {sourceTypes.length > 0 ? (
+              sourceTypes.map((shipmentType) => (
+                <ShipmentBadge
+                  key={shipmentType.label}
+                  shipmentType={shipmentType}
+                />
+              ))
+            ) : (
+              <ShipmentBadge shipmentType={null} />
+            )}
+          </div>
         </div>
 
-        <div className="grid gap-2 text-sm font-bold text-slate-600 sm:grid-cols-2 lg:grid-cols-1">
+        <div className="grid gap-1.5 text-xs font-bold text-slate-600">
           <span className="inline-flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-blue-600" aria-hidden="true" />
-            {formatDate(delivery.deliveryDate)}
+            {scheduleLabel}
           </span>
           <span className="inline-flex min-w-0 items-center gap-2">
             <MapPin className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
             <span className="truncate">{delivery.address || "Address not entered"}</span>
           </span>
-          <span className="inline-flex min-w-0 items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-blue-800">
+          <span className="inline-flex min-w-0 items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-blue-800">
             <Clock3 className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
             <span className="truncate">
               {routeMetric?.status === "ready"
@@ -209,26 +336,55 @@ function DeliveryCard({ delivery, orderBuilds, routeMetric }) {
             </span>
           </span>
         </div>
-
+        <div className="grid grid-cols-2 gap-1.5">
+          <PlanningStat
+            label="One way"
+            value={
+              timing.driveMinutes > 0
+                ? formatDurationMinutes(timing.driveMinutes)
+                : "Calculating"
+            }
+            tone="blue"
+          />
+          <PlanningStat
+            label="At delivery"
+            value={formatDurationMinutes(timing.serviceMinutes)}
+          />
+          <PlanningStat
+            label="Rough total"
+            value={
+              timing.totalMinutes
+                ? formatDurationMinutes(timing.totalMinutes)
+                : "Pending route"
+            }
+            tone="emerald"
+          />
+          <PlanningStat
+            label="Load"
+            value={`${items.length} item${items.length === 1 ? "" : "s"} · ${delivery.unloadType || "Normal"}`}
+          />
+        </div>
       </div>
 
-      <div className="p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="p-3.5">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
-              Material on this delivery
+            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+              Material &amp; vendors
             </p>
-            <p className="mt-1 text-sm font-bold text-slate-600">
-              Incoming shipment source is shown on every item.
+            <p className="text-xs font-bold text-slate-600">
+              {vendors.length > 0
+                ? vendors.join(" · ")
+                : "Vendor information has not been entered."}
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 text-xs font-black text-slate-600">
-            <span className="rounded-full bg-slate-100 px-3 py-1.5">
+          <div className="flex flex-wrap gap-1.5 text-[10px] font-black text-slate-600">
+            <span className="rounded-full bg-slate-100 px-2.5 py-1">
               {delivery.unloadType || "Normal"}
             </span>
             {delivery.needsTarp ? (
-              <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">
+              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
                 Tarp
               </span>
             ) : null}
@@ -236,24 +392,21 @@ function DeliveryCard({ delivery, orderBuilds, routeMetric }) {
         </div>
 
         {items.length > 0 ? (
-          <div className="grid gap-2">
-            {items.map((item, index) => {
-              const shipmentType = getShipmentType(item, buildItems);
-              const vendor = getItemVendor(item, buildItems);
-
+          <div className="grid gap-1.5 xl:grid-cols-2">
+            {itemDetails.map(({ item, shipmentType, vendor }, index) => {
               return (
                 <div
                   key={item.id || `${delivery.id}-item-${index}`}
-                  className="grid gap-3 rounded-2xl border border-slate-200 px-4 py-3 sm:grid-cols-[auto_1fr_auto] sm:items-center"
+                  className="grid gap-2 rounded-xl border border-slate-200 px-3 py-2 sm:grid-cols-[auto_1fr_auto] sm:items-center"
                 >
-                  <span className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-slate-950 px-2 text-sm font-black text-white">
+                  <span className="flex h-7 min-w-7 items-center justify-center rounded-lg bg-slate-950 px-1.5 text-xs font-black text-white">
                     {item.quantity || index + 1}
                   </span>
                   <div className="min-w-0">
-                    <p className="font-black text-slate-900">
+                    <p className="truncate text-sm font-black text-slate-900">
                       {item.description || "Delivery item"}
                     </p>
-                    <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    <p className="truncate text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
                       Vendor: {vendor || "Not entered"}
                     </p>
                   </div>
@@ -265,12 +418,79 @@ function DeliveryCard({ delivery, orderBuilds, routeMetric }) {
             })}
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500">
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-xs font-bold text-slate-500">
             No item details were added to this delivery.
           </div>
         )}
       </div>
     </article>
+  );
+}
+
+function DeliveryDateGroup({ dateKey, deliveries, orderBuilds, routeMetrics }) {
+  const itemCount = deliveries.reduce(
+    (total, delivery) =>
+      total + (Array.isArray(delivery.items) ? delivery.items.length : 0),
+    0,
+  );
+  const shipmentLabels = new Set();
+
+  deliveries.forEach((delivery) => {
+    const buildItems = getBuildItems(
+      getDeliveryOrderBuild(delivery, orderBuilds),
+    );
+
+    (Array.isArray(delivery.items) ? delivery.items : []).forEach((item) => {
+      const label = getShipmentType(item, buildItems)?.label;
+      if (label) shipmentLabels.add(label);
+    });
+  });
+
+  return (
+    <section className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-100/70 p-2.5 shadow-sm">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1.5 py-1">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-red-100 bg-white text-[#FC2C38] shadow-sm">
+            <CalendarDays className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+              Delivery date
+            </p>
+            <h2 className="text-lg font-black text-slate-950">
+              {getDateGroupLabel(dateKey)}
+            </h2>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {[...shipmentLabels].map((label) => (
+            <span
+              key={label}
+              className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-600"
+            >
+              {label}
+            </span>
+          ))}
+          <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-black text-white">
+            {deliveries.length} deliver{deliveries.length === 1 ? "y" : "ies"}
+          </span>
+          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-600">
+            {itemCount} item{itemCount === 1 ? "" : "s"}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        {deliveries.map((delivery) => (
+          <DeliveryCard
+            key={delivery.id}
+            delivery={delivery}
+            orderBuilds={orderBuilds}
+            routeMetric={routeMetrics[String(delivery.id || "")]}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -325,6 +545,7 @@ export default function QueuedUpcomingDeliveriesPage({
             deliveryId,
             {
               status: hasAddress ? "loading" : "missing",
+              durationSeconds: 0,
               durationText: "",
               distanceText: "",
             },
@@ -358,6 +579,7 @@ export default function QueuedUpcomingDeliveriesPage({
               nextMetrics[deliveryId] = {
                 status: "ready",
                 direction: getCompassDirection(routeData.encodedPolyline),
+                durationSeconds: Number(routeData.durationSeconds) || 0,
                 durationText: routeData.durationText || "Time unavailable",
                 distanceText: routeData.distanceText || "Miles unavailable",
               };
@@ -378,6 +600,7 @@ export default function QueuedUpcomingDeliveriesPage({
             deliveryIds.forEach((deliveryId) => {
               nextMetrics[deliveryId] = {
                 status: "error",
+                durationSeconds: 0,
                 durationText: "",
                 distanceText: "",
               };
@@ -397,17 +620,44 @@ export default function QueuedUpcomingDeliveriesPage({
       return queuedDeliveries;
     }
 
-    return queuedDeliveries.filter((delivery) =>
-      [
+    return queuedDeliveries.filter((delivery) => {
+      const buildItems = getBuildItems(
+        getDeliveryOrderBuild(delivery, orderBuilds),
+      );
+      const itemValues = (Array.isArray(delivery.items) ? delivery.items : []).flatMap(
+        (item) => [
+          item?.description,
+          getItemVendor(item, buildItems),
+          getShipmentType(item, buildItems)?.label,
+        ],
+      );
+
+      return [
         delivery.orderNumber,
         delivery.customerName,
         delivery.address,
-        ...(Array.isArray(delivery.items)
-          ? delivery.items.map((item) => item?.description)
-          : []),
-      ].some((value) => normalizeValue(value).includes(query)),
-    );
-  }, [queuedDeliveries, searchTerm]);
+        delivery.contactPhone,
+        delivery.phoneNumber,
+        ...itemValues,
+      ].some((value) => normalizeValue(value).includes(query));
+    });
+  }, [orderBuilds, queuedDeliveries, searchTerm]);
+
+  const visibleDateGroups = useMemo(() => {
+    const groups = new Map();
+
+    visibleDeliveries.forEach((delivery) => {
+      const dateKey = String(delivery.deliveryDate || "");
+      const group = groups.get(dateKey) || [];
+      group.push(delivery);
+      groups.set(dateKey, group);
+    });
+
+    return [...groups.entries()].map(([dateKey, groupedDeliveries]) => ({
+      dateKey,
+      deliveries: groupedDeliveries,
+    }));
+  }, [visibleDeliveries]);
 
   const shipmentCounts = useMemo(() => {
     const counts = { south: 0, theirTruck: 0 };
@@ -513,14 +763,15 @@ export default function QueuedUpcomingDeliveriesPage({
         />
       </label>
 
-      <section className="mt-5 grid gap-4">
+      <section className="mt-5 grid gap-5">
         {visibleDeliveries.length > 0 ? (
-          visibleDeliveries.map((delivery) => (
-            <DeliveryCard
-              key={delivery.id}
-              delivery={delivery}
+          visibleDateGroups.map(({ dateKey, deliveries: dateDeliveries }) => (
+            <DeliveryDateGroup
+              key={dateKey || "unscheduled"}
+              dateKey={dateKey}
+              deliveries={dateDeliveries}
               orderBuilds={orderBuilds}
-              routeMetric={routeMetrics[String(delivery.id || "")]}
+              routeMetrics={routeMetrics}
             />
           ))
         ) : (
