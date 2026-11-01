@@ -18,6 +18,7 @@ import {
 import { useMemo, useRef, useState } from "react";
 import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
+import OrderDetailsModal from "../components/OrderDetailsModal";
 import PageContainer from "../components/PageContainer";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
 import { getPOReceivingSummary } from "../utils/poReceivingSummary";
@@ -436,6 +437,25 @@ function getDashboardSearchItemLabel(item) {
     .join(" · ");
 }
 
+function getUniqueReferenceValues(values) {
+  const seenValues = new Set();
+
+  return values
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .filter((value) => {
+      const normalizedValue = normalizeSearchText(value);
+
+      if (seenValues.has(normalizedValue)) {
+        return false;
+      }
+
+      seenValues.add(normalizedValue);
+      return true;
+    });
+}
+
 function createDashboardSearchItem(
   record,
   type,
@@ -732,6 +752,7 @@ export default function SalesConverterPage({
 }) {
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [isDashboardSearchOpen, setIsDashboardSearchOpen] = useState(false);
+  const [viewingOrderNumber, setViewingOrderNumber] = useState("");
   const [locationLookupAddress, setLocationLookupAddress] = useState("");
   const [locationLookupStatus, setLocationLookupStatus] = useState("idle");
   const [locationLookupResult, setLocationLookupResult] = useState(null);
@@ -837,6 +858,70 @@ export default function SalesConverterPage({
       Array.isArray(searchSources?.[key]) ? searchSources[key] : [];
     const items = [];
     const checkIns = safeSource("checkIns");
+    const poToOrders = new Map();
+    const orderToPOs = new Map();
+    const addReferenceRelation = (poNumber, orderNumber) => {
+      const cleanPONumber = String(poNumber || "").trim();
+      const cleanOrderNumber = String(orderNumber || "").trim();
+
+      if (!cleanPONumber || !cleanOrderNumber) {
+        return;
+      }
+
+      const poKey = normalizeSearchText(cleanPONumber);
+      const orderKey = normalizeSearchText(cleanOrderNumber);
+      poToOrders.set(
+        poKey,
+        getUniqueReferenceValues([
+          ...(poToOrders.get(poKey) || []),
+          cleanOrderNumber,
+        ]),
+      );
+      orderToPOs.set(
+        orderKey,
+        getUniqueReferenceValues([
+          ...(orderToPOs.get(orderKey) || []),
+          cleanPONumber,
+        ]),
+      );
+    };
+    const addRecordRelations = (record) => {
+      const recordItems = [
+        ...(Array.isArray(record?.items) ? record.items : []),
+        ...(Array.isArray(record?.materials) ? record.materials : []),
+      ];
+      const poNumbers = getUniqueReferenceValues([
+        record?.poNumber,
+        record?.poNumbers,
+        record?.sourceSupplierRunPoNumber,
+        record?.sourceTheirTruckPONumber,
+        ...recordItems.map((item) => item?.poNumber),
+      ]);
+      const orderNumbers = getUniqueReferenceValues([
+        record?.orderNumber,
+        record?.sourceOrderNumber,
+        record?.orderAssignment?.orderNumber,
+        ...recordItems.map((item) => item?.orderNumber),
+      ]);
+
+      poNumbers.forEach((poNumber) =>
+        orderNumbers.forEach((orderNumber) =>
+          addReferenceRelation(poNumber, orderNumber),
+        ),
+      );
+    };
+
+    [
+      ...safeSource("supplierRuns"),
+      ...safeSource("theirTruckPOs"),
+      ...safeSource("checkIns"),
+      ...safeSource("deliveries"),
+      ...safeSource("orderBuilds"),
+    ].forEach(addRecordRelations);
+    const getOrdersForPO = (poNumber) =>
+      poToOrders.get(normalizeSearchText(poNumber)) || [];
+    const getPOsForOrder = (orderNumber) =>
+      orderToPOs.get(normalizeSearchText(orderNumber)) || [];
 
     [...safeSource("vendors")]
       .sort((firstVendor, secondVendor) =>
@@ -893,6 +978,7 @@ export default function SalesConverterPage({
             .join(" • "),
           poNumber || record.orderNumber || record.customerName || "",
           {
+            relatedOrderNumbers: getOrdersForPO(poNumber),
             receivingSummary: getPOReceivingSummary(
               checkIns,
               poNumber,
@@ -917,6 +1003,7 @@ export default function SalesConverterPage({
             .join(" • "),
           poNumber || record.orderNumber || record.customerName || "",
           {
+            relatedOrderNumbers: getOrdersForPO(poNumber),
             receivingSummary: getPOReceivingSummary(
               checkIns,
               poNumber,
@@ -946,6 +1033,7 @@ export default function SalesConverterPage({
             .join(" • "),
           poNumber || businessName || record.vendor || "",
           {
+            relatedOrderNumbers: getOrdersForPO(poNumber),
             receivingSummary: getPOReceivingSummary(checkIns, poNumber),
             poItems: receivedItems.map(getDashboardSearchItemLabel),
           },
@@ -964,6 +1052,10 @@ export default function SalesConverterPage({
             .filter(Boolean)
             .join(" • "),
           orderNumber || record.customerName || record.address || "",
+          {
+            orderNumber,
+            relatedPONumbers: getPOsForOrder(orderNumber),
+          },
         ),
       );
     });
@@ -979,6 +1071,10 @@ export default function SalesConverterPage({
             .filter(Boolean)
             .join(" • "),
           orderNumber || record.businessName || record.customerName || "",
+          {
+            orderNumber,
+            relatedPONumbers: getPOsForOrder(orderNumber),
+          },
         ),
       );
     });
@@ -1246,8 +1342,97 @@ export default function SalesConverterPage({
                           <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[#FC2C38]">
                             {result.type}
                           </span>
-                          <span className="mt-0.5 block truncate text-sm font-black text-slate-950">
-                            {result.title}
+                          <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                            <span
+                              role={
+                                result.orderNumber
+                                  ? "button"
+                                  : undefined
+                              }
+                              tabIndex={
+                                result.orderNumber
+                                  ? 0
+                                  : undefined
+                              }
+                              title={
+                                result.orderNumber
+                                  ? `View complete order ${result.orderNumber}`
+                                  : undefined
+                              }
+                              onMouseDown={(event) => {
+                                if (
+                                  result.orderNumber
+                                ) {
+                                  event.preventDefault();
+                                }
+                              }}
+                              onClick={(event) => {
+                                if (
+                                  !result.orderNumber
+                                ) {
+                                  return;
+                                }
+
+                                event.stopPropagation();
+                                setIsDashboardSearchOpen(false);
+                                setViewingOrderNumber(result.orderNumber);
+                              }}
+                              onKeyDown={(event) => {
+                                if (
+                                  result.orderNumber &&
+                                  (event.key === "Enter" || event.key === " ")
+                                ) {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  setIsDashboardSearchOpen(false);
+                                  setViewingOrderNumber(result.orderNumber);
+                                }
+                              }}
+                              className={`truncate text-sm font-black text-slate-950 ${
+                                result.orderNumber
+                                  ? "cursor-pointer rounded-md underline decoration-violet-300 decoration-2 underline-offset-4 transition hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                  : ""
+                              }`}
+                            >
+                              {result.title}
+                            </span>
+                            {result.relatedOrderNumbers
+                              ?.slice(0, 3)
+                              .map((orderNumber) => (
+                                <span
+                                  key={`${result.id}-order-${orderNumber}`}
+                                  role="button"
+                                  tabIndex={0}
+                                  title={`View complete order ${orderNumber}`}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setIsDashboardSearchOpen(false);
+                                    setViewingOrderNumber(orderNumber);
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      setIsDashboardSearchOpen(false);
+                                      setViewingOrderNumber(orderNumber);
+                                    }
+                                  }}
+                                  className="cursor-pointer rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-violet-700 transition hover:border-violet-400 hover:bg-violet-100 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                >
+                                  Order {orderNumber}
+                                </span>
+                              ))}
+                            {result.relatedPONumbers
+                              ?.slice(0, 3)
+                              .map((poNumber) => (
+                                <span
+                                  key={`${result.id}-po-${poNumber}`}
+                                  className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-blue-700"
+                                >
+                                  PO {poNumber}
+                                </span>
+                              ))}
                           </span>
                           {result.subtitle ? (
                             <span className="mt-0.5 block truncate text-xs font-semibold text-slate-500">
@@ -1266,6 +1451,9 @@ export default function SalesConverterPage({
                                 }`}
                               >
                                 {result.receivingSummary.label}
+                                {result.receivingSummary.receivedDateLabel
+                                  ? ` · ${result.receivingSummary.receivedDateLabel}`
+                                  : ""}
                               </span>
                               {result.receivingSummary.locationLabel ? (
                                 <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-blue-700">
@@ -1629,6 +1817,13 @@ export default function SalesConverterPage({
             </span>
           </button>
         </div>
+        {viewingOrderNumber ? (
+          <OrderDetailsModal
+            orderNumber={viewingOrderNumber}
+            sources={searchSources}
+            onClose={() => setViewingOrderNumber("")}
+          />
+        ) : null}
       </PageContainer>
     );
   }

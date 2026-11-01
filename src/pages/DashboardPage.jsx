@@ -942,6 +942,16 @@ export default function DashboardPage({
                           <span className="truncate text-sm font-black text-slate-950">
                             {result.title} · {result.description}
                           </span>
+                          {Array.isArray(result.links)
+                            ? result.links.slice(0, 3).map((link) => (
+                                <span
+                                  key={`${result.id}-${link.label}`}
+                                  className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-violet-700"
+                                >
+                                  {link.label}
+                                </span>
+                              ))
+                            : null}
                           {result.receivingStatus ? (
                             <span
                               className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${result.receivingStatus.className}`}

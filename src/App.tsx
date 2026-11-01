@@ -41,6 +41,7 @@ import {
 import AppHeader from "./components/AppHeader";
 import DispatchOpsDeliveryOverview from "./components/DispatchOpsDeliveryOverview";
 import FeatureErrorBoundary from "./components/FeatureErrorBoundary";
+import OrderDetailsModal from "./components/OrderDetailsModal";
 import SectionHubPage from "./components/SectionHubPage";
 import LoginPage from "./components/LoginPage";
 import {
@@ -363,6 +364,31 @@ function getLookupItemNumberText(item: Record<string, unknown>) {
     .map((value) => normalizeSearchNumber(value))
     .filter(Boolean)
     .join(" ");
+}
+
+function getLookupOrderNumbers(
+  record: Record<string, unknown>,
+  items: Record<string, unknown>[],
+) {
+  const seenOrderNumbers = new Set<string>();
+
+  return [
+    record.orderNumber,
+    record.sourceOrderNumber,
+    ...items.map((item) => item.orderNumber),
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .filter((orderNumber) => {
+      const orderKey = normalizeSearchText(orderNumber);
+
+      if (seenOrderNumbers.has(orderKey)) {
+        return false;
+      }
+
+      seenOrderNumbers.add(orderKey);
+      return true;
+    });
 }
 
 function getLookupItemLabel(item: Record<string, unknown>) {
@@ -1848,6 +1874,8 @@ export default function App() {
     useState("");
   const [traceInitialSearch, setTraceInitialSearch] = useState("");
   const [dispatchDashboardSearch, setDispatchDashboardSearch] =
+    useState("");
+  const [viewingDashboardOrderNumber, setViewingDashboardOrderNumber] =
     useState("");
   const [receivingDashboardSearch, setReceivingDashboardSearch] =
     useState("");
@@ -4965,6 +4993,10 @@ export default function App() {
               const items = Array.isArray(supplierRun.items)
                 ? supplierRun.items
                 : [];
+              const orderNumbers = getLookupOrderNumbers(
+                supplierRun as unknown as Record<string, unknown>,
+                items as Record<string, unknown>[],
+              );
               const receivingSummary = getPOReceivingSummary(
                 checkIns,
                 supplierRun.poNumber,
@@ -4978,6 +5010,7 @@ export default function App() {
                 vendor: supplierRun.vendor || "Vendor not entered",
                 itemCount: items.length,
                 items,
+                orderNumbers,
                 receivingSummary,
                 searchableText: normalizeSearchText(
                   [
@@ -4985,12 +5018,14 @@ export default function App() {
                     supplierRun.vendor,
                     supplierRun.customerName,
                     supplierRun.driver,
+                    ...orderNumbers,
                     ...items.map((item) => getLookupItemText(item)),
                   ].join(" "),
                 ),
                 searchableNumbers: normalizeSearchNumber(
                   [
                     supplierRun.poNumber,
+                    ...orderNumbers,
                     ...items.map((item) => getLookupItemNumberText(item)),
                   ].join(" "),
                 ),
@@ -5000,6 +5035,10 @@ export default function App() {
               const items = Array.isArray(theirTruckPO.items)
                 ? theirTruckPO.items
                 : [];
+              const orderNumbers = getLookupOrderNumbers(
+                theirTruckPO as unknown as Record<string, unknown>,
+                items as Record<string, unknown>[],
+              );
               const receivingSummary = getPOReceivingSummary(
                 checkIns,
                 theirTruckPO.poNumber,
@@ -5013,20 +5052,21 @@ export default function App() {
                 vendor: theirTruckPO.vendor || "Vendor not entered",
                 itemCount: items.length,
                 items,
+                orderNumbers,
                 receivingSummary,
                 searchableText: normalizeSearchText(
                   [
                     theirTruckPO.poNumber,
                     theirTruckPO.vendor,
                     theirTruckPO.customerName,
-                    theirTruckPO.orderNumber,
+                    ...orderNumbers,
                     ...items.map((item) => getLookupItemText(item)),
                   ].join(" "),
                 ),
                 searchableNumbers: normalizeSearchNumber(
                   [
                     theirTruckPO.poNumber,
-                    theirTruckPO.orderNumber,
+                    ...orderNumbers,
                     ...items.map((item) => getLookupItemNumberText(item)),
                   ].join(" "),
                 ),
@@ -5190,6 +5230,33 @@ export default function App() {
                                   <span className="text-sm font-black text-slate-950">
                                     PO {match.poNumber}
                                   </span>
+                                  {match.orderNumbers.map((orderNumber) => (
+                                    <span
+                                      key={`${match.id}-order-${orderNumber}`}
+                                      role="button"
+                                      tabIndex={0}
+                                      title={`View complete order ${orderNumber}`}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setViewingDashboardOrderNumber(orderNumber);
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (
+                                          event.key === "Enter" ||
+                                          event.key === " "
+                                        ) {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          setViewingDashboardOrderNumber(
+                                            orderNumber,
+                                          );
+                                        }
+                                      }}
+                                      className="cursor-pointer rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-violet-700 transition hover:border-violet-400 hover:bg-violet-100 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-300"
+                                    >
+                                      Order {orderNumber}
+                                    </span>
+                                  ))}
                                   <span
                                     className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${
                                       match.receivingSummary.key === "received"
@@ -5200,6 +5267,9 @@ export default function App() {
                                     }`}
                                   >
                                     {match.receivingSummary.label}
+                                    {match.receivingSummary.receivedDateLabel
+                                      ? ` · ${match.receivingSummary.receivedDateLabel}`
+                                      : ""}
                                   </span>
                                   {match.receivingSummary.locationLabel ? (
                                     <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-blue-700">
@@ -5314,6 +5384,20 @@ export default function App() {
                     onPageChange={navigateToPage}
                   />
                 </FeatureErrorBoundary>
+
+                {viewingDashboardOrderNumber ? (
+                  <OrderDetailsModal
+                    orderNumber={viewingDashboardOrderNumber}
+                    sources={{
+                      orderBuilds,
+                      supplierRuns: southLookupSupplierRuns,
+                      theirTruckPOs,
+                      deliveries,
+                      checkIns,
+                    }}
+                    onClose={() => setViewingDashboardOrderNumber("")}
+                  />
+                ) : null}
 
               </>
             }

@@ -54,6 +54,53 @@ function formatLocationSummary(locations) {
   return `${locations.slice(0, 2).join(", ")} +${locations.length - 2}`;
 }
 
+function getDateValue(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value?.toDate === "function") {
+    return value.toDate();
+  }
+
+  if (typeof value?.seconds === "number") {
+    return new Date(value.seconds * 1000);
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getLatestReceivedDate(checkIns) {
+  return checkIns
+    .map((checkIn) =>
+      getDateValue(
+        checkIn?.checkedInAt ||
+          checkIn?.receivedAt ||
+          checkIn?.updatedAt ||
+          checkIn?.createdAt,
+      ),
+    )
+    .filter(Boolean)
+    .sort((firstDate, secondDate) => secondDate - firstDate)[0];
+}
+
+function formatReceivedDate(date) {
+  if (!date) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
 export function getPOReceivingSummary(
   checkIns,
   poNumber,
@@ -84,6 +131,7 @@ export function getPOReceivingSummary(
     isReceived &&
     Number(expectedItemCount) > 0 &&
     receivedItemCount < Number(expectedItemCount);
+  const latestReceivedDate = getLatestReceivedDate(matchingCheckIns);
 
   return {
     key: !isReceived ? "pending" : isPartial ? "partial" : "received",
@@ -96,6 +144,8 @@ export function getPOReceivingSummary(
     isPartial,
     matchingCheckInCount: matchingCheckIns.length,
     receivedItemCount,
+    receivedAt: latestReceivedDate?.toISOString() || "",
+    receivedDateLabel: formatReceivedDate(latestReceivedDate),
     locations,
     locationLabel: formatLocationSummary(locations),
   };
