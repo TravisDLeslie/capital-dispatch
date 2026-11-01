@@ -2826,6 +2826,18 @@ export default function DeliveryDispatchPage({
       return;
     }
 
+    const deliveryElement = document.getElementById(
+      `delivery-dispatch-${delivery.id}`,
+    );
+    const deliveryViewportTop = deliveryElement?.getBoundingClientRect().top;
+    const deliveryIndex = visibleRouteMapDeliveries.findIndex(
+      (visibleDelivery) => visibleDelivery.id === delivery.id,
+    );
+    const nextDeliveryId =
+      deliveryIndex >= 0
+        ? visibleRouteMapDeliveries[deliveryIndex + 1]?.id || ""
+        : "";
+    const previousScrollTop = window.scrollY;
     const deliveredAt = new Date().toISOString();
 
     setMarkingDeliveredId(delivery.id);
@@ -2838,8 +2850,34 @@ export default function DeliveryDispatchPage({
         deliveryCompletionSource: "dispatchOverride",
         deliveryOverrideAt: deliveredAt,
       });
+      setOpenDeliveryKeys((currentOpenDeliveryKeys) => {
+        const nextOpenDeliveryKeys = { ...currentOpenDeliveryKeys };
+        delete nextOpenDeliveryKeys[delivery.id];
+        return nextOpenDeliveryKeys;
+      });
+
       window.requestAnimationFrame(() => {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        window.requestAnimationFrame(() => {
+          const nextDeliveryElement = nextDeliveryId
+            ? document.getElementById(`delivery-dispatch-${nextDeliveryId}`)
+            : null;
+
+          if (
+            nextDeliveryElement &&
+            Number.isFinite(deliveryViewportTop)
+          ) {
+            const nextDeliveryTop =
+              nextDeliveryElement.getBoundingClientRect().top;
+
+            window.scrollBy({
+              top: nextDeliveryTop - deliveryViewportTop,
+              behavior: "auto",
+            });
+            return;
+          }
+
+          window.scrollTo({ top: previousScrollTop, behavior: "auto" });
+        });
       });
     } catch (updateError) {
       console.error("Unable to mark delivery delivered:", updateError);
