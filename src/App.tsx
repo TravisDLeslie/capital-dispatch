@@ -37,7 +37,7 @@ import {
   X,
 } from "lucide-react";
 import AppHeader from "./components/AppHeader";
-import DispatchOpsDailyDeliveries from "./components/DispatchOpsDailyDeliveries";
+import DispatchOpsDeliveryOverview from "./components/DispatchOpsDeliveryOverview";
 import FeatureErrorBoundary from "./components/FeatureErrorBoundary";
 import SectionHubPage from "./components/SectionHubPage";
 import LoginPage from "./components/LoginPage";
@@ -1409,7 +1409,14 @@ function getAllowedPageIds(
     }
 
     if (workView === "dispatch-ops") {
-      nextPageIds.push("receiving", "check-in", "today", "search", "trace");
+      nextPageIds.push(
+        "deliveries-add",
+        "receiving",
+        "check-in",
+        "today",
+        "search",
+        "trace",
+      );
     }
 
     if (workView === "main") {
@@ -5120,17 +5127,23 @@ export default function App() {
                 <FeatureErrorBoundary
                   fallback={
                     <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-800">
-                      Today’s delivery list could not load. The Dispatch Ops links
+                      The delivery lineup could not load. The Dispatch Ops links
                       below are still available.
                     </div>
                   }
                 >
-                  <DispatchOpsDailyDeliveries
-                    createdBy={currentUserCreator}
-                    driverOptions={approvedEmployeeNames}
-                    className="mb-5"
+                  <DispatchOpsDeliveryOverview
+                    deliveries={deliveries}
+                    canAddDelivery={dashboardAllowedPageIds.includes(
+                      "deliveries-add",
+                    )}
+                    canOpenDispatch={dashboardAllowedPageIds.includes(
+                      "deliveries-dispatch",
+                    )}
+                    onPageChange={navigateToPage}
                   />
                 </FeatureErrorBoundary>
+
               </>
             }
           />

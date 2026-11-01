@@ -29,6 +29,7 @@ const dispatchOpsPermissionIds = [
   "supplier-runs-dispatch",
   "supplier-runs-check",
   "supplier-runs-calendar",
+  "deliveries-add",
   "deliveries-dispatch",
   "deliveries-route-planner",
   "receiving",
