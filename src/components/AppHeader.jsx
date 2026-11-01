@@ -20,11 +20,6 @@ import capitalLumberLogo from "../assets/capital-lumber-new.svg";
 
 const navigationItems = [
   {
-    group: "New Home",
-    id: "new-home",
-    label: "New Home",
-  },
-  {
     group: "Dashboard",
     id: "dashboard",
     label: "Dashboard",
@@ -765,7 +760,7 @@ export default function AppHeader({
       );
     }
 
-    return ["Dashboard", "Orders", "Dispatch", "South", "Deliveries", "Yard Tasks", "Sales", "Documents", "Accounting", "Admin", "Fleet", "New Home"].map((group) => {
+    return ["Dashboard", "Orders", "Dispatch", "South", "Deliveries", "Yard Tasks", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||

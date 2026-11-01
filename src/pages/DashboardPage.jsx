@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import PageContainer from "../components/PageContainer";
+import { getPOReceivingSummary } from "../utils/poReceivingSummary";
 import { formatCustomerName } from "../utils/textFormatters";
 
 function normalizeText(value) {
@@ -450,6 +451,11 @@ export default function DashboardPage({
             supplierRun.poNumber,
             items.length,
           ),
+          receivingSummary: getPOReceivingSummary(
+            checkIns,
+            supplierRun.poNumber,
+            items.length,
+          ),
           meta: [
             supplierRun.driver ? `Driver ${supplierRun.driver}` : "",
             supplierRun.status === "complete" ? "Complete" : "Open",
@@ -491,6 +497,11 @@ export default function DashboardPage({
           icon: Truck,
           tone: "bg-blue-50 text-blue-700",
           receivingStatus: getReceivingStatusForPO(
+            checkIns,
+            theirTruckPO.poNumber,
+            items.length,
+          ),
+          receivingSummary: getPOReceivingSummary(
             checkIns,
             theirTruckPO.poNumber,
             items.length,
@@ -567,6 +578,7 @@ export default function DashboardPage({
           label: "Checked In",
           className: RECEIVING_STATUS_STAMPS.received,
         },
+        receivingSummary: getPOReceivingSummary(checkIns, checkIn.poNumber),
         meta: [
           checkIn.checkedInBy ? `Checked in by ${checkIn.checkedInBy}` : "",
           checkIn.sourceType === "south" ? "From South" : "",
@@ -935,6 +947,11 @@ export default function DashboardPage({
                               className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${result.receivingStatus.className}`}
                             >
                               {result.receivingStatus.label}
+                            </span>
+                          ) : null}
+                          {result.receivingSummary?.locationLabel ? (
+                            <span className="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-blue-700">
+                              Location {result.receivingSummary.locationLabel}
                             </span>
                           ) : null}
                         </span>

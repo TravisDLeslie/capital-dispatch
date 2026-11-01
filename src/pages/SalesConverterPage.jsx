@@ -20,6 +20,7 @@ import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
+import { getPOReceivingSummary } from "../utils/poReceivingSummary";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const CAPITAL_LUMBER_ADDRESS = "3105 W State St, Boise, ID 83703";
@@ -418,6 +419,21 @@ function getRecordItemText(record) {
         .join(" "),
     )
     .join(" ");
+}
+
+function getDashboardSearchItemLabel(item) {
+  const quantity = String(item?.quantity || item?.qty || "").trim();
+  const description = String(
+    item?.description ||
+      item?.materialDescription ||
+      item?.itemDescription ||
+      item?.material ||
+      "Item detail",
+  ).trim();
+
+  return [quantity ? `Qty ${quantity}` : "", description]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function createDashboardSearchItem(
@@ -820,6 +836,7 @@ export default function SalesConverterPage({
     const safeSource = (key) =>
       Array.isArray(searchSources?.[key]) ? searchSources[key] : [];
     const items = [];
+    const checkIns = safeSource("checkIns");
 
     [...safeSource("vendors")]
       .sort((firstVendor, secondVendor) =>
@@ -865,6 +882,7 @@ export default function SalesConverterPage({
 
     safeSource("supplierRuns").forEach((record) => {
       const poNumber = String(record.poNumber || "").trim();
+      const recordItems = Array.isArray(record.items) ? record.items : [];
       items.push(
         createDashboardSearchItem(
           record,
@@ -874,12 +892,21 @@ export default function SalesConverterPage({
             .filter(Boolean)
             .join(" • "),
           poNumber || record.orderNumber || record.customerName || "",
+          {
+            receivingSummary: getPOReceivingSummary(
+              checkIns,
+              poNumber,
+              recordItems.length,
+            ),
+            poItems: recordItems.map(getDashboardSearchItemLabel),
+          },
         ),
       );
     });
 
     safeSource("theirTruckPOs").forEach((record) => {
       const poNumber = String(record.poNumber || "").trim();
+      const recordItems = Array.isArray(record.items) ? record.items : [];
       items.push(
         createDashboardSearchItem(
           record,
@@ -889,6 +916,14 @@ export default function SalesConverterPage({
             .filter(Boolean)
             .join(" • "),
           poNumber || record.orderNumber || record.customerName || "",
+          {
+            receivingSummary: getPOReceivingSummary(
+              checkIns,
+              poNumber,
+              recordItems.length,
+            ),
+            poItems: recordItems.map(getDashboardSearchItemLabel),
+          },
         ),
       );
     });
@@ -896,6 +931,11 @@ export default function SalesConverterPage({
     safeSource("checkIns").forEach((record) => {
       const poNumber = String(record.poNumber || "").trim();
       const businessName = record.orderAssignment?.businessName || record.customer?.businessName;
+      const receivedItems = Array.isArray(record.materials)
+        ? record.materials
+        : Array.isArray(record.items)
+          ? record.items
+          : [];
       items.push(
         createDashboardSearchItem(
           record,
@@ -905,6 +945,10 @@ export default function SalesConverterPage({
             .filter(Boolean)
             .join(" • "),
           poNumber || businessName || record.vendor || "",
+          {
+            receivingSummary: getPOReceivingSummary(checkIns, poNumber),
+            poItems: receivedItems.map(getDashboardSearchItemLabel),
+          },
         ),
       );
     });
@@ -1039,16 +1083,26 @@ export default function SalesConverterPage({
   if (dashboardMode) {
     return (
       <PageContainer>
-        <div className="mb-6">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
-            Main Dashboard
-          </p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
-            Main
-          </h1>
-          <p className="mt-2 max-w-3xl text-lg font-semibold text-slate-500">
-            Start an order, find activity across the app, or open a pricing tool.
-          </p>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
+              Main Dashboard
+            </p>
+            <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
+              Main
+            </h1>
+            <p className="mt-2 max-w-3xl text-lg font-semibold text-slate-500">
+              Start an order, find activity across the app, or open a pricing tool.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onPageChange?.("order-flow")}
+            className="inline-flex min-h-12 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:w-auto"
+          >
+            <ClipboardList aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
+            New Order
+          </button>
         </div>
 
         <form
@@ -1200,6 +1254,44 @@ export default function SalesConverterPage({
                               {result.subtitle}
                             </span>
                           ) : null}
+                          {result.receivingSummary ? (
+                            <span className="mt-2 flex flex-wrap items-center gap-1.5">
+                              <span
+                                className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${
+                                  result.receivingSummary.key === "received"
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : result.receivingSummary.key === "partial"
+                                      ? "border-orange-200 bg-orange-50 text-orange-700"
+                                      : "border-amber-200 bg-amber-50 text-amber-800"
+                                }`}
+                              >
+                                {result.receivingSummary.label}
+                              </span>
+                              {result.receivingSummary.locationLabel ? (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-blue-700">
+                                  <MapPin className="h-3 w-3" aria-hidden="true" />
+                                  {result.receivingSummary.locationLabel}
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : null}
+                          {Array.isArray(result.poItems) && result.poItems.length > 0 ? (
+                            <span className="mt-2 flex flex-wrap gap-1.5">
+                              {result.poItems.slice(0, 2).map((itemLabel, itemIndex) => (
+                                <span
+                                  key={`${result.id}-item-${itemIndex}`}
+                                  className="max-w-full truncate rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-700"
+                                >
+                                  {itemLabel}
+                                </span>
+                              ))}
+                              {result.poItems.length > 2 ? (
+                                <span className="rounded-lg bg-slate-200 px-2 py-1 text-[11px] font-black text-slate-600">
+                                  +{result.poItems.length - 2} more
+                                </span>
+                              ) : null}
+                            </span>
+                          ) : null}
                         </span>
                         <ArrowRight
                           aria-hidden="true"
@@ -1299,7 +1391,7 @@ export default function SalesConverterPage({
                 >
                   {locationLookupStatus === "loading"
                     ? "Calculating..."
-                    : "Get drive time"}
+                    : "Get drive time & price"}
                   <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2.7} />
                 </button>
                 <button

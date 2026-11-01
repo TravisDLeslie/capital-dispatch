@@ -10,6 +10,7 @@ import {
 } from "react";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import {
+  ArrowRight,
   Building2,
   Calculator,
   CalendarDays,
@@ -23,6 +24,7 @@ import {
   BookOpen,
   Mail,
   MailCheck,
+  MapPin,
   Package,
   PackageCheck,
   Percent,
@@ -51,6 +53,7 @@ import {
 import { getFirebaseErrorMessage } from "./utils/firebaseErrorMessages";
 import { auth, isFirebaseConfigured } from "./utils/firebase";
 import { isDeliveryComplete } from "./utils/deliveryStatus";
+import { getPOReceivingSummary } from "./utils/poReceivingSummary";
 import {
   isAssignedOpenSupplierRun,
   isOpenSupplierRun,
@@ -4949,6 +4952,97 @@ export default function App() {
     const isForcedWorkView = Boolean(forcedWorkView);
 
     if (!isForcedWorkView && dashboardWorkView === "dispatch-ops") {
+      const dispatchQuickLookupQuery = dispatchDashboardSearch.trim();
+      const dispatchQuickLookupText = normalizeSearchText(
+        dispatchQuickLookupQuery,
+      );
+      const dispatchQuickLookupNumber = normalizeSearchNumber(
+        dispatchQuickLookupQuery,
+      );
+      const dispatchQuickMatches = dispatchQuickLookupQuery
+        ? [
+            ...southLookupSupplierRuns.map((supplierRun) => {
+              const items = Array.isArray(supplierRun.items)
+                ? supplierRun.items
+                : [];
+              const receivingSummary = getPOReceivingSummary(
+                checkIns,
+                supplierRun.poNumber,
+                items.length,
+              );
+
+              return {
+                id: `dispatch-south-${supplierRun.id}`,
+                source: "South",
+                poNumber: supplierRun.poNumber || "No PO",
+                vendor: supplierRun.vendor || "Vendor not entered",
+                itemCount: items.length,
+                items,
+                receivingSummary,
+                searchableText: normalizeSearchText(
+                  [
+                    supplierRun.poNumber,
+                    supplierRun.vendor,
+                    supplierRun.customerName,
+                    supplierRun.driver,
+                    ...items.map((item) => getLookupItemText(item)),
+                  ].join(" "),
+                ),
+                searchableNumbers: normalizeSearchNumber(
+                  [
+                    supplierRun.poNumber,
+                    ...items.map((item) => getLookupItemNumberText(item)),
+                  ].join(" "),
+                ),
+              };
+            }),
+            ...theirTruckPOs.map((theirTruckPO) => {
+              const items = Array.isArray(theirTruckPO.items)
+                ? theirTruckPO.items
+                : [];
+              const receivingSummary = getPOReceivingSummary(
+                checkIns,
+                theirTruckPO.poNumber,
+                items.length,
+              );
+
+              return {
+                id: `dispatch-their-truck-${theirTruckPO.id}`,
+                source: "Their Truck",
+                poNumber: theirTruckPO.poNumber || "No PO",
+                vendor: theirTruckPO.vendor || "Vendor not entered",
+                itemCount: items.length,
+                items,
+                receivingSummary,
+                searchableText: normalizeSearchText(
+                  [
+                    theirTruckPO.poNumber,
+                    theirTruckPO.vendor,
+                    theirTruckPO.customerName,
+                    theirTruckPO.orderNumber,
+                    ...items.map((item) => getLookupItemText(item)),
+                  ].join(" "),
+                ),
+                searchableNumbers: normalizeSearchNumber(
+                  [
+                    theirTruckPO.poNumber,
+                    theirTruckPO.orderNumber,
+                    ...items.map((item) => getLookupItemNumberText(item)),
+                  ].join(" "),
+                ),
+              };
+            }),
+          ]
+            .filter(
+              (match) =>
+                (dispatchQuickLookupText &&
+                  match.searchableText.includes(dispatchQuickLookupText)) ||
+                (dispatchQuickLookupNumber &&
+                  match.searchableNumbers.includes(dispatchQuickLookupNumber)),
+            )
+            .slice(0, 6)
+        : [];
+
       return (
         <FeatureErrorBoundary
           fallback={
@@ -5060,6 +5154,109 @@ export default function App() {
                       Search POs
                     </button>
                   </div>
+
+                  {dispatchQuickLookupQuery ? (
+                    <div className="mt-3">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">
+                          Quick PO matches
+                        </p>
+                        <p className="text-xs font-bold text-slate-400">
+                          {dispatchQuickMatches.length} shown
+                        </p>
+                      </div>
+                      {dispatchQuickMatches.length > 0 ? (
+                        <div className="grid gap-2 lg:grid-cols-2">
+                          {dispatchQuickMatches.map((match) => (
+                            <button
+                              key={match.id}
+                              type="button"
+                              onClick={() =>
+                                handleTraceSearch(String(match.poNumber))
+                              }
+                              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left transition hover:border-blue-200 hover:bg-white"
+                            >
+                              <span
+                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xs font-black ${
+                                  match.source === "South"
+                                    ? "bg-red-50 text-[#FC2C38]"
+                                    : "bg-blue-50 text-blue-700"
+                                }`}
+                              >
+                                PO
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-sm font-black text-slate-950">
+                                    PO {match.poNumber}
+                                  </span>
+                                  <span
+                                    className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${
+                                      match.receivingSummary.key === "received"
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                        : match.receivingSummary.key === "partial"
+                                          ? "border-orange-200 bg-orange-50 text-orange-700"
+                                          : "border-amber-200 bg-amber-50 text-amber-800"
+                                    }`}
+                                  >
+                                    {match.receivingSummary.label}
+                                  </span>
+                                  {match.receivingSummary.locationLabel ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-blue-700">
+                                      <MapPin
+                                        aria-hidden="true"
+                                        className="h-3 w-3"
+                                      />
+                                      {match.receivingSummary.locationLabel}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="mt-1 block truncate text-xs font-bold text-slate-500">
+                                  {match.source} · {match.vendor} · {match.itemCount}{" "}
+                                  {match.itemCount === 1 ? "item" : "items"}
+                                </span>
+                                {match.items.length > 0 ? (
+                                  <span className="mt-1.5 flex flex-wrap gap-1">
+                                    {match.items.slice(0, 2).map((item, itemIndex) => {
+                                      const itemLabel = getLookupItemLabel(
+                                        item as Record<string, unknown>,
+                                      );
+
+                                      return (
+                                        <span
+                                          key={`${match.id}-item-${itemIndex}`}
+                                          className="max-w-full truncate rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700"
+                                        >
+                                          {itemLabel.quantity
+                                            ? `Qty ${itemLabel.quantity} · `
+                                            : ""}
+                                          {itemLabel.description}
+                                        </span>
+                                      );
+                                    })}
+                                    {match.items.length > 2 ? (
+                                      <span className="rounded-lg bg-slate-200 px-2 py-1 text-[10px] font-black text-slate-600">
+                                        +{match.items.length - 2} more
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <ArrowRight
+                                aria-hidden="true"
+                                className="h-4 w-4 shrink-0 text-slate-400"
+                                strokeWidth={2.7}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3 text-sm font-bold text-slate-500">
+                          No quick PO match yet. Use Search POs for the full PO chain.
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
 
                   <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center">
                     <label
