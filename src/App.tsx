@@ -1424,6 +1424,7 @@ function getAllowedPageIds(
         "order-flow",
         "order-builds",
         "trace",
+        "deliveries-calendar",
         "sales",
         "sales-tools",
         "sales-converter",
@@ -4948,11 +4949,6 @@ export default function App() {
     const isForcedWorkView = Boolean(forcedWorkView);
 
     if (!isForcedWorkView && dashboardWorkView === "dispatch-ops") {
-      const southNeedsDispatch =
-        adminDashboardOperations.southNeedsDispatch || 0;
-      const deliveryNeedsDispatch =
-        adminDashboardOperations.deliveryNeedsDispatch || 0;
-
       return (
         <FeatureErrorBoundary
           fallback={
@@ -4972,28 +4968,6 @@ export default function App() {
             stats={[]}
             actionsClassName="grid gap-4 lg:grid-cols-3"
             actions={[
-            dashboardAllowedPageIds.includes("dispatch")
-              ? {
-                  icon: ClipboardCheck,
-                  label:
-                    southNeedsDispatch + deliveryNeedsDispatch > 0
-                      ? "Action Needed"
-                      : "All Assigned",
-                  title: "Dispatch Queue",
-                  description:
-                    southNeedsDispatch + deliveryNeedsDispatch > 0
-                      ? "Assign a driver and truck to the South and delivery requests waiting below."
-                      : "Nothing is waiting for assignment. Open the board to review dispatched work.",
-                  metric: southNeedsDispatch + deliveryNeedsDispatch,
-                  metricLabel: "Waiting",
-                  ctaLabel: "Open Queue",
-                  className: "lg:col-span-3",
-                  solidIcon: true,
-                  tone: "priority",
-                  variant: "priority",
-                  onClick: () => setCurrentPage("dispatch"),
-                }
-              : null,
             dashboardAllowedPageIds.includes("south-overview") || canReadSouth
               ? {
                   icon: Truck,
@@ -6456,6 +6430,8 @@ export default function App() {
             },
             {
               icon: Trees,
+              logoSrc: "/brands/woodgrain.png",
+              logoAlt: "Woodgrain",
               label: "Woodgrain",
               value: WOODGRAIN_CATEGORY_COUNT,
               note: "Categories",
@@ -6511,6 +6487,8 @@ export default function App() {
             effectiveAllowedPageIds.includes("woodgrain-price-book")
               ? {
                   icon: Trees,
+                  logoSrc: "/brands/woodgrain.png",
+                  logoAlt: "Woodgrain",
                   label: "Price Book",
                   title: "Woodgrain",
                   description:
@@ -7474,6 +7452,8 @@ export default function App() {
               },
               {
                 icon: Trees,
+                logoSrc: "/brands/woodgrain.png",
+                logoAlt: "Woodgrain",
                 label: "Woodgrain",
                 value: WOODGRAIN_CATEGORY_COUNT,
                 note: "Categories",
@@ -7529,6 +7509,8 @@ export default function App() {
               effectiveAllowedPageIds.includes("woodgrain-price-book")
                 ? {
                     icon: Trees,
+                    logoSrc: "/brands/woodgrain.png",
+                    logoAlt: "Woodgrain",
                     label: "Price Book",
                     title: "Woodgrain",
                     description:

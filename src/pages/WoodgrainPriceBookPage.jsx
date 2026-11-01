@@ -202,7 +202,12 @@ export default function WoodgrainPriceBookPage() {
                 <BookOpen className="h-5 w-5" />
                 <p className="text-xs font-black uppercase tracking-[0.22em]">Documents · Price book</p>
               </div>
-              <h1 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">Woodgrain</h1>
+              <img
+                src="/brands/woodgrain.png"
+                alt="Woodgrain"
+                className="mt-5 h-14 w-auto max-w-[280px] rounded-2xl bg-white px-4 py-3 object-contain sm:h-16 sm:max-w-[340px]"
+              />
+              <h1 className="mt-4 text-4xl font-black tracking-tight sm:text-5xl">Woodgrain Price Book</h1>
               <p className="mt-3 max-w-3xl text-sm font-semibold leading-relaxed text-slate-300 sm:text-base">
                 Search the complete stocking-dealer catalog and quote from Capital Lumber net pricing wherever a negotiated item match is available.
               </p>

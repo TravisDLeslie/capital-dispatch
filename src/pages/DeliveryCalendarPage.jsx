@@ -25,6 +25,7 @@ import {
   scheduleWindowsOverlap,
   timeToMinutes,
 } from "../utils/deliverySchedule";
+import { isDeliveryComplete } from "../utils/deliveryStatus";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const timelineStartMinutes = 6 * 60;
@@ -112,15 +113,22 @@ function formatDateLabel(value) {
   }).format(new Date(`${dateKey}T12:00:00`));
 }
 
-function getScheduledDeliveries(deliveries, selectedDate) {
+function getDayDeliveries(deliveries, selectedDate) {
   return deliveries
     .filter(
       (delivery) =>
-        delivery.status !== "complete" &&
-        getDeliveryDrivers(delivery).length > 0 &&
+        !isDeliveryComplete(delivery) &&
         getDeliveryDateKey(delivery.deliveryDate) === selectedDate,
     )
     .sort(compareDeliveriesByRouteOrder);
+}
+
+function deliveryNeedsDispatch(delivery) {
+  return (
+    delivery?.dispatchStatus === "needsDispatch" ||
+    getDeliveryDrivers(delivery).length === 0 ||
+    getDeliveryTrucks(delivery).length === 0
+  );
 }
 
 function compareDeliveriesByRouteOrder(firstDelivery, secondDelivery) {
@@ -151,12 +159,11 @@ function compareDeliveriesByRouteOrder(firstDelivery, secondDelivery) {
   );
 }
 
-function getFirstScheduledDeliveryDate(deliveries) {
+function getFirstOpenDeliveryDate(deliveries) {
   return deliveries
     .filter(
       (delivery) =>
-        delivery.status !== "complete" &&
-        getDeliveryDrivers(delivery).length > 0 &&
+        !isDeliveryComplete(delivery) &&
         getDeliveryDateKey(delivery.deliveryDate),
     )
     .map((delivery) => getDeliveryDateKey(delivery.deliveryDate))
@@ -167,11 +174,40 @@ function getDeliveryDrivers(delivery) {
   const drivers = Array.isArray(delivery.drivers)
     ? delivery.drivers
     : [];
+  const assignmentDrivers = Array.isArray(delivery.dispatchAssignments)
+    ? delivery.dispatchAssignments.map((assignment) => assignment?.driver)
+    : [];
 
   return [
     ...new Set(
-      [delivery.driver, ...drivers]
+      [delivery.driver, ...drivers, ...assignmentDrivers]
         .map((driver) => String(driver || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function getDeliveryTrucks(delivery) {
+  const assignmentTrucks = Array.isArray(delivery?.dispatchAssignments)
+    ? delivery.dispatchAssignments.flatMap((assignment) => [
+        assignment?.vehicleTitle,
+        assignment?.vehicleBadge,
+      ])
+    : [];
+  const savedTrucks = Array.isArray(delivery?.vehicles)
+    ? delivery.vehicles
+    : [];
+
+  return [
+    ...new Set(
+      [
+        delivery?.vehicleTitle,
+        delivery?.vehicleBadge,
+        delivery?.truck,
+        ...savedTrucks,
+        ...assignmentTrucks,
+      ]
+        .map((truck) => String(truck || "").trim())
         .filter(Boolean),
     ),
   ];
@@ -195,6 +231,119 @@ function groupDeliveriesByDriver(deliveries) {
   }, {});
 }
 
+function DeliveryStatusOverview({
+  needsDispatchDeliveries,
+  scheduledDeliveries,
+  statusFilter,
+  onOpenDispatch,
+  onSelectScheduledDelivery,
+}) {
+  const sections = [
+    {
+      id: "needsDispatch",
+      title: "Needs Dispatch",
+      description: "Missing a driver or truck",
+      deliveries: needsDispatchDeliveries,
+      panelClass: "border-amber-200 bg-amber-50/70",
+      countClass: "bg-amber-100 text-amber-800",
+      labelClass: "text-amber-800",
+    },
+    {
+      id: "scheduled",
+      title: "Scheduled",
+      description: "Driver and truck assigned",
+      deliveries: scheduledDeliveries,
+      panelClass: "border-blue-200 bg-blue-50/60",
+      countClass: "bg-blue-100 text-blue-800",
+      labelClass: "text-blue-800",
+    },
+  ].filter((section) => statusFilter === "all" || section.id === statusFilter);
+
+  return (
+    <section
+      className={`mb-5 grid gap-4 ${
+        sections.length > 1 ? "lg:grid-cols-2" : ""
+      }`}
+    >
+      {sections.map((section) => (
+        <div
+          key={section.id}
+          className={`rounded-3xl border p-4 shadow-sm ${section.panelClass}`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p
+                className={`text-xs font-black uppercase tracking-[0.16em] ${section.labelClass}`}
+              >
+                {section.title}
+              </p>
+              <p className="mt-1 text-sm font-bold text-slate-600">
+                {section.description}
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1.5 text-sm font-black ${section.countClass}`}
+            >
+              {section.deliveries.length}
+            </span>
+          </div>
+
+          {section.deliveries.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {section.deliveries.map((delivery) => {
+                const drivers = getDeliveryDrivers(delivery);
+                const trucks = getDeliveryTrucks(delivery);
+
+                return (
+                  <button
+                    key={delivery.id}
+                    type="button"
+                    onClick={() =>
+                      section.id === "needsDispatch"
+                        ? onOpenDispatch?.()
+                        : onSelectScheduledDelivery?.(delivery.id)
+                    }
+                    className="grid w-full gap-2 rounded-2xl border border-white/90 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-black text-slate-950">
+                        {formatCustomerName(delivery.customerName) || "Delivery"}
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
+                        Order {delivery.orderNumber || "—"}
+                        {delivery.address ? ` · ${delivery.address}` : ""}
+                      </span>
+                    </span>
+                    <span className="text-left sm:text-right">
+                      <span className="block text-xs font-black text-slate-800">
+                        {delivery.deliveryTimeSlot
+                          ? getDeliveryTimeRange(delivery)
+                          : "Time not set"}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] font-bold text-slate-500">
+                        {section.id === "needsDispatch"
+                          ? [
+                              drivers.length ? "Driver set" : "Needs driver",
+                              trucks.length ? "Truck set" : "Needs truck",
+                            ].join(" · ")
+                          : `${drivers.join(", ")} · ${trucks.join(", ")}`}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-3 rounded-2xl border-2 border-dashed border-white bg-white/60 px-4 py-5 text-center text-sm font-bold text-slate-500">
+              No {section.title.toLowerCase()} deliveries on this date.
+            </div>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function deliveriesShareDriver(firstDelivery, secondDelivery) {
   const firstDrivers = getDeliveryDrivers(firstDelivery);
   const secondDrivers = getDeliveryDrivers(secondDelivery);
@@ -214,7 +363,7 @@ function findScheduleConflict(candidateDelivery, deliveries) {
   return deliveries.find(
     (delivery) =>
       delivery.id !== candidateDelivery.id &&
-      delivery.status !== "complete" &&
+      !isDeliveryComplete(delivery) &&
       delivery.dispatchStatus !== "needsDispatch" &&
       getDeliveryDateKey(delivery.deliveryDate) === candidateDate &&
       deliveriesShareDriver(candidateDelivery, delivery) &&
@@ -600,16 +749,24 @@ export default function DeliveryCalendarPage({
   const [expandedDeliveryIds, setExpandedDeliveryIds] = useState({});
   const [selectedTimelineDeliveryId, setSelectedTimelineDeliveryId] =
     useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
   const [error, setError] = useState("");
-  const fallbackScheduledDate = useMemo(
-    () => getFirstScheduledDeliveryDate(safeDeliveries),
+  const fallbackDeliveryDate = useMemo(
+    () => getFirstOpenDeliveryDate(safeDeliveries),
     [safeDeliveries],
   );
-
-  const scheduledDeliveries = useMemo(
-    () => getScheduledDeliveries(safeDeliveries, selectedDate),
+  const dayDeliveries = useMemo(
+    () => getDayDeliveries(safeDeliveries, selectedDate),
     [safeDeliveries, selectedDate],
+  );
+  const needsDispatchDeliveries = useMemo(
+    () => dayDeliveries.filter(deliveryNeedsDispatch),
+    [dayDeliveries],
+  );
+  const scheduledDeliveries = useMemo(
+    () => dayDeliveries.filter((delivery) => !deliveryNeedsDispatch(delivery)),
+    [dayDeliveries],
   );
   const deliveriesByDriver = useMemo(
     () => groupDeliveriesByDriver(scheduledDeliveries),
@@ -626,12 +783,12 @@ export default function DeliveryCalendarPage({
   useEffect(() => {
     if (
       selectedDate === getTodayDateValue() &&
-      scheduledDeliveries.length === 0 &&
-      fallbackScheduledDate
+      dayDeliveries.length === 0 &&
+      fallbackDeliveryDate
     ) {
-      setSelectedDate(fallbackScheduledDate);
+      setSelectedDate(fallbackDeliveryDate);
     }
-  }, [fallbackScheduledDate, scheduledDeliveries.length, selectedDate]);
+  }, [dayDeliveries.length, fallbackDeliveryDate, selectedDate]);
 
   function toggleDelivery(deliveryId) {
     setExpandedDeliveryIds((currentExpandedDeliveryIds) => ({
@@ -729,14 +886,47 @@ export default function DeliveryCalendarPage({
               {formatDateLabel(selectedDate)}
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-500">
-              {scheduledDeliveries.length}{" "}
-              {scheduledDeliveries.length === 1 ? "delivery" : "deliveries"}{" "}
-              across {driverNames.length}{" "}
-              {driverNames.length === 1 ? "driver" : "drivers"}
+              {dayDeliveries.length}{" "}
+              {dayDeliveries.length === 1 ? "delivery" : "deliveries"} ·{" "}
+              {needsDispatchDeliveries.length} need dispatch ·{" "}
+              {scheduledDeliveries.length} scheduled
             </p>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+              {[
+                { id: "all", label: "All", count: dayDeliveries.length },
+                {
+                  id: "needsDispatch",
+                  label: "Needs Dispatch",
+                  count: needsDispatchDeliveries.length,
+                },
+                {
+                  id: "scheduled",
+                  label: "Scheduled",
+                  count: scheduledDeliveries.length,
+                },
+              ].map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setStatusFilter(option.id)}
+                  className={`rounded-lg px-3 py-2 text-xs font-black transition ${
+                    statusFilter === option.id
+                      ? option.id === "needsDispatch"
+                        ? "bg-amber-100 text-amber-900 shadow-sm"
+                        : option.id === "scheduled"
+                          ? "bg-blue-100 text-blue-900 shadow-sm"
+                          : "bg-white text-slate-950 shadow-sm"
+                      : "text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  {option.label} {option.count}
+                </button>
+              ))}
+            </div>
+
             <button
               type="button"
               onClick={() => onPageChange?.("deliveries-queue")}
@@ -764,13 +954,31 @@ export default function DeliveryCalendarPage({
         </div>
       ) : null}
 
-      {scheduledDeliveries.length === 0 ? (
+      {dayDeliveries.length === 0 ? (
         <EmptyState
-          title="No deliveries scheduled"
-          description="Assigned deliveries with this date will show here by driver."
+          title="No deliveries on this date"
+          description="Deliveries that need dispatch and scheduled deliveries will both appear here."
         />
       ) : (
         <>
+          <DeliveryStatusOverview
+            needsDispatchDeliveries={needsDispatchDeliveries}
+            scheduledDeliveries={scheduledDeliveries}
+            statusFilter={statusFilter}
+            onOpenDispatch={() => onPageChange?.("deliveries-dispatch")}
+            onSelectScheduledDelivery={(deliveryId) => {
+              setSelectedTimelineDeliveryId(deliveryId);
+              window.setTimeout(() => {
+                document
+                  .getElementById("delivery-calendar-day-board")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }, 0);
+            }}
+          />
+
+          {statusFilter !== "needsDispatch" &&
+          scheduledDeliveries.length > 0 ? (
+            <div id="delivery-calendar-day-board" className="scroll-mt-5">
           <DeliveryTimelineBoard
             driverNames={driverNames}
             deliveriesByDriver={deliveriesByDriver}
@@ -894,6 +1102,8 @@ export default function DeliveryCalendarPage({
               </section>
             ))}
           </div>
+            </div>
+          ) : null}
         </>
       )}
     </PageContainer>

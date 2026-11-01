@@ -43,6 +43,7 @@ const mainPermissionIds = [
   "dashboard",
   "order-flow",
   "order-builds",
+  "deliveries-calendar",
   "sales",
   "sales-tools",
   "sales-converter",

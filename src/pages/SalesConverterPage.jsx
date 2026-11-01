@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Calculator,
+  CalendarDays,
   ClipboardList,
   Clock3,
   Layers,
@@ -11,15 +12,177 @@ import {
   Phone,
   Ruler,
   Search,
+  Truck,
   X,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
+import { isDeliveryComplete } from "../utils/deliveryStatus";
+import { formatCustomerName } from "../utils/textFormatters";
 
 const CAPITAL_LUMBER_ADDRESS = "3105 W State St, Boise, ID 83703";
 const METERS_PER_MILE = 1609.344;
+
+function formatUpcomingDeliveryDate(value) {
+  if (!value) {
+    return "Date not set";
+  }
+
+  const date = new Date(`${value}T12:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+function getDeliveryDriver(delivery) {
+  const assignedDriver = Array.isArray(delivery?.dispatchAssignments)
+    ? delivery.dispatchAssignments.find((assignment) => assignment?.driver)
+        ?.driver
+    : "";
+
+  return (
+    assignedDriver ||
+    (Array.isArray(delivery?.drivers)
+      ? delivery.drivers.find(Boolean)
+      : "") ||
+    delivery?.driver ||
+    ""
+  );
+}
+
+function MainDashboardUpcomingDeliveries({ deliveries = [], onPageChange }) {
+  const upcomingDeliveries = useMemo(() => {
+    const today = new Date();
+    const todayKey = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    return (Array.isArray(deliveries) ? deliveries : [])
+      .filter(
+        (delivery) =>
+          !isDeliveryComplete(delivery) &&
+          String(delivery?.deliveryDate || "") >= todayKey,
+      )
+      .sort((firstDelivery, secondDelivery) => {
+        const dateComparison = String(
+          firstDelivery?.deliveryDate || "9999-12-31",
+        ).localeCompare(String(secondDelivery?.deliveryDate || "9999-12-31"));
+
+        if (dateComparison !== 0) {
+          return dateComparison;
+        }
+
+        return String(
+          firstDelivery?.deliveryTimeSlot || "99:99",
+        ).localeCompare(
+          String(secondDelivery?.deliveryTimeSlot || "99:99"),
+        );
+      });
+  }, [deliveries]);
+  const visibleDeliveries = upcomingDeliveries.slice(0, 4);
+
+  return (
+    <section className="mb-5 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#FC2C38] text-white shadow-sm">
+            <CalendarDays className="h-5 w-5" aria-hidden="true" strokeWidth={2.7} />
+          </span>
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+              Delivery Snapshot
+            </p>
+            <h2 className="text-xl font-black tracking-tight text-slate-950">
+              Upcoming deliveries
+            </h2>
+          </div>
+          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-black text-slate-700">
+            {upcomingDeliveries.length}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onPageChange?.("deliveries-calendar")}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 transition hover:border-red-200 hover:text-[#FC2C38]"
+        >
+          View calendar
+          <ArrowRight className="h-4 w-4" aria-hidden="true" strokeWidth={2.7} />
+        </button>
+      </div>
+
+      {visibleDeliveries.length > 0 ? (
+        <div className="grid gap-2 p-3 sm:grid-cols-2 xl:grid-cols-4">
+          {visibleDeliveries.map((delivery) => {
+            const driver = getDeliveryDriver(delivery);
+            const needsDispatch =
+              delivery?.dispatchStatus === "needsDispatch" || !driver;
+
+            return (
+              <button
+                key={delivery.id}
+                type="button"
+                onClick={() => onPageChange?.("deliveries-calendar")}
+                className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 text-left transition hover:border-red-200 hover:bg-red-50/30"
+              >
+                <span className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-[#FC2C38]">
+                    <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+                    {formatUpcomingDeliveryDate(delivery.deliveryDate)}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] ${
+                      needsDispatch
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {needsDispatch ? "Needs dispatch" : "Assigned"}
+                  </span>
+                </span>
+                <span className="mt-2 block truncate text-sm font-black text-slate-950">
+                  {formatCustomerName(delivery.customerName) || "Delivery"}
+                </span>
+                <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
+                  Order {delivery.orderNumber || "—"}
+                  {delivery.deliveryTimeSlot
+                    ? ` · ${delivery.deliveryTimeSlot}`
+                    : ""}
+                </span>
+                <span className="mt-2 flex items-center gap-1.5 truncate text-[11px] font-semibold text-slate-500">
+                  <Truck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {driver || "Driver not assigned"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 px-5 py-5 text-sm font-bold text-slate-500">
+          <Package className="h-5 w-5 text-slate-300" aria-hidden="true" />
+          No upcoming deliveries are scheduled.
+        </div>
+      )}
+
+      {upcomingDeliveries.length > visibleDeliveries.length ? (
+        <div className="border-t border-slate-100 px-5 py-2 text-xs font-bold text-slate-500">
+          +{upcomingDeliveries.length - visibleDeliveries.length} more on the delivery calendar
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 function getLocationShippingRate(distanceMeters) {
   const distance = Number(distanceMeters);
@@ -1075,6 +1238,11 @@ export default function SalesConverterPage({
             <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2.7} />
           </button>
         </form>
+
+        <MainDashboardUpcomingDeliveries
+          deliveries={searchSources?.deliveries}
+          onPageChange={onPageChange}
+        />
 
         <section className="mb-5 overflow-visible rounded-[2rem] border border-blue-200 bg-blue-50/50 p-4 shadow-sm sm:p-5">
           <div
