@@ -2694,7 +2694,7 @@ export default function OrderFlowPage({
         <button
           type="button"
           onClick={addItem}
-          className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-red-200 bg-red-50 px-4 text-sm font-black text-[#FC2C38] transition hover:border-[#FC2C38] hover:bg-red-100"
+          className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-100 px-4 text-sm font-black text-slate-700 transition hover:border-slate-400 hover:bg-slate-200"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
           Add Item
