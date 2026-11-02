@@ -11,6 +11,8 @@ import {
 import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
+import cashAccounts from "../data/cashAccounts.json";
+import chargeAccounts from "../data/chargeAccounts.json";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
 import { formatCustomerName } from "../utils/textFormatters";
@@ -46,6 +48,82 @@ function getCustomerTypeBadgeClass(customerType) {
   return customerType === "prospect"
     ? "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
     : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+}
+
+function isChargeAccount(customer) {
+  return (
+    customer.accountType === "charge" ||
+    customer.accountTerms === "Net 30" ||
+    customer.accountSource === "charge-accounts"
+  );
+}
+
+function isCashAccount(customer) {
+  return (
+    customer.accountType === "cash" ||
+    customer.accountSource === "cash-accounts"
+  );
+}
+
+function mergeAccountCustomers(customers) {
+  const liveCustomers = Array.isArray(customers) ? customers : [];
+  const savedAccountNumbers = new Set(
+    liveCustomers
+      .map((customer) => String(customer.accountNumber || "").trim())
+      .filter(Boolean),
+  );
+  const importedChargeAccounts = chargeAccounts
+    .filter(
+      (account) =>
+        !savedAccountNumbers.has(String(account.accountJobNumber || "").trim()),
+    )
+    .map((account) => ({
+      id: `charge-account-${account.accountJobNumber}`,
+      name: "",
+      companyName: account.name,
+      accountNumber: account.accountJobNumber,
+      accountType: "charge",
+      accountTerms: "Net 30",
+      accountSource: "charge-accounts",
+      customerType: "current",
+      contacts: [],
+      isImportedChargeAccount: true,
+    }));
+
+  const knownAccountNumbers = new Set([
+    ...savedAccountNumbers,
+    ...importedChargeAccounts.map((customer) => customer.accountNumber),
+  ]);
+  const importedCashAccounts = cashAccounts
+    .filter(
+      (account) =>
+        !knownAccountNumbers.has(String(account.accountJobNumber || "").trim()),
+    )
+    .map((account) => ({
+      id: `cash-account-${account.accountJobNumber}`,
+      name: "",
+      companyName: account.name,
+      accountNumber: account.accountJobNumber,
+      accountType: "cash",
+      accountTerms: "Cash",
+      accountSource: "cash-accounts",
+      customerType: "current",
+      contacts: [],
+      isImportedCashAccount: true,
+    }));
+
+  return [
+    ...liveCustomers,
+    ...importedChargeAccounts,
+    ...importedCashAccounts,
+  ].sort(
+    (firstCustomer, secondCustomer) =>
+      String(
+        firstCustomer.companyName || firstCustomer.name || "",
+      ).localeCompare(
+        String(secondCustomer.companyName || secondCustomer.name || ""),
+      ),
+  );
 }
 
 const statementStatusOptions = [
@@ -180,6 +258,9 @@ function customerMatchesSearch(customer, searchTerm) {
     customer.city,
     customer.state,
     customer.zip,
+    customer.accountTerms,
+    isChargeAccount(customer) ? "charge net 30" : "",
+    isCashAccount(customer) ? "cash" : "",
     ...(Array.isArray(customer.contacts)
       ? customer.contacts.flatMap((contact) => [
           contact.label,
@@ -208,7 +289,10 @@ export default function CustomersPage({
   onSaveCustomerStatement,
   onPageChange,
 }) {
-  const savedCustomers = Array.isArray(customers) ? customers : [];
+  const savedCustomers = useMemo(
+    () => mergeAccountCustomers(customers),
+    [customers],
+  );
   const savedCustomerStatements = useMemo(
     () => (Array.isArray(customerStatements) ? customerStatements : []),
     [customerStatements],
@@ -278,6 +362,8 @@ export default function CustomersPage({
   const filteredCustomers = savedCustomers.filter((customer) => {
     const matchesType =
       customerTypeFilter === "all" ||
+      (customerTypeFilter === "charge" && isChargeAccount(customer)) ||
+      (customerTypeFilter === "cash" && isCashAccount(customer)) ||
       getCustomerType(customer) === customerTypeFilter;
 
     return matchesType && customerMatchesSearch(customer, searchTerm);
@@ -596,7 +682,28 @@ export default function CustomersPage({
 
     try {
       if (editingCustomerId) {
-        await onUpdateCustomer(editingCustomerId, customerUpdates);
+        const editingCustomer = savedCustomers.find(
+          (customer) => customer.id === editingCustomerId,
+        );
+
+        if (
+          editingCustomer?.isImportedChargeAccount ||
+          editingCustomer?.isImportedCashAccount
+        ) {
+          const now = new Date().toISOString();
+
+          await onAddCustomer({
+            id: editingCustomerId,
+            ...customerUpdates,
+            accountType: editingCustomer.accountType,
+            accountTerms: editingCustomer.accountTerms,
+            accountSource: editingCustomer.accountSource,
+            createdAt: now,
+            updatedAt: now,
+          });
+        } else {
+          await onUpdateCustomer(editingCustomerId, customerUpdates);
+        }
         setMessage(
           `${formatCustomerName(
             customerUpdates.companyName || customerUpdates.name,
@@ -1133,7 +1240,7 @@ export default function CustomersPage({
       ) : (
         <section className="space-y-5">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+            <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
               {[
                 {
                   value: "all",
@@ -1144,6 +1251,16 @@ export default function CustomersPage({
                   value: "current",
                   label: "Current",
                   count: customerTypeCounts.current,
+                },
+                {
+                  value: "charge",
+                  label: "Charge · Net 30",
+                  count: savedCustomers.filter(isChargeAccount).length,
+                },
+                {
+                  value: "cash",
+                  label: "Cash Accounts",
+                  count: savedCustomers.filter(isCashAccount).length,
                 },
                 {
                   value: "prospect",
@@ -1257,11 +1374,21 @@ export default function CustomersPage({
                           </span>
 
                           <span
-                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.1em] ${getCustomerTypeBadgeClass(
-                              getCustomerType(customer),
-                            )}`}
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.1em] ${
+                              isChargeAccount(customer)
+                                ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200"
+                                : isCashAccount(customer)
+                                  ? "bg-amber-50 text-amber-800 ring-1 ring-amber-200"
+                                : getCustomerTypeBadgeClass(
+                                    getCustomerType(customer),
+                                  )
+                            }`}
                           >
-                            {getCustomerType(customer) === "prospect"
+                            {isChargeAccount(customer)
+                              ? "Charge Account"
+                              : isCashAccount(customer)
+                                ? "Cash Account"
+                              : getCustomerType(customer) === "prospect"
                               ? "Prospect"
                               : "Current"}
                           </span>
@@ -1269,7 +1396,11 @@ export default function CustomersPage({
 
                         <span className="mt-2 flex items-center justify-between gap-3 text-xs font-black">
                           <span className="truncate text-slate-400">
-                            {customer.city || customer.email || "No city listed"}
+                            {isChargeAccount(customer)
+                              ? "Net 30 terms"
+                              : isCashAccount(customer)
+                                ? "Cash account"
+                              : customer.city || customer.email || "No city listed"}
                           </span>
                           {canManageCustomerStatements ? (
                             <span
@@ -1318,7 +1449,10 @@ export default function CustomersPage({
                       <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                         {customer.accountNumber ? (
                           <span className="inline-flex items-center gap-1.5">
-                            Account # {customer.accountNumber}
+                            {isChargeAccount(customer) || isCashAccount(customer)
+                              ? "Account / Job #"
+                              : "Account #"}{" "}
+                            {customer.accountNumber}
                             <span className="group relative inline-flex">
                               <button
                                 type="button"
@@ -1349,13 +1483,32 @@ export default function CustomersPage({
                           "Unnamed Customer"}
                       </h2>
 
-                      <p
-                        className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${getCustomerTypeBadgeClass(
-                          type,
-                        )}`}
-                      >
-                        {getCustomerTypeLabel(type)}
-                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <p
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${getCustomerTypeBadgeClass(
+                            type,
+                          )}`}
+                        >
+                          {getCustomerTypeLabel(type)}
+                        </p>
+
+                        {isChargeAccount(customer) ? (
+                          <>
+                            <p className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-blue-700 ring-1 ring-blue-200">
+                              Charge Account
+                            </p>
+                            <p className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-slate-600 ring-1 ring-slate-200">
+                              Net 30 Terms
+                            </p>
+                          </>
+                        ) : null}
+
+                        {isCashAccount(customer) ? (
+                          <p className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-amber-800 ring-1 ring-amber-200">
+                            Cash Account
+                          </p>
+                        ) : null}
+                      </div>
 
                       {customer.name && customer.companyName ? (
                         <p className="mt-1 text-sm font-bold text-slate-500">

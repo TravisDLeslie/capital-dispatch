@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Building2,
   CalendarDays,
+  Check,
   ChevronDown,
   CircleHelp,
   ExternalLink,
@@ -22,12 +23,71 @@ import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import SearchableSelect from "../components/SearchableSelect";
+import cashAccounts from "../data/cashAccounts.json";
+import chargeAccounts from "../data/chargeAccounts.json";
 import { inventoryCatalogItems } from "../data/inventoryCatalog";
 
 const normalizeInventorySearch = (value) =>
   String(value || "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+
+const normalizeAccountNumber = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+function buildCustomerAccountOptions(customers) {
+  const accountsByNumber = new Map();
+
+  (Array.isArray(customers) ? customers : []).forEach((customer) => {
+    const accountNumber = String(customer.accountNumber || "").trim();
+
+    if (!accountNumber) {
+      return;
+    }
+
+    accountsByNumber.set(normalizeAccountNumber(accountNumber), {
+      accountNumber,
+      customerId: customer.id || "",
+      name: String(customer.companyName || customer.name || "").trim(),
+      businessName: String(customer.companyName || customer.name || "").trim(),
+      accountType:
+        customer.accountType === "charge" || customer.accountTerms === "Net 30"
+          ? "charge"
+          : customer.accountType === "cash"
+            ? "cash"
+            : "customer",
+    });
+  });
+
+  [
+    ...chargeAccounts.map((account) => ({ ...account, accountType: "charge" })),
+    ...cashAccounts.map((account) => ({ ...account, accountType: "cash" })),
+  ].forEach((account) => {
+    const accountNumber = String(account.accountJobNumber || "").trim();
+    const normalizedAccountNumber = normalizeAccountNumber(accountNumber);
+
+    if (!accountNumber || accountsByNumber.has(normalizedAccountNumber)) {
+      return;
+    }
+
+    accountsByNumber.set(normalizedAccountNumber, {
+      accountNumber,
+      customerId: `${account.accountType}-account-${accountNumber}`,
+      name: String(account.name || "").trim(),
+      businessName: String(account.name || "").trim(),
+      accountType: account.accountType,
+    });
+  });
+
+  return [...accountsByNumber.values()].sort((firstAccount, secondAccount) =>
+    firstAccount.accountNumber.localeCompare(secondAccount.accountNumber, "en-US", {
+      numeric: true,
+      sensitivity: "base",
+    }),
+  );
+}
 
 const inventoryCatalog = Array.from(
   new Map(
@@ -486,6 +546,7 @@ function ChoiceButton({
 /**
  * @param {{
  *   currentUser?: { id?: string; name?: string; email?: string } | null;
+ *   customers?: Array<Record<string, any>>;
  *   vendorOptions?: string[];
  *   supplierAddressMap?: Record<string, string>;
  *   removedInventoryItemNumbers?: string[];
@@ -496,6 +557,7 @@ function ChoiceButton({
  */
 export default function OrderFlowPage({
   currentUser = null,
+  customers = [],
   vendorOptions = [],
   supplierAddressMap = {},
   removedInventoryItemNumbers = [],
@@ -541,6 +603,19 @@ export default function OrderFlowPage({
   const [isProcessingStockPO, setIsProcessingStockPO] = useState(false);
   const [stockProcessError, setStockProcessError] = useState("");
   const [stockProcessSummary, setStockProcessSummary] = useState(null);
+  const customerAccountOptions = useMemo(
+    () => buildCustomerAccountOptions(customers),
+    [customers],
+  );
+  const linkedCustomerAccount = useMemo(
+    () =>
+      customerAccountOptions.find(
+        (account) =>
+          normalizeAccountNumber(account.accountNumber) ===
+          normalizeAccountNumber(accountNumber),
+      ) || null,
+    [accountNumber, customerAccountOptions],
+  );
   const availableInventoryCatalog = useMemo(() => {
     const removedItemNumberSet = new Set(
       removedInventoryItemNumbers.map((itemNumber) =>
@@ -726,6 +801,8 @@ export default function OrderFlowPage({
       businessName,
       phoneNumber,
       accountNumber,
+      customerId: linkedCustomerAccount?.customerId || "",
+      customerAccountType: linkedCustomerAccount?.accountType || "",
       orderMethod,
       deliveryAddress,
       deliveryDate,
@@ -738,6 +815,23 @@ export default function OrderFlowPage({
       items: savedItems,
       createdBy: currentUser,
     };
+  }
+
+  function handleBusinessNameChange(nextBusinessName) {
+    setBusinessName(nextBusinessName);
+
+    const matchingCustomer = customerAccountOptions.find(
+      (account) =>
+        String(account.name || "").trim().toLowerCase() ===
+        String(nextBusinessName || "").trim().toLowerCase(),
+    );
+
+    if (!matchingCustomer) {
+      return;
+    }
+
+    setBusinessName(matchingCustomer.businessName || matchingCustomer.name);
+    setAccountNumber(matchingCustomer.accountNumber);
   }
 
   async function processOrder() {
@@ -1604,7 +1698,41 @@ export default function OrderFlowPage({
             />
           </Field>
 
-          <Field label="Name">
+          <Field label="Business Name">
+            <div className="relative">
+              <Building2
+                className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+                aria-hidden="true"
+              />
+              <TextInput
+                value={businessName}
+                onChange={(event) =>
+                  handleBusinessNameChange(event.target.value)
+                }
+                placeholder="Business name"
+                className="pl-12"
+                list="order-business-names"
+                autoComplete="off"
+              />
+              <datalist id="order-business-names">
+                {customerAccountOptions.map((account) => (
+                  <option
+                    key={`${account.accountType}-${account.accountNumber}-${account.name}`}
+                    value={account.name}
+                    label={`Account ${account.accountNumber} · ${
+                      account.accountType === "charge"
+                        ? "Charge"
+                        : account.accountType === "cash"
+                          ? "Cash"
+                          : "Customer"
+                    }`}
+                  />
+                ))}
+              </datalist>
+            </div>
+          </Field>
+
+          <Field label="Customer Name">
             <div className="relative">
               <UserRound
                 className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
@@ -1614,21 +1742,6 @@ export default function OrderFlowPage({
                 value={customerName}
                 onChange={(event) => setCustomerName(event.target.value)}
                 placeholder="Customer name"
-                className="pl-12"
-              />
-            </div>
-          </Field>
-
-          <Field label="Business Name">
-            <div className="relative">
-              <Building2
-                className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-                aria-hidden="true"
-              />
-              <TextInput
-                value={businessName}
-                onChange={(event) => setBusinessName(event.target.value)}
-                placeholder="Business name"
                 className="pl-12"
               />
             </div>
@@ -1647,11 +1760,51 @@ export default function OrderFlowPage({
           </Field>
 
           <Field label="Account #">
-            <TextInput
-              value={accountNumber}
-              onChange={(event) => setAccountNumber(event.target.value)}
-              placeholder="Optional"
-            />
+            <div>
+              <div className="relative">
+                <TextInput
+                  value={accountNumber}
+                  onChange={(event) => setAccountNumber(event.target.value)}
+                  placeholder="Optional"
+                  list="order-customer-accounts"
+                  autoComplete="off"
+                  className={linkedCustomerAccount ? "pr-12" : ""}
+                />
+                {linkedCustomerAccount ? (
+                  <span
+                    className="absolute right-3 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-emerald-700 text-white"
+                    title="Account found"
+                    aria-label="Account found"
+                  >
+                    <Check
+                      className="h-4 w-4"
+                      strokeWidth={3}
+                      aria-hidden="true"
+                    />
+                  </span>
+                ) : null}
+              </div>
+              <datalist id="order-customer-accounts">
+                {customerAccountOptions.map((account) => (
+                  <option
+                    key={`${account.accountType}-${account.accountNumber}`}
+                    value={account.accountNumber}
+                    label={`${account.name || "Unnamed account"} · ${
+                      account.accountType === "charge"
+                        ? "Charge"
+                        : account.accountType === "cash"
+                          ? "Cash"
+                          : "Customer"
+                    }`}
+                  />
+                ))}
+              </datalist>
+              {!linkedCustomerAccount && accountNumber.trim() ? (
+                <p className="mt-1.5 truncate text-[11px] font-bold text-slate-400">
+                  No saved account match
+                </p>
+              ) : null}
+            </div>
           </Field>
         </div>
       </section>

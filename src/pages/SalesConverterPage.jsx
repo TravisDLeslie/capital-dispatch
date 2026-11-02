@@ -1,9 +1,7 @@
 import {
   ArrowRight,
-  Building2,
   Calculator,
   CalendarDays,
-  Check,
   ClipboardList,
   Clock3,
   Layers,
@@ -720,215 +718,133 @@ function OrderChainSearchCard({
     result.orderRecord?.contactName ||
     "";
   const deliveryDate = result.deliveryRecord?.deliveryDate;
-  const steps = [
-    {
-      key: "received",
-      label: "Received",
-      complete: isReceived,
-      detail: result.receivingSummary?.receivedDateLabel || "Waiting",
-    },
-    {
-      key: "delivery",
-      label: "Delivery",
-      complete: hasDelivery,
-      detail: deliveryDate
-        ? formatUpcomingDeliveryDate(deliveryDate)
-        : hasDelivery
-          ? "Scheduled"
-          : "Not set",
-    },
-    {
-      key: "delivered",
-      label: "Delivered",
-      complete: isDelivered,
-      detail: deliveryBadge?.deliveredDateLabel || "Waiting",
-    },
-  ];
 
   return (
-    <article className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md">
-      <span
-        aria-hidden="true"
-        className={`absolute inset-y-0 left-0 w-1.5 ${
-          isDelivered
-            ? "bg-emerald-500"
-            : hasDelivery
-              ? "bg-blue-500"
-              : "bg-amber-400"
-        }`}
-      />
+    <article className="relative border-b border-slate-100 bg-white px-4 py-3 text-left transition last:border-b-0 hover:bg-slate-50/70">
+      <div className="pr-10">
+        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+          Order Chain
+        </p>
 
-      <div className="grid gap-5 px-5 pb-4 pt-5 lg:grid-cols-[minmax(220px,0.8fr)_minmax(300px,1.35fr)_minmax(330px,1.25fr)] lg:items-center lg:px-6">
-        <div className="min-w-0 lg:border-r lg:border-slate-200 lg:pr-5">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-            Order Chain
-          </p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => onOpenOrder?.(result.orderNumber)}
-            className="mt-1 text-left text-2xl font-black tracking-tight text-slate-950 transition hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-300"
+            style={{ fontSize: "10px", fontWeight: 900, lineHeight: "1.25" }}
+            className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-left uppercase tracking-[0.05em] text-violet-700 transition hover:border-violet-400 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-300"
           >
             Order {result.orderNumber}
           </button>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {result.relatedPONumbers?.slice(0, 3).map((poNumber) => {
-              const vendor =
-                poVendors.get(normalizeSearchText(poNumber)) ||
-                "Vendor not listed";
 
-              return (
-                <span
-                  key={`${result.id}-chain-po-${poNumber}`}
-                  className="group/po relative rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.06em] text-blue-700"
-                  title={`Vendor: ${vendor}`}
-                >
-                  PO {poNumber}
-                  <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-950 px-3 py-2 text-[11px] font-black normal-case tracking-normal text-white shadow-xl group-hover/po:block">
-                    {vendor}
-                  </span>
-                </span>
-              );
-            })}
-            {result.fulfillmentBadges?.map((fulfillment) => (
+          {result.relatedPONumbers?.slice(0, 3).map((poNumber) => {
+            const vendor =
+              poVendors.get(normalizeSearchText(poNumber)) ||
+              "Vendor not listed";
+
+            return (
               <span
-                key={`${result.id}-chain-method-${fulfillment.orderNumber}-${fulfillment.key}`}
-                className={`rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.06em] ${getOrderFulfillmentBadgeClass(
-                  fulfillment.key,
-                )}`}
+                key={`${result.id}-chain-po-${poNumber}`}
+                className="group/po relative rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.05em] text-blue-700"
+                title={`Vendor: ${vendor}`}
               >
-                {fulfillment.label}
+                PO {poNumber}
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-950 px-3 py-2 text-[11px] font-black normal-case tracking-normal text-white shadow-xl group-hover/po:block">
+                  {vendor}
+                </span>
               </span>
-            ))}
-          </div>
-        </div>
+            );
+          })}
 
-        <div className="min-w-0 lg:border-r lg:border-slate-200 lg:pr-5">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-              <Building2 aria-hidden="true" className="h-5 w-5" />
+          {result.fulfillmentBadges?.map((fulfillment) => (
+            <span
+              key={`${result.id}-chain-method-${fulfillment.orderNumber}-${fulfillment.key}`}
+              className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.05em] ${getOrderFulfillmentBadgeClass(
+                fulfillment.key,
+              )}`}
+            >
+              {fulfillment.label}
             </span>
-            <div className="min-w-0">
-              <h3 className="truncate text-lg font-black text-slate-950">
-                {customerName}
-              </h3>
-              <p className="mt-0.5 truncate text-sm font-bold text-slate-500">
-                {address}
-                {contactName ? ` · ${contactName}` : ""}
-              </p>
-            </div>
-          </div>
+          ))}
 
-          <div className="mt-3 flex min-w-0 flex-nowrap items-center gap-2">
-            {result.receivingSummary ? (
-              <span
-                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-black ${
-                  isReceived
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-amber-200 bg-amber-50 text-amber-800"
-                }`}
-              >
-                <CalendarDays aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                <span>
-                  {result.receivingSummary.label}
-                  {result.receivingSummary.receivedDateLabel
-                    ? ` · ${result.receivingSummary.receivedDateLabel}`
-                    : ""}
-                </span>
-              </span>
-            ) : null}
-            {result.receivingSummary?.locationLabel ? (
-              <button
-                type="button"
-                onClick={() => onOpenReceiving?.(result)}
-                title={`View receiving photos for ${result.receivingSummary.locationLabel}`}
-                className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700 transition hover:border-blue-400 hover:bg-blue-100"
-              >
-                <MapPin aria-hidden="true" className="h-3 w-3 shrink-0" />
-                <span className="truncate">{result.receivingSummary.locationLabel}</span>
-              </button>
-            ) : null}
-          </div>
+          {isDelivered ? (
+            <button
+              type="button"
+              onClick={() => onOpenDelivery?.(deliveryBadge?.deliveryRecord)}
+              style={{ fontSize: "10px", fontWeight: 900, lineHeight: "1.25" }}
+              className="whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-black uppercase tracking-[0.05em] text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100"
+            >
+              Delivered
+              {deliveryBadge?.deliveredDateLabel
+                ? ` · ${deliveryBadge.deliveredDateLabel}`
+                : ""}
+            </button>
+          ) : hasDelivery && deliveryDate ? (
+            <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.05em] text-violet-700">
+              Scheduled · {formatUpcomingDeliveryDate(deliveryDate)}
+            </span>
+          ) : null}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          {steps.map((step, index) => (
-            <button
-              key={step.key}
-              type="button"
-              disabled={step.key !== "delivered" || !isDelivered}
-              onClick={() => {
-                if (step.key === "delivered" && isDelivered) {
-                  onOpenDelivery?.(deliveryBadge?.deliveryRecord);
-                }
-              }}
-              className={`relative min-w-0 text-center ${
-                step.key === "delivered" && isDelivered
-                  ? "cursor-pointer rounded-xl transition hover:bg-emerald-50"
-                  : "cursor-default"
+        <p className="mt-1 truncate text-xs font-bold text-slate-500">
+          {customerName} · {address}
+          {contactName ? ` · ${contactName}` : ""}
+        </p>
+
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
+          {result.receivingSummary ? (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.05em] ${
+                isReceived
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-amber-200 bg-amber-50 text-amber-800"
               }`}
             >
-              {index > 0 ? (
-                <span
-                  aria-hidden="true"
-                  className={`absolute right-1/2 top-4 h-0.5 w-full ${
-                    step.complete ? "bg-emerald-400" : "bg-slate-200"
-                  }`}
-                />
-              ) : null}
-              <span
-                className={`relative mx-auto flex h-8 w-8 items-center justify-center rounded-full border-2 ${
-                  step.complete
-                    ? "border-emerald-500 bg-emerald-500 text-white"
-                    : "border-slate-300 bg-white text-slate-300"
-                }`}
-              >
-                <Check aria-hidden="true" className="h-4 w-4" strokeWidth={3} />
-              </span>
-              <span
-                className={`mt-2 block truncate text-xs font-black ${
-                  step.complete ? "text-slate-900" : "text-slate-400"
-                }`}
-              >
-                {step.label}
-              </span>
-              <span className="mt-0.5 block text-[10px] font-bold leading-tight text-slate-500">
-                {step.detail}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+              {result.receivingSummary.label}
+              {result.receivingSummary.receivedDateLabel
+                ? ` · ${result.receivingSummary.receivedDateLabel}`
+                : ""}
+            </span>
+          ) : null}
 
-      <div className="mx-4 mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center lg:mx-5">
-        <span className="inline-flex shrink-0 items-center gap-2 text-sm font-black text-slate-900">
-          <Package aria-hidden="true" className="h-5 w-5 text-slate-500" />
-          Order Items ({result.poItems?.length || 0})
-        </span>
-        <span className="hidden h-8 w-px bg-slate-300 sm:block" />
-        <span className="flex min-w-0 flex-1 flex-wrap gap-2">
+          {result.receivingSummary?.locationLabel ? (
+            <button
+              type="button"
+              onClick={() => onOpenReceiving?.(result)}
+              title={`View receiving photos for ${result.receivingSummary.locationLabel}`}
+              style={{ fontSize: "10px", fontWeight: 900, lineHeight: "1.25" }}
+              className="inline-flex max-w-full items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-black uppercase tracking-[0.05em] text-blue-700 transition hover:border-blue-400 hover:bg-blue-100"
+            >
+              <MapPin aria-hidden="true" className="h-3 w-3 shrink-0" />
+              <span className="truncate">{result.receivingSummary.locationLabel}</span>
+            </button>
+          ) : null}
+        </div>
+
+        <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
           {result.poItems?.slice(0, 2).map((itemLabel, index) => (
             <span
               key={`${result.id}-chain-item-${index}`}
-              className="max-w-full truncate rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+              className="max-w-full truncate rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700"
             >
               {itemLabel}
             </span>
           ))}
           {(result.poItems?.length || 0) > 2 ? (
-            <span className="rounded-xl bg-slate-200 px-3 py-2 text-xs font-black text-slate-600">
+            <span className="rounded-lg bg-slate-200 px-2.5 py-1.5 text-[11px] font-black text-slate-600">
               +{result.poItems.length - 2} more
             </span>
           ) : null}
-        </span>
-        <button
-          type="button"
-          onClick={() => onOpenOrder?.(result.orderNumber)}
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 sm:self-auto"
-          aria-label={`View order ${result.orderNumber}`}
-        >
-          <ArrowRight aria-hidden="true" className="h-5 w-5" strokeWidth={2.7} />
-        </button>
+        </div>
       </div>
+
+      <button
+        type="button"
+        onClick={() => onOpenOrder?.(result.orderNumber)}
+        className="absolute right-4 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-slate-700 text-white shadow-sm transition hover:bg-slate-900"
+        aria-label={`View order ${result.orderNumber}`}
+      >
+        <ArrowRight aria-hidden="true" className="h-5 w-5" strokeWidth={2.7} />
+      </button>
     </article>
   );
 }
@@ -1912,7 +1828,7 @@ export default function SalesConverterPage({
                             setIsDashboardSearchOpen(false);
                             onPageChange?.("inventory");
                           }}
-                          className="mb-1 block w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition last:mb-0 hover:border-blue-300 hover:bg-blue-50/60 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                          className="group mb-1 block w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition last:mb-0 hover:border-blue-300 hover:bg-blue-50/60 focus:outline-none focus:ring-4 focus:ring-blue-100"
                         >
                           <span className="flex items-start gap-3">
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white">
@@ -1960,11 +1876,13 @@ export default function SalesConverterPage({
                             </span>
                             <span className="inline-flex shrink-0 items-center gap-1 text-xs font-black text-blue-700">
                               Inventory
-                              <ArrowRight
-                                aria-hidden="true"
-                                className="h-3.5 w-3.5"
-                                strokeWidth={2.7}
-                              />
+                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-700 text-white shadow-sm transition group-hover:bg-slate-900">
+                                <ArrowRight
+                                  aria-hidden="true"
+                                  className="h-4 w-4"
+                                  strokeWidth={2.7}
+                                />
+                              </span>
                             </span>
                           </span>
                         </button>
@@ -1977,7 +1895,7 @@ export default function SalesConverterPage({
                             setIsDashboardSearchOpen(false);
                             onTraceSearch?.(result.searchValue);
                           }}
-                          className="block w-full rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                          className="group block w-full rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50 focus:outline-none focus:ring-4 focus:ring-blue-100"
                         >
                           <span className="flex items-start justify-between gap-3">
                             <span>
@@ -1990,11 +1908,13 @@ export default function SalesConverterPage({
                             </span>
                             <span className="inline-flex shrink-0 items-center gap-1 text-xs font-black text-blue-700">
                               View all POs
-                              <ArrowRight
-                                aria-hidden="true"
-                                className="h-3.5 w-3.5"
-                                strokeWidth={2.7}
-                              />
+                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-700 text-white shadow-sm transition group-hover:bg-slate-900">
+                                <ArrowRight
+                                  aria-hidden="true"
+                                  className="h-4 w-4"
+                                  strokeWidth={2.7}
+                                />
+                              </span>
                             </span>
                           </span>
                           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-xs font-bold text-slate-600">
@@ -2089,7 +2009,7 @@ export default function SalesConverterPage({
                             setIsDashboardSearchOpen(false);
                             onTraceSearch?.(result.searchValue);
                           }}
-                          className="flex w-full items-center justify-between gap-4 rounded-xl px-3 py-3 text-left transition hover:bg-slate-50"
+                          className="group flex w-full items-center justify-between gap-4 rounded-xl px-3 py-3 text-left transition hover:bg-slate-50"
                         >
                         <span className="min-w-0">
                           <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[#FC2C38]">
@@ -2316,11 +2236,13 @@ export default function SalesConverterPage({
                             </span>
                           ) : null}
                         </span>
-                        <ArrowRight
-                          aria-hidden="true"
-                          className="h-4 w-4 shrink-0 text-slate-400"
-                          strokeWidth={2.6}
-                        />
+                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-white shadow-sm transition group-hover:bg-slate-900">
+                          <ArrowRight
+                            aria-hidden="true"
+                            className="h-4 w-4"
+                            strokeWidth={2.6}
+                          />
+                        </span>
                         </button>
                       ),
                     )}

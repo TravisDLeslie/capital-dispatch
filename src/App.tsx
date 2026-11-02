@@ -7321,6 +7321,7 @@ export default function App() {
         return effectiveAllowedPageIds.includes("order-flow") ? (
           <OrderFlowPage
             currentUser={currentUserCreator}
+            customers={customers}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
             removedInventoryItemNumbers={inventorySettings.removedItemNumbers}
