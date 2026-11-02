@@ -46,6 +46,12 @@ const formatMoney = (value) =>
 
 const normalize = (value) => String(value || "").trim().toLowerCase();
 
+const normalizeSearchCode = (value) =>
+  normalize(value).replace(/[^a-z0-9]/g, "");
+
+const isWoodgrainProfileSearch = (value) =>
+  /^tm[\s-]*[a-z0-9]+$/i.test(String(value || "").trim());
+
 const parseLengthFeet = (value) => {
   const match = String(value || "").match(/(\d+(?:\.\d+)?)\s*'/);
   return match ? Number(match[1]) : null;
@@ -162,8 +168,16 @@ export default function WoodgrainPriceBookPage() {
 
   const filteredItems = useMemo(() => {
     const needle = normalize(query);
-    return categoryItems.filter((item) => {
-      if (section !== "all" && item.section !== section) return false;
+    const compactNeedle = normalizeSearchCode(query);
+    const isProfileSearch = isWoodgrainProfileSearch(query);
+    const itemsToSearch = isProfileSearch
+      ? woodgrainPriceBookItems
+      : categoryItems;
+
+    return itemsToSearch.filter((item) => {
+      if (!isProfileSearch && section !== "all" && item.section !== section) {
+        return false;
+      }
       if (!needle) return true;
       return [
         item.itemCode,
@@ -173,19 +187,29 @@ export default function WoodgrainPriceBookPage() {
         item.length,
         item.category,
         item.section,
-      ].some((value) => normalize(value).includes(needle));
+      ].some((value) => {
+        const normalizedValue = normalize(value);
+        return (
+          normalizedValue.includes(needle) ||
+          normalizeSearchCode(value).includes(compactNeedle)
+        );
+      });
     });
   }, [categoryItems, query, section]);
 
   const grouped = useMemo(() => {
     const groups = new Map();
     filteredItems.forEach((item) => {
-      const key = category === "all" || category === "capital-net" ? `${item.category}||${item.section}` : item.section;
+      const isProfileSearch = isWoodgrainProfileSearch(query);
+      const key =
+        category === "all" || category === "capital-net" || isProfileSearch
+          ? `${item.category}||${item.section}`
+          : item.section;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(item);
     });
     return [...groups.entries()];
-  }, [category, filteredItems]);
+  }, [category, filteredItems, query]);
 
   const chooseCategory = (nextCategory) => {
     setCategory(nextCategory);
