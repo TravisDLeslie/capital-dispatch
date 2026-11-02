@@ -7,6 +7,10 @@ import {
 } from "lucide-react";
 import PageContainer from "../components/PageContainer";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
+import {
+  getOpenSupplierRunItemCount,
+  isOpenSupplierRun,
+} from "../utils/supplierRunStatus";
 
 const UNASSIGNED_DRIVER = "Unassigned Driver";
 
@@ -14,21 +18,100 @@ function getDriverName(value) {
   return String(value || UNASSIGNED_DRIVER).trim() || UNASSIGNED_DRIVER;
 }
 
-function getOpenSupplierRuns(supplierRuns, driverName) {
-  return supplierRuns.filter(
-    (supplierRun) =>
-      supplierRun.status !== "complete" &&
-      getDriverName(supplierRun.driver) === driverName,
+function normalizeDriverName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function getUserDisplayName(user) {
+  return String(
+    user?.displayName ||
+      user?.driverName ||
+      String(user?.email || "").split("@")[0] ||
+      "",
+  ).trim();
+}
+
+function createDriverAliasMap(users) {
+  const firstNameCounts = new Map();
+  const aliasMap = new Map();
+
+  users.forEach((user) => {
+    const displayName = getUserDisplayName(user);
+    const firstNameKey = normalizeDriverName(displayName.split(/\s+/)[0]);
+
+    if (firstNameKey) {
+      firstNameCounts.set(
+        firstNameKey,
+        (firstNameCounts.get(firstNameKey) || 0) + 1,
+      );
+    }
+  });
+
+  users.forEach((user) => {
+    const displayName = getUserDisplayName(user);
+    const displayNameKey = normalizeDriverName(displayName);
+    const firstName = displayName.split(/\s+/)[0] || "";
+    const firstNameKey = normalizeDriverName(firstName);
+    const aliases = [
+      displayName,
+      user?.driverName,
+      user?.displayName,
+      String(user?.email || "").split("@")[0],
+    ];
+
+    if (firstNameKey && firstNameCounts.get(firstNameKey) === 1) {
+      aliases.push(firstName);
+    }
+
+    aliases.forEach((alias) => {
+      const aliasKey = normalizeDriverName(alias);
+
+      if (aliasKey && displayNameKey) {
+        aliasMap.set(aliasKey, displayNameKey);
+      }
+    });
+  });
+
+  return aliasMap;
+}
+
+function areDriverNamesEqual(firstName, secondName, aliasMap) {
+  const firstKey = normalizeDriverName(firstName);
+  const secondKey = normalizeDriverName(secondName);
+
+  return (
+    (aliasMap.get(firstKey) || firstKey) ===
+    (aliasMap.get(secondKey) || secondKey)
   );
 }
 
-function getOpenDeliveries(deliveries, driverName) {
+function getOpenSupplierRuns(supplierRuns, driverName, aliasMap) {
+  return supplierRuns.filter(
+    (supplierRun) =>
+      isOpenSupplierRun(supplierRun) &&
+      supplierRun.dispatchStatus !== "needsDispatch" &&
+      areDriverNamesEqual(
+        getDriverName(supplierRun.driver),
+        driverName,
+        aliasMap,
+      ),
+  );
+}
+
+function getOpenDeliveries(deliveries, driverName, aliasMap) {
   return sortDeliveriesBySchedule(
     deliveries.filter(
       (delivery) =>
         !isDeliveryComplete(delivery) &&
         delivery.dispatchStatus !== "needsDispatch" &&
-        getDriverName(delivery.driver) === driverName &&
+        areDriverNamesEqual(
+          getDriverName(delivery.driver),
+          driverName,
+          aliasMap,
+        ) &&
         isTodayOrFutureDelivery(delivery),
     ),
   );
@@ -86,8 +169,7 @@ function getSupplierStopCount(supplierRuns) {
 
 function getItemCountFromRuns(supplierRuns) {
   return supplierRuns.reduce(
-    (total, supplierRun) =>
-      total + (Array.isArray(supplierRun.items) ? supplierRun.items.length : 0),
+    (total, supplierRun) => total + getOpenSupplierRunItemCount(supplierRun),
     0,
   );
 }
@@ -109,7 +191,7 @@ function getDeliveryLocationLabel(delivery) {
   return cityMatch?.[1] || address || "Delivery stop";
 }
 
-function getDriverOptions({ supplierRuns, deliveries, users, employeeOptions }) {
+function getDriverOptions(employeeOptions) {
   return [
     ...new Set(
       [
@@ -207,17 +289,17 @@ function DriverRouteOverview({
       <DriverRouteCard
         icon={Route}
         eyebrow="South Route"
-        title={nextSupplierRun?.vendor || "No South Route"}
+        title={openSupplierRuns.length > 0 ? "South Pickups" : "No South Route"}
         primary={
           openSupplierRuns.length > 0
-            ? `${supplierStopCount} ${
-                supplierStopCount === 1 ? "stop" : "stops"
-              } ready`
+            ? `Next pickup: ${nextSupplierRun?.vendor || "Supplier"}`
             : "Nothing assigned"
         }
         secondary={
           openSupplierRuns.length > 0
-            ? `${openSupplierRuns.length} ${
+            ? `${supplierStopCount} ${
+                supplierStopCount === 1 ? "stop" : "stops"
+              } • ${openSupplierRuns.length} ${
                 openSupplierRuns.length === 1 ? "PO" : "POs"
               } • ${supplierItemCount || 0} ${
                 supplierItemCount === 1 ? "item" : "items"
@@ -280,22 +362,18 @@ export default function DriverDashboardPage({
   headerAccessory = null,
 }) {
   const safeUsers = Array.isArray(users) ? users : [];
-  const driverOptions = getDriverOptions({
-    supplierRuns,
-    deliveries,
-    users: safeUsers,
-    employeeOptions,
-  });
+  const driverAliasMap = createDriverAliasMap(safeUsers);
+  const driverOptions = getDriverOptions(employeeOptions);
   const [previewDriver, setPreviewDriver] = useState(
     driverName || driverOptions[0] || "",
   );
   const activeDriver =
     isSuperAdmin ? previewDriver || driverOptions[0] || "" : driverName;
   const openSupplierRuns = activeDriver
-    ? getOpenSupplierRuns(supplierRuns, activeDriver)
+    ? getOpenSupplierRuns(supplierRuns, activeDriver, driverAliasMap)
     : [];
   const openDeliveries = activeDriver
-    ? getOpenDeliveries(deliveries, activeDriver)
+    ? getOpenDeliveries(deliveries, activeDriver, driverAliasMap)
     : [];
   return (
     <PageContainer>
