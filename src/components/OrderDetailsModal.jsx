@@ -107,6 +107,19 @@ function normalizeItemDescription(item) {
   return getItemDescription(item).toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+function isYardStockItem(item) {
+  const fulfillmentPath = String(
+    item?.path || item?.fulfillmentPath || item?.source || "",
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+
+  return ["instock", "stock", "yardstock", "fromyard"].includes(
+    fulfillmentPath,
+  );
+}
+
 export default function OrderDetailsModal({
   orderNumber,
   sources = {},
@@ -135,7 +148,16 @@ export default function OrderDetailsModal({
       : []
     ).find((record) => normalizeOrderNumber(record?.orderNumber) === orderKey);
     const primaryRecord = orderBuild || delivery || matchingRecords[0] || {};
-    const primaryItems = getRecordItems(orderBuild);
+    const savedOrderItems = getRecordItems(orderBuild);
+    const groupedOrderItems = [
+      ...(Array.isArray(orderBuild?.waitingItems)
+        ? orderBuild.waitingItems
+        : []),
+      ...(Array.isArray(orderBuild?.stockItems) ? orderBuild.stockItems : []),
+    ];
+    const primaryItems = savedOrderItems.length
+      ? savedOrderItems
+      : groupedOrderItems;
     const relatedItems = matchingRecords.flatMap((record) =>
       getRecordItems(record)
         .filter(
@@ -204,6 +226,7 @@ export default function OrderDetailsModal({
       seenItemKeys.add(itemKey);
       return true;
     });
+    const stockItems = items.filter(isYardStockItem);
     const poNumbers = uniqueValues([
       primaryRecord.poNumbers,
       ...items.map((item) => item?.poNumber),
@@ -287,6 +310,7 @@ export default function OrderDetailsModal({
         delivery?.handoffType ||
         "",
       items,
+      stockItems,
       poNumbers,
       receivingSummaries,
       found: Boolean(orderBuild || delivery || matchingRecords.length),
@@ -568,6 +592,49 @@ export default function OrderDetailsModal({
                           </span>
                         ) : null}
                       </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {orderDetails.stockItems.length > 0 ? (
+            <section className="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-700 text-white">
+                    <Package className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">
+                      Yard Stock
+                    </p>
+                    <h3 className="text-base font-black text-slate-950">
+                      From Capital Lumber Yard
+                    </h3>
+                  </div>
+                </div>
+                <span className="rounded-full bg-emerald-700 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-white">
+                  {orderDetails.stockItems.length}{" "}
+                  {orderDetails.stockItems.length === 1 ? "item" : "items"}
+                </span>
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {orderDetails.stockItems.map((item, index) => (
+                  <div
+                    key={`yard-stock-${getItemKey(item, index)}`}
+                    className="rounded-xl border border-emerald-200 bg-white px-3 py-2.5 shadow-sm"
+                  >
+                    <p className="text-sm font-black text-slate-900">
+                      {item?.quantity ? `QTY ${item.quantity} · ` : ""}
+                      {getItemDescription(item)}
+                    </p>
+                    {item?.itemNumber || item?.itemCode ? (
+                      <p className="mt-1 text-[10px] font-black uppercase tracking-[0.1em] text-emerald-700">
+                        Item # {item.itemNumber || item.itemCode}
+                      </p>
                     ) : null}
                   </div>
                 ))}
