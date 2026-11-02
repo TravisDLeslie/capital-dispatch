@@ -624,6 +624,7 @@ export default function CheckInForm({
   const [linkedTheirTruckPOId, setLinkedTheirTruckPOId] = useState("");
   const [isPoSuggestionMenuOpen, setIsPoSuggestionMenuOpen] =
     useState(false);
+  const poSuggestionMenuRef = useRef(null);
   const [processingPhotoMaterialId, setProcessingPhotoMaterialId] =
     useState("");
   const [currentStep, setCurrentStep] = useState(1);
@@ -637,6 +638,25 @@ export default function CheckInForm({
 
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isPoSuggestionMenuOpen) {
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      if (
+        poSuggestionMenuRef.current &&
+        !poSuggestionMenuRef.current.contains(event.target)
+      ) {
+        setIsPoSuggestionMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isPoSuggestionMenuOpen]);
 
   const activeDraftKey = useMemo(
     () =>
@@ -1754,7 +1774,7 @@ export default function CheckInForm({
             </section>
 
             <div className="grid gap-5 md:grid-cols-2">
-              <div className="relative">
+              <div ref={poSuggestionMenuRef} className="relative">
                 <label
                   htmlFor="poNumber"
                   className="mb-2 block text-sm font-black uppercase tracking-[0.08em] text-slate-700"
@@ -1771,12 +1791,22 @@ export default function CheckInForm({
                     value={poNumber}
                     onChange={handlePoChange}
                     onFocus={() => setIsPoSuggestionMenuOpen(true)}
-                    onBlur={() => {
-                      window.setTimeout(
-                        () => setIsPoSuggestionMenuOpen(false),
-                        150,
-                      );
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" &&
+                        window.matchMedia(
+                          "(max-width: 639px), (pointer: coarse)",
+                        ).matches
+                      ) {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                        window.setTimeout(
+                          () => setIsPoSuggestionMenuOpen(true),
+                          0,
+                        );
+                      }
                     }}
+                    enterKeyHint="done"
                     disabled={isSubmitting}
                     placeholder="123-456"
                     className="w-full rounded-xl border border-slate-300 px-4 py-4 pr-14 text-2xl font-black tracking-[0.08em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-blue-700 focus:ring-4 focus:ring-blue-100"
@@ -1796,7 +1826,7 @@ export default function CheckInForm({
                         {poSuggestionInputLabel}
                       </p>
                     </div>
-                    <div className="max-h-72 overflow-y-auto overscroll-contain p-2">
+                    <div className="max-h-[38dvh] touch-pan-y overflow-y-auto overscroll-contain p-2 [-webkit-overflow-scrolling:touch] sm:max-h-72">
                       {filteredPoSuggestions.length > 0 ? (
                         filteredPoSuggestions.map((poSuggestion) => {
                           const poSuggestionTitle = getPoSuggestionTitle(

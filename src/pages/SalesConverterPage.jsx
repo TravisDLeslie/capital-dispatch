@@ -15,7 +15,7 @@ import {
   Truck,
   X,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import DeliveryDetailsModal from "../components/DeliveryDetailsModal";
@@ -1111,6 +1111,7 @@ export default function SalesConverterPage({
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [dashboardSearchFilter, setDashboardSearchFilter] = useState("all");
   const [isDashboardSearchOpen, setIsDashboardSearchOpen] = useState(false);
+  const dashboardSearchPanelRef = useRef(null);
   const [viewingOrderNumber, setViewingOrderNumber] = useState("");
   const [viewingDeliveryDetails, setViewingDeliveryDetails] = useState(null);
   const [viewingReceivingPhotos, setViewingReceivingPhotos] = useState(null);
@@ -1139,6 +1140,25 @@ export default function SalesConverterPage({
   const [itemQuantity, setItemQuantity] = useState("1");
   const [itemCost, setItemCost] = useState("");
   const [itemSellPrice, setItemSellPrice] = useState("");
+
+  useEffect(() => {
+    if (!isDashboardSearchOpen) {
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      if (
+        dashboardSearchPanelRef.current &&
+        !dashboardSearchPanelRef.current.contains(event.target)
+      ) {
+        setIsDashboardSearchOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isDashboardSearchOpen]);
 
   const panelTotals = useMemo(() => {
     const quantity = toNumber(panelQuantity);
@@ -1755,6 +1775,18 @@ export default function SalesConverterPage({
             event.preventDefault();
             const searchValue = dashboardSearch.trim();
 
+            if (
+              window.matchMedia("(max-width: 639px), (pointer: coarse)")
+                .matches
+            ) {
+              if (document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+              }
+
+              window.setTimeout(() => setIsDashboardSearchOpen(true), 0);
+              return;
+            }
+
             if (searchValue) {
               onTraceSearch?.(searchValue);
             }
@@ -1790,7 +1822,7 @@ export default function SalesConverterPage({
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row">
-          <div className="relative min-w-0 flex-1">
+          <div ref={dashboardSearchPanelRef} className="relative min-w-0 flex-1">
             <label className="relative block">
               <span className="sr-only">Search across the app</span>
               <Search
@@ -1806,9 +1838,7 @@ export default function SalesConverterPage({
                   setIsDashboardSearchOpen(true);
                 }}
                 onFocus={() => setIsDashboardSearchOpen(true)}
-                onBlur={() =>
-                  window.setTimeout(() => setIsDashboardSearchOpen(false), 150)
-                }
+                enterKeyHint="done"
                 placeholder="Search item name or #, PO, order, customer, or vendor..."
                 className="min-h-12 w-full rounded-xl border border-slate-300 bg-slate-50 py-3 pl-12 pr-4 text-base font-bold text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
               />
@@ -1817,7 +1847,7 @@ export default function SalesConverterPage({
             {isDashboardSearchOpen ? (
               <div className="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
                 {dashboardSearchMatches.length > 0 ? (
-                  <div className="max-h-[70vh] overflow-y-auto p-2">
+                  <div className="max-h-[42dvh] touch-pan-y overflow-y-auto overscroll-contain p-2 [-webkit-overflow-scrolling:touch] sm:max-h-[70vh]">
                     {dashboardSearchMatches.map((result) =>
                       result.inventoryItem ? (
                         <button
@@ -2253,14 +2283,14 @@ export default function SalesConverterPage({
                       No quick matches yet
                     </p>
                     <p className="mt-1 text-xs font-semibold text-slate-500">
-                      Press Enter or Search App to run the full search.
+                      Use Search App to run the full search.
                     </p>
                   </div>
                 )}
                 <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-500">
                   {dashboardSearchMatches.length > 0
                     ? normalizedDashboardSearch
-                      ? `${dashboardSearchMatches.length}${dashboardSearchAllMatches.length > dashboardSearchMatches.length ? ` of ${dashboardSearchAllMatches.length}` : ""} quick match${dashboardSearchMatches.length === 1 ? "" : "es"} • Press Enter for all results`
+                      ? `${dashboardSearchMatches.length}${dashboardSearchAllMatches.length > dashboardSearchMatches.length ? ` of ${dashboardSearchAllMatches.length}` : ""} quick match${dashboardSearchMatches.length === 1 ? "" : "es"} • Use Search App for all results`
                       : `${dashboardSearchAllMatches.length} supplier${dashboardSearchAllMatches.length === 1 ? "" : "s"} • Type to search products and contacts`
                     : "Search includes inventory item names and numbers, POs, orders, customers, and vendors"}
                 </div>
@@ -2268,7 +2298,14 @@ export default function SalesConverterPage({
             ) : null}
           </div>
           <button
-            type="submit"
+            type="button"
+            onClick={() => {
+              const searchValue = dashboardSearch.trim();
+
+              if (searchValue) {
+                onTraceSearch?.(searchValue);
+              }
+            }}
             className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-black text-white transition hover:bg-slate-800"
           >
             Search App

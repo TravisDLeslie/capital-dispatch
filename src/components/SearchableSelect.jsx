@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Check } from "lucide-react";
 
 function normalizeText(value) {
@@ -19,6 +19,7 @@ export default function SearchableSelect({
 }) {
   const safeOptions = Array.isArray(options) ? options : [];
   const [isOpen, setIsOpen] = useState(false);
+  const selectRef = useRef(null);
   const normalizedValue = normalizeText(value);
   const filteredOptions = useMemo(() => {
     if (!normalizedValue) {
@@ -36,8 +37,24 @@ export default function SearchableSelect({
         ? "focus:border-blue-600 focus:ring-blue-100"
         : "focus:border-emerald-600 focus:ring-emerald-100";
 
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      if (selectRef.current && !selectRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isOpen]);
+
   return (
-    <div className={`relative ${className}`}>
+    <div ref={selectRef} className={`relative ${className}`}>
       <div className="relative">
         <input
           id={id}
@@ -49,9 +66,18 @@ export default function SearchableSelect({
             setIsOpen(true);
           }}
           onFocus={() => setIsOpen(true)}
-          onBlur={() => {
-            window.setTimeout(() => setIsOpen(false), 150);
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter" &&
+              window.matchMedia("(max-width: 639px), (pointer: coarse)")
+                .matches
+            ) {
+              event.preventDefault();
+              event.currentTarget.blur();
+              window.setTimeout(() => setIsOpen(true), 0);
+            }
           }}
+          enterKeyHint="done"
           readOnly={!allowCustomValue}
           disabled={disabled}
           placeholder={placeholder}
@@ -76,7 +102,7 @@ export default function SearchableSelect({
 
       {isOpen && !disabled ? (
         <div className="absolute left-0 right-0 z-40 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-          <div className="max-h-72 overflow-y-auto overscroll-contain p-2">
+          <div className="max-h-[38dvh] touch-pan-y overflow-y-auto overscroll-contain p-2 [-webkit-overflow-scrolling:touch] sm:max-h-72">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option) => {
                 const isSelected = normalizeText(option) === normalizedValue;
