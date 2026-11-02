@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Edit3,
   MapPin,
   Package,
@@ -108,6 +110,53 @@ function formatDateLabel(value) {
   return new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(`${dateKey}T12:00:00`));
+}
+
+function getCalendarMonthDays(monthDate) {
+  const monthStart = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth(),
+    1,
+  );
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(monthStart.getDate() - monthStart.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+
+    const dateKey = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+
+    return {
+      date,
+      dateKey,
+      isCurrentMonth: date.getMonth() === monthDate.getMonth(),
+    };
+  });
+}
+
+function getCalendarMonthLabel(monthDate) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  }).format(monthDate);
+}
+
+function getCompactDateLabel(dateKey) {
+  if (!dateKey) {
+    return "Choose a date";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
     day: "numeric",
     year: "numeric",
   }).format(new Date(`${dateKey}T12:00:00`));
@@ -746,6 +795,12 @@ export default function DeliveryCalendarPage({
     [deliveries],
   );
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date(`${getTodayDateValue()}T12:00:00`);
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+  const calendarPickerRef = useRef(null);
   const [expandedDeliveryIds, setExpandedDeliveryIds] = useState({});
   const [selectedTimelineDeliveryId, setSelectedTimelineDeliveryId] =
     useState("");
@@ -755,6 +810,27 @@ export default function DeliveryCalendarPage({
   const fallbackDeliveryDate = useMemo(
     () => getFirstOpenDeliveryDate(safeDeliveries),
     [safeDeliveries],
+  );
+  const deliveryDates = useMemo(() => {
+    const dateCounts = new Map();
+
+    safeDeliveries.forEach((delivery) => {
+      if (isDeliveryComplete(delivery)) {
+        return;
+      }
+
+      const dateKey = getDeliveryDateKey(delivery.deliveryDate);
+
+      if (dateKey) {
+        dateCounts.set(dateKey, (dateCounts.get(dateKey) || 0) + 1);
+      }
+    });
+
+    return dateCounts;
+  }, [safeDeliveries]);
+  const calendarDays = useMemo(
+    () => getCalendarMonthDays(calendarMonth),
+    [calendarMonth],
   );
   const dayDeliveries = useMemo(
     () => getDayDeliveries(safeDeliveries, selectedDate),
@@ -789,6 +865,59 @@ export default function DeliveryCalendarPage({
       setSelectedDate(fallbackDeliveryDate);
     }
   }, [dayDeliveries.length, fallbackDeliveryDate, selectedDate]);
+
+  useEffect(() => {
+    function handleOutsidePointer(event) {
+      if (
+        isDatePickerOpen &&
+        calendarPickerRef.current &&
+        !calendarPickerRef.current.contains(event.target)
+      ) {
+        setIsDatePickerOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setIsDatePickerOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsidePointer);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsidePointer);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isDatePickerOpen]);
+
+  function openDatePicker() {
+    const selectedDateValue = new Date(`${selectedDate}T12:00:00`);
+
+    if (!Number.isNaN(selectedDateValue.getTime())) {
+      setCalendarMonth(
+        new Date(
+          selectedDateValue.getFullYear(),
+          selectedDateValue.getMonth(),
+          1,
+        ),
+      );
+    }
+
+    setIsDatePickerOpen((currentValue) => !currentValue);
+  }
+
+  function changeCalendarMonth(offset) {
+    setCalendarMonth(
+      (currentMonth) =>
+        new Date(
+          currentMonth.getFullYear(),
+          currentMonth.getMonth() + offset,
+          1,
+        ),
+    );
+  }
 
   function toggleDelivery(deliveryId) {
     setExpandedDeliveryIds((currentExpandedDeliveryIds) => ({
@@ -864,19 +993,139 @@ export default function DeliveryCalendarPage({
           </p>
         </div>
 
-        <label className="block rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div
+          ref={calendarPickerRef}
+          className="relative block rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
+        >
           <span className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
             <CalendarDays className="h-4 w-4" aria-hidden="true" />
             Schedule Date
           </span>
 
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-            className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 lg:w-60"
-          />
-        </label>
+          <button
+            type="button"
+            onClick={openDatePicker}
+            aria-haspopup="dialog"
+            aria-expanded={isDatePickerOpen}
+            className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-300 px-4 py-3 text-left text-base font-black text-slate-900 outline-none transition hover:border-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 lg:w-72"
+          >
+            <span>{getCompactDateLabel(selectedDate)}</span>
+            <ChevronDown
+              aria-hidden="true"
+              className={`h-5 w-5 shrink-0 text-slate-400 transition ${
+                isDatePickerOpen ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+
+          {isDatePickerOpen ? (
+            <div
+              role="dialog"
+              aria-label="Choose delivery schedule date"
+              className="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-[min(92vw,25rem)] rounded-[26px] border border-slate-200 bg-white p-5 shadow-2xl"
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => changeCalendarMonth(-1)}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950"
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                </button>
+
+                <p className="text-lg font-black text-slate-950">
+                  {getCalendarMonthLabel(calendarMonth)}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => changeCalendarMonth(1)}
+                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950"
+                  aria-label="Next month"
+                >
+                  <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                  (weekday) => (
+                    <span
+                      key={weekday}
+                      className="py-2 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400"
+                    >
+                      {weekday}
+                    </span>
+                  ),
+                )}
+
+                {calendarDays.map((day) => {
+                  const isSelected = day.dateKey === selectedDate;
+                  const isToday = day.dateKey === getTodayDateValue();
+                  const deliveryCount = deliveryDates.get(day.dateKey) || 0;
+
+                  return (
+                    <button
+                      key={day.dateKey}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate(day.dateKey);
+                        setIsDatePickerOpen(false);
+                      }}
+                      title={
+                        deliveryCount > 0
+                          ? `${deliveryCount} ${
+                              deliveryCount === 1 ? "delivery" : "deliveries"
+                            }`
+                          : undefined
+                      }
+                      className={`relative flex h-12 items-center justify-center rounded-xl text-sm font-black transition focus:outline-none focus:ring-2 focus:ring-red-300 ${
+                        isSelected
+                          ? "bg-[#FC2C38] text-white shadow-sm"
+                          : day.isCurrentMonth
+                            ? "text-slate-800 hover:bg-slate-100"
+                            : "text-slate-300 hover:bg-slate-50"
+                      } ${isToday && !isSelected ? "ring-1 ring-red-300" : ""}`}
+                    >
+                      {day.date.getDate()}
+                      {deliveryCount > 0 ? (
+                        <span
+                          className={`absolute bottom-1.5 h-1.5 w-1.5 rounded-full ${
+                            isSelected ? "bg-white" : "bg-[#FC2C38]"
+                          }`}
+                          aria-label={`${deliveryCount} deliveries`}
+                        />
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
+                <span className="inline-flex items-center gap-2 text-xs font-bold text-slate-500">
+                  <span className="h-2 w-2 rounded-full bg-[#FC2C38]" />
+                  Delivery scheduled
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = getTodayDateValue();
+                    const todayDate = new Date(`${today}T12:00:00`);
+                    setSelectedDate(today);
+                    setCalendarMonth(
+                      new Date(todayDate.getFullYear(), todayDate.getMonth(), 1),
+                    );
+                    setIsDatePickerOpen(false);
+                  }}
+                  className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                >
+                  Today
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">

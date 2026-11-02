@@ -1,5 +1,6 @@
 import {
   CalendarDays,
+  CheckCircle2,
   MapPin,
   Package,
   Phone,
@@ -7,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo } from "react";
+import { getPOReceivingSummary } from "../utils/poReceivingSummary";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const pathLabels = {
@@ -90,6 +92,20 @@ function getItemKey(item, index) {
   );
 }
 
+function getItemDescription(item) {
+  return String(
+    item?.description ||
+      item?.materialDescription ||
+      item?.itemDescription ||
+      item?.name ||
+      "Item description not entered",
+  ).trim();
+}
+
+function normalizeItemDescription(item) {
+  return getItemDescription(item).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
 export default function OrderDetailsModal({
   orderNumber,
   sources = {},
@@ -120,13 +136,62 @@ export default function OrderDetailsModal({
     const primaryRecord = orderBuild || delivery || matchingRecords[0] || {};
     const primaryItems = getRecordItems(orderBuild);
     const relatedItems = matchingRecords.flatMap((record) =>
-      getRecordItems(record).filter(
-        (item) =>
-          !item?.orderNumber ||
-          normalizeOrderNumber(item.orderNumber) === orderKey,
-      ),
+      getRecordItems(record)
+        .filter(
+          (item) =>
+            !item?.orderNumber ||
+            normalizeOrderNumber(item.orderNumber) === orderKey,
+        )
+        .map((item) => ({
+          ...item,
+          poNumber:
+            item?.poNumber ||
+            record?.poNumber ||
+            record?.sourceSupplierRunPoNumber ||
+            record?.sourceTheirTruckPONumber ||
+            "",
+          vendor:
+            item?.vendor ||
+            record?.vendor ||
+            record?.vendorName ||
+            record?.supplierName ||
+            "",
+          expectedDate:
+            item?.routeDate ||
+            item?.supplierDate ||
+            item?.deliveryDate ||
+            record?.scheduledDate ||
+            record?.pickupDate ||
+            record?.deliveryDate ||
+            record?.routeDate ||
+            "",
+        })),
     );
-    const rawItems = primaryItems.length > 0 ? primaryItems : relatedItems;
+    const rawItems =
+      primaryItems.length > 0
+        ? primaryItems.map((item) => {
+            if (item?.poNumber) {
+              return item;
+            }
+
+            const linkedPOItem = relatedItems.find(
+              (candidate) =>
+                candidate?.poNumber &&
+                normalizeItemDescription(candidate) ===
+                  normalizeItemDescription(item),
+            );
+
+            return linkedPOItem
+              ? {
+                  ...item,
+                  poNumber: linkedPOItem.poNumber,
+                  vendor: item?.vendor || linkedPOItem.vendor,
+                  expectedDate:
+                    item?.expectedDate || linkedPOItem.expectedDate,
+                }
+              : item;
+          })
+        : relatedItems;
     const seenItemKeys = new Set();
     const items = rawItems.filter((item, index) => {
       const itemKey = String(getItemKey(item, index)).toLowerCase();
@@ -143,6 +208,45 @@ export default function OrderDetailsModal({
       ...items.map((item) => item?.poNumber),
       ...matchingRecords.map((record) => record?.poNumber),
     ]);
+    const customerItem = items.find(
+      (item) =>
+        item?.businessName ||
+        item?.customerName ||
+        item?.deliveryAddress ||
+        item?.address,
+    );
+    const checkIns = Array.isArray(sources.checkIns) ? sources.checkIns : [];
+    const receivingSummaries = poNumbers.map((poNumber) => {
+      const expectedItems = items.filter(
+        (item) =>
+          normalizeOrderNumber(item?.poNumber) ===
+          normalizeOrderNumber(poNumber),
+      );
+      const summary = getPOReceivingSummary(
+        checkIns,
+        poNumber,
+        expectedItems.length,
+      );
+      const receivedDescriptions = new Set(
+        summary.receivedItems.map((item) =>
+          normalizeItemDescription(item),
+        ),
+      );
+      const waitingItems = summary.isReceived
+        ? summary.isPartial
+          ? expectedItems.filter(
+              (item) => !receivedDescriptions.has(normalizeItemDescription(item)),
+            )
+          : []
+        : expectedItems;
+
+      return {
+        poNumber,
+        ...summary,
+        expectedItems,
+        waitingItems,
+      };
+    });
 
     return {
       ...primaryRecord,
@@ -152,11 +256,13 @@ export default function OrderDetailsModal({
         delivery?.businessName ||
         delivery?.customerName ||
         matchingRecords.find((record) => record?.businessName)?.businessName ||
+        customerItem?.businessName ||
         "",
       customerName:
         primaryRecord.customerName ||
         delivery?.customerName ||
         matchingRecords.find((record) => record?.customerName)?.customerName ||
+        customerItem?.customerName ||
         "",
       phoneNumber:
         primaryRecord.phoneNumber ||
@@ -169,6 +275,8 @@ export default function OrderDetailsModal({
         primaryRecord.address ||
         delivery?.deliveryAddress ||
         delivery?.address ||
+        customerItem?.deliveryAddress ||
+        customerItem?.address ||
         "",
       deliveryDate:
         primaryRecord.deliveryDate || delivery?.deliveryDate || "",
@@ -179,6 +287,7 @@ export default function OrderDetailsModal({
         "",
       items,
       poNumbers,
+      receivingSummaries,
       found: Boolean(orderBuild || delivery || matchingRecords.length),
     };
   }, [orderNumber, sources]);
@@ -332,6 +441,139 @@ export default function OrderDetailsModal({
             </div>
           ) : null}
 
+          {orderDetails.receivingSummaries.length > 0 ? (
+            <section className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2
+                  className="h-5 w-5 text-emerald-700"
+                  aria-hidden="true"
+                />
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">
+                    Receiving
+                  </p>
+                  <h3 className="text-base font-black text-slate-950">
+                    PO receiving details
+                  </h3>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {orderDetails.receivingSummaries.map((summary) => (
+                  <div
+                    key={`receiving-${summary.poNumber}`}
+                    className="rounded-xl border border-white bg-white p-3 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-black uppercase tracking-[0.08em] text-blue-700">
+                        PO {summary.poNumber}
+                      </span>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${
+                          summary.isReceived
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-amber-100 text-amber-900"
+                        }`}
+                      >
+                        {summary.label}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-slate-600">
+                      {summary.receivedDateLabel ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+                          {summary.receivedDateLabel}
+                        </span>
+                      ) : null}
+                      {summary.locationLabel ? (
+                        <span className="inline-flex items-center gap-1.5 text-blue-700">
+                          <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                          {summary.locationLabel}
+                        </span>
+                      ) : null}
+                      {summary.receivedItemCount > 0 ? (
+                        <span>
+                          {summary.receivedItemCount} received {summary.receivedItemCount === 1 ? "item" : "items"}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {summary.receivedItems.length > 0 ? (
+                      <div className="mt-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                          Received items
+                        </p>
+                        <div className="mt-1.5 grid gap-1.5">
+                          {summary.receivedItems.map((item, index) => (
+                            <div
+                              key={item.id || `received-${index}`}
+                              className="flex items-start justify-between gap-3 rounded-lg bg-emerald-50 px-2.5 py-2 text-xs"
+                            >
+                              <span className="min-w-0 font-bold text-slate-800">
+                                {item.quantity ? `QTY ${item.quantity} · ` : ""}
+                                {item.description}
+                              </span>
+                              {item.location ? (
+                                <span className="shrink-0 font-black text-blue-700">
+                                  {item.location}
+                                </span>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {summary.waitingItems.length > 0 ? (
+                      <div className="mt-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-800">
+                          Waiting on items
+                        </p>
+                        <div className="mt-1.5 grid gap-1.5">
+                          {summary.waitingItems.map((item, index) => (
+                            <div
+                              key={getItemKey(item, index)}
+                              className="rounded-lg bg-amber-50 px-2.5 py-2 text-xs font-bold text-slate-800"
+                            >
+                              {item?.quantity ? `QTY ${item.quantity} · ` : ""}
+                              {getItemDescription(item)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {summary.receivedItems.length === 0 &&
+                    summary.waitingItems.length === 0 ? (
+                      <p className="mt-3 rounded-lg bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-500">
+                        No item details are linked to this PO yet.
+                      </p>
+                    ) : null}
+
+                    {summary.receivingPhotos.length > 0 ? (
+                      <div className="mt-3 flex gap-2">
+                        {summary.receivingPhotos.slice(0, 3).map((photo) => (
+                          <img
+                            key={photo.id || photo.dataUrl}
+                            src={photo.dataUrl}
+                            alt={photo.title || `Receiving photo for PO ${summary.poNumber}`}
+                            className="h-14 w-14 rounded-lg border border-slate-200 object-cover"
+                          />
+                        ))}
+                        {summary.receivingPhotos.length > 3 ? (
+                          <span className="flex h-14 min-w-14 items-center justify-center rounded-lg bg-slate-100 px-2 text-xs font-black text-slate-600">
+                            +{summary.receivingPhotos.length - 3}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <div className="mt-5 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
@@ -351,7 +593,29 @@ export default function OrderDetailsModal({
               {orderDetails.items.map((item, index) => {
                 const path = item?.path || item?.fulfillment || "";
                 const itemDate =
-                  item?.routeDate || item?.supplierDate || item?.deliveryDate;
+                  item?.routeDate ||
+                  item?.supplierDate ||
+                  item?.deliveryDate ||
+                  item?.expectedDate;
+                const receivingSummary = orderDetails.receivingSummaries.find(
+                  (summary) =>
+                    normalizeOrderNumber(summary.poNumber) ===
+                    normalizeOrderNumber(item?.poNumber),
+                );
+                const matchedReceivedItem =
+                  receivingSummary?.receivedItems.find(
+                    (receivedItem) =>
+                      normalizeItemDescription(receivedItem) ===
+                      normalizeItemDescription(item),
+                  );
+                const isItemReceived = Boolean(
+                  matchedReceivedItem ||
+                    (receivingSummary?.isReceived &&
+                      !receivingSummary?.isPartial),
+                );
+                const receivedLocation =
+                  matchedReceivedItem?.location ||
+                  (isItemReceived ? receivingSummary?.locationLabel : "");
 
                 return (
                   <div
@@ -383,7 +647,28 @@ export default function OrderDetailsModal({
                               PO {item.poNumber}
                             </span>
                           ) : null}
-                          {itemDate ? (
+                          {receivingSummary ? (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${
+                                isItemReceived
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-amber-100 text-amber-900"
+                              }`}
+                            >
+                              {isItemReceived ? (
+                                <CheckCircle2
+                                  className="h-3 w-3"
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                              {isItemReceived ? "Received" : "Waiting"}
+                              {receivedLocation ? ` · ${receivedLocation}` : ""}
+                              {!isItemReceived && itemDate
+                                ? ` · ${formatOrderDate(itemDate)}`
+                                : ""}
+                            </span>
+                          ) : null}
+                          {itemDate && (!receivingSummary || isItemReceived) ? (
                             <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-violet-700">
                               {formatOrderDate(itemDate)}
                             </span>

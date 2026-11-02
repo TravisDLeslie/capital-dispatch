@@ -1,7 +1,9 @@
 import {
   ArrowRight,
+  Building2,
   Calculator,
   CalendarDays,
+  Check,
   ClipboardList,
   Clock3,
   Layers,
@@ -18,9 +20,15 @@ import {
 import { useMemo, useRef, useState } from "react";
 import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
+import DeliveryDetailsModal from "../components/DeliveryDetailsModal";
 import OrderDetailsModal from "../components/OrderDetailsModal";
 import PageContainer from "../components/PageContainer";
+import ReceivingLocationPhotosModal from "../components/ReceivingLocationPhotosModal";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
+import {
+  getOrderFulfillmentBadgeClass,
+  getOrderFulfillmentBadges,
+} from "../utils/orderFulfillment";
 import { getPOReceivingSummary } from "../utils/poReceivingSummary";
 import { formatCustomerName } from "../utils/textFormatters";
 
@@ -402,7 +410,10 @@ function formatPercent(value) {
 }
 
 function normalizeSearchText(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 function getRecordItemText(record) {
@@ -491,6 +502,366 @@ function createDashboardSearchItem(
         .join(" "),
     ),
   };
+}
+
+function uniqueDashboardValues(values) {
+  const seenValues = new Set();
+
+  return values
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .map((value) => String(value || "").trim())
+    .filter((value) => {
+      const normalizedValue = normalizeSearchText(value);
+
+      if (!normalizedValue || seenValues.has(normalizedValue)) {
+        return false;
+      }
+
+      seenValues.add(normalizedValue);
+      return true;
+    });
+}
+
+function consolidateDashboardSearchMatches(matches) {
+  const groupedMatches = new Map();
+  const resultOrder = [];
+
+  matches.forEach((match) => {
+    const orderNumbers = uniqueDashboardValues([
+      match.orderNumber,
+      match.relatedOrderNumbers,
+    ]);
+    const groupKey =
+      orderNumbers.length === 1
+        ? `order-${normalizeSearchText(orderNumbers[0])}`
+        : `record-${match.id}`;
+
+    if (!groupedMatches.has(groupKey)) {
+      groupedMatches.set(groupKey, []);
+      resultOrder.push(groupKey);
+    }
+
+    groupedMatches.get(groupKey).push(match);
+  });
+
+  return resultOrder.map((groupKey) => {
+    const group = groupedMatches.get(groupKey) || [];
+
+    if (group.length <= 1 || !groupKey.startsWith("order-")) {
+      return group[0];
+    }
+
+    const orderNumber = uniqueDashboardValues([
+      ...group.map((match) => match.orderNumber),
+      ...group.map((match) => match.relatedOrderNumbers),
+    ])[0];
+    const relatedPONumbers = uniqueDashboardValues([
+      ...group.map((match) => match.poNumber),
+      ...group.map((match) => match.relatedPONumbers),
+    ]);
+    const fulfillmentBadges = group
+      .flatMap((match) => match.fulfillmentBadges || [])
+      .filter(
+        (fulfillment, index, allFulfillment) =>
+          allFulfillment.findIndex(
+            (candidate) =>
+              candidate.orderNumber === fulfillment.orderNumber &&
+              candidate.key === fulfillment.key,
+          ) === index,
+      );
+    const poItems = uniqueDashboardValues(
+      group.flatMap((match) => match.poItems || []),
+    );
+    const deliveryMatch = group.find((match) => match.type === "Delivery");
+    const orderMatch = group.find((match) => match.type === "Order");
+    const receivingMatch = group.find((match) => match.receivingSummary);
+    const primaryMatch = deliveryMatch || orderMatch || group[0];
+    const customerMatch = group.find((match) => match.customerName);
+    const addressMatch = group.find((match) => match.address);
+    const contactMatch = group.find((match) => match.contactName);
+
+    return {
+      ...primaryMatch,
+      id: `order-chain-${normalizeSearchText(orderNumber)}`,
+      type: "Order Chain",
+      title: `Order ${orderNumber}`,
+      subtitle:
+        deliveryMatch?.subtitle || orderMatch?.subtitle || group[0]?.subtitle,
+      searchValue: orderNumber,
+      orderNumber,
+      poNumber: receivingMatch?.poNumber || relatedPONumbers[0] || "",
+      relatedOrderNumbers: [],
+      relatedPONumbers,
+      fulfillmentBadges,
+      deliveryRecord: deliveryMatch?.deliveryRecord || null,
+      orderRecord: orderMatch?.orderRecord || null,
+      customerName:
+        deliveryMatch?.customerName ||
+        orderMatch?.customerName ||
+        customerMatch?.customerName ||
+        "",
+      address:
+        deliveryMatch?.address ||
+        orderMatch?.address ||
+        addressMatch?.address ||
+        "",
+      contactName:
+        deliveryMatch?.contactName ||
+        orderMatch?.contactName ||
+        contactMatch?.contactName ||
+        "",
+      receivingSummary: receivingMatch?.receivingSummary,
+      poItems,
+      searchableText: group
+        .map((match) => match.searchableText)
+        .filter(Boolean)
+        .join(" "),
+      chainRecordCount: group.length,
+    };
+  });
+}
+
+function OrderChainSearchCard({
+  result,
+  poVendors,
+  onOpenOrder,
+  onOpenDelivery,
+  onOpenReceiving,
+}) {
+  const deliveryBadge = result.fulfillmentBadges?.find(
+    (fulfillment) => fulfillment.key === "delivery",
+  );
+  const isReceived = Boolean(result.receivingSummary?.isReceived);
+  const hasDelivery = Boolean(result.deliveryRecord || deliveryBadge);
+  const isDelivered = Boolean(deliveryBadge?.isDelivered);
+  const customerName =
+    result.customerName ||
+    result.deliveryRecord?.customerName ||
+    result.orderRecord?.businessName ||
+    result.orderRecord?.customerName ||
+    "Customer not listed";
+  const address =
+    result.address ||
+    result.deliveryRecord?.address ||
+    result.orderRecord?.deliveryAddress ||
+    "Address not listed";
+  const contactName =
+    result.contactName ||
+    result.deliveryRecord?.contactName ||
+    result.orderRecord?.contactName ||
+    "";
+  const deliveryDate = result.deliveryRecord?.deliveryDate;
+  const steps = [
+    {
+      key: "received",
+      label: "Received",
+      complete: isReceived,
+      detail: result.receivingSummary?.receivedDateLabel || "Waiting",
+    },
+    {
+      key: "delivery",
+      label: "Delivery",
+      complete: hasDelivery,
+      detail: deliveryDate
+        ? formatUpcomingDeliveryDate(deliveryDate)
+        : hasDelivery
+          ? "Scheduled"
+          : "Not set",
+    },
+    {
+      key: "delivered",
+      label: "Delivered",
+      complete: isDelivered,
+      detail: deliveryBadge?.deliveredDateLabel || "Waiting",
+    },
+  ];
+
+  return (
+    <article className="relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md">
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 left-0 w-1.5 ${
+          isDelivered
+            ? "bg-emerald-500"
+            : hasDelivery
+              ? "bg-blue-500"
+              : "bg-amber-400"
+        }`}
+      />
+
+      <div className="grid gap-5 px-5 pb-4 pt-5 lg:grid-cols-[minmax(220px,0.8fr)_minmax(300px,1.35fr)_minmax(330px,1.25fr)] lg:items-center lg:px-6">
+        <div className="min-w-0 lg:border-r lg:border-slate-200 lg:pr-5">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+            Order Chain
+          </p>
+          <button
+            type="button"
+            onClick={() => onOpenOrder?.(result.orderNumber)}
+            className="mt-1 text-left text-2xl font-black tracking-tight text-slate-950 transition hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-300"
+          >
+            Order {result.orderNumber}
+          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {result.relatedPONumbers?.slice(0, 3).map((poNumber) => {
+              const vendor =
+                poVendors.get(normalizeSearchText(poNumber)) ||
+                "Vendor not listed";
+
+              return (
+                <span
+                  key={`${result.id}-chain-po-${poNumber}`}
+                  className="group/po relative rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.06em] text-blue-700"
+                  title={`Vendor: ${vendor}`}
+                >
+                  PO {poNumber}
+                  <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-950 px-3 py-2 text-[11px] font-black normal-case tracking-normal text-white shadow-xl group-hover/po:block">
+                    {vendor}
+                  </span>
+                </span>
+              );
+            })}
+            {result.fulfillmentBadges?.map((fulfillment) => (
+              <span
+                key={`${result.id}-chain-method-${fulfillment.orderNumber}-${fulfillment.key}`}
+                className={`rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.06em] ${getOrderFulfillmentBadgeClass(
+                  fulfillment.key,
+                )}`}
+              >
+                {fulfillment.label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="min-w-0 lg:border-r lg:border-slate-200 lg:pr-5">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+              <Building2 aria-hidden="true" className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="truncate text-lg font-black text-slate-950">
+                {customerName}
+              </h3>
+              <p className="mt-0.5 truncate text-sm font-bold text-slate-500">
+                {address}
+                {contactName ? ` · ${contactName}` : ""}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 flex min-w-0 flex-nowrap items-center gap-2">
+            {result.receivingSummary ? (
+              <span
+                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-black ${
+                  isReceived
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-amber-200 bg-amber-50 text-amber-800"
+                }`}
+              >
+                <CalendarDays aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {result.receivingSummary.label}
+                  {result.receivingSummary.receivedDateLabel
+                    ? ` · ${result.receivingSummary.receivedDateLabel}`
+                    : ""}
+                </span>
+              </span>
+            ) : null}
+            {result.receivingSummary?.locationLabel ? (
+              <button
+                type="button"
+                onClick={() => onOpenReceiving?.(result)}
+                title={`View receiving photos for ${result.receivingSummary.locationLabel}`}
+                className="inline-flex min-w-0 flex-1 items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700 transition hover:border-blue-400 hover:bg-blue-100"
+              >
+                <MapPin aria-hidden="true" className="h-3 w-3 shrink-0" />
+                <span className="truncate">{result.receivingSummary.locationLabel}</span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          {steps.map((step, index) => (
+            <button
+              key={step.key}
+              type="button"
+              disabled={step.key !== "delivered" || !isDelivered}
+              onClick={() => {
+                if (step.key === "delivered" && isDelivered) {
+                  onOpenDelivery?.(deliveryBadge?.deliveryRecord);
+                }
+              }}
+              className={`relative min-w-0 text-center ${
+                step.key === "delivered" && isDelivered
+                  ? "cursor-pointer rounded-xl transition hover:bg-emerald-50"
+                  : "cursor-default"
+              }`}
+            >
+              {index > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className={`absolute right-1/2 top-4 h-0.5 w-full ${
+                    step.complete ? "bg-emerald-400" : "bg-slate-200"
+                  }`}
+                />
+              ) : null}
+              <span
+                className={`relative mx-auto flex h-8 w-8 items-center justify-center rounded-full border-2 ${
+                  step.complete
+                    ? "border-emerald-500 bg-emerald-500 text-white"
+                    : "border-slate-300 bg-white text-slate-300"
+                }`}
+              >
+                <Check aria-hidden="true" className="h-4 w-4" strokeWidth={3} />
+              </span>
+              <span
+                className={`mt-2 block truncate text-xs font-black ${
+                  step.complete ? "text-slate-900" : "text-slate-400"
+                }`}
+              >
+                {step.label}
+              </span>
+              <span className="mt-0.5 block text-[10px] font-bold leading-tight text-slate-500">
+                {step.detail}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-4 mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center lg:mx-5">
+        <span className="inline-flex shrink-0 items-center gap-2 text-sm font-black text-slate-900">
+          <Package aria-hidden="true" className="h-5 w-5 text-slate-500" />
+          Order Items ({result.poItems?.length || 0})
+        </span>
+        <span className="hidden h-8 w-px bg-slate-300 sm:block" />
+        <span className="flex min-w-0 flex-1 flex-wrap gap-2">
+          {result.poItems?.slice(0, 2).map((itemLabel, index) => (
+            <span
+              key={`${result.id}-chain-item-${index}`}
+              className="max-w-full truncate rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+            >
+              {itemLabel}
+            </span>
+          ))}
+          {(result.poItems?.length || 0) > 2 ? (
+            <span className="rounded-xl bg-slate-200 px-3 py-2 text-xs font-black text-slate-600">
+              +{result.poItems.length - 2} more
+            </span>
+          ) : null}
+        </span>
+        <button
+          type="button"
+          onClick={() => onOpenOrder?.(result.orderNumber)}
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center self-end rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-slate-800 sm:self-auto"
+          aria-label={`View order ${result.orderNumber}`}
+        >
+          <ArrowRight aria-hidden="true" className="h-5 w-5" strokeWidth={2.7} />
+        </button>
+      </div>
+    </article>
+  );
 }
 
 function ConverterInput({
@@ -753,6 +1124,8 @@ export default function SalesConverterPage({
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [isDashboardSearchOpen, setIsDashboardSearchOpen] = useState(false);
   const [viewingOrderNumber, setViewingOrderNumber] = useState("");
+  const [viewingDeliveryDetails, setViewingDeliveryDetails] = useState(null);
+  const [viewingReceivingPhotos, setViewingReceivingPhotos] = useState(null);
   const [locationLookupAddress, setLocationLookupAddress] = useState("");
   const [locationLookupStatus, setLocationLookupStatus] = useState("idle");
   const [locationLookupResult, setLocationLookupResult] = useState(null);
@@ -853,6 +1226,32 @@ export default function SalesConverterPage({
     };
   }, [itemCost, itemQuantity]);
 
+  const dashboardPOVendors = useMemo(() => {
+    const vendorByPO = new Map();
+    const sourceRecords = [
+      ...(Array.isArray(searchSources?.supplierRuns)
+        ? searchSources.supplierRuns
+        : []),
+      ...(Array.isArray(searchSources?.theirTruckPOs)
+        ? searchSources.theirTruckPOs
+        : []),
+      ...(Array.isArray(searchSources?.checkIns) ? searchSources.checkIns : []),
+    ];
+
+    sourceRecords.forEach((record) => {
+      const poNumber = String(record?.poNumber || "").trim();
+      const vendor = String(
+        record?.vendor || record?.vendorName || record?.supplierName || "",
+      ).trim();
+
+      if (poNumber && vendor) {
+        vendorByPO.set(normalizeSearchText(poNumber), vendor);
+      }
+    });
+
+    return vendorByPO;
+  }, [searchSources]);
+
   const dashboardSearchItems = useMemo(() => {
     const safeSource = (key) =>
       Array.isArray(searchSources?.[key]) ? searchSources[key] : [];
@@ -922,6 +1321,12 @@ export default function SalesConverterPage({
       poToOrders.get(normalizeSearchText(poNumber)) || [];
     const getPOsForOrder = (orderNumber) =>
       orderToPOs.get(normalizeSearchText(orderNumber)) || [];
+    const fulfillmentRecords = [
+      ...safeSource("orderBuilds"),
+      ...safeSource("deliveries"),
+    ];
+    const getFulfillmentBadges = (orderNumbers) =>
+      getOrderFulfillmentBadges(orderNumbers, fulfillmentRecords);
 
     [...safeSource("vendors")]
       .sort((firstVendor, secondVendor) =>
@@ -968,6 +1373,9 @@ export default function SalesConverterPage({
     safeSource("supplierRuns").forEach((record) => {
       const poNumber = String(record.poNumber || "").trim();
       const recordItems = Array.isArray(record.items) ? record.items : [];
+      const linkedItem = recordItems.find(
+        (item) => item?.customerName || item?.businessName,
+      );
       items.push(
         createDashboardSearchItem(
           record,
@@ -978,13 +1386,32 @@ export default function SalesConverterPage({
             .join(" • "),
           poNumber || record.orderNumber || record.customerName || "",
           {
+            poNumber,
             relatedOrderNumbers: getOrdersForPO(poNumber),
+            fulfillmentBadges: getFulfillmentBadges(getOrdersForPO(poNumber)),
             receivingSummary: getPOReceivingSummary(
               checkIns,
               poNumber,
               recordItems.length,
             ),
             poItems: recordItems.map(getDashboardSearchItemLabel),
+            customerName: String(
+              record.customerName ||
+                record.businessName ||
+                linkedItem?.businessName ||
+                linkedItem?.customerName ||
+                "",
+            ),
+            address: String(
+              record.deliveryAddress ||
+                record.address ||
+                linkedItem?.deliveryAddress ||
+                linkedItem?.address ||
+                "",
+            ),
+            contactName: String(
+              record.contactName || linkedItem?.contactName || "",
+            ),
           },
         ),
       );
@@ -993,6 +1420,9 @@ export default function SalesConverterPage({
     safeSource("theirTruckPOs").forEach((record) => {
       const poNumber = String(record.poNumber || "").trim();
       const recordItems = Array.isArray(record.items) ? record.items : [];
+      const linkedItem = recordItems.find(
+        (item) => item?.customerName || item?.businessName,
+      );
       items.push(
         createDashboardSearchItem(
           record,
@@ -1003,13 +1433,32 @@ export default function SalesConverterPage({
             .join(" • "),
           poNumber || record.orderNumber || record.customerName || "",
           {
+            poNumber,
             relatedOrderNumbers: getOrdersForPO(poNumber),
+            fulfillmentBadges: getFulfillmentBadges(getOrdersForPO(poNumber)),
             receivingSummary: getPOReceivingSummary(
               checkIns,
               poNumber,
               recordItems.length,
             ),
             poItems: recordItems.map(getDashboardSearchItemLabel),
+            customerName: String(
+              record.customerName ||
+                record.businessName ||
+                linkedItem?.businessName ||
+                linkedItem?.customerName ||
+                "",
+            ),
+            address: String(
+              record.deliveryAddress ||
+                record.address ||
+                linkedItem?.deliveryAddress ||
+                linkedItem?.address ||
+                "",
+            ),
+            contactName: String(
+              record.contactName || linkedItem?.contactName || "",
+            ),
           },
         ),
       );
@@ -1033,9 +1482,29 @@ export default function SalesConverterPage({
             .join(" • "),
           poNumber || businessName || record.vendor || "",
           {
+            poNumber,
             relatedOrderNumbers: getOrdersForPO(poNumber),
+            fulfillmentBadges: getFulfillmentBadges(getOrdersForPO(poNumber)),
             receivingSummary: getPOReceivingSummary(checkIns, poNumber),
             poItems: receivedItems.map(getDashboardSearchItemLabel),
+            customerName: String(
+              businessName ||
+                record.orderAssignment?.customerName ||
+                record.customer?.customerName ||
+                "",
+            ),
+            address: String(
+              record.orderAssignment?.deliveryAddress ||
+                record.customer?.deliveryAddress ||
+                record.deliveryAddress ||
+                record.address ||
+                "",
+            ),
+            contactName: String(
+              record.orderAssignment?.contactName ||
+                record.customer?.contactName ||
+                "",
+            ),
           },
         ),
       );
@@ -1055,6 +1524,11 @@ export default function SalesConverterPage({
           {
             orderNumber,
             relatedPONumbers: getPOsForOrder(orderNumber),
+            fulfillmentBadges: getFulfillmentBadges([orderNumber]),
+            deliveryRecord: record,
+            customerName: String(record.customerName || ""),
+            address: String(record.address || ""),
+            contactName: String(record.contactName || ""),
           },
         ),
       );
@@ -1074,6 +1548,13 @@ export default function SalesConverterPage({
           {
             orderNumber,
             relatedPONumbers: getPOsForOrder(orderNumber),
+            fulfillmentBadges: getFulfillmentBadges([orderNumber]),
+            orderRecord: record,
+            customerName: String(
+              record.businessName || record.customerName || "",
+            ),
+            address: String(record.deliveryAddress || record.address || ""),
+            contactName: String(record.contactName || ""),
           },
         ),
       );
@@ -1099,10 +1580,13 @@ export default function SalesConverterPage({
     return items.filter((item) => item.searchValue);
   }, [searchSources]);
   const normalizedDashboardSearch = normalizeSearchText(dashboardSearch);
-  const dashboardSearchAllMatches = normalizedDashboardSearch
+  const dashboardSearchRawMatches = normalizedDashboardSearch
     ? dashboardSearchItems
         .filter((item) => item.searchableText.includes(normalizedDashboardSearch))
     : dashboardSearchItems.filter((item) => item.supplierProfile);
+  const dashboardSearchAllMatches = consolidateDashboardSearchMatches(
+    dashboardSearchRawMatches,
+  );
   const dashboardSearchMatches = dashboardSearchAllMatches.slice(0, 40);
   const hasLocationLookupMap = Boolean(
     locationLookupStatus === "success" &&
@@ -1239,7 +1723,7 @@ export default function SalesConverterPage({
             {isDashboardSearchOpen ? (
               <div className="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
                 {dashboardSearchMatches.length > 0 ? (
-                  <div className="max-h-96 overflow-y-auto p-2">
+                  <div className="max-h-[70vh] overflow-y-auto p-2">
                     {dashboardSearchMatches.map((result) =>
                       result.supplierProfile ? (
                         <button
@@ -1327,6 +1811,32 @@ export default function SalesConverterPage({
                             </span>
                           )}
                         </button>
+                      ) : result.type === "Order Chain" ? (
+                        <OrderChainSearchCard
+                          key={result.id}
+                          result={result}
+                          poVendors={dashboardPOVendors}
+                          onOpenOrder={(orderNumber) => {
+                            setIsDashboardSearchOpen(false);
+                            setViewingOrderNumber(orderNumber);
+                          }}
+                          onOpenDelivery={(delivery) => {
+                            if (delivery) {
+                              setViewingDeliveryDetails(delivery);
+                            }
+                          }}
+                          onOpenReceiving={(chainResult) => {
+                            setIsDashboardSearchOpen(false);
+                            setViewingReceivingPhotos({
+                              poNumber: chainResult.poNumber,
+                              locationLabel:
+                                chainResult.receivingSummary.locationLabel,
+                              photos:
+                                chainResult.receivingSummary.receivingPhotos ||
+                                [],
+                            });
+                          }}
+                        />
                       ) : (
                         <button
                           key={result.id}
@@ -1425,14 +1935,69 @@ export default function SalesConverterPage({
                               ))}
                             {result.relatedPONumbers
                               ?.slice(0, 3)
-                              .map((poNumber) => (
+                              .map((poNumber) => {
+                                const poVendor =
+                                  dashboardPOVendors.get(
+                                    normalizeSearchText(poNumber),
+                                  ) || "Vendor not listed";
+
+                                return (
+                                  <span
+                                    key={`${result.id}-po-${poNumber}`}
+                                    className="group/po relative rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-blue-700"
+                                    title={`Vendor: ${poVendor}`}
+                                  >
+                                    PO {poNumber}
+                                    <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-950 px-3 py-2 text-[11px] font-black normal-case tracking-normal text-white shadow-xl group-hover/po:block">
+                                      {poVendor}
+                                    </span>
+                                  </span>
+                                );
+                              })}
+                            {result.fulfillmentBadges?.map((fulfillment) => (
+                              <span
+                                key={`${result.id}-fulfillment-${fulfillment.orderNumber}-${fulfillment.key}`}
+                                className="contents"
+                              >
                                 <span
-                                  key={`${result.id}-po-${poNumber}`}
-                                  className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-blue-700"
+                                  title={`Order ${fulfillment.orderNumber}: ${fulfillment.label}`}
+                                  className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${getOrderFulfillmentBadgeClass(
+                                    fulfillment.key,
+                                  )}`}
                                 >
-                                  PO {poNumber}
+                                  {fulfillment.label}
                                 </span>
-                              ))}
+                                {fulfillment.isDelivered ? (
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    title={`Order ${fulfillment.orderNumber} has been delivered`}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setViewingDeliveryDetails(
+                                        fulfillment.deliveryRecord,
+                                      );
+                                    }}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter" || event.key === " ") {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        setViewingDeliveryDetails(
+                                          fulfillment.deliveryRecord,
+                                        );
+                                      }
+                                    }}
+                                    className="cursor-pointer rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                  >
+                                    Delivered
+                                    {fulfillment.deliveredDateLabel
+                                      ? ` · ${fulfillment.deliveredDateLabel}`
+                                      : ""}
+                                  </span>
+                                ) : null}
+                              </span>
+                            ))}
                           </span>
                           {result.subtitle ? (
                             <span className="mt-0.5 block truncate text-xs font-semibold text-slate-500">
@@ -1456,7 +2021,34 @@ export default function SalesConverterPage({
                                   : ""}
                               </span>
                               {result.receivingSummary.locationLabel ? (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-blue-700">
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  title={`View receiving photo for ${result.receivingSummary.locationLabel}`}
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setIsDashboardSearchOpen(false);
+                                    setViewingReceivingPhotos({
+                                      poNumber: result.poNumber,
+                                      locationLabel: result.receivingSummary.locationLabel,
+                                      photos: result.receivingSummary.receivingPhotos || [],
+                                    });
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      setIsDashboardSearchOpen(false);
+                                      setViewingReceivingPhotos({
+                                        poNumber: result.poNumber,
+                                        locationLabel: result.receivingSummary.locationLabel,
+                                        photos: result.receivingSummary.receivingPhotos || [],
+                                      });
+                                    }
+                                  }}
+                                  className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-blue-700 transition hover:border-blue-400 hover:bg-blue-100 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                >
                                   <MapPin className="h-3 w-3" aria-hidden="true" />
                                   {result.receivingSummary.locationLabel}
                                 </span>
@@ -1822,6 +2414,18 @@ export default function SalesConverterPage({
             orderNumber={viewingOrderNumber}
             sources={searchSources}
             onClose={() => setViewingOrderNumber("")}
+          />
+        ) : null}
+        {viewingReceivingPhotos ? (
+          <ReceivingLocationPhotosModal
+            {...viewingReceivingPhotos}
+            onClose={() => setViewingReceivingPhotos(null)}
+          />
+        ) : null}
+        {viewingDeliveryDetails ? (
+          <DeliveryDetailsModal
+            delivery={viewingDeliveryDetails}
+            onClose={() => setViewingDeliveryDetails(null)}
           />
         ) : null}
       </PageContainer>

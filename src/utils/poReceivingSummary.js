@@ -101,6 +101,125 @@ function formatReceivedDate(date) {
   }).format(date);
 }
 
+function getPhotoDataUrl(photo) {
+  return String(photo?.dataUrl || photo?.url || "").trim();
+}
+
+function getMaterialDescription(material, index) {
+  return String(
+    material?.description ||
+      material?.itemDescription ||
+      material?.name ||
+      material?.itemName ||
+      `Item ${index + 1}`,
+  ).trim();
+}
+
+function getReceivingLocationPhotos(matchingCheckIns, poNumber) {
+  const photos = [];
+  const seenPhotos = new Set();
+
+  const addPhoto = (photo, { checkIn, location = "", description = "" }) => {
+    const dataUrl = getPhotoDataUrl(photo);
+
+    if (!dataUrl || seenPhotos.has(dataUrl)) {
+      return;
+    }
+
+    seenPhotos.add(dataUrl);
+    const receivedDate = formatReceivedDate(
+      getDateValue(
+        checkIn?.checkedInAt ||
+          checkIn?.receivedAt ||
+          checkIn?.updatedAt ||
+          checkIn?.createdAt,
+      ),
+    );
+
+    photos.push({
+      id: `${checkIn?.id || poNumber || "po"}-${photos.length}`,
+      dataUrl,
+      location: String(location || "").trim(),
+      title: location ? `Received at ${location}` : "Receiving location photo",
+      subtitle: [description, receivedDate].filter(Boolean).join(" • "),
+    });
+  };
+
+  matchingCheckIns.forEach((checkIn) => {
+    const materials = getCheckInMaterials(checkIn);
+    const fallbackLocation = String(checkIn?.poLocation || "").trim();
+
+    if (checkIn?.locationPhoto) {
+      addPhoto(checkIn.locationPhoto, {
+        checkIn,
+        location: fallbackLocation,
+      });
+    }
+
+    materials.forEach((material, materialIndex) => {
+      const location = String(material?.location || fallbackLocation).trim();
+      const description = getMaterialDescription(material, materialIndex);
+      const materialPhotos = Array.isArray(material?.locationPhotos)
+        ? material.locationPhotos
+        : [];
+
+      materialPhotos.forEach((photo) =>
+        addPhoto(photo, { checkIn, location, description }),
+      );
+      if (material?.locationPhoto) {
+        addPhoto(material.locationPhoto, {
+          checkIn,
+          location,
+          description,
+        });
+      }
+    });
+  });
+
+  return photos;
+}
+
+function getReceivedItems(matchingCheckIns) {
+  const receivedItems = [];
+  const seenItems = new Set();
+
+  matchingCheckIns.forEach((checkIn) => {
+    const fallbackLocation = String(checkIn?.poLocation || "").trim();
+    const receivedDateLabel = formatReceivedDate(
+      getDateValue(
+        checkIn?.checkedInAt ||
+          checkIn?.receivedAt ||
+          checkIn?.updatedAt ||
+          checkIn?.createdAt,
+      ),
+    );
+
+    getCheckInMaterials(checkIn).forEach((material, materialIndex) => {
+      const description = getMaterialDescription(material, materialIndex);
+      const quantity = String(material?.quantity || material?.qty || "").trim();
+      const location = String(material?.location || fallbackLocation).trim();
+      const itemKey = [description, quantity, location]
+        .join("|")
+        .toLowerCase();
+
+      if (seenItems.has(itemKey)) {
+        return;
+      }
+
+      seenItems.add(itemKey);
+      receivedItems.push({
+        id: String(material?.id || `${checkIn?.id || "check-in"}-${materialIndex}`),
+        description,
+        quantity,
+        location,
+        receivedDateLabel,
+      });
+    });
+  });
+
+  return receivedItems;
+}
+
 export function getPOReceivingSummary(
   checkIns,
   poNumber,
@@ -132,6 +251,11 @@ export function getPOReceivingSummary(
     Number(expectedItemCount) > 0 &&
     receivedItemCount < Number(expectedItemCount);
   const latestReceivedDate = getLatestReceivedDate(matchingCheckIns);
+  const receivingPhotos = getReceivingLocationPhotos(
+    matchingCheckIns,
+    poNumber,
+  );
+  const receivedItems = getReceivedItems(matchingCheckIns);
 
   return {
     key: !isReceived ? "pending" : isPartial ? "partial" : "received",
@@ -148,5 +272,7 @@ export function getPOReceivingSummary(
     receivedDateLabel: formatReceivedDate(latestReceivedDate),
     locations,
     locationLabel: formatLocationSummary(locations),
+    receivedItems,
+    receivingPhotos,
   };
 }

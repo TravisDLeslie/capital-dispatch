@@ -36,12 +36,13 @@ import {
   Truck,
   UsersRound,
   Warehouse,
-  X,
 } from "lucide-react";
 import AppHeader from "./components/AppHeader";
 import DispatchOpsDeliveryOverview from "./components/DispatchOpsDeliveryOverview";
+import DeliveryDetailsModal from "./components/DeliveryDetailsModal";
 import FeatureErrorBoundary from "./components/FeatureErrorBoundary";
 import OrderDetailsModal from "./components/OrderDetailsModal";
+import ReceivingLocationPhotosModal from "./components/ReceivingLocationPhotosModal";
 import SectionHubPage from "./components/SectionHubPage";
 import LoginPage from "./components/LoginPage";
 import {
@@ -54,6 +55,10 @@ import {
 import { getFirebaseErrorMessage } from "./utils/firebaseErrorMessages";
 import { auth, isFirebaseConfigured } from "./utils/firebase";
 import { isDeliveryComplete } from "./utils/deliveryStatus";
+import {
+  getOrderFulfillmentBadgeClass,
+  getOrderFulfillmentBadges,
+} from "./utils/orderFulfillment";
 import { getPOReceivingSummary } from "./utils/poReceivingSummary";
 import {
   isAssignedOpenSupplierRun,
@@ -1877,6 +1882,8 @@ export default function App() {
     useState("");
   const [viewingDashboardOrderNumber, setViewingDashboardOrderNumber] =
     useState("");
+  const [viewingDashboardDelivery, setViewingDashboardDelivery] =
+    useState<Record<string, unknown> | null>(null);
   const [receivingDashboardSearch, setReceivingDashboardSearch] =
     useState("");
   const [copiedReceivingQuickPO, setCopiedReceivingQuickPO] =
@@ -1884,6 +1891,7 @@ export default function App() {
   const [viewingReceivingQuickPhotos, setViewingReceivingQuickPhotos] =
     useState<{
       poNumber: string;
+      locationLabel?: string;
       photos: Array<{
         id: string;
         dataUrl: string;
@@ -4987,6 +4995,7 @@ export default function App() {
       const dispatchQuickLookupNumber = normalizeSearchNumber(
         dispatchQuickLookupQuery,
       );
+      const dispatchFulfillmentRecords = [...orderBuilds, ...deliveries];
       const dispatchQuickMatches = dispatchQuickLookupQuery
         ? [
             ...southLookupSupplierRuns.map((supplierRun) => {
@@ -5011,6 +5020,10 @@ export default function App() {
                 itemCount: items.length,
                 items,
                 orderNumbers,
+                fulfillmentBadges: getOrderFulfillmentBadges(
+                  orderNumbers,
+                  dispatchFulfillmentRecords,
+                ),
                 receivingSummary,
                 searchableText: normalizeSearchText(
                   [
@@ -5053,6 +5066,10 @@ export default function App() {
                 itemCount: items.length,
                 items,
                 orderNumbers,
+                fulfillmentBadges: getOrderFulfillmentBadges(
+                  orderNumbers,
+                  dispatchFulfillmentRecords,
+                ),
                 receivingSummary,
                 searchableText: normalizeSearchText(
                   [
@@ -5227,8 +5244,14 @@ export default function App() {
                               </span>
                               <span className="min-w-0 flex-1">
                                 <span className="flex flex-wrap items-center gap-1.5">
-                                  <span className="text-sm font-black text-slate-950">
+                                  <span
+                                    className="group/po relative text-sm font-black text-slate-950"
+                                    title={`Vendor: ${match.vendor || "Vendor not listed"}`}
+                                  >
                                     PO {match.poNumber}
+                                    <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-xl bg-slate-950 px-3 py-2 text-[11px] font-black text-white shadow-xl group-hover/po:block">
+                                      {match.vendor || "Vendor not listed"}
+                                    </span>
                                   </span>
                                   {match.orderNumbers.map((orderNumber) => (
                                     <span
@@ -5257,6 +5280,50 @@ export default function App() {
                                       Order {orderNumber}
                                     </span>
                                   ))}
+                                  {match.fulfillmentBadges.map((fulfillment) => (
+                                    <span
+                                      key={`${match.id}-fulfillment-${fulfillment.orderNumber}-${fulfillment.key}`}
+                                      className="contents"
+                                    >
+                                      <span
+                                        title={`Order ${fulfillment.orderNumber}: ${fulfillment.label}`}
+                                        className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${getOrderFulfillmentBadgeClass(
+                                          fulfillment.key,
+                                        )}`}
+                                      >
+                                        {fulfillment.label}
+                                      </span>
+                                      {fulfillment.isDelivered ? (
+                                        <span
+                                          role="button"
+                                          tabIndex={0}
+                                          title={`View delivered order ${fulfillment.orderNumber}`}
+                                          onMouseDown={(event) => event.preventDefault()}
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            setViewingDashboardDelivery(
+                                              fulfillment.deliveryRecord,
+                                            );
+                                          }}
+                                          onKeyDown={(event) => {
+                                            if (event.key === "Enter" || event.key === " ") {
+                                              event.preventDefault();
+                                              event.stopPropagation();
+                                              setViewingDashboardDelivery(
+                                                fulfillment.deliveryRecord,
+                                              );
+                                            }
+                                          }}
+                                          className="cursor-pointer rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                                        >
+                                          Delivered
+                                          {fulfillment.deliveredDateLabel
+                                            ? ` · ${fulfillment.deliveredDateLabel}`
+                                            : ""}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                  ))}
                                   <span
                                     className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${
                                       match.receivingSummary.key === "received"
@@ -5272,7 +5339,32 @@ export default function App() {
                                       : ""}
                                   </span>
                                   {match.receivingSummary.locationLabel ? (
-                                    <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-blue-700">
+                                    <span
+                                      role="button"
+                                      tabIndex={0}
+                                      title={`View receiving photo for ${match.receivingSummary.locationLabel}`}
+                                      onMouseDown={(event) => event.preventDefault()}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setViewingReceivingQuickPhotos({
+                                          poNumber: String(match.poNumber || ""),
+                                          locationLabel: match.receivingSummary.locationLabel,
+                                          photos: match.receivingSummary.receivingPhotos || [],
+                                        });
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter" || event.key === " ") {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          setViewingReceivingQuickPhotos({
+                                            poNumber: String(match.poNumber || ""),
+                                            locationLabel: match.receivingSummary.locationLabel,
+                                            photos: match.receivingSummary.receivingPhotos || [],
+                                          });
+                                        }
+                                      }}
+                                      className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-blue-700 transition hover:border-blue-400 hover:bg-blue-100 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                    >
                                       <MapPin
                                         aria-hidden="true"
                                         className="h-3 w-3"
@@ -5396,6 +5488,12 @@ export default function App() {
                       checkIns,
                     }}
                     onClose={() => setViewingDashboardOrderNumber("")}
+                  />
+                ) : null}
+                {viewingDashboardDelivery ? (
+                  <DeliveryDetailsModal
+                    delivery={viewingDashboardDelivery}
+                    onClose={() => setViewingDashboardDelivery(null)}
                   />
                 ) : null}
 
@@ -6178,74 +6276,13 @@ export default function App() {
               ) : null}
 
               {viewingReceivingQuickPhotos ? (
-                <div
-                  className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-4"
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="quick-po-photos-title"
-                >
-                  <div className="max-h-[88vh] w-full max-w-5xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
-                    <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-                      <div className="min-w-0">
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-                          PO Photos
-                        </p>
-                        <h3
-                          id="quick-po-photos-title"
-                          className="mt-1 text-2xl font-black text-slate-950"
-                        >
-                          PO {viewingReceivingQuickPhotos.poNumber}
-                        </h3>
-                        <p className="mt-1 text-sm font-bold text-slate-500">
-                          {viewingReceivingQuickPhotos.photos.length} saved{" "}
-                          {viewingReceivingQuickPhotos.photos.length === 1
-                            ? "photo"
-                            : "photos"}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setViewingReceivingQuickPhotos(null)}
-                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:text-slate-950"
-                        aria-label="Close PO photos"
-                      >
-                        <X
-                          aria-hidden="true"
-                          className="h-5 w-5"
-                          strokeWidth={2.5}
-                        />
-                      </button>
-                    </div>
-
-                    <div className="max-h-[72vh] overflow-auto bg-slate-50 p-4">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {viewingReceivingQuickPhotos.photos.map((photo) => (
-                          <figure
-                            key={photo.id}
-                            className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
-                          >
-                            <img
-                              src={photo.dataUrl}
-                              alt={`${photo.title} for PO ${viewingReceivingQuickPhotos.poNumber}`}
-                              className="max-h-[520px] w-full object-contain bg-slate-950"
-                            />
-                            <figcaption className="border-t border-slate-200 px-4 py-3">
-                              <p className="text-sm font-black text-slate-950">
-                                {photo.title}
-                              </p>
-                              {photo.subtitle ? (
-                                <p className="mt-0.5 text-xs font-bold text-slate-500">
-                                  {photo.subtitle}
-                                </p>
-                              ) : null}
-                            </figcaption>
-                          </figure>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <ReceivingLocationPhotosModal
+                  {...viewingReceivingQuickPhotos}
+                  locationLabel={
+                    viewingReceivingQuickPhotos.locationLabel || "PO photos"
+                  }
+                  onClose={() => setViewingReceivingQuickPhotos(null)}
+                />
               ) : null}
             </form>
           ) : null}

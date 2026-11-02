@@ -247,6 +247,13 @@ export default function DeliveryDashboardPage({
   const hardwareNeededCount = selectedDateDeliveries.filter(
     (delivery) => delivery.hasHardware && !delivery.hardwareChecked,
   ).length;
+  const upcomingPageId = allowedPageIds.includes(
+    "deliveries-queued-upcoming",
+  )
+    ? "deliveries-queued-upcoming"
+    : allowedPageIds.includes("deliveries-queue")
+      ? "deliveries-queue"
+      : "";
 
   return (
     <PageContainer>
@@ -331,13 +338,13 @@ export default function DeliveryDashboardPage({
             onClick={() => onPageChange?.("deliveries-add")}
           />
         ) : null}
-        {allowedPageIds.includes("deliveries-queue") ? (
+        {upcomingPageId ? (
           <ActionButton
             icon={PackageCheck}
             title="View Upcoming"
             detail={`${openDeliveries.length} open`}
             tone="green"
-            onClick={() => onPageChange?.("deliveries-queue")}
+            onClick={() => onPageChange?.(upcomingPageId)}
           />
         ) : null}
         {allowedPageIds.includes("deliveries-route-planner") ? (
@@ -406,7 +413,7 @@ export default function DeliveryDashboardPage({
         )}
       </section>
 
-      {upcomingDeliveries.length > 0 ? (
+      {upcomingDeliveries.length > 0 && upcomingPageId ? (
         <section className="mt-6 rounded-[2rem] border border-slate-200 bg-slate-50 p-4 sm:p-5">
           <div className="mb-4 flex items-center gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-slate-700 shadow-sm">
@@ -427,7 +434,7 @@ export default function DeliveryDashboardPage({
               <button
                 key={delivery.id}
                 type="button"
-                onClick={() => onPageChange?.("deliveries-queue")}
+                onClick={() => onPageChange?.(upcomingPageId)}
                 className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-red-200"
               >
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-[#FC2C38]">
