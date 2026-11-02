@@ -515,6 +515,46 @@ function getDashboardSearchItemLabel(item) {
     .join(" · ");
 }
 
+function isDashboardYardStockItem(item) {
+  const fulfillmentPath = String(
+    item?.path || item?.fulfillmentPath || item?.source || "",
+  )
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+
+  return ["instock", "stock", "yardstock", "fromyard"].includes(
+    fulfillmentPath,
+  );
+}
+
+function getOrderBuildSearchItemGroups(record) {
+  const savedItems = Array.isArray(record?.items) ? record.items : [];
+  const savedWaitingItems = Array.isArray(record?.waitingItems)
+    ? record.waitingItems
+    : [];
+  const savedStockItems = Array.isArray(record?.stockItems)
+    ? record.stockItems
+    : [];
+  const hasSavedItemGroups =
+    savedWaitingItems.length > 0 || savedStockItems.length > 0;
+  const incomingItems = hasSavedItemGroups
+    ? savedWaitingItems
+    : savedItems.filter((item) => !isDashboardYardStockItem(item));
+  const yardStockItems = hasSavedItemGroups
+    ? savedStockItems
+    : savedItems.filter(isDashboardYardStockItem);
+
+  return {
+    incomingItems: uniqueDashboardValues(
+      incomingItems.map(getDashboardSearchItemLabel),
+    ),
+    yardStockItems: uniqueDashboardValues(
+      yardStockItems.map(getDashboardSearchItemLabel),
+    ),
+  };
+}
+
 function getUniqueReferenceValues(values) {
   const seenValues = new Set();
 
@@ -614,7 +654,7 @@ function consolidateDashboardSearchMatches(matches) {
   return resultOrder.map((groupKey) => {
     const group = groupedMatches.get(groupKey) || [];
 
-    if (group.length <= 1 || !groupKey.startsWith("order-")) {
+    if (!groupKey.startsWith("order-")) {
       return group[0];
     }
 
@@ -679,6 +719,12 @@ function consolidateDashboardSearchMatches(matches) {
         "",
       receivingSummary: receivingMatch?.receivingSummary,
       poItems,
+      incomingItems: uniqueDashboardValues(
+        group.flatMap((match) => match.incomingItems || []),
+      ),
+      yardStockItems: uniqueDashboardValues(
+        group.flatMap((match) => match.yardStockItems || []),
+      ),
       searchableText: group
         .map((match) => match.searchableText)
         .filter(Boolean)
@@ -718,6 +764,11 @@ function OrderChainSearchCard({
     result.orderRecord?.contactName ||
     "";
   const deliveryDate = result.deliveryRecord?.deliveryDate;
+  const incomingItems =
+    result.incomingItems?.length > 0
+      ? result.incomingItems
+      : result.poItems || [];
+  const yardStockItems = result.yardStockItems || [];
 
   return (
     <article className="relative border-b border-slate-100 bg-white px-4 py-3 text-left transition last:border-b-0 hover:bg-slate-50/70">
@@ -820,21 +871,57 @@ function OrderChainSearchCard({
           ) : null}
         </div>
 
-        <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
-          {result.poItems?.slice(0, 2).map((itemLabel, index) => (
-            <span
-              key={`${result.id}-chain-item-${index}`}
-              className="max-w-full truncate rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700"
-            >
-              {itemLabel}
-            </span>
-          ))}
-          {(result.poItems?.length || 0) > 2 ? (
-            <span className="rounded-lg bg-slate-200 px-2.5 py-1.5 text-[11px] font-black text-slate-600">
-              +{result.poItems.length - 2} more
-            </span>
-          ) : null}
-        </div>
+        {incomingItems.length > 0 || yardStockItems.length > 0 ? (
+          <div className="mt-2 grid min-w-0 gap-2 sm:grid-cols-2">
+            {incomingItems.length > 0 ? (
+              <div className="min-w-0 rounded-xl border border-amber-200 bg-amber-50/80 px-2.5 py-2">
+                <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.12em] text-amber-800">
+                  <Truck className="h-3 w-3" aria-hidden="true" />
+                  Coming in · {incomingItems.length}
+                </p>
+                <div className="mt-1.5 flex min-w-0 flex-wrap gap-1">
+                  {incomingItems.slice(0, 2).map((itemLabel, index) => (
+                    <span
+                      key={`${result.id}-incoming-item-${index}`}
+                      className="max-w-full truncate rounded-lg border border-amber-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700"
+                    >
+                      {itemLabel}
+                    </span>
+                  ))}
+                  {incomingItems.length > 2 ? (
+                    <span className="rounded-lg bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-800">
+                      +{incomingItems.length - 2} more
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {yardStockItems.length > 0 ? (
+              <div className="min-w-0 rounded-xl border border-emerald-200 bg-emerald-50/80 px-2.5 py-2">
+                <p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.12em] text-emerald-800">
+                  <Package className="h-3 w-3" aria-hidden="true" />
+                  In stock · From yard · {yardStockItems.length}
+                </p>
+                <div className="mt-1.5 flex min-w-0 flex-wrap gap-1">
+                  {yardStockItems.slice(0, 2).map((itemLabel, index) => (
+                    <span
+                      key={`${result.id}-yard-item-${index}`}
+                      className="max-w-full truncate rounded-lg border border-emerald-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700"
+                    >
+                      {itemLabel}
+                    </span>
+                  ))}
+                  {yardStockItems.length > 2 ? (
+                    <span className="rounded-lg bg-emerald-100 px-2 py-1 text-[10px] font-black text-emerald-800">
+                      +{yardStockItems.length - 2} more
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <button
@@ -1595,6 +1682,7 @@ export default function SalesConverterPage({
 
     safeSource("orderBuilds").forEach((record) => {
       const orderNumber = String(record.orderNumber || "").trim();
+      const orderItemGroups = getOrderBuildSearchItemGroups(record);
       items.push(
         createDashboardSearchItem(
           record,
@@ -1614,6 +1702,8 @@ export default function SalesConverterPage({
             ),
             address: String(record.deliveryAddress || record.address || ""),
             contactName: String(record.contactName || ""),
+            incomingItems: orderItemGroups.incomingItems,
+            yardStockItems: orderItemGroups.yardStockItems,
           },
         ),
       );
