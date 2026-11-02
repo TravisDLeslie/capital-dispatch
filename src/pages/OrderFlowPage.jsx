@@ -2404,7 +2404,7 @@ export default function OrderFlowPage({
       </section>
 
       <section className="mt-5 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
               Step 3
@@ -2416,14 +2416,6 @@ export default function OrderFlowPage({
               Add material from Capital Lumber's yard or from a supplier.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={addItem}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-600"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Add Item
-          </button>
         </div>
 
         <div className="mt-5 grid gap-2">
@@ -2698,6 +2690,15 @@ export default function OrderFlowPage({
             );
           })}
         </div>
+
+        <button
+          type="button"
+          onClick={addItem}
+          className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-red-200 bg-red-50 px-4 text-sm font-black text-[#FC2C38] transition hover:border-[#FC2C38] hover:bg-red-100"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Add Item
+        </button>
       </section>
 
       {orderMethod === "delivery" ? (
