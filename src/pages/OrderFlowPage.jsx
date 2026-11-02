@@ -230,11 +230,15 @@ function getHandoffOption(orderMethod) {
   );
 }
 
+function normalizeVendorName(vendorName) {
+  return String(vendorName || "").trim().toLowerCase();
+}
+
 function getVendorAddress(vendorName, supplierAddressMap) {
-  const normalizedVendorName = String(vendorName || "").trim().toLowerCase();
+  const normalizedVendorName = normalizeVendorName(vendorName);
   const matchedVendorName = Object.keys(supplierAddressMap || {}).find(
     (currentVendorName) =>
-      currentVendorName.trim().toLowerCase() === normalizedVendorName,
+      normalizeVendorName(currentVendorName) === normalizedVendorName,
   );
 
   return matchedVendorName ? supplierAddressMap[matchedVendorName] || "" : "";
@@ -794,6 +798,102 @@ export default function OrderFlowPage({
     );
   }
 
+  function updateItemVendor(itemId, vendor) {
+    setItems((currentItems) => {
+      const currentItem = currentItems.find((item) => item.id === itemId);
+
+      if (!currentItem) {
+        return currentItems;
+      }
+
+      const vendorKey = normalizeVendorName(vendor);
+      const currentVendorKey = normalizeVendorName(currentItem.vendor);
+      const vendorChanged = vendorKey !== currentVendorKey;
+      const matchingSetup = vendorKey
+        ? currentItems.find(
+            (item) =>
+              item.id !== itemId &&
+              item.path === currentItem.path &&
+              normalizeVendorName(item.vendor) === vendorKey &&
+              (String(item.poNumber || "").trim() || getItemDateValue(item)),
+          )
+        : null;
+      const matchingDate = matchingSetup
+        ? getItemDateValue(matchingSetup)
+        : "";
+
+      return currentItems.map((item) => {
+        if (item.id !== itemId) {
+          return item;
+        }
+
+        return {
+          ...item,
+          vendor,
+          supplierAddress: getVendorAddress(vendor, supplierAddressMap),
+          poNumber:
+            vendorChanged || !String(item.poNumber || "").trim()
+              ? matchingSetup?.poNumber || ""
+              : item.poNumber,
+          ...(item.path === "wePickup"
+            ? {
+                routeDate:
+                  vendorChanged || !item.routeDate
+                    ? matchingDate
+                    : item.routeDate,
+                ...(vendorChanged ? { supplierDate: "" } : {}),
+              }
+            : {
+                supplierDate:
+                  vendorChanged || !item.supplierDate
+                    ? matchingDate
+                    : item.supplierDate,
+                ...(vendorChanged ? { routeDate: "" } : {}),
+              }),
+        };
+      });
+    });
+  }
+
+  function finishSupplierSetup(itemId) {
+    setItems((currentItems) => {
+      const sourceItem = currentItems.find((item) => item.id === itemId);
+
+      if (!sourceItem || !normalizeVendorName(sourceItem.vendor)) {
+        return currentItems;
+      }
+
+      const sourceVendorKey = normalizeVendorName(sourceItem.vendor);
+      const sourceDate = getItemDateValue(sourceItem);
+
+      return currentItems.map((item) => {
+        if (
+          item.id === itemId ||
+          item.path === "inStock" ||
+          normalizeVendorName(item.vendor) !== sourceVendorKey
+        ) {
+          return item;
+        }
+
+        const dateUpdates =
+          item.path === sourceItem.path && sourceDate
+            ? item.path === "wePickup"
+              ? { routeDate: item.routeDate || sourceDate }
+              : { supplierDate: item.supplierDate || sourceDate }
+            : {};
+
+        return {
+          ...item,
+          poNumber: item.poNumber || sourceItem.poNumber,
+          supplierAddress:
+            item.supplierAddress || sourceItem.supplierAddress,
+          ...dateUpdates,
+        };
+      });
+    });
+    setEditingItemId(null);
+  }
+
   function addItem() {
     const previousItem = items[items.length - 1];
     const nextItem = createBlankItem({
@@ -801,6 +901,8 @@ export default function OrderFlowPage({
       poNumber: previousItem?.poNumber || "",
       vendor: previousItem?.vendor || "",
       supplierAddress: previousItem?.supplierAddress || "",
+      routeDate: previousItem?.routeDate || "",
+      supplierDate: previousItem?.supplierDate || "",
     });
 
     setItems((currentItems) => [...currentItems, nextItem]);
@@ -829,6 +931,10 @@ export default function OrderFlowPage({
               vendor: currentItems[currentItems.length - 1]?.vendor || "",
               supplierAddress:
                 currentItems[currentItems.length - 1]?.supplierAddress || "",
+              routeDate:
+                currentItems[currentItems.length - 1]?.routeDate || "",
+              supplierDate:
+                currentItems[currentItems.length - 1]?.supplierDate || "",
             }),
           ];
     });
@@ -2533,31 +2639,36 @@ export default function OrderFlowPage({
                       onChange={(itemNumber) =>
                         updateItem(item.id, { itemNumber })
                       }
-                      onSelect={(inventoryItem) =>
+                      onSelect={(inventoryItem) => {
+                        if (!inventoryItem.nonStocked) {
+                          updateItem(item.id, {
+                            itemNumber: inventoryItem.itemNumber,
+                            description: inventoryItem.description,
+                            path: "inStock",
+                            vendor: "",
+                            supplierAddress: "",
+                            poNumber: "",
+                            routeDate: "",
+                            supplierDate: "",
+                          });
+                          return;
+                        }
+
                         updateItem(item.id, {
                           itemNumber: inventoryItem.itemNumber,
                           description: inventoryItem.description,
-                          ...(!inventoryItem.nonStocked
-                            ? {
-                                path: "inStock",
-                                vendor: "",
-                                supplierAddress: "",
-                                poNumber: "",
-                                routeDate: "",
-                                supplierDate: "",
-                              }
+                          ...(item.path === "inStock"
+                            ? { path: "supplierDelivery" }
                             : {}),
-                          ...(inventoryItem.defaultVendor
-                            ? {
-                                vendor: inventoryItem.defaultVendor,
-                                supplierAddress: getVendorAddress(
-                                  inventoryItem.defaultVendor,
-                                  supplierAddressMap,
-                                ),
-                              }
-                            : {}),
-                        })
-                      }
+                        });
+
+                        if (inventoryItem.defaultVendor) {
+                          updateItemVendor(
+                            item.id,
+                            inventoryItem.defaultVendor,
+                          );
+                        }
+                      }}
                     />
                   </Field>
                   <Field label="Item Description">
@@ -2990,7 +3101,7 @@ export default function OrderFlowPage({
               </div>
               <button
                 type="button"
-                onClick={() => setEditingItemId(null)}
+                onClick={() => finishSupplierSetup(editingItem.id)}
                 className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
                 aria-label="Close setup"
               >
@@ -3004,13 +3115,7 @@ export default function OrderFlowPage({
                   value={editingItem.vendor}
                   options={vendorOptions}
                   onChange={(vendor) =>
-                    updateItem(editingItem.id, {
-                      vendor,
-                      supplierAddress: getVendorAddress(
-                        vendor,
-                        supplierAddressMap,
-                      ),
-                    })
+                    updateItemVendor(editingItem.id, vendor)
                   }
                   allowCustomValue
                   placeholder="Start typing a vendor..."
@@ -3154,7 +3259,7 @@ export default function OrderFlowPage({
 
             <button
               type="button"
-              onClick={() => setEditingItemId(null)}
+              onClick={() => finishSupplierSetup(editingItem.id)}
               className="mt-5 w-full rounded-2xl bg-slate-950 px-5 py-4 text-base font-black text-white shadow-sm transition hover:bg-slate-800"
             >
               Done
