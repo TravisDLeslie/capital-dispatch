@@ -7711,6 +7711,10 @@ export default function App() {
             deliveries={deliveries}
             vehicleOptions={southVehicleOptions}
             employeeOptions={deliveryDriverOptions}
+            orderBuilds={orderBuilds}
+            supplierRuns={southLookupSupplierRuns}
+            theirTruckPOs={theirTruckPOs}
+            checkIns={checkIns}
             deliveryOriginOptions={deliveryOriginOptions}
             canEditDeliveries={canEditDeliveryDetails}
             onUpdateDelivery={handleUpdateDelivery}

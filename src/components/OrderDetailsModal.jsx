@@ -19,6 +19,7 @@ const pathLabels = {
   pod: "POD / Will Call",
   podPickup: "POD / Will Call",
   stock: "Stock",
+  inStock: "From Capital Lumber Yard",
 };
 
 function normalizeOrderNumber(value) {
