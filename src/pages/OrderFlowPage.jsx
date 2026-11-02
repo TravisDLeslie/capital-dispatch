@@ -7,12 +7,16 @@ import {
   ChevronDown,
   CircleHelp,
   ExternalLink,
+  FileText,
+  FileUp,
   Hand,
+  LoaderCircle,
   MapPin,
   Package,
   Plus,
   ShieldCheck,
   ShoppingBag,
+  Sparkles,
   Trash2,
   Truck,
   UserRound,
@@ -482,6 +486,45 @@ function formatPhoneInput(value) {
   return `(${area}) ${prefix}-${line}`;
 }
 
+const MAX_ORDER_IMPORT_BYTES = 3 * 1024 * 1024;
+
+function inferOrderImportMimeType(file) {
+  if (file?.type) {
+    return file.type;
+  }
+
+  const extension = String(file?.name || "")
+    .split(".")
+    .pop()
+    .toLowerCase();
+
+  return (
+    {
+      pdf: "application/pdf",
+      xls: "application/vnd.ms-excel",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      csv: "text/csv",
+      tsv: "text/tab-separated-values",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      webp: "image/webp",
+    }[extension] || ""
+  );
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.addEventListener("load", () => resolve(String(reader.result || "")));
+    reader.addEventListener("error", () =>
+      reject(new Error("The selected file could not be read.")),
+    );
+    reader.readAsDataURL(file);
+  });
+}
+
 function formatShortDate(value) {
   if (!value) {
     return "";
@@ -588,6 +631,12 @@ export default function OrderFlowPage({
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
   const [processError, setProcessError] = useState("");
   const [processSummary, setProcessSummary] = useState(null);
+  const [orderImportStatus, setOrderImportStatus] = useState("idle");
+  const [orderImportError, setOrderImportError] = useState("");
+  const [orderImportFileName, setOrderImportFileName] = useState("");
+  const [orderImportDraft, setOrderImportDraft] = useState(null);
+  const [isOrderImportReviewOpen, setIsOrderImportReviewOpen] =
+    useState(false);
   const [stockPoNumber, setStockPoNumber] = useState("");
   const [stockVendor, setStockVendor] = useState("");
   const [stockVendorAddress, setStockVendorAddress] = useState("");
@@ -790,6 +839,150 @@ export default function OrderFlowPage({
     if (activeItemId === itemId) {
       setActiveItemId(null);
     }
+  }
+
+  async function importOrderFile(file) {
+    if (!file || orderImportStatus === "loading") {
+      return;
+    }
+
+    const mimeType = inferOrderImportMimeType(file);
+
+    if (!mimeType) {
+      setOrderImportStatus("error");
+      setOrderImportError(
+        "Use a PDF, Excel/CSV file, JPG, PNG, or WebP image.",
+      );
+      return;
+    }
+
+    if (file.size > MAX_ORDER_IMPORT_BYTES) {
+      setOrderImportStatus("error");
+      setOrderImportError("This first version supports files up to 3 MB.");
+      return;
+    }
+
+    setOrderImportStatus("loading");
+    setOrderImportError("");
+    setOrderImportFileName(file.name);
+    setOrderImportDraft(null);
+
+    try {
+      const fileData = await readFileAsDataUrl(file);
+      const response = await fetch("/api/orders/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          mimeType,
+          fileData,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data?.error || "The order document could not be parsed.");
+      }
+
+      setOrderImportDraft(data?.draft || null);
+      setOrderImportStatus("success");
+      setIsOrderImportReviewOpen(true);
+    } catch (error) {
+      setOrderImportStatus("error");
+      setOrderImportError(
+        error?.message || "The order document could not be parsed.",
+      );
+    }
+  }
+
+  function applyImportedOrder() {
+    if (!orderImportDraft) {
+      return;
+    }
+
+    if (orderImportDraft.orderNumber) {
+      setOrderNumber(formatOrderNumberInput(orderImportDraft.orderNumber));
+    }
+
+    if (orderImportDraft.businessName) {
+      handleBusinessNameChange(orderImportDraft.businessName);
+    }
+
+    if (orderImportDraft.customerName) {
+      setCustomerName(orderImportDraft.customerName);
+    }
+
+    if (orderImportDraft.phoneNumber) {
+      setPhoneNumber(formatPhoneInput(orderImportDraft.phoneNumber));
+    }
+
+    if (orderImportDraft.accountNumber) {
+      setAccountNumber(orderImportDraft.accountNumber);
+    }
+
+    if (["delivery", "willCall", "pod"].includes(orderImportDraft.orderMethod)) {
+      setOrderMethod(orderImportDraft.orderMethod);
+    }
+
+    if (orderImportDraft.deliveryAddress) {
+      setDeliveryAddress(orderImportDraft.deliveryAddress);
+    }
+
+    if (orderImportDraft.deliveryDate) {
+      setDeliveryDate(orderImportDraft.deliveryDate);
+    }
+
+    if (orderImportDraft.notes) {
+      setDeliveryNotes(orderImportDraft.notes);
+    }
+
+    const importedItems = (orderImportDraft.items || [])
+      .map((importedItem) => {
+        const matchedCatalogItem = availableInventoryCatalog.find(
+          (catalogItem) =>
+            normalizeInventorySearch(catalogItem.itemNumber) ===
+            normalizeInventorySearch(importedItem.itemNumber),
+        );
+        const path = [
+          "supplierDelivery",
+          "wePickup",
+          "pod",
+          "inStock",
+        ].includes(importedItem.fulfillment)
+          ? importedItem.fulfillment
+          : "supplierDelivery";
+        const vendor =
+          importedItem.vendor || matchedCatalogItem?.defaultVendor || "";
+
+        return createBlankItem({
+          quantity: importedItem.quantity || "",
+          itemNumber: importedItem.itemNumber || "",
+          description:
+            importedItem.description || matchedCatalogItem?.description || "",
+          path,
+          vendor,
+          supplierAddress: getVendorAddress(vendor, supplierAddressMap),
+          poNumber: formatOrderNumberInput(importedItem.poNumber || ""),
+          routeDate:
+            path === "wePickup" ? importedItem.scheduledDate || "" : "",
+          supplierDate:
+            path !== "wePickup" && path !== "inStock"
+              ? importedItem.scheduledDate || ""
+              : "",
+          saved: true,
+        });
+      })
+      .filter(
+        (item) => item.itemNumber || item.description || item.quantity,
+      );
+
+    if (importedItems.length > 0) {
+      setItems(importedItems);
+      setActiveItemId(null);
+      setEditingItemId(null);
+    }
+
+    setIsOrderImportReviewOpen(false);
   }
 
   function buildOrderPayload() {
@@ -1668,6 +1861,266 @@ export default function OrderFlowPage({
           </div>
         </div>
       </div>
+
+      <section className="mb-3 rounded-3xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-700 shadow-sm">
+              <Sparkles className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">
+                Import Order Draft
+              </p>
+              <h2 className="text-lg font-black text-slate-950">
+                Drop an order document and review what it finds
+              </h2>
+              <p className="mt-0.5 text-sm font-bold text-slate-500">
+                PDF, image, Excel, or CSV · Nothing is saved until you review
+                and process the order.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <label
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                importOrderFile(event.dataTransfer.files?.[0]);
+              }}
+              className={`flex min-h-[56px] min-w-0 cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed bg-white px-4 transition hover:border-blue-500 hover:bg-blue-50 sm:min-w-[330px] ${
+                orderImportStatus === "error"
+                  ? "border-red-300"
+                  : "border-blue-300"
+              }`}
+            >
+              {orderImportStatus === "loading" ? (
+                <LoaderCircle
+                  className="h-5 w-5 shrink-0 animate-spin text-blue-700"
+                  aria-hidden="true"
+                />
+              ) : orderImportFileName ? (
+                <FileText
+                  className="h-5 w-5 shrink-0 text-blue-700"
+                  aria-hidden="true"
+                />
+              ) : (
+                <FileUp
+                  className="h-5 w-5 shrink-0 text-blue-700"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-black text-slate-900">
+                  {orderImportStatus === "loading"
+                    ? `Reading ${orderImportFileName || "document"}...`
+                    : orderImportFileName || "Choose or drop an order"}
+                </span>
+                <span className="block text-xs font-bold text-slate-500">
+                  {orderImportStatus === "success"
+                    ? "Draft ready to review"
+                    : "Up to 3 MB"}
+                </span>
+              </span>
+              <input
+                type="file"
+                accept=".pdf,.xls,.xlsx,.csv,.tsv,.jpg,.jpeg,.png,.webp"
+                className="sr-only"
+                disabled={orderImportStatus === "loading"}
+                onChange={(event) => {
+                  importOrderFile(event.target.files?.[0]);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+
+            {orderImportStatus === "success" && orderImportDraft ? (
+              <button
+                type="button"
+                onClick={() => setIsOrderImportReviewOpen(true)}
+                className="inline-flex min-h-[56px] items-center justify-center rounded-2xl bg-blue-700 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-800"
+              >
+                Review Draft
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {orderImportError ? (
+          <div className="mt-3 rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-red-700">
+            {orderImportError}
+          </div>
+        ) : null}
+      </section>
+
+      {isOrderImportReviewOpen && orderImportDraft ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="order-import-review-title"
+        >
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">
+                  Imported Draft · {orderImportFileName}
+                </p>
+                <h2
+                  id="order-import-review-title"
+                  className="mt-1 text-2xl font-black text-slate-950"
+                >
+                  Review before filling the order
+                </h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">
+                  Missing or uncertain fields stay blank so you can correct
+                  them in the regular form.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOrderImportReviewOpen(false)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100"
+                aria-label="Close import review"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-6">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  ["Order #", orderImportDraft.orderNumber],
+                  ["Business", orderImportDraft.businessName],
+                  ["Customer", orderImportDraft.customerName],
+                  ["Account #", orderImportDraft.accountNumber],
+                  ["Phone", orderImportDraft.phoneNumber],
+                  [
+                    "Handoff",
+                    orderImportDraft.orderMethod
+                      ? getHandoffOption(orderImportDraft.orderMethod).label
+                      : "",
+                  ],
+                  ["Delivery date", orderImportDraft.deliveryDate],
+                  ["Delivery address", orderImportDraft.deliveryAddress],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
+                  >
+                    <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                      {label}
+                    </p>
+                    <p className="mt-1 break-words text-sm font-black text-slate-900">
+                      {value || "Not found"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-blue-700">
+                      Extracted Items
+                    </p>
+                    <p className="text-lg font-black text-slate-950">
+                      {orderImportDraft.items?.length || 0} line item
+                      {(orderImportDraft.items?.length || 0) === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
+                    Review each line
+                  </span>
+                </div>
+
+                <div className="mt-3 grid gap-2">
+                  {(orderImportDraft.items || []).map((item, index) => (
+                    <div
+                      key={`${item.itemNumber}-${item.description}-${index}`}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="font-black text-slate-950">
+                            {item.quantity ? `QTY ${item.quantity} · ` : ""}
+                            {item.description || "Description not found"}
+                          </p>
+                          <p className="mt-1 text-xs font-bold text-slate-500">
+                            {[
+                              item.itemNumber
+                                ? `Item # ${item.itemNumber}`
+                                : "",
+                              item.vendor ? `Vendor ${item.vendor}` : "",
+                              item.poNumber ? `PO ${item.poNumber}` : "",
+                              item.scheduledDate || "",
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || "No additional details found"}
+                          </p>
+                        </div>
+                        <WorkflowPill
+                          pathId={item.fulfillment || "supplierDelivery"}
+                        />
+                      </div>
+                    </div>
+                  ))}
+
+                  {!orderImportDraft.items?.length ? (
+                    <div className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-4 py-5 text-sm font-black text-amber-800">
+                      No item lines were found. You can still apply the customer
+                      details and add items manually.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              {orderImportDraft.notes ? (
+                <div className="mt-4 rounded-2xl border border-slate-200 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                    Notes found
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-slate-700">
+                    {orderImportDraft.notes}
+                  </p>
+                </div>
+              ) : null}
+
+              {orderImportDraft.warnings?.length ? (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-700">
+                    Needs a human check
+                  </p>
+                  <ul className="mt-2 grid gap-1 text-sm font-bold text-amber-900">
+                    {orderImportDraft.warnings.map((warning) => (
+                      <li key={warning}>• {warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsOrderImportReviewOpen(false)}
+                  className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border border-slate-300 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={applyImportedOrder}
+                  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl bg-blue-700 px-6 text-sm font-black text-white shadow-sm transition hover:bg-blue-800"
+                >
+                  <Sparkles className="h-4 w-4" aria-hidden="true" />
+                  Apply Draft to Order
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between gap-3">

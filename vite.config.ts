@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 import routeHandler from './api/maps/route.js'
 // @ts-expect-error The Vercel route handler is intentionally plain JavaScript.
 import staticMapHandler from './api/maps/static.js'
+// @ts-expect-error The Vercel route handler is intentionally plain JavaScript.
+import orderParseHandler from './api/orders/parse.js'
 
 function getQueryEntries(searchParams: URLSearchParams) {
   const query: Record<string, string | string[]> = {}
@@ -24,11 +26,33 @@ function getQueryEntries(searchParams: URLSearchParams) {
   return query
 }
 
+async function readJsonBody(request: import('node:http').IncomingMessage) {
+  const chunks: Buffer[] = []
+
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+
+  if (chunks.length === 0) {
+    return {}
+  }
+
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   if (!process.env.VITE_GOOGLE_MAPS_API_KEY && env.VITE_GOOGLE_MAPS_API_KEY) {
     process.env.VITE_GOOGLE_MAPS_API_KEY = env.VITE_GOOGLE_MAPS_API_KEY
+  }
+
+  if (!process.env.OPENAI_API_KEY && env.OPENAI_API_KEY) {
+    process.env.OPENAI_API_KEY = env.OPENAI_API_KEY
+  }
+
+  if (!process.env.OPENAI_ORDER_PARSER_MODEL && env.OPENAI_ORDER_PARSER_MODEL) {
+    process.env.OPENAI_ORDER_PARSER_MODEL = env.OPENAI_ORDER_PARSER_MODEL
   }
 
   return {
@@ -141,6 +165,48 @@ export default defineConfig(({ mode }) => {
               },
               responseAdapter,
             )
+          })
+
+          server.middlewares.use('/api/orders/parse', async (request, response) => {
+            let responseStatus = 200
+            const responseAdapter = {
+              setHeader(name: string, value: string) {
+                response.setHeader(name, value)
+              },
+              status(statusCode: number) {
+                responseStatus = statusCode
+                return responseAdapter
+              },
+              json(payload: unknown) {
+                response.statusCode = responseStatus
+                response.setHeader('Content-Type', 'application/json')
+                response.end(JSON.stringify(payload))
+              },
+            }
+
+            try {
+              const body = await readJsonBody(request)
+
+              await orderParseHandler(
+                {
+                  method: request.method,
+                  headers: request.headers,
+                  body,
+                },
+                responseAdapter,
+              )
+            } catch (error) {
+              response.statusCode = 400
+              response.setHeader('Content-Type', 'application/json')
+              response.end(
+                JSON.stringify({
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : 'Unable to read the upload request.',
+                }),
+              )
+            }
           })
         },
       },
