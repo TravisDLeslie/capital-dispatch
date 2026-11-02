@@ -207,6 +207,7 @@ function getCurrentPageLabel(currentPage) {
       "trex-price-book",
       "timbertech-price-book",
       "woodgrain-price-book",
+      "inventory",
     ].includes(currentPage)
   ) {
     return "Documents";
@@ -319,6 +320,7 @@ function getCurrentPageGroup(currentPage) {
       "trex-price-book",
       "timbertech-price-book",
       "woodgrain-price-book",
+      "inventory",
     ].includes(currentPage)
   ) {
     return "Documents";
@@ -802,6 +804,7 @@ export default function AppHeader({
                 "trex-price-book",
                 "timbertech-price-book",
                 "woodgrain-price-book",
+                "inventory",
               ].includes(pageId),
             )) ||
           (item.id === "accounting" &&

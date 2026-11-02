@@ -24,6 +24,7 @@ import DeliveryDetailsModal from "../components/DeliveryDetailsModal";
 import OrderDetailsModal from "../components/OrderDetailsModal";
 import PageContainer from "../components/PageContainer";
 import ReceivingLocationPhotosModal from "../components/ReceivingLocationPhotosModal";
+import { inventoryCatalogItems } from "../data/inventoryCatalog";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
 import {
   getOrderFulfillmentBadgeClass,
@@ -414,6 +415,74 @@ function normalizeSearchText(value) {
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
+}
+
+function getDashboardSearchMatchScore(result, normalizedQuery) {
+  const normalizedSearchValue = normalizeSearchText(result.searchValue);
+  const normalizedTitle = normalizeSearchText(result.title);
+  const normalizedItemNumber = normalizeSearchText(result.itemNumber);
+  const normalizedDescription = normalizeSearchText(result.description);
+
+  if (
+    normalizedSearchValue === normalizedQuery ||
+    normalizedTitle === normalizedQuery ||
+    normalizedItemNumber === normalizedQuery
+  ) {
+    return 0;
+  }
+
+  if (
+    normalizedSearchValue.startsWith(normalizedQuery) ||
+    normalizedTitle.startsWith(normalizedQuery) ||
+    normalizedItemNumber.startsWith(normalizedQuery)
+  ) {
+    return 1;
+  }
+
+  if (
+    result.inventoryItem &&
+    normalizedDescription.startsWith(normalizedQuery)
+  ) {
+    return 2;
+  }
+
+  return result.inventoryItem ? 3 : 4;
+}
+
+const DASHBOARD_SEARCH_FILTERS = [
+  { id: "all", label: "All" },
+  { id: "po-order", label: "PO / Order" },
+  { id: "items", label: "Items" },
+  { id: "vendors", label: "Vendors" },
+];
+
+function matchesDashboardSearchFilter(result, filterId) {
+  if (filterId === "items") {
+    return Boolean(result.inventoryItem);
+  }
+
+  if (filterId === "vendors") {
+    return Boolean(result.supplierProfile);
+  }
+
+  if (filterId === "po-order") {
+    return Boolean(
+      result.poNumber ||
+        result.orderNumber ||
+        result.relatedPONumbers?.length ||
+        result.relatedOrderNumbers?.length ||
+        [
+          "South PO",
+          "Their Truck",
+          "Receiving",
+          "Delivery",
+          "Order",
+          "Order Chain",
+        ].includes(result.type),
+    );
+  }
+
+  return true;
 }
 
 function getRecordItemText(record) {
@@ -1112,6 +1181,7 @@ function SellPriceCheck({
  *   onPageChange?: (pageId: string) => void;
  *   onTraceSearch?: (searchValue: string) => void;
  *   searchSources?: Record<string, Array<Record<string, any>>>;
+ *   removedInventoryItemNumbers?: string[];
  *   dashboardMode?: boolean;
  * }} props
  */
@@ -1119,9 +1189,11 @@ export default function SalesConverterPage({
   onPageChange,
   onTraceSearch,
   searchSources = {},
+  removedInventoryItemNumbers = [],
   dashboardMode = false,
 }) {
   const [dashboardSearch, setDashboardSearch] = useState("");
+  const [dashboardSearchFilter, setDashboardSearchFilter] = useState("all");
   const [isDashboardSearchOpen, setIsDashboardSearchOpen] = useState(false);
   const [viewingOrderNumber, setViewingOrderNumber] = useState("");
   const [viewingDeliveryDetails, setViewingDeliveryDetails] = useState(null);
@@ -1327,6 +1399,57 @@ export default function SalesConverterPage({
     ];
     const getFulfillmentBadges = (orderNumbers) =>
       getOrderFulfillmentBadges(orderNumbers, fulfillmentRecords);
+
+    const removedInventoryNumbers = new Set(
+      removedInventoryItemNumbers.map(normalizeSearchText),
+    );
+    const uniqueInventoryItems = new Map();
+
+    inventoryCatalogItems.forEach((record) => {
+      const itemNumber = String(record?.itemNumber || "").trim();
+      const normalizedItemNumber = normalizeSearchText(itemNumber);
+
+      if (
+        !normalizedItemNumber ||
+        removedInventoryNumbers.has(normalizedItemNumber) ||
+        uniqueInventoryItems.has(normalizedItemNumber)
+      ) {
+        return;
+      }
+
+      uniqueInventoryItems.set(normalizedItemNumber, record);
+    });
+
+    uniqueInventoryItems.forEach((record) => {
+      const itemNumber = String(record.itemNumber || "").trim();
+      const description = String(record.description || "").trim();
+      const brand = String(record.brand || "").trim();
+      const groupSection = String(record.groupSection || "").trim();
+      const defaultVendor = String(record.defaultVendor || "").trim();
+
+      items.push(
+        createDashboardSearchItem(
+          record,
+          "Inventory Item",
+          itemNumber,
+          description || "No description listed",
+          itemNumber,
+          {
+            inventoryItem: true,
+            itemNumber,
+            description,
+            brand,
+            groupSection,
+            defaultVendor,
+            nonStocked: Boolean(record.nonStocked),
+            onHand: record.onHand,
+            searchText: [brand, groupSection, defaultVendor]
+              .filter(Boolean)
+              .join(" "),
+          },
+        ),
+      );
+    });
 
     [...safeSource("vendors")]
       .sort((firstVendor, secondVendor) =>
@@ -1578,12 +1701,38 @@ export default function SalesConverterPage({
     });
 
     return items.filter((item) => item.searchValue);
-  }, [searchSources]);
+  }, [removedInventoryItemNumbers, searchSources]);
   const normalizedDashboardSearch = normalizeSearchText(dashboardSearch);
+  const dashboardSearchFilteredItems = dashboardSearchItems.filter((item) =>
+    matchesDashboardSearchFilter(item, dashboardSearchFilter),
+  );
   const dashboardSearchRawMatches = normalizedDashboardSearch
-    ? dashboardSearchItems
+    ? dashboardSearchFilteredItems
         .filter((item) => item.searchableText.includes(normalizedDashboardSearch))
-    : dashboardSearchItems.filter((item) => item.supplierProfile);
+        .sort((leftItem, rightItem) => {
+          const scoreDifference =
+            getDashboardSearchMatchScore(
+              leftItem,
+              normalizedDashboardSearch,
+            ) -
+            getDashboardSearchMatchScore(
+              rightItem,
+              normalizedDashboardSearch,
+            );
+
+          if (scoreDifference !== 0) {
+            return scoreDifference;
+          }
+
+          return String(leftItem.title || "").localeCompare(
+            String(rightItem.title || ""),
+            undefined,
+            { numeric: true, sensitivity: "base" },
+          );
+        })
+    : dashboardSearchFilter === "all"
+      ? dashboardSearchItems.filter((item) => item.supplierProfile)
+      : dashboardSearchFilteredItems;
   const dashboardSearchAllMatches = consolidateDashboardSearchMatches(
     dashboardSearchRawMatches,
   );
@@ -1694,8 +1843,37 @@ export default function SalesConverterPage({
               onTraceSearch?.(searchValue);
             }
           }}
-          className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row"
+          className="mb-5 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
         >
+          <div
+            className="mb-3 flex flex-wrap items-center gap-2"
+            aria-label="Search result type"
+          >
+            {DASHBOARD_SEARCH_FILTERS.map((filter) => {
+              const isSelected = dashboardSearchFilter === filter.id;
+
+              return (
+                <button
+                  key={filter.id}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => {
+                    setDashboardSearchFilter(filter.id);
+                    setIsDashboardSearchOpen(true);
+                  }}
+                  className={`rounded-full border px-4 py-2 text-xs font-black transition sm:text-sm ${
+                    isSelected
+                      ? "border-slate-950 bg-slate-950 text-white shadow-sm"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-white hover:text-slate-950"
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative min-w-0 flex-1">
             <label className="relative block">
               <span className="sr-only">Search across the app</span>
@@ -1715,7 +1893,7 @@ export default function SalesConverterPage({
                 onBlur={() =>
                   window.setTimeout(() => setIsDashboardSearchOpen(false), 150)
                 }
-                placeholder="Search PO, order, customer, vendor, material, or SKU..."
+                placeholder="Search item name or #, PO, order, customer, or vendor..."
                 className="min-h-12 w-full rounded-xl border border-slate-300 bg-slate-50 py-3 pl-12 pr-4 text-base font-bold text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
               />
             </label>
@@ -1725,7 +1903,72 @@ export default function SalesConverterPage({
                 {dashboardSearchMatches.length > 0 ? (
                   <div className="max-h-[70vh] overflow-y-auto p-2">
                     {dashboardSearchMatches.map((result) =>
-                      result.supplierProfile ? (
+                      result.inventoryItem ? (
+                        <button
+                          key={result.id}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            setIsDashboardSearchOpen(false);
+                            onPageChange?.("inventory");
+                          }}
+                          className="mb-1 block w-full rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-left transition last:mb-0 hover:border-blue-300 hover:bg-blue-50/60 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                        >
+                          <span className="flex items-start gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white">
+                              <Package
+                                aria-hidden="true"
+                                className="h-5 w-5"
+                                strokeWidth={2.6}
+                              />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-lg bg-blue-700 px-2.5 py-1 text-xs font-black tracking-wide text-white">
+                                  {result.itemNumber}
+                                </span>
+                                <span
+                                  className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${
+                                    result.nonStocked
+                                      ? "bg-violet-100 text-violet-700"
+                                      : "bg-emerald-100 text-emerald-700"
+                                  }`}
+                                >
+                                  {result.nonStocked
+                                    ? "Non-stocked"
+                                    : Number.isFinite(result.onHand)
+                                      ? `${result.onHand} on hand`
+                                      : "Stock item"}
+                                </span>
+                              </span>
+                              <span className="mt-1.5 block text-sm font-black leading-5 text-slate-950">
+                                {result.description || "No description listed"}
+                              </span>
+                              <span className="mt-1 block truncate text-[11px] font-bold text-slate-500">
+                                {[
+                                  result.brand,
+                                  result.groupSection
+                                    ? `Group ${result.groupSection}`
+                                    : "",
+                                  result.defaultVendor
+                                    ? `Vendor ${result.defaultVendor}`
+                                    : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ") || "Capital Lumber inventory"}
+                              </span>
+                            </span>
+                            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-black text-blue-700">
+                              Inventory
+                              <ArrowRight
+                                aria-hidden="true"
+                                className="h-3.5 w-3.5"
+                                strokeWidth={2.7}
+                              />
+                            </span>
+                          </span>
+                        </button>
+                      ) : result.supplierProfile ? (
                         <button
                           key={result.id}
                           type="button"
@@ -2097,7 +2340,7 @@ export default function SalesConverterPage({
                     ? normalizedDashboardSearch
                       ? `${dashboardSearchMatches.length}${dashboardSearchAllMatches.length > dashboardSearchMatches.length ? ` of ${dashboardSearchAllMatches.length}` : ""} quick match${dashboardSearchMatches.length === 1 ? "" : "es"} • Press Enter for all results`
                       : `${dashboardSearchAllMatches.length} supplier${dashboardSearchAllMatches.length === 1 ? "" : "s"} • Type to search products and contacts`
-                    : "Search includes POs, orders, customers, vendors, materials, and SKUs"}
+                    : "Search includes inventory item names and numbers, POs, orders, customers, and vendors"}
                 </div>
               </div>
             ) : null}
@@ -2109,6 +2352,7 @@ export default function SalesConverterPage({
             Search App
             <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2.7} />
           </button>
+          </div>
         </form>
 
         <MainDashboardUpcomingDeliveries

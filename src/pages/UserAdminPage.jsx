@@ -136,6 +136,7 @@ const permissionGroups = [
     permissions: [
       { id: "documents", label: "Documents" },
       { id: "stocking-handbook", label: "Stocking Handbook" },
+      { id: "inventory", label: "Inventory" },
       { id: "trex-price-book", label: "Trex Price Book" },
       { id: "timbertech-price-book", label: "TimberTech Price Book" },
       { id: "woodgrain-price-book", label: "Woodgrain Price Book" },
@@ -274,6 +275,7 @@ const legacyRolePermissionPresets = {
     "sales-converter",
     "documents",
     "stocking-handbook",
+    "inventory",
     "trex-price-book",
     "timbertech-price-book",
     "woodgrain-price-book",

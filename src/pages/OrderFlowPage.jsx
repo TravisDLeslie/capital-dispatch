@@ -22,6 +22,36 @@ import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import SearchableSelect from "../components/SearchableSelect";
+import { inventoryCatalogItems } from "../data/inventoryCatalog";
+
+const normalizeInventorySearch = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+const inventoryCatalog = Array.from(
+  new Map(
+    inventoryCatalogItems
+      .filter((item) => item?.itemNumber)
+      .map((item) => [
+        normalizeInventorySearch(item.itemNumber),
+        {
+          itemNumber: String(item.itemNumber || "").trim(),
+          description: String(item.description || "").trim(),
+          brand: String(item.brand || "").trim(),
+          groupSection: String(item.groupSection || "").trim(),
+          defaultVendor: String(item.defaultVendor || "").trim(),
+          nonStocked: Boolean(item.nonStocked),
+          onHand: item.onHand,
+        },
+      ]),
+  ).values(),
+).sort((left, right) =>
+  left.itemNumber.localeCompare(right.itemNumber, "en-US", {
+    numeric: true,
+    sensitivity: "base",
+  }),
+);
 
 const fulfillmentPaths = [
   {
@@ -53,9 +83,9 @@ const fulfillmentPaths = [
   },
   {
     id: "inStock",
-    label: "In Stock",
-    shortLabel: "Stock",
-    description: "Future path for material already in the yard.",
+    label: "From Yard (In Stock)",
+    shortLabel: "Yard Stock",
+    description: "Pull this stocked item from Capital Lumber's yard.",
     icon: Warehouse,
     tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
     activeTone:
@@ -63,9 +93,7 @@ const fulfillmentPaths = [
   },
 ];
 
-const activeFulfillmentPaths = fulfillmentPaths.filter(
-  (path) => path.id !== "inStock",
-);
+const activeFulfillmentPaths = fulfillmentPaths;
 
 const CAPITAL_LUMBER_ADDRESS = "3105 W State St, Boise, ID 83703";
 
@@ -152,6 +180,7 @@ function createBlankItem(overrides = {}) {
   return {
     id: `item-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     quantity: "",
+    itemNumber: "",
     description: "",
     path: "supplierDelivery",
     vendor: "",
@@ -174,6 +203,7 @@ function createBlankStockItem() {
   return {
     id: `stock-item-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     quantity: "",
+    itemNumber: "",
     description: "",
     easilyDamaged: false,
   };
@@ -187,6 +217,10 @@ function getPath(pathId) {
 }
 
 function getItemDateLabel(pathId) {
+  if (pathId === "inStock") {
+    return "Availability";
+  }
+
   if (pathId === "wePickup") {
     return "Pickup";
   }
@@ -199,6 +233,10 @@ function getItemDateLabel(pathId) {
 }
 
 function getItemDateValue(item) {
+  if (item.path === "inStock") {
+    return "";
+  }
+
   return item.path === "wePickup" ? item.routeDate : item.supplierDate;
 }
 
@@ -219,6 +257,141 @@ function TextInput({ className = "", ...props }) {
       {...props}
       className={`w-full rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100 ${className}`}
     />
+  );
+}
+
+function InventoryItemNumberInput({
+  value,
+  onChange,
+  onSelect,
+  catalog = inventoryCatalog,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const normalizedQuery = normalizeInventorySearch(value);
+  const itemByNumber = useMemo(
+    () =>
+      new Map(
+        catalog.map((item) => [
+          normalizeInventorySearch(item.itemNumber),
+          item,
+        ]),
+      ),
+    [catalog],
+  );
+  const suggestions = useMemo(() => {
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    const startsWith = [];
+    const contains = [];
+
+    for (const item of catalog) {
+      const normalizedNumber = normalizeInventorySearch(item.itemNumber);
+      const normalizedDescription = normalizeInventorySearch(item.description);
+      const normalizedMetadata = normalizeInventorySearch(
+        [item.brand, item.groupSection, item.defaultVendor]
+          .filter(Boolean)
+          .join(" "),
+      );
+
+      if (normalizedNumber.startsWith(normalizedQuery)) {
+        startsWith.push(item);
+      } else if (
+        normalizedNumber.includes(normalizedQuery) ||
+        normalizedDescription.includes(normalizedQuery) ||
+        normalizedMetadata.includes(normalizedQuery)
+      ) {
+        contains.push(item);
+      }
+
+      if (startsWith.length >= 8) {
+        break;
+      }
+    }
+
+    return [...startsWith, ...contains].slice(0, 8);
+  }, [catalog, normalizedQuery]);
+
+  function handleChange(event) {
+    const nextValue = event.target.value;
+    onChange(nextValue);
+    setIsOpen(true);
+
+    const exactMatch = itemByNumber.get(
+      normalizeInventorySearch(nextValue),
+    );
+    if (exactMatch) {
+      onSelect(exactMatch);
+    }
+  }
+
+  function selectItem(item) {
+    onSelect(item);
+    setIsOpen(false);
+  }
+
+  return (
+    <div className="relative">
+      <TextInput
+        value={value}
+        onChange={handleChange}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => window.setTimeout(() => setIsOpen(false), 120)}
+        autoComplete="off"
+        placeholder="Item #"
+      />
+      {isOpen && normalizedQuery && suggestions.length > 0 ? (
+        <div className="absolute left-0 top-[calc(100%+0.4rem)] z-30 max-h-96 w-[min(42rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+          <div className="flex items-center justify-between px-2 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+            <span>Matching inventory items</span>
+            <span>{suggestions.length} shown</span>
+          </div>
+          {suggestions.map((item) => (
+            <button
+              key={item.itemNumber}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => selectItem(item)}
+              className="group mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 rounded-xl border border-transparent px-3 py-3 text-left transition last:mb-0 hover:border-blue-200 hover:bg-blue-50"
+            >
+              <span className="w-fit rounded-lg bg-slate-950 px-2.5 py-1 text-xs font-black tracking-wide text-white transition group-hover:bg-blue-700">
+                {item.itemNumber}
+              </span>
+              <span
+                className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${
+                  item.nonStocked
+                    ? "bg-violet-100 text-violet-700"
+                    : "bg-emerald-100 text-emerald-700"
+                }`}
+              >
+                {item.nonStocked
+                  ? "Non-stocked"
+                  : Number.isFinite(item.onHand) && item.onHand > 0
+                    ? `${item.onHand} on hand`
+                    : "Stock item"}
+              </span>
+              <span className="col-span-2 line-clamp-2 text-sm font-black leading-5 text-slate-900">
+                {item.description || "No description listed"}
+              </span>
+              <span className="col-span-2 truncate text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">
+                {[
+                  item.brand ||
+                    (item.groupSection
+                      ? `Inventory group ${item.groupSection}`
+                      : "Capital Lumber inventory"),
+                  item.defaultVendor
+                    ? `Vendor: ${item.defaultVendor}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -315,6 +488,7 @@ function ChoiceButton({
  *   currentUser?: { id?: string; name?: string; email?: string } | null;
  *   vendorOptions?: string[];
  *   supplierAddressMap?: Record<string, string>;
+ *   removedInventoryItemNumbers?: string[];
  *   onProcessOrder?: (orderPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onProcessStockPO?: (stockPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onPageChange?: (pageId: string) => void;
@@ -324,6 +498,7 @@ export default function OrderFlowPage({
   currentUser = null,
   vendorOptions = [],
   supplierAddressMap = {},
+  removedInventoryItemNumbers = [],
   onProcessOrder,
   onProcessStockPO,
   onPageChange,
@@ -366,6 +541,20 @@ export default function OrderFlowPage({
   const [isProcessingStockPO, setIsProcessingStockPO] = useState(false);
   const [stockProcessError, setStockProcessError] = useState("");
   const [stockProcessSummary, setStockProcessSummary] = useState(null);
+  const availableInventoryCatalog = useMemo(() => {
+    const removedItemNumberSet = new Set(
+      removedInventoryItemNumbers.map((itemNumber) =>
+        normalizeInventorySearch(itemNumber),
+      ),
+    );
+
+    return inventoryCatalog.filter(
+      (item) =>
+        !removedItemNumberSet.has(
+          normalizeInventorySearch(item.itemNumber),
+        ),
+    );
+  }, [removedInventoryItemNumbers]);
 
   const editingItem = items.find((item) => item.id === editingItemId);
   const selectedUnloadType =
@@ -642,6 +831,7 @@ export default function OrderFlowPage({
         scheduledDate: stockScheduledDate,
         items: validStockItems.map((item) => ({
           quantity: String(item.quantity || "").trim(),
+          itemNumber: String(item.itemNumber || "").trim(),
           description: String(item.description || "").trim(),
           easilyDamaged: Boolean(item.easilyDamaged),
         })),
@@ -898,12 +1088,16 @@ export default function OrderFlowPage({
                         {item.description || "Unnamed item"}
                       </p>
                       <p className="mt-1 text-sm font-bold text-slate-600">
-                        {item.vendor || "No vendor"} · PO{" "}
-                        {item.poNumber || "not entered"}
+                        {item.path === "inStock"
+                          ? "From Capital Lumber yard · No PO required"
+                          : `${item.vendor || "No vendor"} · PO ${item.poNumber || "not entered"}`}
                       </p>
                       <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                        {getItemDateLabel(item.path)}{" "}
-                        {formatShortDate(getItemDateValue(item)) || "No date"}
+                        {item.path === "inStock"
+                          ? "Ready from stock"
+                          : `${getItemDateLabel(item.path)} ${
+                              formatShortDate(getItemDateValue(item)) || "No date"
+                            }`}
                       </p>
                     </div>
                     <WorkflowPill pathId={item.path} />
@@ -1164,7 +1358,7 @@ export default function OrderFlowPage({
                     </button>
                   </div>
 
-                  <div className="grid gap-3 lg:grid-cols-[160px_minmax(0,1fr)]">
+                  <div className="grid gap-3 lg:grid-cols-[130px_190px_minmax(0,1fr)]">
                     <Field label="Quantity Optional">
                       <TextInput
                         value={item.quantity}
@@ -1174,6 +1368,24 @@ export default function OrderFlowPage({
                           })
                         }
                         placeholder="Qty"
+                      />
+                    </Field>
+                    <Field label="Item # Optional">
+                      <InventoryItemNumberInput
+                        value={item.itemNumber}
+                        catalog={availableInventoryCatalog}
+                        onChange={(itemNumber) =>
+                          updateStockItem(item.id, { itemNumber })
+                        }
+                        onSelect={(inventoryItem) => {
+                          updateStockItem(item.id, {
+                            itemNumber: inventoryItem.itemNumber,
+                            description: inventoryItem.description,
+                          });
+                          if (inventoryItem.defaultVendor) {
+                            updateStockVendor(inventoryItem.defaultVendor);
+                          }
+                        }}
                       />
                     </Field>
                     <Field label="Material">
@@ -1565,8 +1777,7 @@ export default function OrderFlowPage({
               Items & fulfillment
             </h2>
             <p className="mt-1 text-sm font-bold text-slate-500">
-              For now, just add items that we need to pick up or that need to
-              be delivered.
+              Add material from Capital Lumber's yard or from a supplier.
             </p>
           </div>
           <button
@@ -1584,8 +1795,10 @@ export default function OrderFlowPage({
             const itemPath = getPath(item.path);
             const PathIcon = itemPath.icon;
             const isActive = activeItemId === item.id || !item.saved;
+            const isYardStock = item.path === "inStock";
             const supplierSetupComplete = Boolean(
-              item.vendor && item.poNumber && getItemDateValue(item),
+              isYardStock ||
+                (item.vendor && item.poNumber && getItemDateValue(item)),
             );
 
             if (!isActive) {
@@ -1613,9 +1826,11 @@ export default function OrderFlowPage({
                       <p className="truncate text-sm font-black text-slate-950">
                         {item.description || "New material"}
                       </p>
-                      <p className="truncate text-xs font-bold text-slate-500">
-                        {item.vendor || "No vendor"} · PO{" "}
-                        {item.poNumber || "not entered"}
+                        <p className="truncate text-xs font-bold text-slate-500">
+                          {item.itemNumber ? `Item # ${item.itemNumber} · ` : ""}
+                          {isYardStock
+                            ? "From Capital Lumber yard"
+                            : `${item.vendor || "No vendor"} · PO ${item.poNumber || "not entered"}`}
                       </p>
                     </div>
                     <div className="min-w-0">
@@ -1623,7 +1838,9 @@ export default function OrderFlowPage({
                         {itemDateLabel}
                       </p>
                       <p className="truncate text-sm font-black text-slate-700">
-                        {formatShortDate(itemDate) || "No date"}
+                        {isYardStock
+                          ? "Ready from stock"
+                          : formatShortDate(itemDate) || "No date"}
                       </p>
                     </div>
                     <WorkflowPill pathId={item.path} />
@@ -1671,7 +1888,7 @@ export default function OrderFlowPage({
                   <WorkflowPill pathId={item.path} />
                 </div>
 
-                <div className="mt-4 grid gap-3 lg:grid-cols-[130px_minmax(220px,1fr)_220px]">
+                <div className="mt-4 grid gap-3 lg:grid-cols-[110px_180px_minmax(220px,1fr)_220px]">
                   <Field label="Qty">
                     <TextInput
                       value={item.quantity}
@@ -1679,6 +1896,40 @@ export default function OrderFlowPage({
                         updateItem(item.id, { quantity: event.target.value })
                       }
                       placeholder="Qty"
+                    />
+                  </Field>
+                  <Field label="Item # Optional">
+                    <InventoryItemNumberInput
+                      value={item.itemNumber}
+                      catalog={availableInventoryCatalog}
+                      onChange={(itemNumber) =>
+                        updateItem(item.id, { itemNumber })
+                      }
+                      onSelect={(inventoryItem) =>
+                        updateItem(item.id, {
+                          itemNumber: inventoryItem.itemNumber,
+                          description: inventoryItem.description,
+                          ...(!inventoryItem.nonStocked
+                            ? {
+                                path: "inStock",
+                                vendor: "",
+                                supplierAddress: "",
+                                poNumber: "",
+                                routeDate: "",
+                                supplierDate: "",
+                              }
+                            : {}),
+                          ...(inventoryItem.defaultVendor
+                            ? {
+                                vendor: inventoryItem.defaultVendor,
+                                supplierAddress: getVendorAddress(
+                                  inventoryItem.defaultVendor,
+                                  supplierAddressMap,
+                                ),
+                              }
+                            : {}),
+                        })
+                      }
                     />
                   </Field>
                   <Field label="Item Description">
@@ -1700,9 +1951,21 @@ export default function OrderFlowPage({
                       />
                       <select
                         value={item.path}
-                        onChange={(event) =>
-                          updateItem(item.id, { path: event.target.value })
-                        }
+                        onChange={(event) => {
+                          const path = event.target.value;
+                          updateItem(item.id, {
+                            path,
+                            ...(path === "inStock"
+                              ? {
+                                  vendor: "",
+                                  supplierAddress: "",
+                                  poNumber: "",
+                                  routeDate: "",
+                                  supplierDate: "",
+                                }
+                              : {}),
+                          });
+                        }}
                         className="w-full cursor-pointer appearance-none rounded-2xl border border-slate-300 bg-slate-100 py-3 pl-11 pr-12 text-base font-black text-slate-900 outline-none transition hover:border-blue-400 hover:bg-white focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
                       >
                         {activeFulfillmentPaths.map((path) => (
@@ -1720,7 +1983,21 @@ export default function OrderFlowPage({
                   </Field>
                 </div>
 
-                {supplierSetupComplete ? (
+                {isYardStock ? (
+                  <div className="mt-4 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm">
+                      <Warehouse className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">
+                        From Capital Lumber yard
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-slate-700">
+                        This stocked item is ready to pull. No vendor or PO setup is needed.
+                      </p>
+                    </div>
+                  </div>
+                ) : supplierSetupComplete ? (
                   <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-black text-slate-950">
@@ -2019,17 +2296,26 @@ export default function OrderFlowPage({
                           {item.quantity ? `QTY ${item.quantity} · ` : ""}
                           {item.description || "Unnamed item"}
                         </p>
+                        {item.itemNumber ? (
+                          <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-blue-600">
+                            Item # {item.itemNumber}
+                          </p>
+                        ) : null}
                         <p className="mt-1 text-sm font-bold text-slate-600">
-                          {item.vendor || "No vendor"} · PO{" "}
-                          {item.poNumber || "not entered"}
+                          {item.path === "inStock"
+                            ? "From Capital Lumber yard · No PO required"
+                            : `${item.vendor || "No vendor"} · PO ${item.poNumber || "not entered"}`}
                         </p>
                         <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                          {item.path === "wePickup" ? "Pickup" : "Delivery"}{" "}
-                          {formatShortDate(
-                            item.path === "wePickup"
-                              ? item.routeDate
-                              : item.supplierDate,
-                          ) || "No date"}
+                          {item.path === "inStock"
+                            ? "Ready from stock"
+                            : `${item.path === "wePickup" ? "Pickup" : "Delivery"} ${
+                                formatShortDate(
+                                  item.path === "wePickup"
+                                    ? item.routeDate
+                                    : item.supplierDate,
+                                ) || "No date"
+                              }`}
                         </p>
                       </div>
                       <WorkflowPill pathId={item.path} />

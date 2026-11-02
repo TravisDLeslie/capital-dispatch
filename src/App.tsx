@@ -18,6 +18,7 @@ import {
   ClipboardList,
   ClipboardCheck,
   Copy,
+  Database,
   DollarSign,
   History,
   Images,
@@ -154,6 +155,11 @@ import {
   saveVendorSettings,
   subscribeToVendorSettings,
 } from "./utils/vendorSettingsStorage";
+import {
+  defaultInventorySettings,
+  saveInventorySettings,
+  subscribeToInventorySettings,
+} from "./utils/inventorySettingsStorage";
 import { capitalLumberAddress } from "./data/options";
 import { formatCustomerName } from "./utils/textFormatters";
 
@@ -244,6 +250,7 @@ const QueuedUpcomingDeliveriesPage = lazy(
 const DeliverySettingsPage = lazy(() => import("./pages/DeliverySettingsPage"));
 const DeliveriesPage = lazy(() => import("./pages/DeliveriesPage"));
 const EmailListPage = lazy(() => import("./pages/EmailListPage"));
+const InventoryPage = lazy(() => import("./pages/InventoryPage"));
 const NewHomePage = lazy(() => import("./pages/NewHomePage"));
 const OrderBuildsPage = lazy(() => import("./pages/OrderBuildsPage"));
 const POCalendarPage = lazy(() => import("./pages/POCalendarPage"));
@@ -286,6 +293,7 @@ const REFRESH_PAGE_STORAGE_KEY = "dispatch-cl-refresh-page";
 const TREX_COLLECTION_COUNT = 23;
 const TIMBERTECH_COLLECTION_COUNT = 12;
 const WOODGRAIN_CATEGORY_COUNT = 11;
+const INVENTORY_ITEM_COUNT = 4769;
 
 function getProfileDisplayName(user: Partial<UserProfile> | null | undefined) {
   const emailName = String(user?.email || "").split("@")[0] || "";
@@ -813,6 +821,7 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
     "trex-price-book",
     "timbertech-price-book",
     "woodgrain-price-book",
+    "inventory",
   ],
   accounting: [
     "dashboard",
@@ -1143,6 +1152,13 @@ type VendorSettings = {
   [key: string]: unknown;
 };
 
+type InventorySettings = {
+  id?: string;
+  removedItemNumbers: string[];
+  updatedAt?: string;
+  [key: string]: unknown;
+};
+
 function canDeleteRecord(label: string) {
   const enteredCode = window.prompt(
     `Enter the internal delete code to delete ${label}.`,
@@ -1302,6 +1318,7 @@ function getAllowedPageIdsForRole(role: string) {
       "trex-price-book",
       "timbertech-price-book",
       "woodgrain-price-book",
+      "inventory",
       "accounting",
       "accounting-customers",
       "customer-payment-links",
@@ -1364,6 +1381,7 @@ function getAllowedPageIdsForRole(role: string) {
       "trex-price-book",
       "timbertech-price-book",
       "woodgrain-price-book",
+      "inventory",
       "accounting",
       "accounting-customers",
       "customer-payment-links",
@@ -1521,7 +1539,8 @@ function getAllowedPageIds(
       (pageIds.includes("stocking-handbook") ||
         pageIds.includes("trex-price-book") ||
         pageIds.includes("timbertech-price-book") ||
-        pageIds.includes("woodgrain-price-book")) &&
+        pageIds.includes("woodgrain-price-book") ||
+        pageIds.includes("inventory")) &&
       !pageIds.includes("documents")
     ) {
       pageIds.push("documents");
@@ -1940,6 +1959,8 @@ export default function App() {
     useState<DeliverySettings>(defaultDeliveryScheduleSettings);
   const [vendorSettings, setVendorSettings] =
     useState<VendorSettings>(defaultVendorSettings);
+  const [inventorySettings, setInventorySettings] =
+    useState<InventorySettings>(defaultInventorySettings);
   const isReconcilingSouthCheckInsRef = useRef(false);
   const [editingDeliveryId, setEditingDeliveryId] =
     useState("");
@@ -2219,6 +2240,7 @@ export default function App() {
       "trex-price-book",
       "timbertech-price-book",
       "woodgrain-price-book",
+      "inventory",
     ].includes(pageId),
   );
   const canReadAccounting = effectiveAllowedPageIds.some((pageId) =>
@@ -2739,6 +2761,24 @@ export default function App() {
       },
     );
   }, [isApproved]);
+
+  useEffect(() => {
+    if (!isApproved || !canReadDocuments) {
+      setInventorySettings(defaultInventorySettings);
+      return () => {};
+    }
+
+    return subscribeToInventorySettings(
+      (savedInventorySettings: InventorySettings) => {
+        setInventorySettings(savedInventorySettings);
+        setSyncError("");
+      },
+      (error: Error) => {
+        console.error("Unable to sync inventory settings:", error);
+        reportBackgroundSyncError(error);
+      },
+    );
+  }, [canReadDocuments, isApproved]);
 
   useEffect(() => {
     if (
@@ -4016,6 +4056,16 @@ export default function App() {
     setSyncError("");
   }
 
+  async function handleSaveRemovedInventoryItems(removedItemNumbers: string[]) {
+    const savedInventorySettings = await saveInventorySettings({
+      ...inventorySettings,
+      removedItemNumbers,
+    });
+
+    setInventorySettings(savedInventorySettings);
+    setSyncError("");
+  }
+
   async function handleEnsureMonthlyPaymentLinks(month: string) {
     const updatedPaymentLinks = await ensureMonthlyPaymentLinks(
       customers,
@@ -4182,6 +4232,7 @@ export default function App() {
         ...item,
         id: String(item.id || createId()),
         quantity: String(item.quantity || "").trim(),
+        itemNumber: String(item.itemNumber || "").trim(),
         description: String(item.description || "").trim(),
         path: String(item.path || "supplierDelivery"),
         vendor: String(item.vendor || "").trim(),
@@ -4335,6 +4386,7 @@ export default function App() {
         items: group.items.map((item) => ({
           id: String(item.id || createId()),
           quantity: item.quantity,
+          itemNumber: item.itemNumber,
           description: item.description,
           materialUse: "order",
           easilyDamaged: Boolean(item.easilyDamaged),
@@ -4383,6 +4435,7 @@ export default function App() {
         items: group.items.map((item) => ({
           id: String(item.id || createId()),
           quantity: item.quantity,
+          itemNumber: item.itemNumber,
           description: item.description,
           materialUse: "order",
           orderNumber: sourceOrderNumber,
@@ -4421,6 +4474,7 @@ export default function App() {
         items: group.items.map((item) => ({
           id: String(item.id || createId()),
           quantity: item.quantity,
+          itemNumber: item.itemNumber,
           description: item.description,
           orderNumber: sourceOrderNumber,
           customerName: customerDisplayName,
@@ -4462,6 +4516,7 @@ export default function App() {
         items: cleanItems.map((item) => ({
           id: String(item.id || createId()),
           quantity: item.quantity,
+          itemNumber: item.itemNumber,
           description: item.description,
           vendor: item.vendor,
           fulfillmentPath: item.path,
@@ -4558,6 +4613,7 @@ export default function App() {
         return {
           id: createId(),
           quantity: String(stockItem.quantity || "").trim(),
+          itemNumber: String(stockItem.itemNumber || "").trim(),
           description: String(stockItem.description || "").trim(),
           materialUse: "stock",
           easilyDamaged: Boolean(stockItem.easilyDamaged),
@@ -5520,6 +5576,7 @@ export default function App() {
             dashboardMode
             onPageChange={setCurrentPage}
             onTraceSearch={handleTraceSearch}
+            removedInventoryItemNumbers={inventorySettings.removedItemNumbers}
             searchSources={{
               supplierRuns: southLookupSupplierRuns,
               theirTruckPOs,
@@ -6731,6 +6788,12 @@ export default function App() {
               note: "Stock items",
             },
             {
+              icon: Database,
+              label: "Inventory",
+              value: INVENTORY_ITEM_COUNT,
+              note: "Usage items",
+            },
+            {
               icon: Percent,
               logoSrc: "/brands/trex.png",
               logoAlt: "Trex",
@@ -6768,6 +6831,20 @@ export default function App() {
                   tone: "dispatch",
                   variant: "compact",
                   onClick: () => setCurrentPage("stocking-handbook"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("inventory")
+              ? {
+                  icon: Database,
+                  label: "Item Database",
+                  title: "Inventory",
+                  description:
+                    "Search item numbers, descriptions, on-hand quantities, and current YTD usage.",
+                  metric: INVENTORY_ITEM_COUNT,
+                  metricLabel: "Items",
+                  tone: "dispatch",
+                  variant: "compact",
+                  onClick: () => setCurrentPage("inventory"),
                 }
               : null,
             effectiveAllowedPageIds.includes("trex-price-book")
@@ -7246,6 +7323,7 @@ export default function App() {
             currentUser={currentUserCreator}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
+            removedInventoryItemNumbers={inventorySettings.removedItemNumbers}
             onProcessOrder={handleProcessOrderFlow}
             onProcessStockPO={handleProcessStockPO}
             onPageChange={navigateToPage}
@@ -7753,6 +7831,12 @@ export default function App() {
                 note: "Stock items",
               },
               {
+                icon: Database,
+                label: "Inventory",
+                value: INVENTORY_ITEM_COUNT,
+                note: "Usage items",
+              },
+              {
                 icon: Percent,
                 logoSrc: "/brands/trex.png",
                 logoAlt: "Trex",
@@ -7790,6 +7874,20 @@ export default function App() {
                     tone: "dispatch",
                     variant: "compact",
                     onClick: () => setCurrentPage("stocking-handbook"),
+                  }
+                : null,
+              effectiveAllowedPageIds.includes("inventory")
+                ? {
+                    icon: Database,
+                    label: "Item Database",
+                    title: "Inventory",
+                    description:
+                      "Search item numbers, descriptions, on-hand quantities, and current YTD usage.",
+                    metric: INVENTORY_ITEM_COUNT,
+                    metricLabel: "Items",
+                    tone: "dispatch",
+                    variant: "compact",
+                    onClick: () => setCurrentPage("inventory"),
                   }
                 : null,
               effectiveAllowedPageIds.includes("trex-price-book")
@@ -7852,6 +7950,16 @@ export default function App() {
             currentUser={currentUserCreator}
             onSaveItem={handleSaveStockingHandbookItem}
             onDeleteItem={handleDeleteStockingHandbookItem}
+            onPageChange={setCurrentPage}
+          />
+        ) : null;
+
+      case "inventory":
+        return canReadDocuments ? (
+          <InventoryPage
+            removedItemNumbers={inventorySettings.removedItemNumbers}
+            canManage={["superAdmin", "admin"].includes(effectiveUserRole)}
+            onSaveRemovedItemNumbers={handleSaveRemovedInventoryItems}
             onPageChange={setCurrentPage}
           />
         ) : null;
