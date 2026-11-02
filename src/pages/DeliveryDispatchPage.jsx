@@ -1299,9 +1299,18 @@ function DeliveryDispatchOverview({
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenOrder(delivery.orderNumber);
+                          }}
+                          onKeyDown={(event) => event.stopPropagation()}
+                          className="text-left text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38] underline decoration-red-200 underline-offset-4 transition hover:decoration-[#FC2C38]"
+                          title={`View complete order ${delivery.orderNumber}`}
+                        >
                           Order {delivery.orderNumber}
-                        </p>
+                        </button>
                         <span
                           className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] ${
                             needsAssignment
@@ -3119,9 +3128,14 @@ export default function DeliveryDispatchPage({
                   <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(210px,260px)_minmax(220px,280px)_auto] xl:items-stretch">
                     <div className="flex min-w-0 flex-col justify-center rounded-2xl bg-slate-50 px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                          <button
+                            type="button"
+                            onClick={() => setViewingOrderNumber(delivery.orderNumber)}
+                            className="text-left text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38] underline decoration-red-200 underline-offset-4 transition hover:decoration-[#FC2C38]"
+                            title={`View complete order ${delivery.orderNumber}`}
+                          >
                             Order {delivery.orderNumber}
-                          </p>
+                          </button>
 
                           <span
                             className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] sm:text-xs ${
