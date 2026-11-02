@@ -5668,16 +5668,26 @@ export default function App() {
       );
       const quickReceivingCheckIns =
         checkIns as unknown as Array<Record<string, unknown>>;
-      const receivingQuickMatches = receivingQuickLookupQuery
+      const receivingQuickRawMatches = receivingQuickLookupQuery
         ? [
             ...receivingDashboardSouthRuns.map((supplierRun) => {
               const items = Array.isArray(supplierRun.items)
                 ? supplierRun.items.map((item) => item as Record<string, unknown>)
                 : [];
+              const orderNumbers = getLookupOrderNumbers(
+                supplierRun as unknown as Record<string, unknown>,
+                items,
+              );
+              const receivingSummary = getPOReceivingSummary(
+                checkIns,
+                supplierRun.poNumber,
+                items.length,
+              );
               const recordText = [
                 supplierRun.poNumber,
                 supplierRun.vendor,
                 supplierRun.customerName,
+                ...orderNumbers,
                 supplierRun.driver,
                 supplierRun.orderedBy,
                 supplierRun.createdByName,
@@ -5689,6 +5699,7 @@ export default function App() {
                 .join(" ");
               const recordNumberText = [
                 supplierRun.poNumber,
+                ...orderNumbers,
                 ...items.map(getLookupItemNumberText),
               ]
                 .map((value) => normalizeSearchNumber(value))
@@ -5718,13 +5729,13 @@ export default function App() {
                     supplierRun.createdAt,
                 ),
                 customerName: supplierRun.customerName || "",
-                orderNumber:
-                  items.find((item) => item.orderNumber)?.orderNumber || "",
+                orderNumbers,
                 receivingStatus: getQuickReceivingStatusForPO(
                   quickReceivingCheckIns,
                   supplierRun.poNumber,
                   items.length,
                 ),
+                receivingSummary,
                 photos: getQuickPOPhotosForPO(
                   quickReceivingCheckIns,
                   supplierRun.poNumber,
@@ -5739,11 +5750,20 @@ export default function App() {
               const items = Array.isArray(theirTruckPO.items)
                 ? theirTruckPO.items.map((item) => item as Record<string, unknown>)
                 : [];
+              const orderNumbers = getLookupOrderNumbers(
+                theirTruckPO as unknown as Record<string, unknown>,
+                items,
+              );
+              const receivingSummary = getPOReceivingSummary(
+                checkIns,
+                theirTruckPO.poNumber,
+                items.length,
+              );
               const recordText = [
                 theirTruckPO.poNumber,
                 theirTruckPO.vendor,
                 theirTruckPO.customerName,
-                theirTruckPO.orderNumber,
+                ...orderNumbers,
                 ...items.map(getLookupItemText),
               ]
                 .map((value) => normalizeSearchText(value))
@@ -5751,7 +5771,7 @@ export default function App() {
                 .join(" ");
               const recordNumberText = [
                 theirTruckPO.poNumber,
-                theirTruckPO.orderNumber,
+                ...orderNumbers,
                 ...items.map(getLookupItemNumberText),
               ]
                 .map((value) => normalizeSearchNumber(value))
@@ -5779,12 +5799,13 @@ export default function App() {
                   theirTruckPO.deliveryDate || theirTruckPO.createdAt,
                 ),
                 customerName: theirTruckPO.customerName || "",
-                orderNumber: String(theirTruckPO.orderNumber || ""),
+                orderNumbers,
                 receivingStatus: getQuickReceivingStatusForPO(
                   quickReceivingCheckIns,
                   theirTruckPO.poNumber,
                   items.length,
                 ),
+                receivingSummary,
                 photos: getQuickPOPhotosForPO(
                   quickReceivingCheckIns,
                   theirTruckPO.poNumber,
@@ -5796,6 +5817,12 @@ export default function App() {
               };
             }),
             ...checkIns.map((checkIn) => {
+              const checkInPONumber = String(
+                checkIn.poNumber ||
+                  checkIn.sourceSupplierRunPoNumber ||
+                  checkIn.sourceTheirTruckPONumber ||
+                  "No PO",
+              );
               const rawItems =
                 Array.isArray(checkIn.materials)
                   ? checkIn.materials
@@ -5805,19 +5832,28 @@ export default function App() {
               const items = rawItems.map(
                 (item) => item as Record<string, unknown>,
               );
+              const orderNumbers = getLookupOrderNumbers(
+                checkIn as unknown as Record<string, unknown>,
+                items,
+              );
+              const receivingSummary = getPOReceivingSummary(
+                checkIns,
+                checkInPONumber,
+                items.length,
+              );
               const recordText = [
-                checkIn.poNumber,
+                checkInPONumber,
                 checkIn.vendor,
                 checkIn.customerName,
-                checkIn.orderNumber,
+                ...orderNumbers,
                 ...items.map(getLookupItemText),
               ]
                 .map((value) => normalizeSearchText(value))
                 .filter(Boolean)
                 .join(" ");
               const recordNumberText = [
-                checkIn.poNumber,
-                checkIn.orderNumber,
+                checkInPONumber,
+                ...orderNumbers,
                 ...items.map(getLookupItemNumberText),
               ]
                 .map((value) => normalizeSearchNumber(value))
@@ -5839,18 +5875,19 @@ export default function App() {
                 id: `receiving-${checkIn.id}`,
                 source: "Receiving",
                 tone: "slate",
-                poNumber: String(checkIn.poNumber || "No PO"),
+                poNumber: checkInPONumber,
                 vendor: String(checkIn.vendor || "Vendor not entered"),
                 date: formatQuickLookupDate(
                   checkIn.checkedInAt || checkIn.createdAt,
                 ),
                 customerName: String(checkIn.customerName || ""),
-                orderNumber: String(checkIn.orderNumber || ""),
+                orderNumbers,
                 receivingStatus: {
                   key: "received",
                   label: "Checked In",
                   className: QUICK_RECEIVING_STATUS_STAMPS.received,
                 },
+                receivingSummary,
                 photos: getQuickPOPhotosForPO(
                   quickReceivingCheckIns,
                   checkIn.poNumber ||
@@ -5874,8 +5911,20 @@ export default function App() {
 
               return textMatch || numberMatch;
             })
-            .slice(0, 6)
         : [];
+      const seenReceivingQuickPOs = new Set<string>();
+      const receivingQuickMatches = receivingQuickRawMatches
+        .filter((match) => {
+          const poKey = normalizeSearchNumber(match.poNumber) || match.id;
+
+          if (seenReceivingQuickPOs.has(poKey)) {
+            return false;
+          }
+
+          seenReceivingQuickPOs.add(poKey);
+          return true;
+        })
+        .slice(0, 6);
 
       return (
         <SectionHubPage
@@ -6039,14 +6088,14 @@ export default function App() {
               <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-                    Search for a PO
+                    Receiving lookup
                   </p>
                   <h2 className="mt-1 text-xl font-black text-slate-950">
-                    Find PO chain
+                    Find a PO, order, or item
                   </h2>
                 </div>
                 <p className="text-sm font-semibold text-slate-500">
-                  Search Their Truck POs, receiving, South runs, item, vendor, or customer.
+                  One result shows the full PO with its receiving status, location, and items.
                 </p>
               </div>
 
@@ -6063,7 +6112,7 @@ export default function App() {
                     onChange={(event) =>
                       setReceivingDashboardSearch(event.target.value)
                     }
-                    placeholder="Search PO, item, vendor..."
+                    placeholder="Search PO, order, item #, vendor, or customer..."
                     className="min-h-[52px] w-full rounded-2xl border border-slate-300 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-950 outline-none transition placeholder:font-semibold placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
                   />
                 </div>
@@ -6117,7 +6166,7 @@ export default function App() {
                 <div className="mt-4">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-                      Quick PO Matches
+                      Quick matches
                     </p>
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
                       {receivingQuickMatches.length} shown
@@ -6125,7 +6174,7 @@ export default function App() {
                   </div>
 
                   {receivingQuickMatches.length > 0 ? (
-                    <div className="grid gap-3 lg:grid-cols-2">
+                    <div className="grid gap-3">
                       {receivingQuickMatches.map((match) => {
                         const visibleItems =
                           match.matchingItems.length > 0
@@ -6142,6 +6191,7 @@ export default function App() {
                         const matchPhotos = Array.isArray(match.photos)
                           ? match.photos
                           : [];
+                        const receivingSummary = match.receivingSummary;
 
                         return (
                           <article
@@ -6175,9 +6225,9 @@ export default function App() {
                                       {match.receivingStatus.label}
                                     </span>
                                   ) : null}
-                                  {match.date ? (
+                                  {match.date && match.source !== "Receiving" ? (
                                     <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                                      {match.date}
+                                      Expected {match.date}
                                     </span>
                                   ) : null}
                                 </div>
@@ -6260,7 +6310,56 @@ export default function App() {
                               </span>
                             </div>
 
-                            {match.customerName || match.orderNumber ? (
+                            {receivingSummary.receivedDateLabel ||
+                            receivingSummary.locationLabel ? (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {receivingSummary.receivedDateLabel ? (
+                                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-emerald-700">
+                                    <CalendarDays
+                                      aria-hidden="true"
+                                      className="h-3.5 w-3.5"
+                                      strokeWidth={2.5}
+                                    />
+                                    Received {receivingSummary.receivedDateLabel}
+                                  </span>
+                                ) : null}
+                                {receivingSummary.locationLabel ? (
+                                  <button
+                                    type="button"
+                                    disabled={matchPhotos.length === 0}
+                                    onClick={() => {
+                                      if (matchPhotos.length > 0) {
+                                        setViewingReceivingQuickPhotos({
+                                          poNumber: String(match.poNumber),
+                                          locationLabel:
+                                            receivingSummary.locationLabel,
+                                          photos: matchPhotos,
+                                        });
+                                      }
+                                    }}
+                                    className={`inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-blue-700 ${
+                                      matchPhotos.length > 0
+                                        ? "transition hover:border-blue-300 hover:bg-blue-100"
+                                        : "cursor-default"
+                                    }`}
+                                    title={
+                                      matchPhotos.length > 0
+                                        ? "View receiving location photos"
+                                        : undefined
+                                    }
+                                  >
+                                    <MapPin
+                                      aria-hidden="true"
+                                      className="h-3.5 w-3.5"
+                                      strokeWidth={2.5}
+                                    />
+                                    {receivingSummary.locationLabel}
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : null}
+
+                            {match.customerName || match.orderNumbers.length > 0 ? (
                               <div className="mt-3 flex flex-wrap gap-2">
                                 {match.customerName ? (
                                   <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-orange-700">
@@ -6270,11 +6369,20 @@ export default function App() {
                                     )}
                                   </span>
                                 ) : null}
-                                {match.orderNumber ? (
-                                  <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-blue-700">
-                                    Order {String(match.orderNumber)}
-                                  </span>
-                                ) : null}
+                                {match.orderNumbers.map((orderNumber) => (
+                                  <button
+                                    key={`${match.id}-order-${orderNumber}`}
+                                    type="button"
+                                    onClick={() =>
+                                      setViewingDashboardOrderNumber(
+                                        String(orderNumber),
+                                      )
+                                    }
+                                    className="rounded-full bg-violet-50 px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-violet-700 transition hover:bg-violet-100"
+                                  >
+                                    Order {String(orderNumber)}
+                                  </button>
+                                ))}
                               </div>
                             ) : null}
 
@@ -6339,6 +6447,19 @@ export default function App() {
                     viewingReceivingQuickPhotos.locationLabel || "PO photos"
                   }
                   onClose={() => setViewingReceivingQuickPhotos(null)}
+                />
+              ) : null}
+              {viewingDashboardOrderNumber ? (
+                <OrderDetailsModal
+                  orderNumber={viewingDashboardOrderNumber}
+                  sources={{
+                    orderBuilds,
+                    supplierRuns: southLookupSupplierRuns,
+                    theirTruckPOs,
+                    deliveries,
+                    checkIns,
+                  }}
+                  onClose={() => setViewingDashboardOrderNumber("")}
                 />
               ) : null}
             </form>
