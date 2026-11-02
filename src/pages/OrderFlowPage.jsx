@@ -635,6 +635,7 @@ export default function OrderFlowPage({
   const [orderImportError, setOrderImportError] = useState("");
   const [orderImportFileName, setOrderImportFileName] = useState("");
   const [orderImportDraft, setOrderImportDraft] = useState(null);
+  const [isOrderImportOpen, setIsOrderImportOpen] = useState(false);
   const [isOrderImportReviewOpen, setIsOrderImportReviewOpen] =
     useState(false);
   const [stockPoNumber, setStockPoNumber] = useState("");
@@ -886,6 +887,7 @@ export default function OrderFlowPage({
 
       setOrderImportDraft(data?.draft || null);
       setOrderImportStatus("success");
+      setIsOrderImportOpen(false);
       setIsOrderImportReviewOpen(true);
     } catch (error) {
       setOrderImportStatus("error");
@@ -1817,6 +1819,14 @@ export default function OrderFlowPage({
               <Warehouse className="h-5 w-5" aria-hidden="true" />
               New Stock PO
             </button>
+            <button
+              type="button"
+              onClick={() => setIsOrderImportOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
+            >
+              <FileUp className="h-5 w-5" aria-hidden="true" />
+              Import Order
+            </button>
           </div>
         </div>
 
@@ -1862,8 +1872,23 @@ export default function OrderFlowPage({
         </div>
       </div>
 
-      <section className="mb-3 rounded-3xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      {isOrderImportOpen ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/65 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="order-import-title"
+        >
+          <section className="relative w-full max-w-4xl rounded-[2rem] border border-blue-200 bg-blue-50 p-5 shadow-2xl sm:p-6">
+            <button
+              type="button"
+              onClick={() => setIsOrderImportOpen(false)}
+              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-blue-200 bg-white text-slate-600 shadow-sm transition hover:bg-blue-100"
+              aria-label="Close order import"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+        <div className="flex flex-col gap-5 pr-12 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-700 shadow-sm">
               <Sparkles className="h-5 w-5" aria-hidden="true" />
@@ -1872,7 +1897,10 @@ export default function OrderFlowPage({
               <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700">
                 Import Order Draft
               </p>
-              <h2 className="text-lg font-black text-slate-950">
+              <h2
+                id="order-import-title"
+                className="text-lg font-black text-slate-950"
+              >
                 Drop an order document and review what it finds
               </h2>
               <p className="mt-0.5 text-sm font-bold text-slate-500">
@@ -1952,7 +1980,9 @@ export default function OrderFlowPage({
             {orderImportError}
           </div>
         ) : null}
-      </section>
+          </section>
+        </div>
+      ) : null}
 
       {isOrderImportReviewOpen && orderImportDraft ? (
         <div
