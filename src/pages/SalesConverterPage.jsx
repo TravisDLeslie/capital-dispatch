@@ -188,11 +188,11 @@ function MainDashboardUpcomingDeliveries({
                     type="button"
                     disabled={!delivery.orderNumber}
                     onClick={() => onViewOrder?.(String(delivery.orderNumber))}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-slate-950 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-800 disabled:cursor-not-allowed disabled:text-slate-300"
                   >
                     View order
                     <ArrowRight
-                      className="h-3.5 w-3.5"
+                      className="h-3 w-3"
                       aria-hidden="true"
                       strokeWidth={2.7}
                     />
