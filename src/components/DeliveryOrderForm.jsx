@@ -241,15 +241,15 @@ const forkliftOptions = [
 
 function FormSection({ eyebrow, title, description, children }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-      <div className="mb-5 flex flex-col gap-1 border-b border-slate-100 pb-4">
+    <section className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+      <div className="mb-3 flex flex-col gap-1 border-b border-slate-100 pb-3">
         {eyebrow ? (
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
             {eyebrow}
           </p>
         ) : null}
 
-        <h3 className="text-xl font-black tracking-tight text-slate-900">
+        <h3 className="text-lg font-black tracking-tight text-slate-900">
           {title}
         </h3>
 
@@ -912,19 +912,19 @@ export default function DeliveryOrderForm({
   );
 
   return (
-    <form onSubmit={(event) => event.preventDefault()} className="space-y-5">
-      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <form onSubmit={(event) => event.preventDefault()} className="space-y-3">
+      <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
               Quick Delivery
             </p>
 
-            <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-900">
+            <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
               {isEditing ? "Edit Delivery Order" : "Add Delivery"}
             </h2>
 
-            <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-500">
+            <p className="mt-1 max-w-2xl text-sm font-semibold leading-5 text-slate-500">
               {isEditing
                 ? "Update the order, delivery essentials, items, or driver notes in one place."
                 : "Choose an order, confirm the delivery details, and add it to dispatch."}
@@ -946,17 +946,17 @@ export default function DeliveryOrderForm({
         </div>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-3">
         <FormSection
             eyebrow="Order"
             title="Order & Customer"
             description="Select an order to fill the customer, address, contact, and items automatically."
           >
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2">
           <div>
             <label
               htmlFor="delivery-order-number"
-              className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
+              className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
             >
               <Package className="h-4 w-4" aria-hidden="true" />
               Order Number
@@ -982,7 +982,7 @@ export default function DeliveryOrderForm({
                 inputMode="numeric"
                 maxLength={7}
                 placeholder="123-456"
-                className="w-full rounded-xl border border-slate-300 px-4 py-4 text-xl font-black tracking-[0.12em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-lg font-black tracking-[0.12em] text-slate-900 outline-none transition placeholder:text-slate-300 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
               />
 
               {isOrderLookupOpen && Array.isArray(orders) && orders.length > 0 ? (
@@ -1046,7 +1046,7 @@ export default function DeliveryOrderForm({
           <div>
             <label
               htmlFor="delivery-customer"
-              className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
+              className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
             >
               <UserRound className="h-4 w-4" aria-hidden="true" />
               Customer / Company
@@ -1071,7 +1071,7 @@ export default function DeliveryOrderForm({
               }
               disabled={isSubmitting}
               placeholder="Customer name"
-              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
 
             <datalist id="delivery-customers">
@@ -1098,11 +1098,11 @@ export default function DeliveryOrderForm({
           </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-3">
+        <div className="mt-3 grid gap-3 lg:grid-cols-3">
           <div>
             <label
               htmlFor="delivery-address"
-              className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
+              className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
             >
               <MapPin className="h-4 w-4" aria-hidden="true" />
               Address
@@ -1121,14 +1121,14 @@ export default function DeliveryOrderForm({
               autoComplete="off"
               enableLocalFallback
               placeholder="Delivery address"
-              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
           </div>
 
           <div>
             <label
               htmlFor="delivery-contact-name"
-              className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
+              className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
             >
               <UserRound className="h-4 w-4" aria-hidden="true" />
               Contact Name
@@ -1145,14 +1145,14 @@ export default function DeliveryOrderForm({
               }}
               disabled={isSubmitting}
               placeholder="Who will be on site?"
-              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
           </div>
 
           <div>
             <label
               htmlFor="delivery-contact-phone"
-              className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"
+              className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
             >
               <Phone className="h-4 w-4" aria-hidden="true" />
               Contact Phone
@@ -1169,7 +1169,7 @@ export default function DeliveryOrderForm({
               }}
               disabled={isSubmitting}
               placeholder="Contact phone"
-              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
           </div>
         </div>
@@ -1184,7 +1184,7 @@ export default function DeliveryOrderForm({
             Delivery Type
           </h4>
 
-          <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {deliveryTypeOptions.map((typeOption) => {
               const TypeIcon = typeOption.Icon;
               const isSelected = deliveryType === typeOption.value;
@@ -1198,7 +1198,7 @@ export default function DeliveryOrderForm({
                     clearError();
                   }}
                   disabled={isSubmitting}
-                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                  className={`rounded-xl border px-3 py-2 text-left transition ${
                     isSelected
                       ? "border-[#FC2C38] bg-red-50 text-slate-900 shadow-sm"
                       : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
@@ -1220,11 +1220,11 @@ export default function DeliveryOrderForm({
                     ) : null}
                   </span>
 
-                  <span className="mt-3 block text-sm font-black">
+                  <span className="mt-1 block text-sm font-black">
                     {typeOption.label}
                   </span>
 
-                  <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">
+                  <span className="sr-only">
                     {typeOption.description}
                   </span>
                 </button>
@@ -1236,7 +1236,7 @@ export default function DeliveryOrderForm({
             Unload Type
           </h4>
 
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-3">
             {deliveryUnloadTypes.map((unloadOption) => {
               const isSelected = unloadType === unloadOption;
 
@@ -1252,7 +1252,7 @@ export default function DeliveryOrderForm({
                     clearError();
                   }}
                   disabled={isSubmitting}
-                  className={`rounded-xl border px-4 py-3 text-left text-sm font-black transition ${
+                  className={`rounded-xl border px-3 py-2 text-left text-sm font-black transition ${
                     isSelected
                       ? "border-[#FC2C38] bg-red-50 text-[#FC2C38] shadow-sm"
                       : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
@@ -1274,17 +1274,17 @@ export default function DeliveryOrderForm({
           </div>
 
           {unloadType === "Forklift" ? (
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="mb-3 flex flex-col gap-1">
+            <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex flex-col gap-1">
                 <h4 className="text-sm font-black text-slate-900">
                   Which forklift?
                 </h4>
-                <p className="text-sm font-semibold text-slate-500">
+                <p className="sr-only">
                   Pick the forklift that should go with this delivery.
                 </p>
               </div>
 
-              <div className="grid gap-3 lg:grid-cols-3">
+              <div className="grid gap-2 lg:grid-cols-3">
                 {forkliftOptions.map((forkliftOption) => {
                   const isSelected = forkliftType === forkliftOption.value;
 
@@ -1297,7 +1297,7 @@ export default function DeliveryOrderForm({
                         clearError();
                       }}
                       disabled={isSubmitting}
-                      className={`rounded-2xl border px-4 py-4 text-left transition ${
+                      className={`rounded-xl border px-3 py-2 text-left transition ${
                         isSelected
                           ? "border-[#FC2C38] bg-white text-slate-900 shadow-sm"
                           : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
@@ -1308,10 +1308,10 @@ export default function DeliveryOrderForm({
                           <span className="block text-base font-black">
                             {forkliftOption.label}
                           </span>
-                          <span className="mt-1 block text-sm font-black text-[#FC2C38]">
+                          <span className="mt-0.5 block text-xs font-black text-[#FC2C38]">
                             {forkliftOption.capacity}
                           </span>
-                          <span className="mt-1 block text-xs font-bold text-slate-500">
+                          <span className="sr-only">
                             {forkliftOption.detail}
                           </span>
                         </span>
@@ -1331,18 +1331,18 @@ export default function DeliveryOrderForm({
             </div>
           ) : null}
 
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="mb-4">
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div className="mb-3">
               <h4 className="flex items-center gap-2 text-sm font-black text-slate-900">
                 <CalendarDays className="h-4 w-4 text-[#FC2C38]" aria-hidden="true" />
                 Delivery Schedule
               </h4>
-              <p className="mt-1 text-sm font-semibold text-slate-500">
+              <p className="sr-only">
                 Pick the delivery date, then add when the driver should be at the job.
               </p>
             </div>
 
-            <div className="grid gap-4">
+            <div className="grid gap-3 lg:grid-cols-2">
               <label className="block" htmlFor="delivery-date">
                 <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                   Delivery Date
@@ -1407,7 +1407,7 @@ export default function DeliveryOrderForm({
 	              </label>
 
 	              <div
-	                className={`rounded-2xl border p-4 ${
+	                className={`rounded-2xl border p-3 lg:col-span-2 ${
 	                  canShowLeaveByTime
 	                    ? "border-emerald-200 bg-emerald-50"
 	                    : "border-slate-200 bg-white"
@@ -1425,7 +1425,7 @@ export default function DeliveryOrderForm({
 	                      Truck Should Leave By
 	                    </p>
 	                    <p
-	                      className={`mt-1 text-3xl font-black ${
+	                      className={`mt-1 text-2xl font-black ${
 	                        canShowLeaveByTime
 	                          ? "text-emerald-900"
 	                          : "text-slate-400"
@@ -1449,7 +1449,7 @@ export default function DeliveryOrderForm({
 	                  </div>
 	                </div>
 
-	                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+	                <div className="mt-3 grid gap-2 sm:grid-cols-3">
 	                  <div className="rounded-xl bg-white px-3 py-2">
 	                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
 	                      Loading
@@ -1492,8 +1492,20 @@ export default function DeliveryOrderForm({
 	              </div>
 	            </div>
 	          </div>
+          <details className="group mt-3 rounded-2xl border border-slate-200 bg-white p-3">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 marker:content-none">
+              <span>
+                <span className="block text-sm font-black text-slate-900">
+                  Route & origin details
+                </span>
+                <span className="mt-0.5 block text-xs font-semibold text-slate-500">
+                  {deliveryOriginName} · {Number(oneWayDriveMinutes) > 0 ? `${Number(oneWayDriveMinutes)} min one-way` : "ETA calculates automatically"}
+                </span>
+              </span>
+              <ChevronDown className="h-5 w-5 shrink-0 text-slate-500 transition group-open:rotate-180" aria-hidden="true" />
+            </summary>
 
-          <div className="mb-3 mt-6">
+          <div className="mb-3 mt-4 border-t border-slate-100 pt-4">
             <h4 className="text-sm font-bold text-slate-700">
               Where is the delivery leaving from?
             </h4>
@@ -1624,6 +1636,7 @@ export default function DeliveryOrderForm({
               ) : null}
             </div>
           </div>
+          </details>
           </FormSection>
 
         <FormSection
@@ -1631,7 +1644,7 @@ export default function DeliveryOrderForm({
           title="What's Going"
           description="Confirm whether the full order is going or list the exact items for this delivery."
         >
-          <div className="grid gap-3 lg:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {deliveryScopeOptions.map((scopeOption) => {
               const isSelected = deliveryScope === scopeOption.value;
 
@@ -1644,7 +1657,7 @@ export default function DeliveryOrderForm({
                     clearError();
                   }}
                   disabled={isSubmitting}
-                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                  className={`rounded-xl border px-3 py-2 text-left transition ${
                     isSelected
                       ? "border-[#FC2C38] bg-red-50 text-slate-900 shadow-sm"
                       : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
@@ -1661,7 +1674,7 @@ export default function DeliveryOrderForm({
                     ) : null}
                   </span>
 
-                  <span className="mt-2 block text-sm font-semibold leading-5 text-slate-500">
+                  <span className="sr-only">
                     {scopeOption.description}
                   </span>
                 </button>
@@ -1690,15 +1703,15 @@ export default function DeliveryOrderForm({
                 clearError();
               }}
               disabled={isSubmitting}
-              rows={3}
+              rows={2}
               placeholder={selectedScope.notePlaceholder}
-              className="w-full rounded-xl border border-slate-300 px-4 py-4 text-lg font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
           </div>
 
           {selectedScope.usesItems ? (
-          <div className="mt-5 border-t border-slate-100 pt-5">
-            <div className="mb-4 flex items-center gap-2 text-sm font-black text-slate-900">
+          <div className="mt-3 border-t border-slate-100 pt-3">
+            <div className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
               <ListChecks className="h-4 w-4" aria-hidden="true" />
               Delivery Items
             </div>
@@ -1835,13 +1848,13 @@ export default function DeliveryOrderForm({
           ) : null}
           </FormSection>
 
-        <details className="group rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <details className="group rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded-2xl px-1 py-1 marker:content-none">
             <span>
               <span className="block text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
                 Optional details
               </span>
-              <span className="mt-1 block text-xl font-black tracking-tight text-slate-900">
+              <span className="mt-1 block text-lg font-black tracking-tight text-slate-900">
                 Driver Instructions
               </span>
               <span className="mt-1 block text-sm font-semibold text-slate-500">
@@ -1962,7 +1975,7 @@ export default function DeliveryOrderForm({
           </div>
         ) : null}
 
-        <div className="flex justify-end">
+        <div className="sticky bottom-3 z-20 flex justify-end rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur">
           <button
             type="button"
             onClick={handleSubmit}
