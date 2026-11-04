@@ -68,7 +68,11 @@ function getDeliveryDriver(delivery) {
   );
 }
 
-function MainDashboardUpcomingDeliveries({ deliveries = [], onPageChange }) {
+function MainDashboardUpcomingDeliveries({
+  deliveries = [],
+  onPageChange,
+  onViewOrder,
+}) {
   const upcomingDeliveries = useMemo(() => {
     const today = new Date();
     const todayKey = [
@@ -139,41 +143,62 @@ function MainDashboardUpcomingDeliveries({ deliveries = [], onPageChange }) {
               delivery?.dispatchStatus === "needsDispatch" || !driver;
 
             return (
-              <button
+              <article
                 key={delivery.id}
-                type="button"
-                onClick={() => onPageChange?.("deliveries-calendar")}
                 className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 text-left transition hover:border-red-200 hover:bg-red-50/30"
               >
-                <span className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-[#FC2C38]">
-                    <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
-                    {formatUpcomingDeliveryDate(delivery.deliveryDate)}
+                <button
+                  type="button"
+                  onClick={() => onPageChange?.("deliveries-calendar")}
+                  className="block w-full text-left"
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-[#FC2C38]">
+                      <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+                      {formatUpcomingDeliveryDate(delivery.deliveryDate)}
+                    </span>
+                    <span
+                      className={`rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] ${
+                        needsDispatch
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-emerald-100 text-emerald-800"
+                      }`}
+                    >
+                      {needsDispatch ? "Needs dispatch" : "Assigned"}
+                    </span>
                   </span>
-                  <span
-                    className={`rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] ${
-                      needsDispatch
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-emerald-100 text-emerald-800"
-                    }`}
+                  <span className="mt-2 block truncate text-sm font-black text-slate-950">
+                    {formatCustomerName(delivery.customerName) || "Delivery"}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
+                    Order {delivery.orderNumber || "—"}
+                    {delivery.deliveryTimeSlot
+                      ? ` · ${delivery.deliveryTimeSlot}`
+                      : ""}
+                  </span>
+                </button>
+                <span className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
+                  <span className="flex min-w-0 items-center gap-1.5 truncate text-[11px] font-semibold text-slate-500">
+                    <Truck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    <span className="truncate">
+                      {driver || "Driver not assigned"}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={!delivery.orderNumber}
+                    onClick={() => onViewOrder?.(String(delivery.orderNumber))}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-slate-950 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
-                    {needsDispatch ? "Needs dispatch" : "Assigned"}
-                  </span>
+                    View order
+                    <ArrowRight
+                      className="h-3.5 w-3.5"
+                      aria-hidden="true"
+                      strokeWidth={2.7}
+                    />
+                  </button>
                 </span>
-                <span className="mt-2 block truncate text-sm font-black text-slate-950">
-                  {formatCustomerName(delivery.customerName) || "Delivery"}
-                </span>
-                <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
-                  Order {delivery.orderNumber || "—"}
-                  {delivery.deliveryTimeSlot
-                    ? ` · ${delivery.deliveryTimeSlot}`
-                    : ""}
-                </span>
-                <span className="mt-2 flex items-center gap-1.5 truncate text-[11px] font-semibold text-slate-500">
-                  <Truck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  {driver || "Driver not assigned"}
-                </span>
-              </button>
+              </article>
             );
           })}
         </div>
@@ -2407,6 +2432,7 @@ export default function SalesConverterPage({
         <MainDashboardUpcomingDeliveries
           deliveries={searchSources?.deliveries}
           onPageChange={onPageChange}
+          onViewOrder={setViewingOrderNumber}
         />
 
         <section className="mb-5 overflow-visible rounded-[2rem] border border-blue-200 bg-blue-50/50 p-4 shadow-sm sm:p-5">
