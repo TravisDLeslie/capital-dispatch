@@ -913,37 +913,21 @@ export default function DeliveryOrderForm({
 
   return (
     <form onSubmit={(event) => event.preventDefault()} className="space-y-3">
-      <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
-              Quick Delivery
-            </p>
+      <div className="flex items-center justify-end gap-3">
+        <h2 className="text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
+          {isEditing ? "Edit Delivery" : "Add Delivery"}
+        </h2>
 
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-              {isEditing ? "Edit Delivery Order" : "Add Delivery"}
-            </h2>
-
-            <p className="mt-1 max-w-2xl text-sm font-semibold leading-5 text-slate-500">
-              {isEditing
-                ? "Update the order, delivery essentials, items, or driver notes in one place."
-                : "Choose an order, confirm the delivery details, and add it to dispatch."}
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            {isEditing && onCancel ? (
-              <button
-                type="button"
-                onClick={onCancel}
-                disabled={isSubmitting}
-                className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Cancel
-              </button>
-            ) : null}
-          </div>
-        </div>
+        {isEditing && onCancel ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={isSubmitting}
+            className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Cancel
+          </button>
+        ) : null}
       </div>
 
       <div className="space-y-3">
@@ -952,7 +936,7 @@ export default function DeliveryOrderForm({
             title="Order & Customer"
             description="Select an order to fill the customer, address, contact, and items automatically."
           >
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
           <div>
             <label
               htmlFor="delivery-order-number"
@@ -1236,7 +1220,7 @@ export default function DeliveryOrderForm({
             Unload Type
           </h4>
 
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {deliveryUnloadTypes.map((unloadOption) => {
               const isSelected = unloadType === unloadOption;
 

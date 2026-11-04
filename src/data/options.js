@@ -135,6 +135,7 @@ export const deliveryDrivers = southDrivers;
 
 export const deliveryUnloadTypes = [
   "Hand unload",
+  "Their Lift",
   "Dump",
   "Forklift",
 ];
