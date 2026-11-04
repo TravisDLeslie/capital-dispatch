@@ -936,7 +936,7 @@ export default function DeliveryOrderForm({
             title="Order & Customer"
             description="Select an order to fill the customer, address, contact, and items automatically."
           >
-        <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="grid gap-3 lg:grid-cols-[190px_minmax(210px,1.25fr)_minmax(180px,1fr)_190px]">
           <div>
             <label
               htmlFor="delivery-order-number"
@@ -1033,7 +1033,7 @@ export default function DeliveryOrderForm({
               className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
             >
               <UserRound className="h-4 w-4" aria-hidden="true" />
-              Customer / Company
+              Company Name
             </label>
 
             <input
@@ -1054,7 +1054,7 @@ export default function DeliveryOrderForm({
                 applyCustomerDetails(findMatchingCustomer(customerName), true)
               }
               disabled={isSubmitting}
-              placeholder="Customer name"
+              placeholder="Company name"
               className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
 
@@ -1080,34 +1080,6 @@ export default function DeliveryOrderForm({
               })}
             </datalist>
           </div>
-        </div>
-
-        <div className="mt-3 grid gap-3 lg:grid-cols-3">
-          <div>
-            <label
-              htmlFor="delivery-address"
-              className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
-            >
-              <MapPin className="h-4 w-4" aria-hidden="true" />
-              Address
-            </label>
-
-            <AddressAutocompleteInput
-              id="delivery-address"
-              value={address}
-              onChange={(nextAddress) => {
-                setAddress(nextAddress);
-                setRouteEtaStatus("idle");
-                setRouteEtaMessage("");
-                clearError();
-              }}
-              disabled={isSubmitting}
-              autoComplete="off"
-              enableLocalFallback
-              placeholder="Delivery address"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-            />
-          </div>
 
           <div>
             <label
@@ -1115,7 +1087,7 @@ export default function DeliveryOrderForm({
               className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
             >
               <UserRound className="h-4 w-4" aria-hidden="true" />
-              Contact Name
+              Customer
             </label>
 
             <input
@@ -1128,7 +1100,7 @@ export default function DeliveryOrderForm({
                 clearError();
               }}
               disabled={isSubmitting}
-              placeholder="Who will be on site?"
+              placeholder="Customer name"
               className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
           </div>
@@ -1139,7 +1111,7 @@ export default function DeliveryOrderForm({
               className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
             >
               <Phone className="h-4 w-4" aria-hidden="true" />
-              Contact Phone
+              Phone
             </label>
 
             <input
@@ -1152,10 +1124,36 @@ export default function DeliveryOrderForm({
                 clearError();
               }}
               disabled={isSubmitting}
-              placeholder="Contact phone"
+              placeholder="(208) 284-6163"
               className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
             />
           </div>
+        </div>
+
+        <div className="mt-3">
+          <label
+            htmlFor="delivery-address"
+            className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
+          >
+            <MapPin className="h-4 w-4" aria-hidden="true" />
+            Address
+          </label>
+
+          <AddressAutocompleteInput
+            id="delivery-address"
+            value={address}
+            onChange={(nextAddress) => {
+              setAddress(nextAddress);
+              setRouteEtaStatus("idle");
+              setRouteEtaMessage("");
+              clearError();
+            }}
+            disabled={isSubmitting}
+            autoComplete="off"
+            enableLocalFallback
+            placeholder="Delivery address"
+            className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+          />
         </div>
           </FormSection>
 
