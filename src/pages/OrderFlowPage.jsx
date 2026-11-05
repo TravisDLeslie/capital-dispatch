@@ -637,6 +637,7 @@ export default function OrderFlowPage({
   const [orderMethod, setOrderMethod] = useState("delivery");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
+  const [deliveryTitle, setDeliveryTitle] = useState("");
   const [items, setItems] = useState(defaultItems);
   const [activeItemId, setActiveItemId] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
@@ -702,10 +703,6 @@ export default function OrderFlowPage({
   }, [removedInventoryItemNumbers]);
 
   const editingItem = items.find((item) => item.id === editingItemId);
-  const shipItem = items.find(
-    (item) => normalizeInventorySearch(item.itemNumber) === "ship",
-  );
-  const deliveryTitle = String(shipItem?.description || "");
   const selectedUnloadType =
     unloadTypes.find((option) => option.id === unloadType) || unloadTypes[0];
   const SelectedUnloadIcon = selectedUnloadType.icon;
@@ -816,47 +813,6 @@ export default function OrderFlowPage({
         item.id === itemId ? { ...item, ...updates } : item,
       ),
     );
-  }
-
-  function updateDeliveryTitle(nextTitle) {
-    setItems((currentItems) => {
-      const matchingShipItem = currentItems.find(
-        (item) => normalizeInventorySearch(item.itemNumber) === "ship",
-      );
-
-      if (matchingShipItem) {
-        if (!nextTitle.trim()) {
-          const remainingItems = currentItems.filter(
-            (item) => item.id !== matchingShipItem.id,
-          );
-
-          return remainingItems.length > 0
-            ? remainingItems
-            : [createBlankItem()];
-        }
-
-        return currentItems.map((item) =>
-          item.id === matchingShipItem.id
-            ? { ...item, description: nextTitle, saved: true }
-            : item,
-        );
-      }
-
-      if (!nextTitle.trim()) {
-        return currentItems;
-      }
-
-      return [
-        ...currentItems,
-        createBlankItem({
-          quantity: "1",
-          itemNumber: "SHIP",
-          description: nextTitle,
-          path: "inStock",
-          saved: true,
-        }),
-      ];
-    });
   }
 
   function updateItemVendor(itemId, vendor) {
@@ -1168,6 +1124,7 @@ export default function OrderFlowPage({
       orderMethod,
       deliveryAddress,
       deliveryDate,
+      deliveryTitle,
       hasHardware: isDeliveryOrder ? hasHardware : false,
       needsTarp: isDeliveryOrder ? needsTarp : false,
       unloadType: isDeliveryOrder ? unloadType : "",
@@ -2523,12 +2480,10 @@ export default function OrderFlowPage({
                     </div>
                   </Field>
 
-                  <Field label="Delivery Title · SHIP Item">
+                  <Field label="Delivery Title">
                     <TextInput
                       value={deliveryTitle}
-                      onChange={(event) =>
-                        updateDeliveryTitle(event.target.value)
-                      }
+                      onChange={(event) => setDeliveryTitle(event.target.value)}
                       placeholder="Order 1, Basement, etc."
                     />
                   </Field>
@@ -2761,7 +2716,7 @@ export default function OrderFlowPage({
                   <Field
                     label={
                       item.itemNumber === "SHIP"
-                        ? "Delivery Title"
+                        ? "Material Notes"
                         : "Item Description"
                     }
                   >
@@ -2774,7 +2729,7 @@ export default function OrderFlowPage({
                       }
                       placeholder={
                         item.itemNumber === "SHIP"
-                          ? "Order 1, Basement, etc."
+                          ? "Material notes, load details, etc."
                           : "2x6-16 #2 Doug Fir"
                       }
                     />
@@ -3101,9 +3056,16 @@ export default function OrderFlowPage({
                   </span>
                 </div>
                 {orderMethod === "delivery" ? (
-                  <p className="mt-2 text-sm font-bold text-slate-600">
-                    {deliveryAddress || "No delivery address"}
-                  </p>
+                  <div className="mt-2">
+                    <p className="text-sm font-bold text-slate-600">
+                      {deliveryAddress || "No delivery address"}
+                    </p>
+                    {deliveryTitle ? (
+                      <p className="mt-1 text-sm font-black text-slate-900">
+                        {deliveryTitle}
+                      </p>
+                    ) : null}
+                  </div>
                 ) : null}
                 {routeEta?.durationText ? (
                   <p className="mt-2 text-sm font-black text-emerald-700">

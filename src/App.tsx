@@ -4296,14 +4296,7 @@ export default function App() {
     const cleanItems = normalizeOrderFlowItems(
       orderPayload.items as Array<Record<string, unknown>>,
     );
-    const deliveryTitle = String(
-      cleanItems.find(
-        (item) =>
-          String(item.itemNumber || "")
-            .replace(/[^a-z0-9]/gi, "")
-            .toLowerCase() === "ship",
-      )?.description || "",
-    ).trim();
+    const deliveryTitle = String(orderPayload.deliveryTitle || "").trim();
     const customerName = String(orderPayload.customerName || "").trim();
     const businessName = String(orderPayload.businessName || "").trim();
     const customerDisplayName = businessName || customerName || "New customer";
