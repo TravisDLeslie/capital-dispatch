@@ -2701,7 +2701,13 @@ export default function OrderFlowPage({
                       }}
                     />
                   </Field>
-                  <Field label="Item Description">
+                  <Field
+                    label={
+                      item.itemNumber === "SHIP"
+                        ? "Delivery Title"
+                        : "Item Description"
+                    }
+                  >
                     <TextInput
                       value={item.description}
                       onChange={(event) =>

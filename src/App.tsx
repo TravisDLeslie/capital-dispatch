@@ -4296,6 +4296,14 @@ export default function App() {
     const cleanItems = normalizeOrderFlowItems(
       orderPayload.items as Array<Record<string, unknown>>,
     );
+    const deliveryTitle = String(
+      cleanItems.find(
+        (item) =>
+          String(item.itemNumber || "")
+            .replace(/[^a-z0-9]/gi, "")
+            .toLowerCase() === "ship",
+      )?.description || "",
+    ).trim();
     const customerName = String(orderPayload.customerName || "").trim();
     const businessName = String(orderPayload.businessName || "").trim();
     const customerDisplayName = businessName || customerName || "New customer";
@@ -4321,6 +4329,7 @@ export default function App() {
       handoffType,
       deliveryAddress: String(orderPayload.deliveryAddress || "").trim(),
       deliveryDate: String(orderPayload.deliveryDate || "").trim(),
+      deliveryTitle,
       hasHardware: isDeliveryOrder && Boolean(orderPayload.hasHardware),
       needsTarp: isDeliveryOrder && Boolean(orderPayload.needsTarp),
       unloadType: isDeliveryOrder
@@ -4499,6 +4508,7 @@ export default function App() {
       const delivery: Delivery = {
         id: createId(),
         orderNumber: sourceOrderNumber,
+        deliveryTitle,
         customerName: customerDisplayName,
         address: String(orderPayload.deliveryAddress || "").trim(),
         contactName: customerName,
@@ -4556,6 +4566,7 @@ export default function App() {
       phoneNumber: String(orderPayload.phoneNumber || "").trim(),
       handoffType: String(orderPayload.orderMethod || "willCall"),
       deliveryDate: String(orderPayload.deliveryDate || "").trim(),
+      deliveryTitle,
       status: "waiting",
       waitingItems: cleanItems.filter((item) => item.path !== "inStock"),
       stockItems: cleanItems.filter((item) => item.path === "inStock"),

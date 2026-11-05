@@ -283,7 +283,6 @@ export default function DeliveryOrderForm({
   const [orderNumber, setOrderNumber] = useState("");
   const [isOrderLookupOpen, setIsOrderLookupOpen] = useState(false);
   const [orderLookupMessage, setOrderLookupMessage] = useState("");
-  const [deliveryTitle, setDeliveryTitle] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [address, setAddress] = useState("");
   const [contactName, setContactName] = useState("");
@@ -338,7 +337,6 @@ export default function DeliveryOrderForm({
     }
 
     setOrderNumber(initialDelivery.orderNumber || "");
-    setDeliveryTitle(initialDelivery.deliveryTitle || "");
     setCustomerName(initialDelivery.customerName || "");
     setAddress(initialDelivery.address || "");
     setContactName(initialDelivery.contactName || "");
@@ -497,10 +495,6 @@ export default function DeliveryOrderForm({
       setDeliveryDate(String(order.deliveryDate));
     }
 
-    if (order.deliveryTitle) {
-      setDeliveryTitle(String(order.deliveryTitle));
-    }
-
     if (deliveryUnloadTypes.includes(order.unloadType)) {
       setUnloadType(order.unloadType);
     }
@@ -616,7 +610,6 @@ export default function DeliveryOrderForm({
     setOrderNumber("");
     setIsOrderLookupOpen(false);
     setOrderLookupMessage("");
-    setDeliveryTitle("");
     setCustomerName("");
     setAddress("");
     setContactName("");
@@ -787,7 +780,6 @@ export default function DeliveryOrderForm({
     const delivery = {
       id: initialDelivery?.id || createId(),
       orderNumber: orderNumber.trim(),
-      deliveryTitle: deliveryTitle.trim(),
       customerName: formatCustomerName(customerName),
       address: address.trim(),
       contactName: contactName.trim(),
@@ -1138,56 +1130,30 @@ export default function DeliveryOrderForm({
           </div>
         </div>
 
-        <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(220px,0.55fr)_minmax(0,1.45fr)]">
-          <div>
-            <label
-              htmlFor="delivery-title"
-              className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
-            >
-              <Package className="h-4 w-4" aria-hidden="true" />
-              Delivery Title <span className="font-semibold text-slate-400">Optional</span>
-            </label>
+        <div className="mt-3">
+          <label
+            htmlFor="delivery-address"
+            className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
+          >
+            <MapPin className="h-4 w-4" aria-hidden="true" />
+            Address
+          </label>
 
-            <input
-              id="delivery-title"
-              type="text"
-              autoComplete="off"
-              value={deliveryTitle}
-              onChange={(event) => {
-                setDeliveryTitle(event.target.value);
-                clearError();
-              }}
-              disabled={isSubmitting}
-              placeholder="Basement, Order 1, etc."
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="delivery-address"
-              className="mb-1 flex items-center gap-2 text-sm font-bold text-slate-700"
-            >
-              <MapPin className="h-4 w-4" aria-hidden="true" />
-              Address
-            </label>
-
-            <AddressAutocompleteInput
-              id="delivery-address"
-              value={address}
-              onChange={(nextAddress) => {
-                setAddress(nextAddress);
-                setRouteEtaStatus("idle");
-                setRouteEtaMessage("");
-                clearError();
-              }}
-              disabled={isSubmitting}
-              autoComplete="off"
-              enableLocalFallback
-              placeholder="Delivery address"
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
-            />
-          </div>
+          <AddressAutocompleteInput
+            id="delivery-address"
+            value={address}
+            onChange={(nextAddress) => {
+              setAddress(nextAddress);
+              setRouteEtaStatus("idle");
+              setRouteEtaMessage("");
+              clearError();
+            }}
+            disabled={isSubmitting}
+            autoComplete="off"
+            enableLocalFallback
+            placeholder="Delivery address"
+            className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold text-slate-900 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+          />
         </div>
           </FormSection>
 
