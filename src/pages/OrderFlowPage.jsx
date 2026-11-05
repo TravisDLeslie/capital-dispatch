@@ -93,24 +93,36 @@ function buildCustomerAccountOptions(customers) {
   );
 }
 
-const inventoryCatalog = Array.from(
-  new Map(
-    inventoryCatalogItems
-      .filter((item) => item?.itemNumber)
-      .map((item) => [
-        normalizeInventorySearch(item.itemNumber),
-        {
-          itemNumber: String(item.itemNumber || "").trim(),
-          description: String(item.description || "").trim(),
-          brand: String(item.brand || "").trim(),
-          groupSection: String(item.groupSection || "").trim(),
-          defaultVendor: String(item.defaultVendor || "").trim(),
-          nonStocked: Boolean(item.nonStocked),
-          onHand: item.onHand,
-        },
-      ]),
-  ).values(),
-).sort((left, right) =>
+const inventoryCatalog = [
+  {
+    itemNumber: "SHIP",
+    description: "",
+    brand: "Shipping",
+    groupSection: "Delivery",
+    defaultVendor: "",
+    nonStocked: false,
+    onHand: null,
+    manualDescription: true,
+  },
+  ...Array.from(
+    new Map(
+      inventoryCatalogItems
+        .filter((item) => item?.itemNumber)
+        .map((item) => [
+          normalizeInventorySearch(item.itemNumber),
+          {
+            itemNumber: String(item.itemNumber || "").trim(),
+            description: String(item.description || "").trim(),
+            brand: String(item.brand || "").trim(),
+            groupSection: String(item.groupSection || "").trim(),
+            defaultVendor: String(item.defaultVendor || "").trim(),
+            nonStocked: Boolean(item.nonStocked),
+            onHand: item.onHand,
+          },
+        ]),
+    ).values(),
+  ),
+].sort((left, right) =>
   left.itemNumber.localeCompare(right.itemNumber, "en-US", {
     numeric: true,
     sensitivity: "base",
@@ -433,14 +445,18 @@ function InventoryItemNumberInput({
                     : "bg-emerald-100 text-emerald-700"
                 }`}
               >
-                {item.nonStocked
+                {item.manualDescription
+                  ? "Ship label"
+                  : item.nonStocked
                   ? "Non-stocked"
                   : Number.isFinite(item.onHand) && item.onHand > 0
                     ? `${item.onHand} on hand`
                     : "Stock item"}
               </span>
               <span className="col-span-2 line-clamp-2 text-sm font-black leading-5 text-slate-900">
-                {item.description || "No description listed"}
+                {item.manualDescription
+                  ? "Enter a shipment label such as Order 1 or Basement"
+                  : item.description || "No description listed"}
               </span>
               <span className="col-span-2 truncate text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">
                 {[
@@ -2640,6 +2656,20 @@ export default function OrderFlowPage({
                         updateItem(item.id, { itemNumber })
                       }
                       onSelect={(inventoryItem) => {
+                        if (inventoryItem.manualDescription) {
+                          updateItem(item.id, {
+                            itemNumber: inventoryItem.itemNumber,
+                            description: "",
+                            path: "inStock",
+                            vendor: "",
+                            supplierAddress: "",
+                            poNumber: "",
+                            routeDate: "",
+                            supplierDate: "",
+                          });
+                          return;
+                        }
+
                         if (!inventoryItem.nonStocked) {
                           updateItem(item.id, {
                             itemNumber: inventoryItem.itemNumber,
@@ -2679,7 +2709,11 @@ export default function OrderFlowPage({
                           description: event.target.value,
                         })
                       }
-                      placeholder="2x6-16 #2 Doug Fir"
+                      placeholder={
+                        item.itemNumber === "SHIP"
+                          ? "Order 1, Basement, etc."
+                          : "2x6-16 #2 Doug Fir"
+                      }
                     />
                   </Field>
                   <Field label="Fulfillment">
