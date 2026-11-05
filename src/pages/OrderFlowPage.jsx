@@ -702,6 +702,10 @@ export default function OrderFlowPage({
   }, [removedInventoryItemNumbers]);
 
   const editingItem = items.find((item) => item.id === editingItemId);
+  const shipItem = items.find(
+    (item) => normalizeInventorySearch(item.itemNumber) === "ship",
+  );
+  const deliveryTitle = String(shipItem?.description || "");
   const selectedUnloadType =
     unloadTypes.find((option) => option.id === unloadType) || unloadTypes[0];
   const SelectedUnloadIcon = selectedUnloadType.icon;
@@ -812,6 +816,47 @@ export default function OrderFlowPage({
         item.id === itemId ? { ...item, ...updates } : item,
       ),
     );
+  }
+
+  function updateDeliveryTitle(nextTitle) {
+    setItems((currentItems) => {
+      const matchingShipItem = currentItems.find(
+        (item) => normalizeInventorySearch(item.itemNumber) === "ship",
+      );
+
+      if (matchingShipItem) {
+        if (!nextTitle.trim()) {
+          const remainingItems = currentItems.filter(
+            (item) => item.id !== matchingShipItem.id,
+          );
+
+          return remainingItems.length > 0
+            ? remainingItems
+            : [createBlankItem()];
+        }
+
+        return currentItems.map((item) =>
+          item.id === matchingShipItem.id
+            ? { ...item, description: nextTitle, saved: true }
+            : item,
+        );
+      }
+
+      if (!nextTitle.trim()) {
+        return currentItems;
+      }
+
+      return [
+        ...currentItems,
+        createBlankItem({
+          quantity: "1",
+          itemNumber: "SHIP",
+          description: nextTitle,
+          path: "inStock",
+          saved: true,
+        }),
+      ];
+    });
   }
 
   function updateItemVendor(itemId, vendor) {
@@ -2450,7 +2495,7 @@ export default function OrderFlowPage({
 
           {orderMethod === "delivery" ? (
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
-              <div className="grid gap-3 xl:grid-cols-[180px_1fr_190px] xl:items-end">
+              <div className="grid gap-3 xl:grid-cols-[180px_1fr_190px] xl:items-start">
                 <Field label="Delivery Date">
                   <TextInput
                     type="date"
@@ -2459,23 +2504,35 @@ export default function OrderFlowPage({
                   />
                 </Field>
 
-                <Field label="Delivery Address">
-                  <div className="relative">
-                    <MapPin
-                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-                      aria-hidden="true"
+                <div className="grid gap-3">
+                  <Field label="Delivery Address">
+                    <div className="relative">
+                      <MapPin
+                        className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+                        aria-hidden="true"
+                      />
+                      <AddressAutocompleteInput
+                        value={deliveryAddress}
+                        onChange={setDeliveryAddress}
+                        autoComplete="off"
+                        enableLocalFallback
+                        placeholder="Start typing the delivery address..."
+                        showStatus={false}
+                        className="w-full rounded-2xl border border-slate-300 bg-slate-100 py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
+                      />
+                    </div>
+                  </Field>
+
+                  <Field label="Delivery Title · SHIP Item">
+                    <TextInput
+                      value={deliveryTitle}
+                      onChange={(event) =>
+                        updateDeliveryTitle(event.target.value)
+                      }
+                      placeholder="Order 1, Basement, etc."
                     />
-                    <AddressAutocompleteInput
-                      value={deliveryAddress}
-                      onChange={setDeliveryAddress}
-                      autoComplete="off"
-                      enableLocalFallback
-                      placeholder="Start typing the delivery address..."
-                      showStatus={false}
-                      className="w-full rounded-2xl border border-slate-300 bg-slate-100 py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
-                    />
-                  </div>
-                </Field>
+                  </Field>
+                </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                   <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
