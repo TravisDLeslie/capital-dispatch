@@ -2826,7 +2826,7 @@ export default function OrderFlowPage({
                   <button
                     type="button"
                     onClick={() => saveItem(item.id)}
-                    className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-700"
                   >
                     Save Item
                   </button>
