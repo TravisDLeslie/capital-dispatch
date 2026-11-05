@@ -356,9 +356,14 @@ function DeliveryStatusOverview({
                   >
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-black text-slate-950">
-                        {formatCustomerName(delivery.customerName) || "Delivery"}
+                        {delivery.deliveryTitle ||
+                          formatCustomerName(delivery.customerName) ||
+                          "Delivery"}
                       </span>
                       <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
+                        {delivery.deliveryTitle
+                          ? `${formatCustomerName(delivery.customerName) || "No customer"} · `
+                          : ""}
                         Order {delivery.orderNumber || "—"}
                         {delivery.address ? ` · ${delivery.address}` : ""}
                       </span>

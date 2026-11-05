@@ -293,8 +293,15 @@ function DeliveryCard({ delivery, orderBuilds, routeMetric }) {
             </span>
           </div>
           <h2 className="mt-1 truncate text-xl font-black text-slate-950">
-            {formatCustomerName(delivery.customerName) || "No customer name"}
+            {delivery.deliveryTitle ||
+              formatCustomerName(delivery.customerName) ||
+              "No customer name"}
           </h2>
+          {delivery.deliveryTitle ? (
+            <p className="truncate text-xs font-black text-slate-500">
+              {formatCustomerName(delivery.customerName) || "No customer name"}
+            </p>
+          ) : null}
           {contactPhone ? (
             <p className="text-xs font-bold text-slate-500">
               {contactPhone}

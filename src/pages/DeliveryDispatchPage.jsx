@@ -1321,6 +1321,11 @@ function DeliveryDispatchOverview({
                           {needsAssignment ? "Needs dispatch" : "Assigned"}
                         </span>
                       </div>
+                      {delivery.deliveryTitle ? (
+                        <p className="mt-1 truncate text-sm font-black text-slate-950">
+                          {delivery.deliveryTitle}
+                        </p>
+                      ) : null}
                       <p className="mt-1 truncate text-sm font-black text-slate-950">
                         {formatCustomerName(delivery.customerName)}
                       </p>
@@ -3149,8 +3154,15 @@ export default function DeliveryDispatchPage({
                         </div>
 
                         <h2 className="mt-1 truncate text-2xl font-black tracking-tight text-slate-900 sm:mt-2">
-                          {formatCustomerName(delivery.customerName)}
+                          {delivery.deliveryTitle ||
+                            formatCustomerName(delivery.customerName)}
                         </h2>
+
+                        {delivery.deliveryTitle ? (
+                          <p className="mt-1 truncate text-sm font-black text-slate-500">
+                            {formatCustomerName(delivery.customerName)}
+                          </p>
+                        ) : null}
 
                         {delivery.address ? (
                           <>
