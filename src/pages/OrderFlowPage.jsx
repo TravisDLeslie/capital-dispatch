@@ -363,8 +363,10 @@ function InventoryItemNumberInput({
       return [];
     }
 
-    const startsWith = [];
-    const contains = [];
+    const queryTokens = String(value || "")
+      .toLowerCase()
+      .match(/[a-z0-9]+/g) || [];
+    const matches = [];
 
     for (const item of catalog) {
       const normalizedNumber = normalizeInventorySearch(item.itemNumber);
@@ -374,24 +376,47 @@ function InventoryItemNumberInput({
           .filter(Boolean)
           .join(" "),
       );
+      const searchableText = [
+        normalizedNumber,
+        normalizedDescription,
+        normalizedMetadata,
+      ].join(" ");
+      const matchesEveryToken = queryTokens.every((token) =>
+        searchableText.includes(normalizeInventorySearch(token)),
+      );
+      let score = null;
 
       if (normalizedNumber.startsWith(normalizedQuery)) {
-        startsWith.push(item);
-      } else if (
-        normalizedNumber.includes(normalizedQuery) ||
-        normalizedDescription.includes(normalizedQuery) ||
-        normalizedMetadata.includes(normalizedQuery)
-      ) {
-        contains.push(item);
+        score = 0;
+      } else if (normalizedDescription.startsWith(normalizedQuery)) {
+        score = 1;
+      } else if (normalizedNumber.includes(normalizedQuery)) {
+        score = 2;
+      } else if (normalizedDescription.includes(normalizedQuery)) {
+        score = 3;
+      } else if (matchesEveryToken) {
+        score = 4;
+      } else if (normalizedMetadata.includes(normalizedQuery)) {
+        score = 5;
       }
 
-      if (startsWith.length >= 8) {
-        break;
+      if (score !== null) {
+        matches.push({ item, score });
       }
     }
 
-    return [...startsWith, ...contains].slice(0, 8);
-  }, [catalog, normalizedQuery]);
+    return matches
+      .sort(
+        (left, right) =>
+          left.score - right.score ||
+          left.item.itemNumber.localeCompare(right.item.itemNumber, "en-US", {
+            numeric: true,
+            sensitivity: "base",
+          }),
+      )
+      .slice(0, 8)
+      .map(({ item }) => item);
+  }, [catalog, normalizedQuery, value]);
 
   function handleChange(event) {
     const nextValue = event.target.value;
@@ -419,7 +444,7 @@ function InventoryItemNumberInput({
         onFocus={() => setIsOpen(true)}
         onBlur={() => window.setTimeout(() => setIsOpen(false), 120)}
         autoComplete="off"
-        placeholder="Item #"
+        placeholder="Item # or description"
       />
       {isOpen && normalizedQuery && suggestions.length > 0 ? (
         <div className="absolute left-0 top-[calc(100%+0.4rem)] z-30 max-h-96 w-[min(42rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
