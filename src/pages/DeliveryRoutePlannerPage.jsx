@@ -385,25 +385,20 @@ export default function DeliveryRoutePlannerPage({
   const todayDeliveriesMissingAddress = todaysDeliveries.filter(
     (delivery) => !String(delivery?.address || "").trim(),
   ).length;
-  const importableTodayDeliveries = useMemo(() => {
-    const savedDeliveryIds = new Set(
-      stops.map((stop) => String(stop.deliveryId || "")).filter(Boolean),
-    );
-    const savedAddresses = new Set(
-      stops.map((stop) => normalizeStopAddress(stop.address)).filter(Boolean),
-    );
-
-    return todaysDeliveries.filter((delivery) => {
-      const deliveryId = String(delivery?.id || "");
-      const normalizedAddress = normalizeStopAddress(delivery?.address);
-
-      return (
-        normalizedAddress &&
-        (!deliveryId || !savedDeliveryIds.has(deliveryId)) &&
-        !savedAddresses.has(normalizedAddress)
-      );
-    });
-  }, [stops, todaysDeliveries]);
+  const savedDeliveryIds = useMemo(
+    () =>
+      new Set(
+        stops.map((stop) => String(stop.deliveryId || "")).filter(Boolean),
+      ),
+    [stops],
+  );
+  const savedStopAddresses = useMemo(
+    () =>
+      new Set(
+        stops.map((stop) => normalizeStopAddress(stop.address)).filter(Boolean),
+      ),
+    [stops],
+  );
 
   useEffect(() => {
     try {
@@ -679,44 +674,42 @@ export default function DeliveryRoutePlannerPage({
     setError("");
   }
 
-  function addTodaysDeliveries() {
-    const availableStopCount = Math.max(0, MAX_ROUTE_STOPS - stops.length);
-    const deliveriesToAdd = importableTodayDeliveries.slice(
-      0,
-      availableStopCount,
-    );
+  function addTodayDelivery(delivery) {
+    const deliveryAddress = String(delivery?.address || "").trim();
+    const deliveryId = String(delivery?.id || "");
+    const normalizedAddress = normalizeStopAddress(deliveryAddress);
 
-    if (deliveriesToAdd.length === 0) {
-      setError(
-        importableTodayDeliveries.length > 0
-          ? `This quick route supports up to ${MAX_ROUTE_STOPS} stops.`
-          : "Today’s addressed deliveries are already on this route.",
-      );
+    if (!deliveryAddress) {
+      setError("Add an address to this delivery before adding it to the route.");
       return;
     }
 
-    const createdAt = new Date().toISOString();
+    if (stops.length >= MAX_ROUTE_STOPS) {
+      setError(`This quick route supports up to ${MAX_ROUTE_STOPS} stops.`);
+      return;
+    }
+
+    if (
+      (deliveryId && savedDeliveryIds.has(deliveryId)) ||
+      savedStopAddresses.has(normalizedAddress)
+    ) {
+      setError("That delivery is already on this route.");
+      return;
+    }
 
     setStops((currentStops) => [
       ...currentStops,
-      ...deliveriesToAdd.map((delivery) => ({
+      {
         id: createId(),
         deliveryId: delivery.id || "",
         orderNumber: delivery.orderNumber || "",
         customerName: delivery.customerName || delivery.contactName || "",
-        address: String(delivery.address || "").trim(),
+        address: deliveryAddress,
         serviceType: getDeliveryServiceType(delivery),
-        createdAt,
-      })),
+        createdAt: new Date().toISOString(),
+      },
     ]);
-
-    if (deliveriesToAdd.length < importableTodayDeliveries.length) {
-      setError(
-        `Added ${deliveriesToAdd.length} deliveries. This quick route supports up to ${MAX_ROUTE_STOPS} stops.`,
-      );
-    } else {
-      setError("");
-    }
+    setError("");
   }
 
   function updateStopServiceType(stopId, serviceType) {
@@ -1139,8 +1132,7 @@ export default function DeliveryRoutePlannerPage({
             </div>
 
             {!isReadOnlyDriverView ? (
-            <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
                 <div className="min-w-0">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
                     Today’s deliveries
@@ -1148,32 +1140,105 @@ export default function DeliveryRoutePlannerPage({
                   <p className="mt-1 text-sm font-bold text-slate-700">
                     {todaysDeliveries.length === 0
                       ? "No open deliveries are scheduled for today."
-                      : `${todaysDeliveries.length} open ${todaysDeliveries.length === 1 ? "delivery" : "deliveries"} scheduled today.`}
+                      : "Review each address and add only the stops you want on this route."}
                   </p>
                   {todayDeliveriesMissingAddress > 0 ? (
                     <p className="mt-1 text-xs font-bold text-amber-700">
-                      {todayDeliveriesMissingAddress} {todayDeliveriesMissingAddress === 1 ? "delivery needs" : "deliveries need"} an address before it can be added.
+                      {todayDeliveriesMissingAddress}{" "}
+                      {todayDeliveriesMissingAddress === 1
+                        ? "delivery needs"
+                        : "deliveries need"}{" "}
+                      an address before it can be added.
                     </p>
                   ) : null}
                 </div>
-                <button
-                  type="button"
-                  onClick={addTodaysDeliveries}
-                  disabled={
-                    importableTodayDeliveries.length === 0 ||
-                    stops.length >= MAX_ROUTE_STOPS
-                  }
-                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-200 disabled:text-blue-500"
-                >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  {importableTodayDeliveries.length > 0
-                    ? `Add ${importableTodayDeliveries.length} to route`
-                    : todaysDeliveries.length > 0
-                      ? "Today is already added"
-                      : "No deliveries to add"}
-                </button>
+
+                {todaysDeliveries.length > 0 ? (
+                  <div className="mt-4 space-y-2">
+                    {todaysDeliveries.map((delivery) => {
+                      const deliveryId = String(delivery?.id || "");
+                      const deliveryAddress = String(
+                        delivery?.address || "",
+                      ).trim();
+                      const alreadyAdded =
+                        (deliveryId && savedDeliveryIds.has(deliveryId)) ||
+                        (deliveryAddress &&
+                          savedStopAddresses.has(
+                            normalizeStopAddress(deliveryAddress),
+                          ));
+                      const customerName =
+                        delivery?.customerName ||
+                        delivery?.contactName ||
+                        "Customer not entered";
+
+                      return (
+                        <div
+                          key={
+                            delivery.id ||
+                            `${delivery.orderNumber}-${deliveryAddress}`
+                          }
+                          className="flex flex-col gap-3 rounded-xl border border-blue-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-slate-950">
+                              {delivery.orderNumber
+                                ? `Order ${delivery.orderNumber}`
+                                : customerName}
+                            </p>
+                            {delivery.orderNumber ? (
+                              <p className="mt-0.5 text-xs font-bold text-slate-600">
+                                {customerName}
+                              </p>
+                            ) : null}
+                            <p
+                              className={`mt-1 flex items-start gap-1.5 text-sm font-bold ${
+                                deliveryAddress
+                                  ? "text-slate-700"
+                                  : "text-amber-700"
+                              }`}
+                            >
+                              <MapPin
+                                className="mt-0.5 h-4 w-4 shrink-0"
+                                aria-hidden="true"
+                              />
+                              <span>
+                                {deliveryAddress ||
+                                  "Delivery address not entered"}
+                              </span>
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => addTodayDelivery(delivery)}
+                            disabled={
+                              !deliveryAddress ||
+                              alreadyAdded ||
+                              stops.length >= MAX_ROUTE_STOPS
+                            }
+                            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                          >
+                            {alreadyAdded ? (
+                              <CheckCircle2
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <Plus className="h-4 w-4" aria-hidden="true" />
+                            )}
+                            {alreadyAdded
+                              ? "Added"
+                              : !deliveryAddress
+                                ? "Address needed"
+                                : stops.length >= MAX_ROUTE_STOPS
+                                  ? "Route full"
+                                  : "Add to route"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
-            </div>
             ) : null}
 
             {!isReadOnlyDriverView ? (
