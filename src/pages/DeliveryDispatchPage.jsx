@@ -1060,7 +1060,6 @@ function DeliveryDispatchOverview({
   savingDeliveryId,
   savedDeliveryId,
   dirtyDeliveryIds,
-  onOpenDelivery,
   onOpenOrder,
 }) {
   const needsAssignmentCount = totalDeliveries.filter(
@@ -1125,10 +1124,6 @@ function DeliveryDispatchOverview({
     }
 
     return delivery.vehicleTitle || delivery.vehicleBadge || "Needs truck";
-  }
-
-  function handleDeliverySelect(delivery) {
-    onOpenDelivery(delivery.id);
   }
 
   return (
@@ -1513,7 +1508,7 @@ function DeliveryDispatchOverview({
                     </span>
                   </button>
 
-                  <div className="grid h-full content-center gap-1.5">
+                  <div className="flex h-full items-center">
                     <button
                       type="button"
                       onClick={() => onDispatchDelivery(delivery)}
@@ -1536,13 +1531,6 @@ function DeliveryDispatchOverview({
                         : savedDeliveryId === delivery.id
                           ? "Saved"
                         : "Save"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeliverySelect(delivery)}
-                      className="inline-flex min-h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-black uppercase tracking-[0.08em] text-slate-600 transition hover:bg-slate-50"
-                    >
-                      Full details
                     </button>
                   </div>
                   </article>
@@ -3105,7 +3093,6 @@ export default function DeliveryDispatchPage({
         savingDeliveryId={savingDeliveryId}
         savedDeliveryId={savedDeliveryId}
         dirtyDeliveryIds={dirtyDeliveryIds}
-        onOpenDelivery={openDeliveryForDispatch}
         onOpenOrder={setViewingOrderNumber}
       />
 
@@ -3116,26 +3103,6 @@ export default function DeliveryDispatchPage({
           onOpenDelivery={openDeliveryForDispatch}
           onMoveDelivery={handleMoveRouteDelivery}
         />
-      ) : null}
-
-      {visibleRouteMapDeliveries.length > 0 ? (
-        <div className="mb-5 flex justify-end">
-          <button
-            type="button"
-            onClick={() => setShowFullDeliveryDetails((isVisible) => !isVisible)}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-[0.08em] text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
-          >
-            {showFullDeliveryDetails
-              ? "Hide full delivery details"
-              : "Show attachments & full details"}
-            <ChevronDown
-              className={`h-4 w-4 transition-transform ${
-                showFullDeliveryDetails ? "rotate-180" : ""
-              }`}
-              aria-hidden="true"
-            />
-          </button>
-        </div>
       ) : null}
 
       {showFullDeliveryDetails && visibleRouteMapDeliveries.length === 0 ? (
