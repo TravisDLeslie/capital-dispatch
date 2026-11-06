@@ -1465,7 +1465,7 @@ function DeliveryDispatchOverview({
       </div>
 
       <div className="p-3 sm:p-4">
-        <div className="hidden grid-cols-[minmax(160px,0.9fr)_minmax(220px,1.1fr)_minmax(280px,1.25fr)_minmax(190px,0.9fr)_minmax(150px,0.65fr)_150px] gap-3 px-3 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
+        <div className="hidden grid-cols-[minmax(160px,0.9fr)_minmax(220px,1.1fr)_minmax(280px,1.25fr)_minmax(190px,0.9fr)_minmax(150px,0.65fr)_120px] gap-3 px-3 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
           <span>Delivery</span>
           <span>Destination</span>
           <span>Schedule</span>
@@ -1515,7 +1515,7 @@ function DeliveryDispatchOverview({
                     />
                   ) : null}
                   <article
-                  className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-slate-300 hover:shadow-sm xl:h-[190px] xl:grid-cols-[minmax(160px,0.9fr)_minmax(220px,1.1fr)_minmax(280px,1.25fr)_minmax(190px,0.9fr)_minmax(150px,0.65fr)_150px] xl:items-stretch"
+                  className="grid min-w-0 gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-slate-300 hover:shadow-sm xl:h-[190px] xl:grid-cols-[minmax(160px,0.9fr)_minmax(220px,1.1fr)_minmax(280px,1.25fr)_minmax(190px,0.9fr)_minmax(150px,0.65fr)_120px] xl:items-stretch"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-[#FC2C38]">
@@ -1747,7 +1747,7 @@ function DeliveryDispatchOverview({
                     </span>
                   </button>
 
-                  <div className="flex h-full flex-col items-stretch justify-center gap-2">
+                  <div className="flex h-full min-w-0 flex-col items-stretch justify-center gap-2">
                     <button
                       type="button"
                       onClick={() => onDispatchDelivery(delivery)}
@@ -1759,7 +1759,7 @@ function DeliveryDispatchOverview({
                         !delivery.deliveryDate ||
                         !delivery.deliveryTimeSlot
                       }
-                      className={`inline-flex min-h-10 items-center justify-center rounded-xl px-3 text-xs font-black transition ${
+                      className={`inline-flex min-h-9 items-center justify-center rounded-xl px-2 text-xs font-black transition ${
                         hasUnsavedChanges
                           ? "bg-emerald-700 text-white hover:bg-emerald-800"
                           : "cursor-not-allowed bg-slate-200 text-slate-500"
@@ -1782,7 +1782,8 @@ function DeliveryDispatchOverview({
                           savingDeliveryId === delivery.id ||
                           markingDeliveredId === delivery.id
                         }
-                        className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-xs font-black text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60"
+                        className="inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-emerald-200 bg-white px-2 text-[11px] font-black text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-60"
+                        title="Mark this delivery as delivered"
                       >
                         <CheckCircle2
                           className="h-3.5 w-3.5"
@@ -1790,7 +1791,7 @@ function DeliveryDispatchOverview({
                         />
                         {markingDeliveredId === delivery.id
                           ? "Saving..."
-                          : "Mark Delivered"}
+                          : "Mark delivered"}
                       </button>
                     ) : null}
                   </div>
