@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarDays,
+  CheckCircle2,
   Clock,
   GripVertical,
   History,
@@ -148,8 +149,11 @@ function ScheduleDeliveryCard({
   isDragging,
   isDragOver,
   isReordering,
+  canMarkDelivered,
+  isMarkingDelivered,
   onOpenQueue,
   onViewOrder,
+  onMarkDelivered,
   onMoveUp,
   onMoveDown,
   onDragStart,
@@ -238,6 +242,17 @@ function ScheduleDeliveryCard({
           >
             Open Delivery
           </button>
+          {canMarkDelivered ? (
+            <button
+              type="button"
+              onClick={onMarkDelivered}
+              disabled={isMarkingDelivered}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+              {isMarkingDelivered ? "Saving..." : "Mark Delivered"}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -297,8 +312,11 @@ function DriverScheduleColumn({
   draggingDeliveryId,
   dragOverDeliveryId,
   reorderingRouteId,
+  canMarkDelivered,
+  markingDeliveredId,
   onOpenQueue,
   onViewOrder,
+  onMarkDelivered,
   onMoveDelivery,
   onDragStart,
   onDragEnd,
@@ -337,8 +355,11 @@ function DriverScheduleColumn({
             isDragging={draggingDeliveryId === delivery.id}
             isDragOver={dragOverDeliveryId === delivery.id}
             isReordering={Boolean(reorderingRouteId)}
+            canMarkDelivered={canMarkDelivered}
+            isMarkingDelivered={markingDeliveredId === delivery.id}
             onOpenQueue={onOpenQueue}
             onViewOrder={() => onViewOrder(delivery)}
+            onMarkDelivered={() => onMarkDelivered(delivery)}
             onMoveUp={() => onMoveDelivery(deliveries, delivery, -1)}
             onMoveDown={() => onMoveDelivery(deliveries, delivery, 1)}
             onDragStart={(event) => onDragStart(event, delivery)}
@@ -378,6 +399,7 @@ export default function DeliveryDashboardPage({
   const [draggingDeliveryId, setDraggingDeliveryId] = useState("");
   const [dragOverDeliveryId, setDragOverDeliveryId] = useState("");
   const [reorderingRouteId, setReorderingRouteId] = useState("");
+  const [markingDeliveredId, setMarkingDeliveredId] = useState("");
   const [viewingDelivery, setViewingDelivery] = useState(null);
   const openDeliveries = useMemo(() => getOpenDeliveryList(deliveries), [deliveries]);
   const selectedDateDeliveries = useMemo(
@@ -462,6 +484,42 @@ export default function DeliveryDashboardPage({
 
     nextRouteDeliveries.splice(nextIndex, 0, movedDelivery);
     await saveRouteOrder(nextRouteDeliveries, delivery.id);
+  }
+
+  async function handleMarkDelivered(delivery) {
+    if (!canEditDeliveries || !onUpdateDelivery) {
+      return;
+    }
+
+    const orderLabel = delivery.orderNumber
+      ? `order ${delivery.orderNumber}`
+      : "this delivery";
+    const customerLabel = formatCustomerName(delivery.customerName);
+    const confirmed = window.confirm(
+      `Mark ${orderLabel}${customerLabel ? ` for ${customerLabel}` : ""} as delivered?\n\nThis removes it from the active schedule and keeps it in Delivery History.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const deliveredAt = new Date().toISOString();
+    setMarkingDeliveredId(delivery.id);
+    setError("");
+
+    try {
+      await onUpdateDelivery(delivery.id, {
+        status: "complete",
+        deliveredAt,
+        deliveryCompletionSource: "dashboardOverride",
+        deliveryOverrideAt: deliveredAt,
+      });
+    } catch (updateError) {
+      console.error("Unable to mark delivery complete:", updateError);
+      setError("Unable to mark that delivery as delivered. Try again.");
+    } finally {
+      setMarkingDeliveredId("");
+    }
   }
 
   function handleDragStart(event, delivery) {
@@ -685,8 +743,13 @@ export default function DeliveryDashboardPage({
                 draggingDeliveryId={draggingDeliveryId}
                 dragOverDeliveryId={dragOverDeliveryId}
                 reorderingRouteId={reorderingRouteId}
+                canMarkDelivered={
+                  canEditDeliveries && !isDriverView && Boolean(onUpdateDelivery)
+                }
+                markingDeliveredId={markingDeliveredId}
                 onOpenQueue={() => onPageChange?.("deliveries-queue")}
                 onViewOrder={setViewingDelivery}
+                onMarkDelivered={handleMarkDelivered}
                 onMoveDelivery={handleMoveDelivery}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
