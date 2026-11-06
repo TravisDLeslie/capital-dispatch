@@ -1955,9 +1955,19 @@ export default function OrderFlowPage({
 
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
-            Customer Order
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
+              Customer Order
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsOrderImportOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-black text-slate-500 transition hover:bg-blue-50 hover:text-blue-700"
+            >
+              <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
+              Import order file
+            </button>
+          </div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
               New Customer Order
@@ -2011,16 +2021,6 @@ export default function OrderFlowPage({
                     : selectedHandoff.description}
                 </p>
               </div>
-          </div>
-          <div className="mt-3 flex justify-end border-t border-slate-100 pt-2.5">
-            <button
-              type="button"
-              onClick={() => setIsOrderImportOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-black text-slate-500 transition hover:bg-blue-50 hover:text-blue-700"
-            >
-              <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
-              Import order file
-            </button>
           </div>
         </div>
       </div>
