@@ -3616,6 +3616,27 @@ export default function DeliveryDispatchPage({
                             : "Upload Delivery Order Copy"}
                       </button>
 
+                      {canEditDeliveries ? (
+                        <button
+                          type="button"
+                          onClick={() => handleMarkDelivered(delivery)}
+                          disabled={
+                            isSaving ||
+                            isUploadingDeliveryOrder ||
+                            isMarkingDelivered
+                          }
+                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                        >
+                          <CheckCircle2
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
+                          {isMarkingDelivered
+                            ? "Saving..."
+                            : "Mark Delivered"}
+                        </button>
+                      ) : null}
+
                       <input
                         ref={(inputElement) => {
                           if (inputElement) {
@@ -4508,24 +4529,6 @@ export default function DeliveryDispatchPage({
 	                </div>
 	                ) : null}
 
-                  <div className="flex justify-end border-t border-slate-200 bg-white px-4 py-3 sm:px-5">
-                    <button
-                      type="button"
-                      onClick={() => handleMarkDelivered(delivery)}
-                      disabled={
-                        isSaving ||
-                        isUploadingDeliveryOrder ||
-                        isMarkingDelivered
-                      }
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-800 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
-                    >
-                      <CheckCircle2
-                        className="h-4 w-4"
-                        aria-hidden="true"
-                      />
-                      {isMarkingDelivered ? "Saving..." : "Mark Delivered"}
-                    </button>
-                  </div>
 	              </article>
               </Fragment>
             );
