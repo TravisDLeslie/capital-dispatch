@@ -2422,6 +2422,16 @@ export default function DeliveryQueuePage({
                             {formatCustomerName(delivery.customerName)}
                           </span>
 
+                          <span className="mt-2 flex items-start gap-2 text-sm font-bold leading-5 text-slate-600">
+                            <MapPin
+                              className="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
+                              aria-hidden="true"
+                            />
+                            <span>
+                              {delivery.address || "Delivery address not entered"}
+                            </span>
+                          </span>
+
                           <span className="mt-3 flex flex-wrap gap-2">
                             <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3 py-1.5 text-sm font-black text-[#FC2C38]">
                               <CalendarDays
