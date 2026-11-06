@@ -23,7 +23,6 @@ import {
   ShieldAlert,
   Trash2,
   Truck,
-  UserRound,
   X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -703,6 +702,111 @@ const DRIVER_DELIVERY_STEPS = [
 
 const MOBILE_DRIVER_DELIVERY_STEPS = ["Load", "Route", "Photos", "Done"];
 
+function DriverDeliveryInformation({
+  delivery,
+  items,
+  contactPhone,
+  deliveryLocationNotes,
+  generalNotes,
+}) {
+  const isReturn = isReturnDelivery(delivery);
+  const notes = [deliveryLocationNotes, generalNotes]
+    .map((note) => String(note || "").trim())
+    .filter((note, index, allNotes) => note && allNotes.indexOf(note) === index);
+
+  return (
+    <section className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4">
+      <div className="flex items-center gap-2">
+        <Package className="h-5 w-5 text-blue-700" aria-hidden="true" />
+        <h3 className="text-sm font-black uppercase tracking-[0.12em] text-slate-950">
+          {isReturn ? "Return Pickup Information" : "Delivery Information"}
+        </h3>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-blue-100">
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.1em] text-slate-500">
+            <Phone className="h-4 w-4 text-blue-700" aria-hidden="true" />
+            Phone Number
+          </p>
+          {contactPhone ? (
+            <a
+              href={`tel:${contactPhone}`}
+              className="mt-1 block text-base font-black text-blue-700 underline decoration-blue-200 underline-offset-4"
+            >
+              {contactPhone}
+            </a>
+          ) : (
+            <p className="mt-1 text-sm font-bold text-slate-500">
+              No phone number entered
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-blue-100">
+          <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.1em] text-slate-500">
+            <MessageSquare className="h-4 w-4 text-blue-700" aria-hidden="true" />
+            {isReturn ? "Return Notes" : "Delivery Notes"}
+          </p>
+          {notes.length > 0 ? (
+            <div className="mt-1 space-y-1">
+              {notes.map((note) => (
+                <p key={note} className="text-sm font-bold leading-5 text-slate-800">
+                  {note}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1 text-sm font-bold text-slate-500">
+              {isReturn ? "No return notes added" : "No delivery notes added"}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-blue-100">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">
+            {isReturn ? "Items To Pick Up" : "Items To Deliver"}
+          </p>
+          <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700">
+            {items.length} {items.length === 1 ? "item" : "items"}
+          </span>
+        </div>
+
+        {items.length > 0 ? (
+          <ul className="mt-2 divide-y divide-slate-100">
+            {items.map((item, itemIndex) => (
+              <li
+                key={item.id || `${delivery.id}-driver-item-${itemIndex}`}
+                className="flex items-start gap-3 py-2.5 first:pt-1 last:pb-1"
+              >
+                <span className="flex min-w-10 shrink-0 items-center justify-center rounded-lg bg-[#FC2C38] px-2 py-1 text-xs font-black text-white">
+                  {item.quantity || "—"}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-black leading-5 text-slate-900">
+                    {item.description || "Item description not entered"}
+                  </span>
+                  {item.itemNumber ? (
+                    <span className="mt-0.5 block text-xs font-bold text-slate-500">
+                      Item # {item.itemNumber}
+                    </span>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm font-bold text-amber-700">
+            No item descriptions were added to this delivery.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function MobileDeliveryFlowCard({
   delivery,
   deliveryIndex,
@@ -915,6 +1019,14 @@ function MobileDeliveryFlowCard({
                 {scopeSummary.shortLabel || scopeSummary.label}
               </div>
             </div>
+
+            <DriverDeliveryInformation
+              delivery={delivery}
+              items={items}
+              contactPhone={contactPhone}
+              deliveryLocationNotes={deliveryLocationNotes}
+              generalNotes={generalNotes}
+            />
 
             {deliveryOrderDocuments.length > 0 ? (
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
@@ -2483,49 +2595,15 @@ export default function DeliveryQueuePage({
                       ) : null}
 
                       {deliveryStep === 0 ? (
-                      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                        <section className="rounded-2xl border border-slate-200 bg-white p-4">
-                          <p className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900">
-                            <UserRound
-                              className="h-4 w-4 text-[#FC2C38]"
-                              aria-hidden="true"
-                            />
-                            Contact
-                          </p>
-
-                          <p className="text-sm font-semibold text-slate-600">
-                            {delivery.contactName || "No contact name added"}
-                          </p>
-
-                          <p className="mt-1 text-sm font-semibold text-slate-600">
-                            {contactPhone || "No contact phone added"}
-                          </p>
-                        </section>
-
-                        {deliveryLocationNotes ? (
-                          <section className="rounded-2xl border border-red-100 bg-white p-4">
-                            <p className="text-sm font-black text-slate-900">
-                              Delivery Location Notes
-                            </p>
-
-                            <p className="mt-1 text-sm font-semibold text-slate-600">
-                              {deliveryLocationNotes}
-                            </p>
-                          </section>
-                        ) : null}
-                      </div>
-                      ) : null}
-
-                      {deliveryStep === 0 && generalNotes ? (
-                        <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                          <p className="text-sm font-black text-slate-900">
-                            General Notes
-                          </p>
-
-                          <p className="mt-1 text-sm font-semibold text-slate-600">
-                            {generalNotes}
-                          </p>
-                        </section>
+                        <div className="mt-4">
+                          <DriverDeliveryInformation
+                            delivery={delivery}
+                            items={items}
+                            contactPhone={contactPhone}
+                            deliveryLocationNotes={deliveryLocationNotes}
+                            generalNotes={generalNotes}
+                          />
+                        </div>
                       ) : null}
 
                       {deliveryStep === 2 && delivery.hasHardware ? (
@@ -2688,23 +2766,6 @@ export default function DeliveryQueuePage({
                           ) : null}
                         </div>
 
-                        {scopeSummary.usesItems ? (
-                          <ul className="mt-3 space-y-2">
-                            {items.map((item) => (
-                              <li
-                                key={item.id}
-                                className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
-                              >
-                                {item.quantity ? (
-                                  <span className="mr-2 font-black text-[#FC2C38]">
-                                    {item.quantity}
-                                  </span>
-                                ) : null}
-                                {item.description}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
                       </section>
                       ) : null}
 
