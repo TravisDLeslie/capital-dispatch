@@ -891,8 +891,8 @@ export default function OrderBuildsPage({
               </div>
 
               {editDraft.handoffType === "delivery" ? (
-                <div className="mt-4 grid gap-4 rounded-3xl border border-blue-100 bg-blue-50/50 p-4 sm:grid-cols-[1fr_12rem]">
-                  <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+                <div className="mt-4 grid gap-4 rounded-3xl border border-blue-100 bg-blue-50/50 p-4 lg:grid-cols-[minmax(0,1fr)_12rem]">
+                  <label className="grid min-w-0 gap-2 text-xs font-black uppercase tracking-[0.12em] text-blue-700">
                     Delivery address
                     <AddressAutocompleteInput
                       id="edit-open-order-delivery-address"
@@ -904,7 +904,7 @@ export default function OrderBuildsPage({
                       enableLocalFallback
                       showStatus={false}
                       placeholder="Start typing the delivery address..."
-                      className="rounded-2xl border border-blue-100 bg-white px-4 py-3 text-base font-bold normal-case tracking-normal text-slate-950 outline-none focus:border-blue-500"
+                      className="w-full min-w-0 rounded-2xl border border-blue-100 bg-white px-4 py-3 text-base font-bold normal-case tracking-normal text-slate-950 outline-none focus:border-blue-500"
                     />
                   </label>
                   <label className="grid gap-2 text-xs font-black uppercase tracking-[0.12em] text-blue-700">
