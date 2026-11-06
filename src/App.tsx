@@ -6634,6 +6634,13 @@ export default function App() {
           isDriverView={isDeliveryDriverScopedView}
           canEditDeliveries={canEditDeliveryDetails}
           onUpdateDelivery={handleUpdateDelivery}
+          orderSources={{
+            orderBuilds,
+            supplierRuns,
+            theirTruckPOs,
+            deliveries,
+            checkIns,
+          }}
           onPageChange={navigateToPage}
         />
       );
@@ -6833,6 +6840,13 @@ export default function App() {
           isDriverView={isDeliveryDriverScopedView}
           canEditDeliveries={canEditDeliveryDetails}
           onUpdateDelivery={handleUpdateDelivery}
+          orderSources={{
+            orderBuilds,
+            supplierRuns,
+            theirTruckPOs,
+            deliveries,
+            checkIns,
+          }}
           onPageChange={navigateToPage}
         />
       );
