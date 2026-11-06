@@ -125,14 +125,6 @@ function getEmbeddedGoogleMapsRouteUrl(stops) {
   return `https://maps.google.com/maps?${params.toString()}`;
 }
 
-function getStopMarkerLabel(index) {
-  if (index < 9) {
-    return String(index + 1);
-  }
-
-  return String.fromCharCode(65 + index - 9);
-}
-
 function formatDurationMinutes(totalMinutes) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -304,7 +296,6 @@ export default function DeliveryRoutePlannerPage({
   );
   const [stops, setStops] = useState(loadSavedStops);
   const [error, setError] = useState("");
-  const [mapImageError, setMapImageError] = useState(false);
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareDriverName, setShareDriverName] = useState("");
@@ -490,8 +481,6 @@ export default function DeliveryRoutePlannerPage({
   }, [isMapExpanded]);
 
   useEffect(() => {
-    setMapImageError(false);
-
     if (stops.length === 0) {
       setRouteState({ status: "idle", route: null, error: "" });
       return;
@@ -621,38 +610,6 @@ export default function DeliveryRoutePlannerPage({
       controller.abort();
     };
   }, [stops]);
-
-  const staticMapUrl = useMemo(() => {
-    if (stops.length === 0) {
-      return "";
-    }
-
-    const params = new URLSearchParams({
-      size: "640x640",
-      scale: "2",
-      maptype: "roadmap",
-    });
-
-    params.append(
-      "markers",
-      `color:0x111827|label:C|${capitalLumberAddress}`,
-    );
-    stops.forEach((stop, index) => {
-      params.append(
-        "markers",
-        `color:0xfc2c38|label:${getStopMarkerLabel(index)}|${stop.address}`,
-      );
-    });
-
-    if (routeState.route?.encodedPolyline) {
-      params.append(
-        "path",
-        `color:0xfc2c38ff|weight:5|enc:${routeState.route.encodedPolyline}`,
-      );
-    }
-
-    return `/api/maps/static?${params.toString()}`;
-  }, [routeState.route?.encodedPolyline, stops]);
 
   function handleAddStop(event) {
     event.preventDefault();
@@ -1594,14 +1551,7 @@ export default function DeliveryRoutePlannerPage({
             </div>
           </div>
 
-          {staticMapUrl && !mapImageError ? (
-            <img
-              src={staticMapUrl}
-              alt="Round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
-              onError={() => setMapImageError(true)}
-              className="mt-3 h-[clamp(320px,44vh,500px)] w-full rounded-2xl border border-slate-200 bg-slate-100 object-contain min-[1100px]:max-[1279px]:h-[280px]"
-            />
-          ) : embeddedGoogleMapsRouteUrl ? (
+          {embeddedGoogleMapsRouteUrl ? (
             <iframe
               src={embeddedGoogleMapsRouteUrl}
               title="Round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
@@ -1712,7 +1662,7 @@ export default function DeliveryRoutePlannerPage({
       </div>
       ) : null}
 
-      {isMapExpanded && (staticMapUrl || embeddedGoogleMapsRouteUrl) ? (
+      {isMapExpanded && embeddedGoogleMapsRouteUrl ? (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-2 backdrop-blur-sm sm:p-4"
           role="dialog"
@@ -1745,23 +1695,14 @@ export default function DeliveryRoutePlannerPage({
             </div>
 
             <div className="min-h-0 flex-1 bg-slate-100 p-2 sm:p-4">
-              {staticMapUrl && !mapImageError ? (
-                <img
-                  src={staticMapUrl}
-                  alt="Expanded round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
-                  onError={() => setMapImageError(true)}
-                  className="h-full w-full rounded-2xl bg-white object-contain shadow-inner"
-                />
-              ) : (
-                <iframe
-                  src={embeddedGoogleMapsRouteUrl}
-                  title="Expanded round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  className="h-full w-full rounded-2xl border-0 bg-white shadow-inner"
-                  allowFullScreen
-                />
-              )}
+              <iframe
+                src={embeddedGoogleMapsRouteUrl}
+                title="Expanded round-trip delivery route from Capital Lumber through the saved stops and back to the yard"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                className="h-full w-full rounded-2xl border-0 bg-white shadow-inner"
+                allowFullScreen
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-white p-3 sm:grid-cols-4 sm:px-5">
