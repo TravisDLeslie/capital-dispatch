@@ -5,6 +5,8 @@ import {
   CalendarDays,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   CloudRain,
   Edit3,
@@ -84,6 +86,251 @@ function clearDeliveryOrderUploadTarget() {
 
 function normalizeSearch(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function parseLocalDateValue(value) {
+  const [year, month, day] = String(value || "")
+    .split("-")
+    .map(Number);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day);
+}
+
+function formatLocalDateValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function DeliveryDatePicker({ value, onChange, deliveryDates = [] }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const initialDate = parseLocalDateValue(value) || new Date();
+    return new Date(initialDate.getFullYear(), initialDate.getMonth(), 1);
+  });
+  const pickerRef = useRef(null);
+  const deliveryCountByDate = useMemo(
+    () =>
+      deliveryDates.reduce((counts, dateValue) => {
+        if (dateValue) {
+          counts.set(dateValue, (counts.get(dateValue) || 0) + 1);
+        }
+
+        return counts;
+      }, new Map()),
+    [deliveryDates],
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      if (!pickerRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    const selectedDate = parseLocalDateValue(value);
+
+    if (selectedDate) {
+      setVisibleMonth(
+        new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1),
+      );
+    }
+  }, [value]);
+
+  const monthStartOffset = visibleMonth.getDay();
+  const calendarStart = new Date(
+    visibleMonth.getFullYear(),
+    visibleMonth.getMonth(),
+    1 - monthStartOffset,
+  );
+  const calendarDays = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(calendarStart);
+    date.setDate(calendarStart.getDate() + index);
+    return date;
+  });
+
+  return (
+    <div ref={pickerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen((currentValue) => !currentValue)}
+        className={`flex min-h-12 w-full items-center gap-3 rounded-xl border bg-white px-3 text-left text-sm font-black outline-none transition hover:border-red-300 focus:ring-4 focus:ring-red-100 ${
+          isOpen ? "border-[#FC2C38]" : "border-slate-300"
+        }`}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-[#FC2C38]">
+          <CalendarDays className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-slate-900">
+          {value ? formatDateLabel(value) : "All delivery dates"}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${
+            isOpen ? "rotate-180" : ""
+          }`}
+          aria-hidden="true"
+        />
+      </button>
+
+      {isOpen ? (
+        <div
+          role="dialog"
+          aria-label="Choose a delivery date"
+          className="absolute left-0 top-full z-50 mt-2 w-[min(400px,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                setVisibleMonth(
+                  (currentMonth) =>
+                    new Date(
+                      currentMonth.getFullYear(),
+                      currentMonth.getMonth() - 1,
+                      1,
+                    ),
+                )
+              }
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition hover:bg-slate-100"
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <p className="text-lg font-black text-slate-950">
+              {visibleMonth.toLocaleDateString("en-US", {
+                month: "long",
+                year: "numeric",
+              })}
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                setVisibleMonth(
+                  (currentMonth) =>
+                    new Date(
+                      currentMonth.getFullYear(),
+                      currentMonth.getMonth() + 1,
+                      1,
+                    ),
+                )
+              }
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition hover:bg-slate-100"
+              aria-label="Next month"
+            >
+              <ChevronRight className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="mt-4 grid grid-cols-7 text-center text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+              (weekday) => (
+                <span key={weekday} className="py-1">
+                  {weekday}
+                </span>
+              ),
+            )}
+          </div>
+
+          <div className="mt-1 grid grid-cols-7 gap-1">
+            {calendarDays.map((date) => {
+              const dateValue = formatLocalDateValue(date);
+              const deliveryCount = deliveryCountByDate.get(dateValue) || 0;
+              const isSelected = value === dateValue;
+              const isCurrentMonth =
+                date.getMonth() === visibleMonth.getMonth();
+
+              return (
+                <button
+                  key={dateValue}
+                  type="button"
+                  onClick={() => {
+                    onChange(dateValue);
+                    setIsOpen(false);
+                  }}
+                  className={`relative flex aspect-square min-h-11 flex-col items-center justify-center rounded-xl border text-sm font-black transition ${
+                    isSelected
+                      ? "border-[#FC2C38] bg-[#FC2C38] text-white"
+                      : deliveryCount > 0
+                        ? "border-red-200 bg-red-50 text-slate-950 hover:border-[#FC2C38]"
+                        : "border-transparent text-slate-700 hover:bg-slate-100"
+                  } ${isCurrentMonth ? "" : "opacity-35"}`}
+                  aria-label={`${date.toLocaleDateString("en-US", {
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })}${
+                    deliveryCount > 0
+                      ? `, ${deliveryCount} ${
+                          deliveryCount === 1 ? "delivery" : "deliveries"
+                        }`
+                      : ""
+                  }`}
+                >
+                  <span>{date.getDate()}</span>
+                  {deliveryCount > 0 ? (
+                    <span
+                      className={`mt-0.5 h-1.5 w-1.5 rounded-full ${
+                        isSelected ? "bg-white" : "bg-[#FC2C38]"
+                      }`}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
+            <p className="text-xs font-bold text-slate-500">
+              Red dots show scheduled deliveries.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setIsOpen(false);
+              }}
+              className="shrink-0 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-slate-800"
+            >
+              All dates
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function isYardStockItem(item) {
@@ -1046,6 +1293,7 @@ function DispatchDetailSection({
 function DeliveryDispatchOverview({
   deliveries,
   totalDeliveries,
+  deliveryDates,
   routeMetrics,
   driverOptions,
   vehicleOptions,
@@ -1127,7 +1375,7 @@ function DeliveryDispatchOverview({
   }
 
   return (
-    <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+    <section className="mb-6 overflow-visible rounded-3xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-slate-50/70 p-4 sm:p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
@@ -1171,28 +1419,16 @@ function DeliveryDispatchOverview({
         </div>
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <label className="block">
+          <div className="block">
             <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
               Delivery Date
             </span>
-            <span className="relative block">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(event) =>
-                  onSelectedDateChange(event.target.value)
-                }
-                className={`block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 ${
-                  selectedDate ? "text-slate-900" : "text-transparent"
-                }`}
-              />
-              {!selectedDate ? (
-                <span className="pointer-events-none absolute inset-y-px left-1 right-11 flex items-center rounded-l-[11px] bg-white px-3 text-sm font-black text-slate-900">
-                  All delivery dates
-                </span>
-              ) : null}
-            </span>
-          </label>
+            <DeliveryDatePicker
+              value={selectedDate}
+              onChange={onSelectedDateChange}
+              deliveryDates={deliveryDates}
+            />
+          </div>
 
           <label className="block">
             <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
@@ -2375,6 +2611,20 @@ export default function DeliveryDispatchPage({
   }, [deliveries]);
 
   const normalizedSearchQuery = normalizeSearch(searchQuery);
+  const availableDeliveryDates = useMemo(
+    () =>
+      deliveries
+        .filter((delivery) => delivery.status !== "complete")
+        .map((delivery) => {
+          const schedule =
+            draftSchedules[delivery.id] ||
+            getInitialSchedule(delivery, safeDeliveryOriginOptions);
+
+          return schedule.deliveryDate || "";
+        })
+        .filter(Boolean),
+    [deliveries, draftSchedules, safeDeliveryOriginOptions],
+  );
   const routeMapDeliveries = useMemo(
     () =>
       deliveries
@@ -3070,6 +3320,7 @@ export default function DeliveryDispatchPage({
       <DeliveryDispatchOverview
         deliveries={visibleRouteMapDeliveries}
         totalDeliveries={routeMapDeliveries}
+        deliveryDates={availableDeliveryDates}
         routeMetrics={routeMetrics}
         driverOptions={driverOptions}
         vehicleOptions={vehicleOptions}
