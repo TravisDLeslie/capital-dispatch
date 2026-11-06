@@ -1970,14 +1970,6 @@ export default function OrderFlowPage({
               <Warehouse className="h-4 w-4" aria-hidden="true" />
               Stock PO
             </button>
-            <button
-              type="button"
-              onClick={() => setIsOrderImportOpen(true)}
-              className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 shadow-sm transition hover:border-blue-400 hover:bg-blue-50"
-            >
-              <FileUp className="h-5 w-5" aria-hidden="true" />
-              Import Order
-            </button>
           </div>
         </div>
 
@@ -2019,6 +2011,16 @@ export default function OrderFlowPage({
                     : selectedHandoff.description}
                 </p>
               </div>
+          </div>
+          <div className="mt-3 flex justify-end border-t border-slate-100 pt-2.5">
+            <button
+              type="button"
+              onClick={() => setIsOrderImportOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-black text-slate-500 transition hover:bg-blue-50 hover:text-blue-700"
+            >
+              <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
+              Import order file
+            </button>
           </div>
         </div>
       </div>
