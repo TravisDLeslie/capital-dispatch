@@ -7890,6 +7890,8 @@ export default function App() {
             driverOptions={deliveryDriverOptions}
             currentDriverName={driverName}
             canShareRoute={canShareDeliveryRoutes}
+            canEditDeliveries={canEditDeliveryDetails}
+            onUpdateDelivery={handleUpdateDelivery}
             createdBy={currentUserCreator}
           />
         );

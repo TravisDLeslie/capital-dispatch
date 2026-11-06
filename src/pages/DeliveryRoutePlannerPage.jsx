@@ -284,6 +284,8 @@ export default function DeliveryRoutePlannerPage({
   driverOptions = EMPTY_DRIVER_OPTIONS,
   currentDriverName = "",
   canShareRoute = false,
+  canEditDeliveries = false,
+  onUpdateDelivery,
   createdBy = {},
 }) {
   const [address, setAddress] = useState("");
@@ -320,6 +322,7 @@ export default function DeliveryRoutePlannerPage({
   const [stopRouteMetrics, setStopRouteMetrics] = useState({});
   const [isTodayDeliveryPickerOpen, setIsTodayDeliveryPickerOpen] =
     useState(false);
+  const [markingDeliveredId, setMarkingDeliveredId] = useState("");
   const googleMapsRouteUrl = useMemo(() => getGoogleMapsRouteUrl(stops), [stops]);
   const embeddedGoogleMapsRouteUrl = useMemo(
     () => getEmbeddedGoogleMapsRouteUrl(stops),
@@ -719,6 +722,46 @@ export default function DeliveryRoutePlannerPage({
     setStops((currentStops) =>
       currentStops.filter((stop) => stop.id !== stopId),
     );
+  }
+
+  async function handleMarkDelivered(stop) {
+    const deliveryId = String(stop?.deliveryId || "");
+
+    if (!deliveryId || !canEditDeliveries || !onUpdateDelivery) {
+      return;
+    }
+
+    const orderLabel = stop.orderNumber
+      ? `order ${stop.orderNumber}`
+      : stop.customerName || "this delivery";
+    const confirmed = window.confirm(
+      `Mark ${orderLabel} as delivered?\n\nThis removes it from active Dispatch and keeps it in Delivery History.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const deliveredAt = new Date().toISOString();
+
+    setMarkingDeliveredId(deliveryId);
+    setError("");
+
+    try {
+      await onUpdateDelivery(deliveryId, {
+        status: "complete",
+        deliveredAt,
+        deliveryCompletionSource: "routePlannerOverride",
+        deliveryOverrideAt: deliveredAt,
+      });
+    } catch (updateError) {
+      console.error("Unable to mark delivery delivered:", updateError);
+      setError(
+        `Unable to mark ${orderLabel} delivered. Check your connection and try again.`,
+      );
+    } finally {
+      setMarkingDeliveredId("");
+    }
   }
 
   function clearAllStops() {
@@ -1378,6 +1421,16 @@ export default function DeliveryRoutePlannerPage({
                 {stops.map((stop, stopIndex) => {
                   const serviceOption = getStopServiceOption(stop);
                   const stopRouteMetric = stopRouteMetrics[stop.id];
+                  const linkedDelivery = stop.deliveryId
+                    ? deliveries.find(
+                        (delivery) => delivery.id === stop.deliveryId,
+                      )
+                    : null;
+                  const isLinkedDeliveryComplete = isDeliveryComplete(
+                    linkedDelivery,
+                  );
+                  const isMarkingDelivered =
+                    markingDeliveredId === stop.deliveryId;
 
                   return (
                     <article
@@ -1443,6 +1496,32 @@ export default function DeliveryRoutePlannerPage({
                         </select>
                       </label>
                       )}
+                      {stop.deliveryId &&
+                      canEditDeliveries &&
+                      onUpdateDelivery ? (
+                        <button
+                          type="button"
+                          onClick={() => handleMarkDelivered(stop)}
+                          disabled={
+                            isLinkedDeliveryComplete || isMarkingDelivered
+                          }
+                          className={`mt-2 inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-black transition disabled:cursor-default ${
+                            isLinkedDeliveryComplete
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              : "border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50 disabled:opacity-60"
+                          }`}
+                        >
+                          <CheckCircle2
+                            className="h-3.5 w-3.5"
+                            aria-hidden="true"
+                          />
+                          {isLinkedDeliveryComplete
+                            ? "Delivered"
+                            : isMarkingDelivered
+                              ? "Saving..."
+                              : "Mark Delivered"}
+                        </button>
+                      ) : null}
                     </div>
                     {!isReadOnlyDriverView ? (
                     <div className="flex shrink-0 gap-1">
