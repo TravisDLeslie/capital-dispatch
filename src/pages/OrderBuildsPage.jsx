@@ -2,10 +2,13 @@ import { useState } from "react";
 import {
   Archive,
   CalendarDays,
+  ChevronDown,
+  ChevronUp,
   CheckCircle2,
   ClipboardList,
   PackageCheck,
   Pencil,
+  Search,
   Trash2,
   Truck,
   Warehouse,
@@ -48,6 +51,47 @@ function formatPhoneNumber(value) {
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+function normalizeOrderSearch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function matchesOrderSearch(build, query) {
+  const trimmedQuery = String(query || "").trim().toLowerCase();
+
+  if (!trimmedQuery) {
+    return true;
+  }
+
+  const items = [...getWaitingItems(build), ...getStockItems(build)];
+  const searchableValues = [
+    build.orderNumber,
+    build.businessName,
+    build.customerName,
+    build.phoneNumber,
+    build.deliveryAddress,
+    ...items.flatMap((item) => [
+      item.itemNumber,
+      item.description,
+      item.vendor,
+      item.poNumber,
+    ]),
+  ];
+  const searchableText = searchableValues
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const collapsedText = normalizeOrderSearch(searchableText);
+  const queryTokens = trimmedQuery.split(/\s+/).filter(Boolean);
+
+  return queryTokens.every(
+    (token) =>
+      searchableText.includes(token) ||
+      collapsedText.includes(normalizeOrderSearch(token)),
+  );
 }
 
 function createEditDraft(build, deliveries) {
@@ -344,6 +388,8 @@ export default function OrderBuildsPage({
   const [editDraft, setEditDraft] = useState(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedBuildIds, setExpandedBuildIds] = useState(() => new Set());
   const lifecycleBuilds = builds.map((build) => ({
     build,
     lifecycle: getOrderLifecycle(
@@ -364,18 +410,35 @@ export default function OrderBuildsPage({
   const archivedBuilds = lifecycleBuilds.filter(
     ({ build }) => build.archived || build.status === "archived",
   );
-  const visibleBuilds =
+  const viewBuilds =
     activeView === "archived"
       ? archivedBuilds
       : activeView === "completed"
         ? completedBuilds
         : openBuilds;
+  const visibleBuilds = viewBuilds.filter(({ build }) =>
+    matchesOrderSearch(build, searchQuery),
+  );
   const isArchivedView = activeView === "archived";
   const isCompletedView = activeView === "completed";
 
   function openEditor(build) {
     setEditDraft(createEditDraft(build, deliveries));
     setEditError("");
+  }
+
+  function toggleBuild(buildId) {
+    setExpandedBuildIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+
+      if (nextIds.has(buildId)) {
+        nextIds.delete(buildId);
+      } else {
+        nextIds.add(buildId);
+      }
+
+      return nextIds;
+    });
   }
 
   function updateDraftItem(section, itemIndex, field, value) {
@@ -487,19 +550,40 @@ export default function OrderBuildsPage({
         </button>
       </div>
 
+      <div className="relative mb-5">
+        <Search
+          className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+          aria-hidden="true"
+        />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search order #, customer, PO, vendor, item #, or description..."
+          className="h-14 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-28 text-base font-bold text-slate-950 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-50"
+        />
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black uppercase tracking-[0.1em] text-slate-400">
+          {visibleBuilds.length} found
+        </span>
+      </div>
+
       <div className="grid gap-3">
         {visibleBuilds.length === 0 ? (
           <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center">
             <Warehouse className="mx-auto h-8 w-8 text-slate-300" aria-hidden="true" />
             <p className="mt-3 text-xl font-black text-slate-950">
-              {isArchivedView
+              {searchQuery.trim()
+                ? "No orders match that search"
+                : isArchivedView
                 ? "No archived orders"
                 : isCompletedView
                   ? "No completed orders yet"
                   : "No open orders yet"}
             </p>
             <p className="mt-1 text-sm font-bold text-slate-500">
-              {isArchivedView
+              {searchQuery.trim()
+                ? "Try an order number, customer, PO, vendor, item number, or description."
+                : isArchivedView
                 ? "Orders archived with the protected action code will appear here."
                 : isCompletedView
                   ? "Orders will move here when their PO and customer handoff workflow is finished."
@@ -510,97 +594,84 @@ export default function OrderBuildsPage({
           visibleBuilds.map(({ build, lifecycle }) => {
             const waitingItems = getWaitingItems(build);
             const stockItems = getStockItems(build);
+            const isExpanded = expandedBuildIds.has(build.id);
 
             return (
               <article
                 key={build.id}
-                className="rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm"
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                      Order {build.orderNumber || "No order #"}
-                    </p>
-                    <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
-                      {build.businessName || build.customerName || "No customer"}
-                    </h2>
-                    <p className="mt-1 text-sm font-bold text-slate-500">
-                      {build.customerName || "No contact"}
-                      {build.phoneNumber ? ` · ${build.phoneNumber}` : ""}
-                    </p>
-                    {isArchivedView ? (
-                      <p className="mt-2 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                        Archived {formatArchivedDate(build.archivedAt) || "previously"}
-                        {build.archivedBy?.name
-                          ? ` by ${build.archivedBy.name}`
-                          : ""}
+                <div className="flex items-stretch gap-2 p-3 sm:p-4">
+                  <button
+                    type="button"
+                    onClick={() => toggleBuild(build.id)}
+                    className="flex min-w-0 flex-1 flex-col gap-3 text-left sm:flex-row sm:items-center"
+                    aria-expanded={isExpanded}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <p className="text-sm font-black uppercase tracking-[0.12em] text-[#FC2C38]">
+                          Order {build.orderNumber || "No order #"}
+                        </p>
+                        <h2 className="truncate text-lg font-black tracking-tight text-slate-950">
+                          {build.businessName || build.customerName || "No customer"}
+                        </h2>
+                      </div>
+                      <p className="mt-1 truncate text-xs font-bold text-slate-500 sm:text-sm">
+                        {build.customerName || "No contact"}
+                        {build.phoneNumber ? ` · ${build.phoneNumber}` : ""}
+                        {` · ${waitingItems.length} PO item${waitingItems.length === 1 ? "" : "s"}`}
+                        {` · ${stockItems.length} stock`}
                       </p>
-                    ) : null}
-                    {isCompletedView ? (
-                      <p className="mt-2 text-xs font-black uppercase tracking-[0.12em] text-emerald-600">
-                        Completed {formatArchivedDate(lifecycle.completedAt) || "from linked workflow"}
-                      </p>
-                    ) : null}
-                  </div>
+                    </div>
 
-                  <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-                    <span
-                      className={`rounded-2xl px-4 py-2 text-center text-sm font-black ${
-                        lifecycle.complete
-                          ? "bg-emerald-50 text-emerald-800"
-                          : lifecycle.pendingCount > 0
-                            ? "bg-amber-50 text-amber-800"
-                            : "bg-blue-50 text-blue-800"
-                      }`}
-                    >
-                      {lifecycle.label}
-                    </span>
-                    <span className="rounded-2xl bg-emerald-50 px-4 py-2 text-center text-sm font-black text-emerald-800">
-                      {stockItems.length} stock
-                    </span>
-                    {!isArchivedView && lifecycle.canMarkComplete ? (
-                      <button
-                        type="button"
-                        onClick={() => onCompleteOrder?.(build.id)}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-black text-white transition hover:bg-emerald-700"
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-3 py-1.5 text-center text-xs font-black ${
+                          lifecycle.complete
+                            ? "bg-emerald-50 text-emerald-800"
+                            : lifecycle.pendingCount > 0
+                              ? "bg-amber-50 text-amber-800"
+                              : "bg-blue-50 text-blue-800"
+                        }`}
                       >
-                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                        Mark Picked Up
-                      </button>
-                    ) : null}
-                    {!isArchivedView && !isCompletedView ? (
-                      <button
-                        type="button"
-                        onClick={() => openEditor(build)}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white transition hover:bg-slate-800"
-                      >
-                        <Pencil className="h-4 w-4" aria-hidden="true" />
-                        Edit
-                      </button>
-                    ) : null}
-                    {!isArchivedView ? (
-                      <button
-                        type="button"
-                        onClick={() => onArchiveOrder?.(build.id)}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
-                      >
-                        <Archive className="h-4 w-4" aria-hidden="true" />
-                        Archive
-                      </button>
-                    ) : null}
+                        {lifecycle.label}
+                      </span>
+                      {isArchivedView ? (
+                        <span className="text-xs font-black text-slate-400">
+                          Archived {formatArchivedDate(build.archivedAt) || "previously"}
+                        </span>
+                      ) : null}
+                      {isCompletedView ? (
+                        <span className="text-xs font-black text-emerald-600">
+                          Completed {formatArchivedDate(lifecycle.completedAt) || "from workflow"}
+                        </span>
+                      ) : null}
+                      {isExpanded ? (
+                        <ChevronUp className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5 text-slate-400" aria-hidden="true" />
+                      )}
+                    </div>
+                  </button>
+
+                  {!isArchivedView && !isCompletedView ? (
                     <button
                       type="button"
-                      onClick={() => onDeleteOrder?.(build.id)}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-200 bg-white px-4 py-2 text-sm font-black text-[#FC2C38] transition hover:bg-red-50"
+                      onClick={() => openEditor(build)}
+                      aria-label={`Edit order ${build.orderNumber || "details"}`}
+                      className="inline-flex shrink-0 items-center justify-center gap-2 self-center rounded-xl bg-slate-950 px-3 py-2 text-sm font-black text-white transition hover:bg-slate-800 sm:px-4"
                     >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      Delete
+                      <Pencil className="h-4 w-4" aria-hidden="true" />
+                      <span className="hidden sm:inline">Edit</span>
                     </button>
-                  </div>
+                  ) : null}
                 </div>
 
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-3xl border border-amber-100 bg-amber-50/40 p-4">
+                {isExpanded ? (
+                  <div className="border-t border-slate-100 p-3 sm:p-4">
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-3xl border border-amber-100 bg-amber-50/40 p-4">
                     <div className="flex items-center gap-2 text-amber-800">
                       <Truck className="h-5 w-5" aria-hidden="true" />
                       <p className="text-sm font-black uppercase tracking-[0.12em]">
@@ -695,6 +766,38 @@ export default function OrderBuildsPage({
                     </div>
                   </div>
                 </div>
+                    <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+                      {!isArchivedView && lifecycle.canMarkComplete ? (
+                        <button
+                          type="button"
+                          onClick={() => onCompleteOrder?.(build.id)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white transition hover:bg-emerald-700"
+                        >
+                          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                          Mark Picked Up
+                        </button>
+                      ) : null}
+                      {!isArchivedView ? (
+                        <button
+                          type="button"
+                          onClick={() => onArchiveOrder?.(build.id)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950"
+                        >
+                          <Archive className="h-4 w-4" aria-hidden="true" />
+                          Archive
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => onDeleteOrder?.(build.id)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-black text-[#FC2C38] transition hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </article>
             );
           })
