@@ -7823,6 +7823,7 @@ export default function App() {
         return (
           <DeliveryRoutePlannerPage
             onPageChange={navigateToPage}
+            deliveries={deliveries}
             driverOptions={deliveryDriverOptions}
             currentDriverName={driverName}
             canShareRoute={canShareDeliveryRoutes}

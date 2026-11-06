@@ -38,6 +38,7 @@ const ROUTE_STOPS_STORAGE_KEY = "dispatch-cl-delivery-route-stops";
 const MAX_ROUTE_STOPS = 10;
 const DEFAULT_SERVICE_TYPE = "small";
 const EMPTY_DRIVER_OPTIONS = /** @type {string[]} */ ([]);
+const EMPTY_DELIVERIES = /** @type {Array<Record<string, any>>} */ ([]);
 const STOP_SERVICE_OPTIONS = [
   { id: "small", label: "Small delivery", minutes: 35 },
   { id: "large", label: "Large delivery", minutes: 75 },
@@ -202,6 +203,51 @@ function getLocalDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function getDeliveryDateKey(value) {
+  const rawValue = String(value || "").trim();
+
+  if (!rawValue) {
+    return "";
+  }
+
+  const dateOnlyMatch = rawValue.match(/^\d{4}-\d{2}-\d{2}/);
+
+  if (dateOnlyMatch) {
+    return dateOnlyMatch[0];
+  }
+
+  const date = new Date(rawValue);
+
+  return Number.isNaN(date.getTime()) ? "" : getLocalDateKey(date);
+}
+
+function normalizeStopAddress(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+function isDeliveryComplete(delivery) {
+  return Boolean(
+    delivery?.status === "complete" ||
+      delivery?.completedAt ||
+      delivery?.deliveredAt,
+  );
+}
+
+function getDeliveryServiceType(delivery) {
+  if (delivery?.deliveryType === "return") {
+    return "return";
+  }
+
+  const estimatedMinutes = Number(delivery?.estimatedDurationMinutes);
+
+  return Number.isFinite(estimatedMinutes) && estimatedMinutes >= 60
+    ? "large"
+    : "small";
+}
+
 function formatRouteDate(dateKey) {
   if (!dateKey) {
     return "Shared route";
@@ -242,6 +288,7 @@ function withTimeout(promise, timeoutMs, message) {
 
 export default function DeliveryRoutePlannerPage({
   onPageChange,
+  deliveries = EMPTY_DELIVERIES,
   driverOptions = EMPTY_DRIVER_OPTIONS,
   currentDriverName = "",
   canShareRoute = false,
@@ -320,6 +367,43 @@ export default function DeliveryRoutePlannerPage({
         ),
     [driverOptions],
   );
+  const todaysDeliveries = useMemo(() => {
+    const todayKey = getLocalDateKey();
+
+    return deliveries
+      .filter(
+        (delivery) =>
+          getDeliveryDateKey(delivery?.deliveryDate) === todayKey &&
+          !isDeliveryComplete(delivery),
+      )
+      .sort((firstDelivery, secondDelivery) =>
+        String(firstDelivery?.deliveryTimeSlot || "").localeCompare(
+          String(secondDelivery?.deliveryTimeSlot || ""),
+        ),
+      );
+  }, [deliveries]);
+  const todayDeliveriesMissingAddress = todaysDeliveries.filter(
+    (delivery) => !String(delivery?.address || "").trim(),
+  ).length;
+  const importableTodayDeliveries = useMemo(() => {
+    const savedDeliveryIds = new Set(
+      stops.map((stop) => String(stop.deliveryId || "")).filter(Boolean),
+    );
+    const savedAddresses = new Set(
+      stops.map((stop) => normalizeStopAddress(stop.address)).filter(Boolean),
+    );
+
+    return todaysDeliveries.filter((delivery) => {
+      const deliveryId = String(delivery?.id || "");
+      const normalizedAddress = normalizeStopAddress(delivery?.address);
+
+      return (
+        normalizedAddress &&
+        (!deliveryId || !savedDeliveryIds.has(deliveryId)) &&
+        !savedAddresses.has(normalizedAddress)
+      );
+    });
+  }, [stops, todaysDeliveries]);
 
   useEffect(() => {
     try {
@@ -593,6 +677,46 @@ export default function DeliveryRoutePlannerPage({
     setAddress("");
     setStopServiceType(DEFAULT_SERVICE_TYPE);
     setError("");
+  }
+
+  function addTodaysDeliveries() {
+    const availableStopCount = Math.max(0, MAX_ROUTE_STOPS - stops.length);
+    const deliveriesToAdd = importableTodayDeliveries.slice(
+      0,
+      availableStopCount,
+    );
+
+    if (deliveriesToAdd.length === 0) {
+      setError(
+        importableTodayDeliveries.length > 0
+          ? `This quick route supports up to ${MAX_ROUTE_STOPS} stops.`
+          : "Today’s addressed deliveries are already on this route.",
+      );
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+
+    setStops((currentStops) => [
+      ...currentStops,
+      ...deliveriesToAdd.map((delivery) => ({
+        id: createId(),
+        deliveryId: delivery.id || "",
+        orderNumber: delivery.orderNumber || "",
+        customerName: delivery.customerName || delivery.contactName || "",
+        address: String(delivery.address || "").trim(),
+        serviceType: getDeliveryServiceType(delivery),
+        createdAt,
+      })),
+    ]);
+
+    if (deliveriesToAdd.length < importableTodayDeliveries.length) {
+      setError(
+        `Added ${deliveriesToAdd.length} deliveries. This quick route supports up to ${MAX_ROUTE_STOPS} stops.`,
+      );
+    } else {
+      setError("");
+    }
   }
 
   function updateStopServiceType(stopId, serviceType) {
@@ -1015,6 +1139,44 @@ export default function DeliveryRoutePlannerPage({
             </div>
 
             {!isReadOnlyDriverView ? (
+            <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                    Today’s deliveries
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-slate-700">
+                    {todaysDeliveries.length === 0
+                      ? "No open deliveries are scheduled for today."
+                      : `${todaysDeliveries.length} open ${todaysDeliveries.length === 1 ? "delivery" : "deliveries"} scheduled today.`}
+                  </p>
+                  {todayDeliveriesMissingAddress > 0 ? (
+                    <p className="mt-1 text-xs font-bold text-amber-700">
+                      {todayDeliveriesMissingAddress} {todayDeliveriesMissingAddress === 1 ? "delivery needs" : "deliveries need"} an address before it can be added.
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={addTodaysDeliveries}
+                  disabled={
+                    importableTodayDeliveries.length === 0 ||
+                    stops.length >= MAX_ROUTE_STOPS
+                  }
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-200 disabled:text-blue-500"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  {importableTodayDeliveries.length > 0
+                    ? `Add ${importableTodayDeliveries.length} to route`
+                    : todaysDeliveries.length > 0
+                      ? "Today is already added"
+                      : "No deliveries to add"}
+                </button>
+              </div>
+            </div>
+            ) : null}
+
+            {!isReadOnlyDriverView ? (
             <form onSubmit={handleAddStop} className="mt-5">
               <label
                 htmlFor="route-planner-address"
@@ -1165,6 +1327,12 @@ export default function DeliveryRoutePlannerPage({
                       {stopIndex + 1}
                     </span>
                     <div className="min-w-0 flex-1">
+                      {stop.orderNumber || stop.customerName ? (
+                        <p className="truncate text-xs font-black uppercase tracking-[0.12em] text-blue-700">
+                          {stop.orderNumber ? `Order ${stop.orderNumber}` : "Delivery"}
+                          {stop.customerName ? ` · ${stop.customerName}` : ""}
+                        </p>
+                      ) : null}
                       <p className="text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38]">
                         {getDeliveryArea(stop.address)}
                       </p>
