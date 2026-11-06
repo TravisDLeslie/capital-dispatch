@@ -107,6 +107,10 @@ function formatDeliveryTypeLabel(value) {
   return "Standard";
 }
 
+function isReturnDelivery(delivery) {
+  return delivery?.deliveryType === "return" || delivery?.routeStopType === "returnPickup";
+}
+
 function formatForkliftLabel(value) {
   if (value === "donkey") {
     return "Donkey 5000 lbs";
@@ -720,6 +724,7 @@ function MobileDeliveryFlowCard({
   isFocusedDriverView = false,
 }) {
   const deliveryCardRef = useRef(null);
+  const isReturn = isReturnDelivery(delivery);
   const [loadedDeliveryKeys, setLoadedDeliveryKeys] = useState({});
   const items = Array.isArray(delivery.items) ? delivery.items : [];
   const deliveryOrderDocuments = getDeliveryOrderDocuments(delivery);
@@ -732,10 +737,16 @@ function MobileDeliveryFlowCard({
     deliveryStep === 1
       ? "EN ROUTE"
       : deliveryStep === 2
-        ? "COMPLETE DELIVERY"
+        ? isReturn
+          ? "COMPLETE RETURN PICKUP"
+          : "COMPLETE DELIVERY"
         : deliveryStep === 3
-          ? "DELIVERY COMPLETE"
-          : "TODAY'S DELIVERY";
+          ? isReturn
+            ? "RETURN PICKUP COMPLETE"
+            : "DELIVERY COMPLETE"
+          : isReturn
+            ? "TODAY'S RETURN PICKUP"
+            : "TODAY'S DELIVERY";
 
   function scrollDeliveryCardIntoView() {
     window.requestAnimationFrame(() => {
@@ -789,7 +800,7 @@ function MobileDeliveryFlowCard({
             {Math.min(deliveryIndex + 1, deliveryCount)} of {deliveryCount}
           </p>
           <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-            Deliveries
+            Route Stops
           </p>
         </div>
 
@@ -1035,7 +1046,7 @@ function MobileDeliveryFlowCard({
 
             <section>
               <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-900">
-                Delivery Instructions
+                {isReturn ? "Return Pickup Instructions" : "Delivery Instructions"}
               </p>
               <p className="mt-2 text-base font-semibold leading-6 text-slate-900">
                 {deliveryLocationNotes ||
@@ -1085,7 +1096,9 @@ function MobileDeliveryFlowCard({
                 </span>
               </div>
               <p className="mt-2 text-sm font-semibold text-slate-600">
-                Take a photo of the delivered material.
+                {isReturn
+                  ? "Take a photo of the material being picked up."
+                  : "Take a photo of the delivered material."}
               </p>
 
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1237,7 +1250,9 @@ function MobileDeliveryFlowCard({
                 Condition
               </p>
               <p className="mt-2 text-sm font-semibold text-slate-700">
-                Was everything delivered in good condition?
+                {isReturn
+                  ? "Was the returned material picked up in the expected condition?"
+                  : "Was everything delivered in good condition?"}
               </p>
               <button
                 type="button"
@@ -1265,7 +1280,7 @@ function MobileDeliveryFlowCard({
                 <CheckCircle2 className="h-14 w-14" aria-hidden="true" />
               </div>
               <h2 className="mt-5 text-2xl font-black text-slate-950">
-                Delivery Complete!
+                {isReturn ? "Return Pickup Complete!" : "Delivery Complete!"}
               </h2>
               <p className="mt-2 text-base font-semibold text-slate-700">
                 Thank you. Great job.
@@ -1274,7 +1289,7 @@ function MobileDeliveryFlowCard({
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-900">
-                Delivery Summary
+                {isReturn ? "Return Pickup Summary" : "Delivery Summary"}
               </p>
               <div className="mt-4 space-y-3 text-sm">
                 <div className="flex justify-between gap-4">
@@ -1314,7 +1329,7 @@ function MobileDeliveryFlowCard({
               disabled={isUpdating}
               className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#FC2C38] px-4 py-4 text-sm font-black uppercase tracking-[0.04em] text-white shadow-sm disabled:opacity-60"
             >
-              Complete Delivery
+              {isReturn ? "Complete Return Pickup" : "Complete Delivery"}
               <ArrowRight className="h-5 w-5" aria-hidden="true" />
             </button>
           </>

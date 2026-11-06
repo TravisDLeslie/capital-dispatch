@@ -191,6 +191,10 @@ function getDeliveryLocationLabel(delivery) {
   return cityMatch?.[1] || address || "Delivery stop";
 }
 
+function isReturnDelivery(delivery) {
+  return delivery?.deliveryType === "return" || delivery?.routeStopType === "returnPickup";
+}
+
 function getDriverOptions(employeeOptions) {
   return [
     ...new Set(
@@ -317,9 +321,11 @@ function DriverRouteOverview({
         title={nextDelivery?.customerName || "No Delivery Route"}
         primary={
           openDeliveries.length > 0
-            ? `${openDeliveries.length} ${
-                openDeliveries.length === 1 ? "delivery" : "deliveries"
-              } assigned`
+            ? isReturnDelivery(nextDelivery)
+              ? `Next stop: return pickup`
+              : `${openDeliveries.length} ${
+                  openDeliveries.length === 1 ? "delivery" : "deliveries"
+                } assigned`
             : "Nothing assigned"
         }
         secondary={
