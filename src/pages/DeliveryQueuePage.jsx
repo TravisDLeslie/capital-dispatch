@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   Camera,
   CalendarDays,
   CheckCircle2,
@@ -12,6 +14,7 @@ import {
   Edit3,
   ExternalLink,
   FileText,
+  GripVertical,
   Images,
   MapPin,
   MessageSquare,
@@ -283,6 +286,19 @@ function sortDeliveriesBySchedule(deliveries) {
       String(secondDelivery.orderNumber || ""),
     );
   });
+}
+
+function getDeliveryRouteDateKey(delivery) {
+  return String(delivery?.deliveryDate || "").slice(0, 10) || "unscheduled";
+}
+
+function getSameDayRouteDeliveries(deliveries, delivery) {
+  const routeDateKey = getDeliveryRouteDateKey(delivery);
+
+  return sortDeliveriesBySchedule(deliveries).filter(
+    (currentDelivery) =>
+      getDeliveryRouteDateKey(currentDelivery) === routeDateKey,
+  );
 }
 
 function deliveryHasDriver(delivery, driverName) {
@@ -1473,6 +1489,9 @@ export default function DeliveryQueuePage({
   const [deliveryStepKeys, setDeliveryStepKeys] = useState({});
   const [pendingDriverSelections, setPendingDriverSelections] = useState({});
   const [activeDriverDeliveryId, setActiveDriverDeliveryId] = useState("");
+  const [draggingDeliveryId, setDraggingDeliveryId] = useState("");
+  const [dragOverDeliveryId, setDragOverDeliveryId] = useState("");
+  const [reorderingRouteId, setReorderingRouteId] = useState("");
 
   const openDeliveries = sortDeliveriesBySchedule(
     deliveries.filter(
@@ -1538,6 +1557,201 @@ export default function DeliveryQueuePage({
 
   function isDriverOpen(driver) {
     return openDriverKeys[driver] !== false;
+  }
+
+  async function saveRouteOrder(routeDeliveries, activeDeliveryId) {
+    setError("");
+    setReorderingRouteId(activeDeliveryId);
+
+    try {
+      for (const [routeIndex, routeDelivery] of routeDeliveries.entries()) {
+        const nextRouteOrder = routeIndex + 1;
+
+        if (Number(routeDelivery.deliveryRouteOrder) === nextRouteOrder) {
+          continue;
+        }
+
+        await onUpdateDelivery(routeDelivery.id, {
+          deliveryRouteOrder: nextRouteOrder,
+        });
+      }
+    } catch (updateError) {
+      console.error("Unable to reorder driver deliveries:", updateError);
+      setError("Unable to save that delivery order. Try again.");
+    } finally {
+      setReorderingRouteId("");
+      setDraggingDeliveryId("");
+      setDragOverDeliveryId("");
+    }
+  }
+
+  async function handleMoveDelivery(driverDeliveries, delivery, direction) {
+    if (!canEditDeliveries || reorderingRouteId) {
+      return;
+    }
+
+    const routeDeliveries = getSameDayRouteDeliveries(
+      driverDeliveries,
+      delivery,
+    );
+    const currentIndex = routeDeliveries.findIndex(
+      (routeDelivery) => routeDelivery.id === delivery.id,
+    );
+    const nextIndex = currentIndex + direction;
+
+    if (
+      currentIndex < 0 ||
+      nextIndex < 0 ||
+      nextIndex >= routeDeliveries.length
+    ) {
+      return;
+    }
+
+    const nextRouteDeliveries = [...routeDeliveries];
+    const [movedDelivery] = nextRouteDeliveries.splice(currentIndex, 1);
+
+    nextRouteDeliveries.splice(nextIndex, 0, movedDelivery);
+    await saveRouteOrder(nextRouteDeliveries, delivery.id);
+  }
+
+  async function handleDropDelivery(
+    driverDeliveries,
+    targetDelivery,
+  ) {
+    if (
+      !canEditDeliveries ||
+      !draggingDeliveryId ||
+      draggingDeliveryId === targetDelivery.id ||
+      reorderingRouteId
+    ) {
+      setDraggingDeliveryId("");
+      setDragOverDeliveryId("");
+      return;
+    }
+
+    const draggedDelivery = driverDeliveries.find(
+      (delivery) => delivery.id === draggingDeliveryId,
+    );
+
+    if (!draggedDelivery) {
+      setDraggingDeliveryId("");
+      setDragOverDeliveryId("");
+      return;
+    }
+
+    if (
+      getDeliveryRouteDateKey(draggedDelivery) !==
+      getDeliveryRouteDateKey(targetDelivery)
+    ) {
+      setError("Deliveries can only be reordered within the same delivery date.");
+      setDraggingDeliveryId("");
+      setDragOverDeliveryId("");
+      return;
+    }
+
+    const routeDeliveries = getSameDayRouteDeliveries(
+      driverDeliveries,
+      draggedDelivery,
+    );
+    const draggedIndex = routeDeliveries.findIndex(
+      (delivery) => delivery.id === draggedDelivery.id,
+    );
+    const targetIndex = routeDeliveries.findIndex(
+      (delivery) => delivery.id === targetDelivery.id,
+    );
+
+    if (draggedIndex < 0 || targetIndex < 0) {
+      return;
+    }
+
+    const nextRouteDeliveries = [...routeDeliveries];
+    const [movedDelivery] = nextRouteDeliveries.splice(draggedIndex, 1);
+
+    nextRouteDeliveries.splice(targetIndex, 0, movedDelivery);
+    await saveRouteOrder(nextRouteDeliveries, draggedDelivery.id);
+  }
+
+  function renderRouteOrderControls(
+    driverDeliveries,
+    delivery,
+    { allowDrag = false, compact = false } = {},
+  ) {
+    if (!canEditDeliveries) {
+      return null;
+    }
+
+    const routeDeliveries = getSameDayRouteDeliveries(
+      driverDeliveries,
+      delivery,
+    );
+    const routeIndex = routeDeliveries.findIndex(
+      (routeDelivery) => routeDelivery.id === delivery.id,
+    );
+    const isReordering = Boolean(reorderingRouteId);
+    const controlClassName = compact
+      ? "h-9 w-9 rounded-lg"
+      : "h-11 w-11 rounded-xl";
+
+    return (
+      <div
+        className="flex items-center gap-1.5"
+        aria-label={`Route order controls for order ${delivery.orderNumber}`}
+      >
+        {!compact ? (
+          <span className="mr-1 whitespace-nowrap text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+            Stop {routeIndex + 1} of {routeDeliveries.length}
+          </span>
+        ) : null}
+
+        {allowDrag ? (
+          <button
+            type="button"
+            draggable={!isReordering}
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", delivery.id);
+              setDraggingDeliveryId(delivery.id);
+            }}
+            onDragEnd={() => {
+              setDraggingDeliveryId("");
+              setDragOverDeliveryId("");
+            }}
+            disabled={isReordering}
+            className={`hidden ${controlClassName} cursor-grab items-center justify-center border border-slate-300 bg-white text-slate-500 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40 lg:flex`}
+            aria-label={`Drag order ${delivery.orderNumber} to a new stop position`}
+            title="Drag to reorder"
+          >
+            <GripVertical className="h-5 w-5" aria-hidden="true" />
+          </button>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => handleMoveDelivery(driverDeliveries, delivery, -1)}
+          disabled={routeIndex <= 0 || isReordering}
+          className={`flex ${controlClassName} items-center justify-center border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30`}
+          aria-label={`Move order ${delivery.orderNumber} up one stop`}
+          title="Move up"
+        >
+          <ArrowUp className="h-4 w-4" aria-hidden="true" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleMoveDelivery(driverDeliveries, delivery, 1)}
+          disabled={
+            routeIndex < 0 ||
+            routeIndex >= routeDeliveries.length - 1 ||
+            isReordering
+          }
+          className={`flex ${controlClassName} items-center justify-center border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30`}
+          aria-label={`Move order ${delivery.orderNumber} down one stop`}
+          title="Move down"
+        >
+          <ArrowDown className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+    );
   }
 
   function toggleDelivery(deliveryId) {
@@ -2107,7 +2321,53 @@ export default function DeliveryQueuePage({
                   );
 
                   return (
-                    <div key={delivery.id}>
+                    <div
+                      key={delivery.id}
+                      onDragOver={(event) => {
+                        if (!canEditDeliveries || !draggingDeliveryId) {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                        setDragOverDeliveryId(delivery.id);
+                      }}
+                      onDragLeave={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget)) {
+                          setDragOverDeliveryId("");
+                        }
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        handleDropDelivery(
+                          driverGroup.deliveries,
+                          delivery,
+                        );
+                      }}
+                      className={`rounded-2xl transition-all ${
+                        dragOverDeliveryId === delivery.id &&
+                        draggingDeliveryId !== delivery.id
+                          ? "ring-4 ring-blue-200 ring-offset-2"
+                          : ""
+                      } ${
+                        draggingDeliveryId === delivery.id
+                          ? "opacity-60"
+                          : ""
+                      }`}
+                    >
+                      {canEditDeliveries ? (
+                        <div className="mb-2 flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 lg:hidden">
+                          <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                            Route order
+                          </span>
+                          {renderRouteOrderControls(
+                            driverGroup.deliveries,
+                            delivery,
+                            { compact: true },
+                          )}
+                        </div>
+                      ) : null}
+
                       <MobileDeliveryFlowCard
                         delivery={delivery}
                         deliveryIndex={deliveryIndex}
@@ -2236,6 +2496,12 @@ export default function DeliveryQueuePage({
                         </button>
 
                         <div className="flex flex-col gap-2 sm:flex-row lg:items-start">
+                          {renderRouteOrderControls(
+                            driverGroup.deliveries,
+                            delivery,
+                            { allowDrag: true },
+                          )}
+
                           <button
                             type="button"
                             onClick={() => toggleDelivery(delivery.id)}
