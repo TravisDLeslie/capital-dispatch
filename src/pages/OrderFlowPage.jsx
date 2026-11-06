@@ -211,6 +211,21 @@ const unloadTypes = [
   },
 ];
 
+const returnLoadTypes = [
+  {
+    id: "Hand unload",
+    label: "Hand Load",
+    description: "Load the return by hand",
+    icon: Hand,
+  },
+  {
+    id: "Forklift",
+    label: "Forklift",
+    description: "A forklift is needed at pickup",
+    icon: Truck,
+  },
+];
+
 const handoffOptions = [
   {
     id: "willCall",
@@ -232,6 +247,13 @@ const handoffOptions = [
     description: "Customer picks up from our supplier.",
     icon: Package,
     tone: "bg-amber-50 text-amber-700",
+  },
+  {
+    id: "return",
+    label: "Return",
+    description: "Pick up returned material and bring it back to Capital Lumber.",
+    icon: ArrowLeft,
+    tone: "bg-violet-50 text-violet-700",
   },
 ];
 
@@ -514,6 +536,18 @@ function formatOrderNumberInput(value) {
   return `${digitsOnly.slice(0, 3)}-${digitsOnly.slice(3)}`;
 }
 
+function createReturnOrderNumber() {
+  const randomValues = new Uint32Array(1);
+
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(randomValues);
+  } else {
+    randomValues[0] = Math.floor(Math.random() * 1_000_000);
+  }
+
+  return `R${String(randomValues[0] % 1_000_000).padStart(6, "0")}`;
+}
+
 function formatPhoneInput(value) {
   const digitsOnly = String(value || "").replace(/\D/g, "").slice(0, 10);
   const area = digitsOnly.slice(0, 3);
@@ -672,6 +706,7 @@ export default function OrderFlowPage({
   const [hasHardware, setHasHardware] = useState(false);
   const [needsTarp, setNeedsTarp] = useState(false);
   const [unloadType, setUnloadType] = useState("Forklift");
+  const [returnLoadType, setReturnLoadType] = useState("Hand unload");
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
@@ -731,6 +766,10 @@ export default function OrderFlowPage({
   const selectedUnloadType =
     unloadTypes.find((option) => option.id === unloadType) || unloadTypes[0];
   const SelectedUnloadIcon = selectedUnloadType.icon;
+  const selectedReturnLoadType =
+    returnLoadTypes.find((option) => option.id === returnLoadType) ||
+    returnLoadTypes[0];
+  const SelectedReturnLoadIcon = selectedReturnLoadType.icon;
   const routeMapUrl = createGoogleMapsRouteUrl(deliveryAddress);
   const selectedHandoff = getHandoffOption(orderMethod);
   const SelectedHandoffIcon = selectedHandoff.icon;
@@ -758,11 +797,12 @@ export default function OrderFlowPage({
       }),
     [items],
   );
+  const isReturnOrder = orderEntryMode === "return";
   const canProcessOrder = Boolean(
-    orderNumber &&
+    (isReturnOrder ? /^R\d{6}$/.test(orderNumber) : orderNumber) &&
       customerName &&
       savedItems.length > 0 &&
-      (orderMethod !== "delivery" || deliveryAddress),
+      (!["delivery", "return"].includes(orderMethod) || deliveryAddress),
   );
   const validStockItems = useMemo(
     () =>
@@ -939,12 +979,12 @@ export default function OrderFlowPage({
   function addItem() {
     const previousItem = items[items.length - 1];
     const nextItem = createBlankItem({
-      path: previousItem?.path || "supplierDelivery",
-      poNumber: previousItem?.poNumber || "",
-      vendor: previousItem?.vendor || "",
-      supplierAddress: previousItem?.supplierAddress || "",
-      routeDate: previousItem?.routeDate || "",
-      supplierDate: previousItem?.supplierDate || "",
+      path: isReturnOrder ? "inStock" : previousItem?.path || "supplierDelivery",
+      poNumber: isReturnOrder ? "" : previousItem?.poNumber || "",
+      vendor: isReturnOrder ? "" : previousItem?.vendor || "",
+      supplierAddress: isReturnOrder ? "" : previousItem?.supplierAddress || "",
+      routeDate: isReturnOrder ? "" : previousItem?.routeDate || "",
+      supplierDate: isReturnOrder ? "" : previousItem?.supplierDate || "",
     });
 
     setItems((currentItems) => [...currentItems, nextItem]);
@@ -968,15 +1008,27 @@ export default function OrderFlowPage({
         ? nextItems
         : [
             createBlankItem({
-              path: currentItems[currentItems.length - 1]?.path || "supplierDelivery",
-              poNumber: currentItems[currentItems.length - 1]?.poNumber || "",
-              vendor: currentItems[currentItems.length - 1]?.vendor || "",
+              path: isReturnOrder
+                ? "inStock"
+                : currentItems[currentItems.length - 1]?.path || "supplierDelivery",
+              poNumber: isReturnOrder
+                ? ""
+                : currentItems[currentItems.length - 1]?.poNumber || "",
+              vendor: isReturnOrder
+                ? ""
+                : currentItems[currentItems.length - 1]?.vendor || "",
               supplierAddress:
-                currentItems[currentItems.length - 1]?.supplierAddress || "",
+                isReturnOrder
+                  ? ""
+                  : currentItems[currentItems.length - 1]?.supplierAddress || "",
               routeDate:
-                currentItems[currentItems.length - 1]?.routeDate || "",
+                isReturnOrder
+                  ? ""
+                  : currentItems[currentItems.length - 1]?.routeDate || "",
               supplierDate:
-                currentItems[currentItems.length - 1]?.supplierDate || "",
+                isReturnOrder
+                  ? ""
+                  : currentItems[currentItems.length - 1]?.supplierDate || "",
             }),
           ];
     });
@@ -1136,7 +1188,7 @@ export default function OrderFlowPage({
   }
 
   function buildOrderPayload() {
-    const isDeliveryOrder = orderMethod === "delivery";
+    const isDeliveryOrder = ["delivery", "return"].includes(orderMethod);
 
     return {
       orderNumber,
@@ -1146,19 +1198,50 @@ export default function OrderFlowPage({
       accountNumber,
       customerId: linkedCustomerAccount?.customerId || "",
       customerAccountType: linkedCustomerAccount?.accountType || "",
+      orderKind: isReturnOrder ? "return" : "customer",
       orderMethod,
       deliveryAddress,
       deliveryDate,
       deliveryTitle,
-      hasHardware: isDeliveryOrder ? hasHardware : false,
-      needsTarp: isDeliveryOrder ? needsTarp : false,
-      unloadType: isDeliveryOrder ? unloadType : "",
+      hasHardware: isReturnOrder ? false : isDeliveryOrder ? hasHardware : false,
+      needsTarp: isReturnOrder ? false : isDeliveryOrder ? needsTarp : false,
+      unloadType: isReturnOrder ? returnLoadType : isDeliveryOrder ? unloadType : "",
       deliveryNotes: isDeliveryOrder ? deliveryNotes : "",
       routeEta: isDeliveryOrder ? routeEta : null,
       routeEtaStatus: isDeliveryOrder ? routeEtaStatus : "idle",
       items: savedItems,
       createdBy: currentUser,
     };
+  }
+
+  function showCustomerOrder() {
+    if (orderMethod === "return") {
+      setOrderNumber("");
+      setOrderMethod("delivery");
+    }
+    setOrderEntryMode("customer");
+  }
+
+  function showReturnOrder() {
+    if (orderMethod !== "return") {
+      setOrderNumber(createReturnOrderNumber());
+      setOrderMethod("return");
+      setItems((currentItems) =>
+        currentItems.map((item) => ({
+          ...item,
+          path: "inStock",
+          vendor: "",
+          supplierAddress: "",
+          poNumber: "",
+          routeDate: "",
+          supplierDate: "",
+        })),
+      );
+      setActiveItemId(null);
+      setEditingItemId(null);
+      setIsReviewing(false);
+    }
+    setOrderEntryMode("return");
   }
 
   function handleBusinessNameChange(nextBusinessName) {
@@ -1628,7 +1711,7 @@ export default function OrderFlowPage({
           <div className="inline-flex w-full rounded-2xl border border-slate-200 bg-slate-100 p-1 lg:w-auto">
             <button
               type="button"
-              onClick={() => setOrderEntryMode("customer")}
+              onClick={showCustomerOrder}
               className="flex-1 rounded-xl px-5 py-3 text-sm font-black text-slate-500 transition hover:text-slate-900 lg:flex-none"
             >
               New Customer Order
@@ -1638,6 +1721,13 @@ export default function OrderFlowPage({
               className="flex-1 rounded-xl bg-white px-5 py-3 text-sm font-black text-emerald-700 shadow-sm lg:flex-none"
             >
               Stock PO
+            </button>
+            <button
+              type="button"
+              onClick={showReturnOrder}
+              className="flex-1 rounded-xl px-5 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-50 lg:flex-none"
+            >
+              Return
             </button>
           </div>
         </div>
@@ -1950,28 +2040,43 @@ export default function OrderFlowPage({
   return (
     <PageContainer>
       <Breadcrumbs
-        items={[{ label: "Orders" }, { label: "New Customer Order" }]}
+        items={[
+          { label: "Orders" },
+          { label: isReturnOrder ? "New Return" : "New Customer Order" },
+        ]}
       />
 
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
-              Customer Order
+              {isReturnOrder ? "Customer Return" : "Customer Order"}
             </p>
-            <button
-              type="button"
-              onClick={() => setIsOrderImportOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-black text-slate-500 transition hover:bg-blue-50 hover:text-blue-700"
-            >
-              <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
-              Import order file
-            </button>
+            {!isReturnOrder ? (
+              <button
+                type="button"
+                onClick={() => setIsOrderImportOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-black text-slate-500 transition hover:bg-blue-50 hover:text-blue-700"
+              >
+                <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
+                Import order file
+              </button>
+            ) : null}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-              New Customer Order
+              {isReturnOrder ? "New Return" : "New Customer Order"}
             </h1>
+            {isReturnOrder ? (
+              <button
+                type="button"
+                onClick={showCustomerOrder}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                <FileText className="h-4 w-4" aria-hidden="true" />
+                Customer Order
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setOrderEntryMode("stock")}
@@ -1980,6 +2085,16 @@ export default function OrderFlowPage({
               <Warehouse className="h-4 w-4" aria-hidden="true" />
               Stock PO
             </button>
+            {!isReturnOrder ? (
+              <button
+                type="button"
+                onClick={showReturnOrder}
+                className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-black text-violet-800 shadow-sm transition hover:border-violet-300 hover:bg-violet-100"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Return
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -1987,7 +2102,7 @@ export default function OrderFlowPage({
           <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                  Current Order
+                  {isReturnOrder ? "Current Return" : "Current Order"}
                 </p>
                 <p className="truncate text-sm font-black text-slate-700">
                   {businessName || "Business name"} ·{" "}
@@ -2001,7 +2116,7 @@ export default function OrderFlowPage({
               </div>
               <div className="text-right">
                 <p className="text-2xl font-black tracking-tight text-slate-950">
-                  {orderNumber || "000-000"}
+                  {orderNumber || (isReturnOrder ? "R000000" : "000-000")}
                 </p>
                 <p className="text-xs font-bold text-slate-500">
                   {phoneNumber || "No phone"}
@@ -2312,25 +2427,30 @@ export default function OrderFlowPage({
               Step 1
             </p>
             <h2 className="text-xl font-black text-slate-950">
-              Order information
+              {isReturnOrder ? "Return information" : "Order information"}
             </h2>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
-            6 digit order
+            {isReturnOrder ? "Unique return ID" : "6 digit order"}
           </span>
         </div>
 
         <div className="grid gap-3 xl:grid-cols-[170px_1fr_1fr_190px_150px] xl:items-end">
-          <Field label="Order #">
+          <Field label={isReturnOrder ? "Return #" : "Order #"}>
             <TextInput
               value={orderNumber}
-              onChange={(event) =>
-                setOrderNumber(formatOrderNumberInput(event.target.value))
-              }
-              placeholder="019-390"
-              inputMode="numeric"
+              onChange={(event) => {
+                if (!isReturnOrder) {
+                  setOrderNumber(formatOrderNumberInput(event.target.value));
+                }
+              }}
+              placeholder={isReturnOrder ? "R000000" : "019-390"}
+              inputMode={isReturnOrder ? "text" : "numeric"}
               maxLength={7}
-              className="text-2xl font-black"
+              readOnly={isReturnOrder}
+              className={`text-2xl font-black ${
+                isReturnOrder ? "cursor-default bg-violet-50 text-violet-800" : ""
+              }`}
             />
           </Field>
 
@@ -2446,17 +2566,22 @@ export default function OrderFlowPage({
       </section>
 
       <section className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-4 xl:grid-cols-[360px_1fr] xl:items-start">
+        <div
+          className={`grid gap-4 xl:items-start ${
+            isReturnOrder ? "xl:grid-cols-[300px_1fr]" : "xl:grid-cols-[360px_1fr]"
+          }`}
+        >
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
               Step 2
             </p>
             <h2 className="text-xl font-black text-slate-950">
-              Customer handoff
+              {isReturnOrder ? "Return pickup" : "Customer handoff"}
             </h2>
 
+            {!isReturnOrder ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              {handoffOptions.map((option) => {
+              {handoffOptions.filter((option) => option.id !== "return").map((option) => {
                 const OptionIcon = option.icon;
                 const isSelected = orderMethod === option.id;
 
@@ -2477,9 +2602,34 @@ export default function OrderFlowPage({
                 );
               })}
             </div>
+            ) : (
+              <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
+                Enter the address where the material needs to be picked up.
+              </p>
+            )}
           </div>
 
-          {orderMethod === "delivery" ? (
+          {isReturnOrder ? (
+            <div className="rounded-3xl border border-violet-200 bg-violet-50/60 p-4">
+              <Field label="Return Pickup Address">
+                <div className="relative">
+                  <MapPin
+                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-violet-500"
+                    aria-hidden="true"
+                  />
+                  <AddressAutocompleteInput
+                    value={deliveryAddress}
+                    onChange={setDeliveryAddress}
+                    autoComplete="off"
+                    enableLocalFallback
+                    placeholder="Start typing the return pickup address..."
+                    showStatus={false}
+                    className="w-full rounded-2xl border border-violet-200 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                  />
+                </div>
+              </Field>
+            </div>
+          ) : orderMethod === "delivery" ? (
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
               <div className="grid gap-3 xl:grid-cols-[180px_1fr_190px] xl:items-start">
                 <Field label="Delivery Date">
@@ -2573,10 +2723,12 @@ export default function OrderFlowPage({
               Step 3
             </p>
             <h2 className="mt-1 text-2xl font-black text-slate-950">
-              Items & fulfillment
+              {isReturnOrder ? "Return items" : "Items & fulfillment"}
             </h2>
             <p className="mt-1 text-sm font-bold text-slate-500">
-              Add material from Capital Lumber's yard or from a supplier.
+              {isReturnOrder
+                ? "Add every item that needs to come back to Capital Lumber."
+                : "Add material from Capital Lumber's yard or from a supplier."}
             </p>
           </div>
         </div>
@@ -2601,7 +2753,13 @@ export default function OrderFlowPage({
                   key={item.id}
                   className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm"
                 >
-                  <div className="grid gap-2 sm:grid-cols-[42px_130px_minmax(180px,1fr)_190px_150px_96px] sm:items-center">
+                  <div
+                    className={`grid gap-2 sm:items-center ${
+                      isReturnOrder
+                        ? "sm:grid-cols-[42px_130px_minmax(220px,1fr)_140px_96px]"
+                        : "sm:grid-cols-[42px_130px_minmax(180px,1fr)_190px_150px_96px]"
+                    }`}
+                  >
                     <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-xs font-black text-slate-500">
                       {index + 1}
                     </span>
@@ -2619,11 +2777,14 @@ export default function OrderFlowPage({
                       </p>
                         <p className="truncate text-xs font-bold text-slate-500">
                           {item.itemNumber ? `Item # ${item.itemNumber} · ` : ""}
-                          {isYardStock
+                          {isReturnOrder
+                            ? "Return item"
+                            : isYardStock
                             ? "From Capital Lumber yard"
                             : `${item.vendor || "No vendor"} · PO ${item.poNumber || "not entered"}`}
                       </p>
                     </div>
+                    {!isReturnOrder ? (
                     <div className="min-w-0">
                       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
                         {itemDateLabel}
@@ -2634,7 +2795,15 @@ export default function OrderFlowPage({
                           : formatShortDate(itemDate) || "No date"}
                       </p>
                     </div>
-                    <WorkflowPill pathId={item.path} />
+                    ) : null}
+                    {isReturnOrder ? (
+                      <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-violet-700">
+                        <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                        Return
+                      </span>
+                    ) : (
+                      <WorkflowPill pathId={item.path} />
+                    )}
                     <div className="flex items-center gap-2 sm:justify-end">
                       <button
                         type="button"
@@ -2676,10 +2845,23 @@ export default function OrderFlowPage({
                       </p>
                     </div>
                   </div>
-                  <WorkflowPill pathId={item.path} />
+                  {isReturnOrder ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-violet-700">
+                      <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                      Return
+                    </span>
+                  ) : (
+                    <WorkflowPill pathId={item.path} />
+                  )}
                 </div>
 
-                <div className="mt-4 grid gap-3 lg:grid-cols-[110px_180px_minmax(220px,1fr)_220px]">
+                <div
+                  className={`mt-4 grid gap-3 ${
+                    isReturnOrder
+                      ? "lg:grid-cols-[110px_180px_minmax(220px,1fr)]"
+                      : "lg:grid-cols-[110px_180px_minmax(220px,1fr)_220px]"
+                  }`}
+                >
                   <Field label="Qty">
                     <TextInput
                       value={item.quantity}
@@ -2728,12 +2910,12 @@ export default function OrderFlowPage({
                         updateItem(item.id, {
                           itemNumber: inventoryItem.itemNumber,
                           description: inventoryItem.description,
-                          ...(item.path === "inStock"
+                          ...(!isReturnOrder && item.path === "inStock"
                             ? { path: "supplierDelivery" }
                             : {}),
                         });
 
-                        if (inventoryItem.defaultVendor) {
+                        if (!isReturnOrder && inventoryItem.defaultVendor) {
                           updateItemVendor(
                             item.id,
                             inventoryItem.defaultVendor,
@@ -2763,6 +2945,7 @@ export default function OrderFlowPage({
                       }
                     />
                   </Field>
+                  {!isReturnOrder ? (
                   <Field label="Fulfillment">
                     <div className="relative">
                       <PathIcon
@@ -2801,9 +2984,24 @@ export default function OrderFlowPage({
                       />
                     </div>
                   </Field>
+                  ) : null}
                 </div>
 
-                {isYardStock ? (
+                {isReturnOrder ? (
+                  <div className="mt-4 flex items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-violet-700 shadow-sm">
+                      <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-violet-700">
+                        Return material
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-slate-700">
+                        This item will be picked up at the return address and brought back to Capital Lumber.
+                      </p>
+                    </div>
+                  </div>
+                ) : isYardStock ? (
                   <div className="mt-4 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm">
                       <Warehouse className="h-5 w-5" aria-hidden="true" />
@@ -2893,7 +3091,51 @@ export default function OrderFlowPage({
         </button>
       </section>
 
-      {orderMethod === "delivery" ? (
+      {isReturnOrder ? (
+        <section className="mt-5 rounded-[2rem] border border-violet-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-700">
+                Step 4
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-slate-950">
+                Type of return
+              </h2>
+              <p className="mt-1 text-sm font-bold text-slate-500">
+                Tell dispatch how the returned material needs to be loaded.
+              </p>
+            </div>
+            <span className="rounded-2xl bg-violet-50 px-4 py-2 text-sm font-black text-violet-700">
+              Return pickup
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {returnLoadTypes.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setReturnLoadType(option.id)}
+                className={`flex min-h-[86px] items-center gap-4 rounded-3xl border p-4 text-left transition ${
+                  returnLoadType === option.id
+                    ? "border-violet-500 bg-violet-50 text-violet-900 ring-4 ring-violet-100"
+                    : "border-slate-200 bg-slate-50 text-slate-700 hover:border-violet-200 hover:bg-white"
+                }`}
+              >
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-violet-700 shadow-sm">
+                  <option.icon className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <span>
+                  <span className="block text-lg font-black">{option.label}</span>
+                  <span className="mt-0.5 block text-sm font-bold text-slate-500">
+                    {option.description}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : orderMethod === "delivery" ? (
       <section className="mt-5 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -2997,17 +3239,17 @@ export default function OrderFlowPage({
           onClick={() => setIsReviewing(true)}
           className="mt-5 inline-flex min-h-[68px] w-full items-center justify-center rounded-[1.5rem] bg-slate-950 px-6 text-xl font-black text-white shadow-sm transition hover:bg-slate-800"
         >
-          Review Order
+          {isReturnOrder ? "Review Return" : "Review Order"}
         </button>
       ) : (
         <section className="mt-5 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-                Review Order
+                {isReturnOrder ? "Review Return" : "Review Order"}
               </p>
               <h2 className="mt-1 text-3xl font-black text-slate-950">
-                {orderNumber || "000-000"}
+                {orderNumber || (isReturnOrder ? "R000000" : "000-000")}
               </h2>
               <p className="mt-1 text-sm font-bold text-slate-500">
                 {businessName || customerName || "No customer"} ·{" "}
@@ -3047,23 +3289,28 @@ export default function OrderFlowPage({
 
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
-                  Delivery setup
+                  {isReturnOrder ? "Return setup" : "Delivery setup"}
                 </p>
                 <div className="mt-3 rounded-2xl border border-red-100 bg-white p-3 shadow-sm">
                   <div className="flex items-center gap-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
-                      <SelectedUnloadIcon className="h-5 w-5" aria-hidden="true" />
+                      {isReturnOrder ? (
+                        <SelectedReturnLoadIcon className="h-5 w-5" aria-hidden="true" />
+                      ) : (
+                        <SelectedUnloadIcon className="h-5 w-5" aria-hidden="true" />
+                      )}
                     </span>
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#FC2C38]">
-                        Delivery Type
+                        {isReturnOrder ? "Return Type" : "Delivery Type"}
                       </p>
                       <p className="text-lg font-black text-slate-950">
-                        {unloadType}
+                        {isReturnOrder ? selectedReturnLoadType.label : unloadType}
                       </p>
                     </div>
                   </div>
                 </div>
+                {!isReturnOrder ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <span
                     className={`rounded-full px-3 py-1.5 text-xs font-black ${
@@ -3084,12 +3331,16 @@ export default function OrderFlowPage({
                     {needsTarp ? "Tarp needed" : "No tarp"}
                   </span>
                 </div>
-                {orderMethod === "delivery" ? (
+                ) : null}
+                {["delivery", "return"].includes(orderMethod) ? (
                   <div className="mt-2">
                     <p className="text-sm font-bold text-slate-600">
-                      {deliveryAddress || "No delivery address"}
+                      {deliveryAddress ||
+                        (isReturnOrder
+                          ? "No return pickup address"
+                          : "No delivery address")}
                     </p>
-                    {deliveryTitle ? (
+                    {!isReturnOrder && deliveryTitle ? (
                       <p className="mt-1 text-sm font-black text-slate-900">
                         {deliveryTitle}
                       </p>
@@ -3138,12 +3389,16 @@ export default function OrderFlowPage({
                           </p>
                         ) : null}
                         <p className="mt-1 text-sm font-bold text-slate-600">
-                          {item.path === "inStock"
+                          {isReturnOrder
+                            ? "Return pickup item"
+                            : item.path === "inStock"
                             ? "From Capital Lumber yard · No PO required"
                             : `${item.vendor || "No vendor"} · PO ${item.poNumber || "not entered"}`}
                         </p>
                         <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                          {item.path === "inStock"
+                          {isReturnOrder
+                            ? `Return by ${selectedReturnLoadType.label}`
+                            : item.path === "inStock"
                             ? "Ready from stock"
                             : `${item.path === "wePickup" ? "Pickup" : "Delivery"} ${
                                 formatShortDate(
@@ -3154,7 +3409,13 @@ export default function OrderFlowPage({
                               }`}
                         </p>
                       </div>
-                      <WorkflowPill pathId={item.path} />
+                      {isReturnOrder ? (
+                        <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-violet-700">
+                          Return
+                        </span>
+                      ) : (
+                        <WorkflowPill pathId={item.path} />
+                      )}
                     </div>
                   </div>
                 ))}
@@ -3164,10 +3425,21 @@ export default function OrderFlowPage({
 
           <button
             type="button"
-            className="mt-5 inline-flex min-h-[64px] w-full items-center justify-center rounded-[1.5rem] bg-[#FC2C38] px-6 text-xl font-black text-white shadow-sm transition hover:bg-red-600"
+            onClick={processOrder}
+            disabled={!canProcessOrder || isProcessingOrder}
+            className="mt-5 inline-flex min-h-[64px] w-full items-center justify-center rounded-[1.5rem] bg-[#FC2C38] px-6 text-xl font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            Process Order
+            {isProcessingOrder
+              ? "Processing..."
+              : isReturnOrder
+                ? "Create Return"
+                : "Process Order"}
           </button>
+          {processError ? (
+            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
+              {processError}
+            </div>
+          ) : null}
         </section>
       )}
 

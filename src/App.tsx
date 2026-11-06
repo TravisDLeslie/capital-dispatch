@@ -4300,9 +4300,43 @@ export default function App() {
     const customerName = String(orderPayload.customerName || "").trim();
     const businessName = String(orderPayload.businessName || "").trim();
     const customerDisplayName = businessName || customerName || "New customer";
-    const sourceOrderNumber = String(orderPayload.orderNumber || "").trim();
+    const orderKind = String(orderPayload.orderKind || "customer");
+    const isReturnOrder = orderKind === "return";
+    let sourceOrderNumber = String(orderPayload.orderNumber || "").trim();
     const handoffType = String(orderPayload.orderMethod || "willCall");
-    const isDeliveryOrder = handoffType === "delivery";
+    const isDeliveryOrder = handoffType === "delivery" || isReturnOrder;
+
+    if (isReturnOrder) {
+      const usedReturnNumbers = new Set(
+        [...salesOrders, ...deliveries]
+          .map((record) => String(record.orderNumber || "").trim().toUpperCase())
+          .filter(Boolean),
+      );
+      const requestedReturnNumber = sourceOrderNumber.toUpperCase();
+
+      if (!/^R\d{6}$/.test(requestedReturnNumber) || usedReturnNumbers.has(requestedReturnNumber)) {
+        const randomValues = new Uint32Array(1);
+        let generatedReturnNumber = "";
+
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          globalThis.crypto.getRandomValues(randomValues);
+          const candidate = `R${String(randomValues[0] % 1_000_000).padStart(6, "0")}`;
+
+          if (!usedReturnNumbers.has(candidate)) {
+            generatedReturnNumber = candidate;
+            break;
+          }
+        }
+
+        if (!generatedReturnNumber) {
+          throw new Error("Unable to reserve a unique return number. Please try again.");
+        }
+
+        sourceOrderNumber = generatedReturnNumber;
+      } else {
+        sourceOrderNumber = requestedReturnNumber;
+      }
+    }
     const poNumbers = Array.from(
       new Set(cleanItems.map((item) => item.poNumber).filter(Boolean)),
     );
@@ -4319,12 +4353,13 @@ export default function App() {
       businessName,
       phone: String(orderPayload.phoneNumber || "").trim(),
       accountNumber: String(orderPayload.accountNumber || "").trim(),
+      orderKind,
       handoffType,
       deliveryAddress: String(orderPayload.deliveryAddress || "").trim(),
       deliveryDate: String(orderPayload.deliveryDate || "").trim(),
       deliveryTitle,
-      hasHardware: isDeliveryOrder && Boolean(orderPayload.hasHardware),
-      needsTarp: isDeliveryOrder && Boolean(orderPayload.needsTarp),
+      hasHardware: !isReturnOrder && isDeliveryOrder && Boolean(orderPayload.hasHardware),
+      needsTarp: !isReturnOrder && isDeliveryOrder && Boolean(orderPayload.needsTarp),
       unloadType: isDeliveryOrder
         ? String(orderPayload.unloadType || "Forklift")
         : "",
@@ -4489,7 +4524,7 @@ export default function App() {
       createdPodPickups.push(podPickup);
     }
 
-    if (orderPayload.orderMethod === "delivery") {
+    if (orderPayload.orderMethod === "delivery" || isReturnOrder) {
       const routeEta = orderPayload.routeEta as
         | { durationValue?: number; durationText?: string; distanceText?: string }
         | null
@@ -4508,10 +4543,10 @@ export default function App() {
         contactPhone: String(orderPayload.phoneNumber || "").trim(),
         phoneNumber: String(orderPayload.phoneNumber || "").trim(),
         driver: "",
-        deliveryType: "Standard",
+        deliveryType: isReturnOrder ? "return" : "Standard",
         unloadType: String(orderPayload.unloadType || "Forklift"),
-        hasHardware: Boolean(orderPayload.hasHardware),
-        needsTarp: Boolean(orderPayload.needsTarp),
+        hasHardware: isReturnOrder ? false : Boolean(orderPayload.hasHardware),
+        needsTarp: isReturnOrder ? false : Boolean(orderPayload.needsTarp),
         hardwareChecked: false,
         deliveryLocationNotes: "",
         generalNotes: String(orderPayload.deliveryNotes || "").trim(),
@@ -4531,7 +4566,7 @@ export default function App() {
         hardwarePhotos: [],
         deliveredAt: "",
         dispatchStatus: "needsDispatch",
-        deliveryScope: "full",
+        deliveryScope: isReturnOrder ? "return" : "full",
         deliveryScopeNotes: "",
         deliveryDate: String(orderPayload.deliveryDate || "").trim(),
         deliveryTimeSlot: "",
@@ -4558,11 +4593,16 @@ export default function App() {
       businessName,
       phoneNumber: String(orderPayload.phoneNumber || "").trim(),
       handoffType: String(orderPayload.orderMethod || "willCall"),
+      orderKind,
       deliveryDate: String(orderPayload.deliveryDate || "").trim(),
       deliveryTitle,
       status: "waiting",
-      waitingItems: cleanItems.filter((item) => item.path !== "inStock"),
-      stockItems: cleanItems.filter((item) => item.path === "inStock"),
+      waitingItems: isReturnOrder
+        ? cleanItems
+        : cleanItems.filter((item) => item.path !== "inStock"),
+      stockItems: isReturnOrder
+        ? []
+        : cleanItems.filter((item) => item.path === "inStock"),
       linkedSouthRunIds: createdSouthRuns.map((run) => run.id),
       linkedTheirTruckPOIds: createdTheirTruckPOs.map((po) => po.id),
       linkedPodPickupIds: createdPodPickups.map((podPickup) =>
@@ -4584,6 +4624,7 @@ export default function App() {
       theirTruckCount: createdTheirTruckPOs.length,
       podCount: createdPodPickups.length,
       deliveryCreated: Boolean(createdDelivery),
+      returnCreated: isReturnOrder,
       buildCreated: true,
     };
   }
