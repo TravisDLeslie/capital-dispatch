@@ -1631,7 +1631,7 @@ export default function OrderFlowPage({
               onClick={() => setOrderEntryMode("customer")}
               className="flex-1 rounded-xl px-5 py-3 text-sm font-black text-slate-500 transition hover:text-slate-900 lg:flex-none"
             >
-              Customer Order
+              New Customer Order
             </button>
             <button
               type="button"
@@ -1949,24 +1949,26 @@ export default function OrderFlowPage({
 
   return (
     <PageContainer>
-      <Breadcrumbs items={[{ label: "New Home" }, { label: "Orders" }]} />
+      <Breadcrumbs
+        items={[{ label: "Orders" }, { label: "New Customer Order" }]}
+      />
 
       <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
-            Super Admin Lab
+            Customer Order
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-              New Order
+              New Customer Order
             </h1>
             <button
               type="button"
               onClick={() => setOrderEntryMode("stock")}
-              className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-md ring-4 ring-emerald-100 transition hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-lg"
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-800 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100"
             >
-              <Warehouse className="h-5 w-5" aria-hidden="true" />
-              New Stock PO
+              <Warehouse className="h-4 w-4" aria-hidden="true" />
+              Stock PO
             </button>
             <button
               type="button"
