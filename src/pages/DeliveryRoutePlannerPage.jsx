@@ -327,6 +327,8 @@ export default function DeliveryRoutePlannerPage({
   });
   const [routeRefreshKey, setRouteRefreshKey] = useState(0);
   const [stopRouteMetrics, setStopRouteMetrics] = useState({});
+  const [isTodayDeliveryPickerOpen, setIsTodayDeliveryPickerOpen] =
+    useState(false);
   const googleMapsRouteUrl = useMemo(() => getGoogleMapsRouteUrl(stops), [stops]);
   const embeddedGoogleMapsRouteUrl = useMemo(
     () => getEmbeddedGoogleMapsRouteUrl(stops),
@@ -398,6 +400,21 @@ export default function DeliveryRoutePlannerPage({
         stops.map((stop) => normalizeStopAddress(stop.address)).filter(Boolean),
       ),
     [stops],
+  );
+  const addedTodayDeliveryCount = todaysDeliveries.filter((delivery) => {
+    const deliveryId = String(delivery?.id || "");
+    const deliveryAddress = normalizeStopAddress(delivery?.address);
+
+    return (
+      (deliveryId && savedDeliveryIds.has(deliveryId)) ||
+      (deliveryAddress && savedStopAddresses.has(deliveryAddress))
+    );
+  }).length;
+  const availableTodayDeliveryCount = Math.max(
+    0,
+    todaysDeliveries.length -
+      todayDeliveriesMissingAddress -
+      addedTodayDeliveryCount,
   );
 
   useEffect(() => {
@@ -1132,29 +1149,51 @@ export default function DeliveryRoutePlannerPage({
             </div>
 
             {!isReadOnlyDriverView ? (
-              <div className="mt-5 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
-                    Today’s deliveries
-                  </p>
-                  <p className="mt-1 text-sm font-bold text-slate-700">
-                    {todaysDeliveries.length === 0
-                      ? "No open deliveries are scheduled for today."
-                      : "Review each address and add only the stops you want on this route."}
-                  </p>
-                  {todayDeliveriesMissingAddress > 0 ? (
-                    <p className="mt-1 text-xs font-bold text-amber-700">
-                      {todayDeliveriesMissingAddress}{" "}
-                      {todayDeliveriesMissingAddress === 1
-                        ? "delivery needs"
-                        : "deliveries need"}{" "}
-                      an address before it can be added.
+              <div className="mt-5 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/70">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIsTodayDeliveryPickerOpen((currentValue) => !currentValue)
+                  }
+                  className="flex w-full items-center justify-between gap-3 p-3 text-left transition hover:bg-blue-100/60"
+                  aria-expanded={isTodayDeliveryPickerOpen}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-black text-slate-950">
+                        Add today’s deliveries
+                      </p>
+                      {addedTodayDeliveryCount > 0 ? (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-black uppercase tracking-wide text-emerald-700">
+                          {addedTodayDeliveryCount} selected
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-0.5 text-xs font-bold text-slate-600">
+                      {todaysDeliveries.length === 0
+                        ? "No open deliveries scheduled today"
+                        : `${availableTodayDeliveryCount} available · ${todaysDeliveries.length} total`}
                     </p>
-                  ) : null}
-                </div>
+                  </div>
+                  <ArrowDown
+                    className={`h-5 w-5 shrink-0 text-blue-700 transition-transform ${
+                      isTodayDeliveryPickerOpen ? "rotate-180" : ""
+                    }`}
+                    aria-hidden="true"
+                  />
+                </button>
 
-                {todaysDeliveries.length > 0 ? (
-                  <div className="mt-4 space-y-2">
+                {isTodayDeliveryPickerOpen && todaysDeliveries.length > 0 ? (
+                  <div className="space-y-2 border-t border-blue-100 p-3">
+                    {todayDeliveriesMissingAddress > 0 ? (
+                      <p className="text-xs font-bold text-amber-700">
+                        {todayDeliveriesMissingAddress}{" "}
+                        {todayDeliveriesMissingAddress === 1
+                          ? "delivery needs"
+                          : "deliveries need"}{" "}
+                        an address before it can be added.
+                      </p>
+                    ) : null}
                     {todaysDeliveries.map((delivery) => {
                       const deliveryId = String(delivery?.id || "");
                       const deliveryAddress = String(
