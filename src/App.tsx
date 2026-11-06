@@ -6632,6 +6632,8 @@ export default function App() {
           deliveries={visibleDeliveries}
           allowedPageIds={dashboardAllowedPageIds}
           isDriverView={isDeliveryDriverScopedView}
+          canEditDeliveries={canEditDeliveryDetails}
+          onUpdateDelivery={handleUpdateDelivery}
           onPageChange={navigateToPage}
         />
       );
@@ -6829,6 +6831,8 @@ export default function App() {
           deliveries={visibleDeliveries}
           allowedPageIds={effectiveAllowedPageIds}
           isDriverView={isDeliveryDriverScopedView}
+          canEditDeliveries={canEditDeliveryDetails}
+          onUpdateDelivery={handleUpdateDelivery}
           onPageChange={navigateToPage}
         />
       );
