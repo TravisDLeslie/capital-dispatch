@@ -1055,6 +1055,11 @@ function DeliveryDispatchOverview({
   onSearchQueryChange,
   onDriverChange,
   onTruckChange,
+  onScheduleChange,
+  onDispatchDelivery,
+  savingDeliveryId,
+  savedDeliveryId,
+  dirtyDeliveryIds,
   onOpenDelivery,
   onOpenOrder,
 }) {
@@ -1226,7 +1231,7 @@ function DeliveryDispatchOverview({
       </div>
 
       <div className="p-3 sm:p-4">
-        <div className="hidden grid-cols-[minmax(160px,1fr)_minmax(205px,1.15fr)_minmax(220px,1.1fr)_minmax(170px,0.9fr)_minmax(105px,0.5fr)_90px] gap-3 px-3 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
+        <div className="hidden grid-cols-[minmax(160px,0.9fr)_minmax(220px,1.1fr)_minmax(280px,1.25fr)_minmax(190px,0.9fr)_minmax(150px,0.65fr)_120px] gap-3 px-3 pb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
           <span>Delivery</span>
           <span>Destination</span>
           <span>Schedule</span>
@@ -1248,12 +1253,10 @@ function DeliveryDispatchOverview({
                 ? delivery.items
                 : [];
               const yardStockItems = items.filter(isYardStockItem);
-              const scheduleLabel = delivery.deliveryTimeSlot
-                ? getDeliveryTimeRange(delivery)
-                : "Time not set";
               const routeMetric = routeMetrics[String(delivery.id || "")];
               const primaryDriver = getPrimaryDriver(delivery);
               const primaryVehicleId = getPrimaryVehicleId(delivery);
+              const hasUnsavedChanges = dirtyDeliveryIds.has(delivery.id);
               const deliveryDateKey = getDeliveryDateGroupKey(delivery);
               const previousDeliveryDateKey =
                 index > 0
@@ -1278,20 +1281,9 @@ function DeliveryDispatchOverview({
                     />
                   ) : null}
                   <article
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => handleDeliverySelect(delivery)}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" && event.key !== " ") {
-                      return;
-                    }
-
-                    event.preventDefault();
-                    handleDeliverySelect(delivery);
-                  }}
-                  className="grid cursor-pointer gap-3 rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-[#FC2C38]/40 hover:bg-red-50/30 hover:shadow-sm focus:outline-none focus:ring-4 focus:ring-red-100 xl:grid-cols-[minmax(160px,1fr)_minmax(205px,1.15fr)_minmax(220px,1.1fr)_minmax(170px,0.9fr)_minmax(105px,0.5fr)_90px] xl:items-center"
+                  className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-slate-300 hover:shadow-sm xl:h-[190px] xl:grid-cols-[minmax(160px,0.9fr)_minmax(220px,1.1fr)_minmax(280px,1.25fr)_minmax(190px,0.9fr)_minmax(150px,0.65fr)_120px] xl:items-stretch"
                 >
-                  <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-[#FC2C38]">
                       {getRouteMarkerLabel(
                         routeIndex >= 0 ? routeIndex : index,
@@ -1322,17 +1314,17 @@ function DeliveryDispatchOverview({
                         </span>
                       </div>
                       {delivery.deliveryTitle ? (
-                        <p className="mt-1 truncate text-sm font-black text-slate-950">
+                        <p className="mt-1 line-clamp-1 text-sm font-black text-slate-950">
                           {delivery.deliveryTitle}
                         </p>
                       ) : null}
-                      <p className="mt-1 truncate text-sm font-black text-slate-950">
+                      <p className="mt-1 line-clamp-2 text-sm font-black text-slate-950">
                         {formatCustomerName(delivery.customerName)}
                       </p>
                     </div>
                   </div>
 
-                  <div className="min-w-0 rounded-xl bg-slate-50 px-3 py-2 xl:bg-transparent xl:px-0 xl:py-0">
+                  <div className="flex min-w-0 flex-col justify-center rounded-xl bg-slate-50 px-3 py-2 xl:bg-transparent xl:px-0 xl:py-0">
                     <p className="flex items-start gap-2 text-sm font-bold text-slate-700">
                       <MapPin
                         className="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
@@ -1361,33 +1353,57 @@ function DeliveryDispatchOverview({
                     ) : null}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 xl:block">
-                    <div>
+                  <div className="grid h-full grid-cols-[minmax(130px,1fr)_minmax(120px,1fr)] content-center gap-2">
+                    <label className="block">
                       <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 xl:hidden">
                         Date
                       </p>
-                      <p className="mt-0.5 text-sm font-black text-slate-800">
-                        {delivery.deliveryDate
-                          ? formatDateLabel(delivery.deliveryDate)
-                          : "Date not set"}
-                      </p>
-                    </div>
-                    <div>
+                      <input
+                        type="date"
+                        value={delivery.deliveryDate || ""}
+                        onChange={(event) =>
+                          onScheduleChange(
+                            delivery,
+                            "deliveryDate",
+                            event.target.value,
+                          )
+                        }
+                        className="mt-0.5 block w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-black text-slate-800 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                        aria-label={`Delivery date for order ${delivery.orderNumber}`}
+                      />
+                    </label>
+                    <label className="block">
                       <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 xl:hidden">
                         Time
                       </p>
-                      <p className="mt-0.5 text-xs font-bold text-slate-500">
-                        {scheduleLabel}
-                      </p>
-                    </div>
+                      <select
+                        value={delivery.deliveryTimeSlot || ""}
+                        onChange={(event) =>
+                          onScheduleChange(
+                            delivery,
+                            "deliveryTimeSlot",
+                            event.target.value,
+                          )
+                        }
+                        className="mt-0.5 block w-full min-w-0 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-black text-slate-800 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                        aria-label={`Truck leave time for order ${delivery.orderNumber}`}
+                      >
+                        <option value="">Leave time...</option>
+                        {deliveryTimeSlotOptions.map((timeSlot) => (
+                          <option key={timeSlot.value} value={timeSlot.value}>
+                            {timeSlot.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <RoughDeliveryTiming
                       delivery={delivery}
                       routeMetric={routeMetric}
-                      className="col-span-2 mt-1 xl:mt-2"
+                      className="col-span-2 mt-1"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 xl:block">
+                  <div className="grid h-full grid-cols-2 content-center gap-2 xl:block">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 xl:hidden">
                         Driver
@@ -1476,7 +1492,7 @@ function DeliveryDispatchOverview({
                       onOpenOrder(delivery.orderNumber);
                     }}
                     onKeyDown={(event) => event.stopPropagation()}
-                    className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50"
+                    className="flex h-full min-h-[132px] min-w-0 flex-col justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50 xl:max-h-[148px]"
                     title={`View the complete order ${delivery.orderNumber}`}
                   >
                     <span className="flex flex-wrap items-center gap-1.5">
@@ -1489,7 +1505,7 @@ function DeliveryDispatchOverview({
                         </span>
                       ) : null}
                     </span>
-                    <span className="mt-1 block line-clamp-1 text-xs font-semibold text-slate-500">
+                    <span className="mt-1 block line-clamp-2 text-xs font-semibold leading-4 text-slate-500">
                       {items[0]?.description || "View the complete order"}
                     </span>
                     <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.1em] text-blue-700">
@@ -1497,21 +1513,38 @@ function DeliveryDispatchOverview({
                     </span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleDeliverySelect(delivery);
-                    }}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    className={`inline-flex min-h-10 items-center justify-center rounded-xl px-3 text-xs font-black transition ${
-                      needsAssignment
-                        ? "bg-slate-950 text-white hover:bg-slate-800"
-                        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
-                  >
-                    {needsAssignment ? "Assign" : "Open"}
-                  </button>
+                  <div className="grid h-full content-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onDispatchDelivery(delivery)}
+                      disabled={
+                        savingDeliveryId === delivery.id ||
+                        !hasUnsavedChanges ||
+                        !primaryDriver ||
+                        (vehicleOptions.length > 0 && !primaryVehicleId) ||
+                        !delivery.deliveryDate ||
+                        !delivery.deliveryTimeSlot
+                      }
+                      className={`inline-flex min-h-10 items-center justify-center rounded-xl px-3 text-xs font-black transition ${
+                        hasUnsavedChanges
+                          ? "bg-emerald-700 text-white hover:bg-emerald-800"
+                          : "cursor-not-allowed bg-slate-200 text-slate-500"
+                      } disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500`}
+                    >
+                      {savingDeliveryId === delivery.id
+                        ? "Saving..."
+                        : savedDeliveryId === delivery.id
+                          ? "Saved"
+                        : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeliverySelect(delivery)}
+                      className="inline-flex min-h-8 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-[10px] font-black uppercase tracking-[0.08em] text-slate-600 transition hover:bg-slate-50"
+                    >
+                      Full details
+                    </button>
+                  </div>
                   </article>
                 </Fragment>
               );
@@ -2281,6 +2314,7 @@ export default function DeliveryDispatchPage({
   const [openDeliveryKeys, setOpenDeliveryKeys] = useState({});
   const [openDetailKeys, setOpenDetailKeys] = useState({});
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
+  const [savedDeliveryId, setSavedDeliveryId] = useState("");
   const [markingDeliveredId, setMarkingDeliveredId] = useState("");
   const [uploadingDeliveryId, setUploadingDeliveryId] = useState("");
   const [deletingDeliveryOrderId, setDeletingDeliveryOrderId] = useState("");
@@ -2291,6 +2325,7 @@ export default function DeliveryDispatchPage({
   const [routeMapDate, setRouteMapDate] = useState("");
   const [draftRouteOrders, setDraftRouteOrders] = useState({});
   const [routeMetrics, setRouteMetrics] = useState({});
+  const [showFullDeliveryDetails, setShowFullDeliveryDetails] = useState(false);
   const deliveryOrderInputRefs = useRef({});
 
   useEffect(() => {
@@ -2392,6 +2427,56 @@ export default function DeliveryDispatchPage({
       safeDeliveryOriginOptions,
     ],
   );
+
+  const dirtyDeliveryIds = useMemo(() => {
+    const dirtyIds = new Set();
+
+    deliveries.forEach((delivery) => {
+      const initialSchedule = getInitialSchedule(
+        delivery,
+        safeDeliveryOriginOptions,
+      );
+      const currentSchedule =
+        draftSchedules[delivery.id] || initialSchedule;
+      const scheduleChanged = [
+        "deliveryDate",
+        "deliveryTimeSlot",
+        "deliveryOriginName",
+        "deliveryOriginAddress",
+        "oneWayDriveMinutes",
+      ].some(
+        (field) =>
+          String(currentSchedule[field] ?? "") !==
+          String(initialSchedule[field] ?? ""),
+      );
+      const initialAssignments = getInitialAssignments(delivery);
+      const currentAssignments =
+        draftAssignments[delivery.id] || initialAssignments;
+      const assignmentsChanged =
+        currentAssignments.length !== initialAssignments.length ||
+        currentAssignments.some((assignment, index) => {
+          const initialAssignment = initialAssignments[index] || {};
+
+          return (
+            String(assignment.driver || "") !==
+              String(initialAssignment.driver || "") ||
+            String(assignment.vehicleId || "") !==
+              String(initialAssignment.vehicleId || "")
+          );
+        });
+
+      if (scheduleChanged || assignmentsChanged) {
+        dirtyIds.add(delivery.id);
+      }
+    });
+
+    return dirtyIds;
+  }, [
+    deliveries,
+    draftAssignments,
+    draftSchedules,
+    safeDeliveryOriginOptions,
+  ]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -2587,6 +2672,7 @@ export default function DeliveryDispatchPage({
   }
 
   function openDeliveryForDispatch(deliveryId) {
+    setShowFullDeliveryDetails(true);
     setOpenDeliveryKeys((currentOpenDeliveryKeys) => ({
       ...currentOpenDeliveryKeys,
       [deliveryId]: true,
@@ -2662,6 +2748,7 @@ export default function DeliveryDispatchPage({
   }
 
   async function handleDispatchDelivery(delivery) {
+    setSavedDeliveryId("");
     const assignments = getAssignments(delivery).map((assignment, index) =>
       createAssignment(index, assignment),
     );
@@ -2750,7 +2837,17 @@ export default function DeliveryDispatchPage({
         status: delivery.status || "open",
         updatedAt: new Date().toISOString(),
       });
-      onPageChange?.("deliveries-calendar");
+      setOpenDeliveryKeys((currentOpenDeliveryKeys) => {
+        const nextOpenDeliveryKeys = { ...currentOpenDeliveryKeys };
+        delete nextOpenDeliveryKeys[delivery.id];
+        return nextOpenDeliveryKeys;
+      });
+      setSavedDeliveryId(delivery.id);
+      window.setTimeout(() => {
+        setSavedDeliveryId((currentSavedDeliveryId) =>
+          currentSavedDeliveryId === delivery.id ? "" : currentSavedDeliveryId,
+        );
+      }, 2500);
     } catch (updateError) {
       console.error("Unable to dispatch delivery:", updateError);
       setError("Unable to dispatch that delivery. Try again.");
@@ -2962,7 +3059,7 @@ export default function DeliveryDispatchPage({
           </h1>
 
           <p className="mt-2 text-base font-semibold text-slate-500 sm:text-lg">
-            Choose how many trucks are going, then assign each driver and truck.
+            Set the date, leave time, driver, and truck from the compact lineup.
           </p>
         </div>
 
@@ -2992,12 +3089,22 @@ export default function DeliveryDispatchPage({
         onSelectedDateChange={setRouteMapDate}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
-        onDriverChange={(delivery, driverName) =>
-          updateAssignment(delivery, 0, "driver", driverName)
-        }
-        onTruckChange={(delivery, vehicleId) =>
-          updateAssignment(delivery, 0, "vehicleId", vehicleId)
-        }
+        onDriverChange={(delivery, driverName) => {
+          setSavedDeliveryId("");
+          updateAssignment(delivery, 0, "driver", driverName);
+        }}
+        onTruckChange={(delivery, vehicleId) => {
+          setSavedDeliveryId("");
+          updateAssignment(delivery, 0, "vehicleId", vehicleId);
+        }}
+        onScheduleChange={(delivery, field, value) => {
+          setSavedDeliveryId("");
+          updateSchedule(delivery, field, value);
+        }}
+        onDispatchDelivery={handleDispatchDelivery}
+        savingDeliveryId={savingDeliveryId}
+        savedDeliveryId={savedDeliveryId}
+        dirtyDeliveryIds={dirtyDeliveryIds}
         onOpenDelivery={openDeliveryForDispatch}
         onOpenOrder={setViewingOrderNumber}
       />
@@ -3011,7 +3118,27 @@ export default function DeliveryDispatchPage({
         />
       ) : null}
 
-      {visibleRouteMapDeliveries.length === 0 ? (
+      {visibleRouteMapDeliveries.length > 0 ? (
+        <div className="mb-5 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowFullDeliveryDetails((isVisible) => !isVisible)}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black uppercase tracking-[0.08em] text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            {showFullDeliveryDetails
+              ? "Hide full delivery details"
+              : "Show attachments & full details"}
+            <ChevronDown
+              className={`h-4 w-4 transition-transform ${
+                showFullDeliveryDetails ? "rotate-180" : ""
+              }`}
+              aria-hidden="true"
+            />
+          </button>
+        </div>
+      ) : null}
+
+      {showFullDeliveryDetails && visibleRouteMapDeliveries.length === 0 ? (
         <EmptyState
           title={
             routeMapDeliveries.length === 0
@@ -3028,7 +3155,7 @@ export default function DeliveryDispatchPage({
               : "Try another order number, customer, address, or item."
           }
         />
-      ) : (
+      ) : showFullDeliveryDetails ? (
         <div className="space-y-4">
           {visibleRouteMapDeliveries.map((delivery, index) => {
             const items = Array.isArray(delivery.items)
@@ -4186,7 +4313,7 @@ export default function DeliveryDispatchPage({
             );
           })}
         </div>
-      )}
+      ) : null}
 
       {previewedDeliveryOrder ? (
         <div
