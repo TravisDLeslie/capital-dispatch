@@ -677,6 +677,9 @@ export default function SupplierChatPage({
                         <div className="min-w-0">
                           <p className="truncate"><strong>{item.contactName}</strong> · {item.vendorName}</p>
                           <p className="truncate text-xs font-semibold text-slate-500">{item.email}</p>
+                          {item.emailStatus === "failed" && item.emailError ? (
+                            <p className="mt-1 text-xs font-bold text-red-700">{item.emailError}</p>
+                          ) : null}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${item.emailStatus === "sent" ? "bg-emerald-100 text-emerald-700" : item.emailStatus === "failed" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
