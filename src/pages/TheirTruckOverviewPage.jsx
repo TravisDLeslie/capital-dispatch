@@ -2,7 +2,6 @@ import {
   ArrowRight,
   CalendarDays,
   History,
-  Plus,
   Warehouse,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -137,15 +136,6 @@ export default function TheirTruckOverviewPage({
       </div>
 
       <section className="mb-6 grid gap-3 lg:grid-cols-2">
-        {canOpen("their-truck-pos") ? (
-          <QuickAction
-            icon={Plus}
-            title="Add Their Truck PO"
-            description="Schedule a PO coming in on a vendor truck."
-            onClick={() => onPageChange?.("their-truck-pos")}
-          />
-        ) : null}
-
         {canOpen("their-truck-calendar") ? (
           <QuickAction
             icon={CalendarDays}

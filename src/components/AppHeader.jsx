@@ -546,7 +546,6 @@ export default function AppHeader({
       : "south";
     const theirTruckPageId =
       (pageAllowed("their-truck-overview") && "their-truck-overview") ||
-      (pageAllowed("their-truck-pos") && "their-truck-pos") ||
       (pageAllowed("their-truck-calendar") &&
         "their-truck-calendar") ||
       (pageAllowed("their-truck-history") &&

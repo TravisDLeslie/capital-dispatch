@@ -556,7 +556,7 @@ async function createLocationPhoto(file) {
   const image = await loadImage(originalDataUrl);
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d");
-  const targetDataUrlLength = 90000;
+  const targetDataUrlLength = 45000;
   const minQuality = 0.26;
   let maxWidth = 720;
   let dataUrl = "";
@@ -637,6 +637,7 @@ export default function CheckInForm({
   const lastSavedDraftJsonRef = useRef("");
 
   const [error, setError] = useState("");
+  const [progressMessage, setProgressMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -1133,8 +1134,8 @@ export default function CheckInForm({
       return;
     }
 
-    setMaterials((currentMaterials) =>
-      currentMaterials.map((item) =>
+    const savedAt = new Date().toISOString();
+    const nextMaterials = materials.map((item) =>
         item.id === materialId
           ? {
               ...item,
@@ -1142,10 +1143,30 @@ export default function CheckInForm({
               location: findMatchingOption(item.location, locations),
               notes: item.notes.trim(),
               saved: true,
-              savedAt: new Date().toISOString(),
+              savedAt,
             }
           : item,
-      ),
+    );
+
+    setMaterials(nextMaterials);
+
+    if (activeDraftKey) {
+      const draft = {
+        poNumber,
+        vendor,
+        checkedInBy,
+        materials: nextMaterials,
+        currentStep,
+        openMaterialId: materialId,
+        updatedAt: savedAt,
+      };
+
+      saveCheckInDraft(activeDraftKey, draft);
+      lastSavedDraftJsonRef.current = JSON.stringify(draft);
+    }
+
+    setProgressMessage(
+      `${material.description.trim()} saved. You can leave this PO and reopen it later to continue.`,
     );
 
     clearError();
@@ -1211,6 +1232,7 @@ export default function CheckInForm({
     setOpenMaterialId("");
     hydratedDraftKeyRef.current = "";
     lastSavedDraftJsonRef.current = "";
+    setProgressMessage("");
     setError("");
   }
 
@@ -2280,6 +2302,26 @@ export default function CheckInForm({
               </p>
             </div>
 
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4">
+              <p className="text-sm font-black text-blue-950">
+                Receive one PO item at a time
+              </p>
+              <p className="mt-1 text-sm font-semibold leading-6 text-blue-800">
+                Add that item&apos;s location and photo, then save it. You can
+                leave this screen and reopen the same PO later to finish the
+                remaining items.
+              </p>
+            </div>
+
+            {progressMessage ? (
+              <div
+                role="status"
+                className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800"
+              >
+                {progressMessage}
+              </div>
+            ) : null}
+
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -2713,8 +2755,8 @@ export default function CheckInForm({
                     }`}
                   >
                     {materialStatus === "ready"
-                      ? "Item Ready"
-                      : "Save Item Progress"}
+                      ? "Item Saved — Safe to Leave"
+                      : "Save Item & Continue Later"}
                   </button>
                 </section>
                 );

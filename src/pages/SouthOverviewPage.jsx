@@ -3,7 +3,6 @@ import {
   CalendarDays,
   History,
   PackageCheck,
-  Plus,
   Truck,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -148,7 +147,7 @@ export default function SouthOverviewPage({
             South Pickups
           </h1>
           <p className="mt-2 max-w-3xl text-lg font-semibold text-slate-500">
-            Add pickups, dispatch routes, and see what is being picked up today.
+            Dispatch routes and see what is being picked up today.
           </p>
         </div>
 
@@ -163,16 +162,6 @@ export default function SouthOverviewPage({
       </div>
 
       <section className="mb-6 grid gap-3 lg:grid-cols-2">
-        {canOpen("supplier-runs-add") ? (
-          <QuickAction
-            icon={Plus}
-            title="Add South POs"
-            description="Create a pickup request for dispatch."
-            tone="red"
-            onClick={() => onPageChange?.("supplier-runs-add")}
-          />
-        ) : null}
-
         {canOpen("supplier-runs-check") ? (
           <QuickAction
             icon={PackageCheck}

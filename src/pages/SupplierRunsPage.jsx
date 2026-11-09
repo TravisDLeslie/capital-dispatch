@@ -25,6 +25,7 @@ import {
 import Breadcrumbs from "../components/Breadcrumbs";
 import CustomerNameBadge from "../components/CustomerNameBadge";
 import EmptyState from "../components/EmptyState";
+import OrderCopyAttachments from "../components/OrderCopyAttachments";
 import PageContainer from "../components/PageContainer";
 import SupplierRunCard from "../components/SupplierRunCard";
 import SupplierRunForm from "../components/SupplierRunForm";
@@ -2317,6 +2318,19 @@ export default function SupplierRunsPage({
                             Choose a driver and truck.
                           </p>
                         </div>
+
+                        <OrderCopyAttachments
+                          recordType="south"
+                          recordId={supplierRun.id}
+                          documents={supplierRun.orderCopyDocuments}
+                          compact
+                          onChange={(orderCopyDocuments) =>
+                            onUpdateSupplierRun?.(supplierRun.id, {
+                              orderCopyDocuments,
+                              updatedAt: new Date().toISOString(),
+                            })
+                          }
+                        />
 
                         <div className="grid gap-3 sm:grid-cols-2">
                         <label className="block">

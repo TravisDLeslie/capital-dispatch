@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
+import MarkDeliveredModal from "../components/MarkDeliveredModal";
 import OrderDetailsModal from "../components/OrderDetailsModal";
 import PageContainer from "../components/PageContainer";
 import {
@@ -507,7 +508,9 @@ function formatDateLabel(value) {
 }
 
 function getDeliveryDateGroupKey(delivery) {
-  return String(delivery?.deliveryDate || "").trim();
+  return String(
+    delivery?._dispatchDisplayDate ?? delivery?.deliveryDate ?? "",
+  ).trim();
 }
 
 function getDeliveryDateGroupLabel(dateKey) {
@@ -1312,6 +1315,11 @@ function DeliveryDispatchOverview({
   canMarkDelivered,
   markingDeliveredId,
   onMarkDelivered,
+  uploadingDeliveryId,
+  attachedDeliveryOrderId,
+  deliveryOrderInputRefs,
+  onDeliveryOrderUpload,
+  onPreviewDeliveryOrder,
 }) {
   const needsAssignmentCount = totalDeliveries.filter(
     (delivery) =>
@@ -1487,6 +1495,9 @@ function DeliveryDispatchOverview({
                 ? delivery.items
                 : [];
               const yardStockItems = items.filter(isYardStockItem);
+              const deliveryOrderDocuments = getDeliveryOrderDocuments(delivery);
+              const isUploadingDeliveryOrder =
+                uploadingDeliveryId === delivery.id;
               const routeMetric = routeMetrics[String(delivery.id || "")];
               const primaryDriver = getPrimaryDriver(delivery);
               const primaryVehicleId = getPrimaryVehicleId(delivery);
@@ -1515,8 +1526,9 @@ function DeliveryDispatchOverview({
                     />
                   ) : null}
                   <article
-                  className="grid min-w-0 gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-slate-300 hover:shadow-sm xl:h-[190px] xl:grid-cols-[minmax(160px,0.9fr)_minmax(220px,1.1fr)_minmax(280px,1.25fr)_minmax(190px,0.9fr)_minmax(150px,0.65fr)_120px] xl:items-stretch"
-                >
+                    id={`delivery-lineup-${delivery.id}`}
+                    className="grid min-w-0 gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-slate-300 hover:shadow-sm xl:grid-cols-[minmax(160px,0.9fr)_minmax(240px,1.15fr)_minmax(300px,1.3fr)_minmax(210px,0.95fr)_minmax(180px,0.75fr)] xl:grid-rows-[minmax(132px,1fr)_auto] xl:items-stretch"
+                  >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-[#FC2C38]">
                       {getRouteMarkerLabel(
@@ -1532,7 +1544,7 @@ function DeliveryDispatchOverview({
                             onOpenOrder(delivery.orderNumber);
                           }}
                           onKeyDown={(event) => event.stopPropagation()}
-                          className="text-left text-xs font-black uppercase tracking-[0.12em] text-[#FC2C38] underline decoration-red-200 underline-offset-4 transition hover:decoration-[#FC2C38]"
+                          className="whitespace-nowrap text-left text-[10px] font-black uppercase tracking-[0.08em] text-[#FC2C38] underline decoration-red-200 underline-offset-4 transition hover:decoration-[#FC2C38] sm:text-[11px]"
                           title={`View complete order ${delivery.orderNumber}`}
                         >
                           Order {delivery.orderNumber}
@@ -1747,19 +1759,79 @@ function DeliveryDispatchOverview({
                     </span>
                   </button>
 
-                  <div className="flex h-full min-w-0 flex-col items-stretch justify-center gap-2">
+                  <div className="col-span-full flex min-w-0 flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-2">
+                    <div className="mr-auto flex min-w-0 flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          rememberDeliveryOrderUploadContext(delivery.id);
+                          deliveryOrderInputRefs.current[delivery.id]?.click();
+                        }}
+                        disabled={isUploadingDeliveryOrder}
+                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 text-[11px] font-black text-blue-800 transition hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                        {isUploadingDeliveryOrder
+                          ? "Uploading..."
+                          : "Add Delivery Order Copy"}
+                      </button>
+
+                      {deliveryOrderDocuments.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onPreviewDeliveryOrder({
+                              ...deliveryOrderDocuments[0],
+                              deliveryId: delivery.id,
+                              orderNumber: delivery.orderNumber,
+                            });
+                          }}
+                          className="inline-flex min-h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-black text-slate-700 transition hover:border-blue-300 hover:text-blue-800"
+                        >
+                          <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                          View {deliveryOrderDocuments.length}{" "}
+                          {deliveryOrderDocuments.length === 1 ? "copy" : "copies"}
+                        </button>
+                      ) : null}
+
+                      {attachedDeliveryOrderId === delivery.id ? (
+                        <span className="inline-flex min-h-9 items-center gap-1.5 rounded-xl bg-emerald-50 px-3 text-[10px] font-black uppercase tracking-[0.08em] text-emerald-700">
+                          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          Attached
+                        </span>
+                      ) : null}
+
+                      <input
+                        ref={(inputElement) => {
+                          if (inputElement) {
+                            deliveryOrderInputRefs.current[delivery.id] =
+                              inputElement;
+                          }
+                        }}
+                        type="file"
+                        accept="image/*,application/pdf,.pdf"
+                        multiple
+                        disabled={isUploadingDeliveryOrder}
+                        onChange={(event) => {
+                          rememberDeliveryOrderUploadContext(delivery.id);
+                          onDeliveryOrderUpload(delivery, event.target.files);
+                          event.target.value = "";
+                        }}
+                        className="sr-only"
+                      />
+                    </div>
+
                     <button
                       type="button"
                       onClick={() => onDispatchDelivery(delivery)}
                       disabled={
                         savingDeliveryId === delivery.id ||
                         !hasUnsavedChanges ||
-                        !primaryDriver ||
-                        (vehicleOptions.length > 0 && !primaryVehicleId) ||
-                        !delivery.deliveryDate ||
-                        !delivery.deliveryTimeSlot
+                        !delivery.deliveryDate
                       }
-                      className={`inline-flex min-h-9 items-center justify-center rounded-xl px-2 text-xs font-black transition ${
+                      className={`inline-flex min-h-9 min-w-28 items-center justify-center rounded-xl px-4 text-xs font-black transition ${
                         hasUnsavedChanges
                           ? "bg-emerald-700 text-white hover:bg-emerald-800"
                           : "cursor-not-allowed bg-slate-200 text-slate-500"
@@ -1782,7 +1854,7 @@ function DeliveryDispatchOverview({
                           savingDeliveryId === delivery.id ||
                           markingDeliveredId === delivery.id
                         }
-                        className="inline-flex min-h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-emerald-200 bg-white px-2 text-[11px] font-black text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-60"
+                        className="inline-flex min-h-9 min-w-36 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-emerald-200 bg-white px-4 text-[11px] font-black text-emerald-800 transition hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-60"
                         title="Mark this delivery as delivered"
                       >
                         <CheckCircle2
@@ -2138,7 +2210,7 @@ function DeliveryRouteMapPlanner({
           className="min-w-0 flex-1 text-left"
         >
           <span className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+            <span className="whitespace-nowrap text-[10px] font-black uppercase tracking-[0.08em] text-[#FC2C38] sm:text-[11px]">
               Order {delivery.orderNumber}
             </span>
             {delivery.dispatchStatus === "needsDispatch" || !delivery.driver ? (
@@ -2566,6 +2638,7 @@ export default function DeliveryDispatchPage({
   const [savingDeliveryId, setSavingDeliveryId] = useState("");
   const [savedDeliveryId, setSavedDeliveryId] = useState("");
   const [markingDeliveredId, setMarkingDeliveredId] = useState("");
+  const [deliveryToMarkDelivered, setDeliveryToMarkDelivered] = useState(null);
   const [uploadingDeliveryId, setUploadingDeliveryId] = useState("");
   const [deletingDeliveryOrderId, setDeletingDeliveryOrderId] = useState("");
   const [attachedDeliveryOrderId, setAttachedDeliveryOrderId] = useState("");
@@ -2618,19 +2691,14 @@ export default function DeliveryDispatchPage({
       return;
     }
 
-    setOpenDeliveryKeys((currentOpenDeliveryKeys) => ({
-      ...currentOpenDeliveryKeys,
-      [uploadTargetId]: true,
-    }));
-
     if (getDeliveryOrderDocuments(uploadTarget).length > 0) {
       setAttachedDeliveryOrderId(uploadTargetId);
     }
 
     window.setTimeout(() => {
       document
-        .getElementById(`delivery-dispatch-${uploadTargetId}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        .getElementById(`delivery-lineup-${uploadTargetId}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 75);
 
     clearDeliveryOrderUploadTarget();
@@ -2654,6 +2722,11 @@ export default function DeliveryDispatchPage({
   const routeMapDeliveries = useMemo(
     () =>
       deliveries
+        .filter(
+          (delivery) =>
+            delivery.status !== "complete" &&
+            (!routeMapDate || delivery.deliveryDate === routeMapDate),
+        )
         .map((delivery) => {
           const schedule =
             draftSchedules[delivery.id] ||
@@ -2667,6 +2740,7 @@ export default function DeliveryDispatchPage({
           return {
             ...delivery,
             ...schedule,
+            _dispatchDisplayDate: delivery.deliveryDate || "",
             driver: assignments[0]?.driver ?? delivery.driver,
             drivers: assignments.map((assignment) => assignment.driver),
             dispatchAssignments: assignments,
@@ -2676,11 +2750,6 @@ export default function DeliveryDispatchPage({
                 : delivery.deliveryRouteOrder,
           };
         })
-        .filter(
-          (delivery) =>
-            delivery.status !== "complete" &&
-            (!routeMapDate || delivery.deliveryDate === routeMapDate),
-        )
         .sort(compareDeliveriesByDateAndRoute),
     [
       deliveries,
@@ -3013,32 +3082,25 @@ export default function DeliveryDispatchPage({
 
   async function handleDispatchDelivery(delivery) {
     setSavedDeliveryId("");
+    const assignmentsWereEdited = Object.prototype.hasOwnProperty.call(
+      draftAssignments,
+      delivery.id,
+    );
     const assignments = getAssignments(delivery).map((assignment, index) =>
       createAssignment(index, assignment),
     );
-    const invalidAssignment = assignments.find(
-      (assignment) =>
-        !driverOptions.includes(assignment.driver) ||
-        (vehicleOptions.length > 0 && !assignment.vehicleId),
-    );
-
-    if (invalidAssignment) {
-      setError(
-        vehicleOptions.length > 0
-          ? `Select a driver and truck for order ${delivery.orderNumber}.`
-          : `Select a driver for order ${delivery.orderNumber}.`,
-      );
-      return;
-    }
-
     const schedule = getSchedule(delivery);
 
-    if (!schedule.deliveryDate || !schedule.deliveryTimeSlot) {
-      setError(
-        `Select a delivery date and time slot for order ${delivery.orderNumber}.`,
-      );
+    if (!schedule.deliveryDate) {
+      setError(`Select a delivery date for order ${delivery.orderNumber}.`);
       return;
     }
+
+    const completeAssignment = assignmentsReady(
+      assignments,
+      vehicleOptions,
+      driverOptions,
+    );
 
     const deliveryWithDraftSchedule = getDeliveryWithDraftSchedule(delivery);
     const routeMetric = routeMetrics[String(delivery.id || "")];
@@ -3053,11 +3115,14 @@ export default function DeliveryDispatchPage({
         roughTiming.oneWayDriveMinutes ||
         0,
     };
-    const scheduleConflictDetails = findScheduleConflictDetails(
-      deliveryWithSchedule,
-      assignments,
-      deliveries,
-    );
+    const scheduleConflictDetails =
+      schedule.deliveryTimeSlot && completeAssignment
+        ? findScheduleConflictDetails(
+            deliveryWithSchedule,
+            assignments,
+            deliveries,
+          )
+        : null;
 
     if (scheduleConflictDetails) {
       const conflictSummary = getConflictSummary(scheduleConflictDetails);
@@ -3077,12 +3142,19 @@ export default function DeliveryDispatchPage({
 
     try {
       await onUpdateDelivery(delivery.id, {
-        driver: primaryAssignment.driver,
-        drivers: assignments.map((assignment) => assignment.driver),
-        vehicleId: primaryAssignment.vehicleId,
-        vehicleTitle: primaryAssignment.vehicleTitle,
-        vehicleBadge: primaryAssignment.vehicleBadge,
-        dispatchAssignments: assignments,
+        ...(assignmentsWereEdited
+          ? {
+              driver: primaryAssignment.driver,
+              drivers: assignments
+                .map((assignment) => assignment.driver)
+                .filter(Boolean),
+              vehicleId: primaryAssignment.vehicleId,
+              vehicleTitle: primaryAssignment.vehicleTitle,
+              vehicleBadge: primaryAssignment.vehicleBadge,
+              dispatchAssignments: assignments,
+              dispatchStatus: completeAssignment ? "assigned" : "needsDispatch",
+            }
+          : {}),
         deliveryDate: schedule.deliveryDate,
         deliveryTimeSlot: schedule.deliveryTimeSlot,
         deliveryOriginName: schedule.deliveryOriginName,
@@ -3097,10 +3169,24 @@ export default function DeliveryDispatchPage({
                 ) + 1,
               )
             : getDeliveryRouteOrder(delivery),
-        dispatchStatus: "assigned",
         status: delivery.status || "open",
         updatedAt: new Date().toISOString(),
       });
+      if (routeMapDate && routeMapDate !== schedule.deliveryDate) {
+        setRouteMapDate(schedule.deliveryDate);
+      }
+      setDraftSchedules((currentDraftSchedules) => {
+        const nextDraftSchedules = { ...currentDraftSchedules };
+        delete nextDraftSchedules[delivery.id];
+        return nextDraftSchedules;
+      });
+      if (assignmentsWereEdited) {
+        setDraftAssignments((currentDraftAssignments) => {
+          const nextDraftAssignments = { ...currentDraftAssignments };
+          delete nextDraftAssignments[delivery.id];
+          return nextDraftAssignments;
+        });
+      }
       setOpenDeliveryKeys((currentOpenDeliveryKeys) => {
         const nextOpenDeliveryKeys = { ...currentOpenDeliveryKeys };
         delete nextOpenDeliveryKeys[delivery.id];
@@ -3152,8 +3238,7 @@ export default function DeliveryDispatchPage({
         ],
       });
       setAttachedDeliveryOrderId(delivery.id);
-      openDeliveryForDispatch(delivery.id);
-      onPageChange?.("deliveries-dispatch");
+      clearDeliveryOrderUploadTarget();
     } catch (uploadError) {
       console.error("Unable to upload delivery order:", uploadError);
       setError(getDeliveryOrderUploadError(uploadError));
@@ -3227,18 +3312,24 @@ export default function DeliveryDispatchPage({
     }
   }
 
-  async function handleMarkDelivered(delivery) {
+  function handleMarkDelivered(delivery) {
+    if (!canEditDeliveries || !onUpdateDelivery) {
+      return;
+    }
+
+    setDeliveryToMarkDelivered(delivery);
+  }
+
+  async function confirmMarkDelivered(deliveredAt) {
+    const delivery = deliveryToMarkDelivered;
+
+    if (!delivery || !deliveredAt) {
+      return;
+    }
+
     const orderLabel = delivery.orderNumber
       ? `order ${delivery.orderNumber}`
       : "this delivery";
-    const customerLabel = formatCustomerName(delivery.customerName);
-    const confirmed = window.confirm(
-      `Mark ${orderLabel}${customerLabel ? ` for ${customerLabel}` : ""} as delivered?\n\nThis removes it from active Dispatch and keeps it in Delivery History.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
 
     const deliveryElement = document.getElementById(
       `delivery-dispatch-${delivery.id}`,
@@ -3252,8 +3343,6 @@ export default function DeliveryDispatchPage({
         ? visibleRouteMapDeliveries[deliveryIndex + 1]?.id || ""
         : "";
     const previousScrollTop = window.scrollY;
-    const deliveredAt = new Date().toISOString();
-
     setMarkingDeliveredId(delivery.id);
     setError("");
 
@@ -3269,6 +3358,7 @@ export default function DeliveryDispatchPage({
         delete nextOpenDeliveryKeys[delivery.id];
         return nextOpenDeliveryKeys;
       });
+      setDeliveryToMarkDelivered(null);
 
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
@@ -3374,6 +3464,11 @@ export default function DeliveryDispatchPage({
         canMarkDelivered={canEditDeliveries}
         markingDeliveredId={markingDeliveredId}
         onMarkDelivered={handleMarkDelivered}
+        uploadingDeliveryId={uploadingDeliveryId}
+        attachedDeliveryOrderId={attachedDeliveryOrderId}
+        deliveryOrderInputRefs={deliveryOrderInputRefs}
+        onDeliveryOrderUpload={handleDeliveryOrderUpload}
+        onPreviewDeliveryOrder={setPreviewedDeliveryOrder}
       />
 
       {SHOW_DELIVERY_DISPATCH_MAP ? (
@@ -3510,7 +3605,7 @@ export default function DeliveryDispatchPage({
                           <button
                             type="button"
                             onClick={() => setViewingOrderNumber(delivery.orderNumber)}
-                            className="text-left text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38] underline decoration-red-200 underline-offset-4 transition hover:decoration-[#FC2C38]"
+                            className="whitespace-nowrap text-left text-[10px] font-black uppercase tracking-[0.08em] text-[#FC2C38] underline decoration-red-200 underline-offset-4 transition hover:decoration-[#FC2C38] sm:text-[11px]"
                             title={`View complete order ${delivery.orderNumber}`}
                           >
                             Order {delivery.orderNumber}
@@ -4696,6 +4791,20 @@ export default function DeliveryDispatchPage({
           onClose={() => setViewingOrderNumber("")}
         />
       ) : null}
+
+      <MarkDeliveredModal
+        delivery={deliveryToMarkDelivered}
+        isSaving={
+          Boolean(deliveryToMarkDelivered) &&
+          markingDeliveredId === deliveryToMarkDelivered?.id
+        }
+        onClose={() => {
+          if (!markingDeliveredId) {
+            setDeliveryToMarkDelivered(null);
+          }
+        }}
+        onConfirm={confirmMarkDelivered}
+      />
     </PageContainer>
   );
 }

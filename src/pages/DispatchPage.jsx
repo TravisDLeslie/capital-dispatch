@@ -273,7 +273,41 @@ function QueuePanel({
             {description}
           </p>
         </div>
-        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+        <div className="hidden shrink-0 flex-col items-end gap-3 sm:flex">
+          <div className="flex items-center gap-3">
+            <MetricPill
+              value={count}
+              label="waiting"
+              tone={toneStyles.metricTone}
+            />
+            <MetricPill
+              value={todayCount}
+              label="today"
+              tone={toneStyles.metricTone}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black text-white shadow-sm transition ${
+              tone === "delivery"
+                ? "bg-blue-700 hover:bg-blue-800"
+                : "bg-[#FC2C38] hover:bg-red-600"
+            } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+          >
+            Open Queue
+            <ArrowRight
+              aria-hidden="true"
+              className="h-4 w-4"
+              strokeWidth={2.6}
+            />
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3 sm:hidden">
+        <div className="flex gap-2">
           <MetricPill
             value={count}
             label="waiting"
@@ -285,6 +319,19 @@ function QueuePanel({
             tone={toneStyles.metricTone}
           />
         </div>
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={disabled}
+          className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-black text-white shadow-sm transition ${
+            tone === "delivery"
+              ? "bg-blue-700 hover:bg-blue-800"
+              : "bg-[#FC2C38] hover:bg-red-600"
+          } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+        >
+          Open Queue
+          <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2.6} />
+        </button>
       </div>
 
       <div className="mt-5 grid min-w-0 gap-2">
@@ -309,33 +356,6 @@ function QueuePanel({
         )}
       </div>
 
-      <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-200 pt-4">
-        <div className="flex gap-2 sm:hidden">
-          <MetricPill
-            value={count}
-            label="waiting"
-            tone={toneStyles.metricTone}
-          />
-          <MetricPill
-            value={todayCount}
-            label="today"
-            tone={toneStyles.metricTone}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={onClick}
-          disabled={disabled}
-          className={`ml-auto inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black text-white shadow-sm transition ${
-            tone === "delivery"
-              ? "bg-blue-700 hover:bg-blue-800"
-              : "bg-[#FC2C38] hover:bg-red-600"
-          } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
-        >
-          Open Queue
-          <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2.6} />
-        </button>
-      </div>
     </section>
   );
 }

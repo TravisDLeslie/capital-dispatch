@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
+import MarkDeliveredModal from "../components/MarkDeliveredModal";
 import OrderDetailsModal from "../components/OrderDetailsModal";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
@@ -57,6 +58,14 @@ function getDeliveryDrivers(delivery) {
         .filter(Boolean),
     ),
   ];
+}
+
+function hasHardwarePhoto(delivery) {
+  return Boolean(
+    (Array.isArray(delivery?.hardwarePhotos) &&
+      delivery.hardwarePhotos.some((photo) => photo?.dataUrl)) ||
+      delivery?.hardwarePhoto?.dataUrl,
+  );
 }
 
 function getOpenDeliveryList(deliveries) {
@@ -219,7 +228,7 @@ function ScheduleDeliveryCard({
             <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
             {getDeliveryBlockSummary(delivery)}
           </span>
-          {delivery.hasHardware && !delivery.hardwareChecked ? (
+          {delivery.hasHardware && !hasHardwarePhoto(delivery) ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-1.5 text-[#FC2C38]">
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
               Hardware
@@ -400,6 +409,7 @@ export default function DeliveryDashboardPage({
   const [dragOverDeliveryId, setDragOverDeliveryId] = useState("");
   const [reorderingRouteId, setReorderingRouteId] = useState("");
   const [markingDeliveredId, setMarkingDeliveredId] = useState("");
+  const [deliveryToMarkDelivered, setDeliveryToMarkDelivered] = useState(null);
   const [viewingDelivery, setViewingDelivery] = useState(null);
   const openDeliveries = useMemo(() => getOpenDeliveryList(deliveries), [deliveries]);
   const selectedDateDeliveries = useMemo(
@@ -421,7 +431,7 @@ export default function DeliveryDashboardPage({
     first.localeCompare(second),
   );
   const hardwareNeededCount = selectedDateDeliveries.filter(
-    (delivery) => delivery.hasHardware && !delivery.hardwareChecked,
+    (delivery) => delivery.hasHardware && !hasHardwarePhoto(delivery),
   ).length;
   const upcomingPageId = allowedPageIds.includes(
     "deliveries-queued-upcoming",
@@ -486,24 +496,21 @@ export default function DeliveryDashboardPage({
     await saveRouteOrder(nextRouteDeliveries, delivery.id);
   }
 
-  async function handleMarkDelivered(delivery) {
+  function handleMarkDelivered(delivery) {
     if (!canEditDeliveries || !onUpdateDelivery) {
       return;
     }
 
-    const orderLabel = delivery.orderNumber
-      ? `order ${delivery.orderNumber}`
-      : "this delivery";
-    const customerLabel = formatCustomerName(delivery.customerName);
-    const confirmed = window.confirm(
-      `Mark ${orderLabel}${customerLabel ? ` for ${customerLabel}` : ""} as delivered?\n\nThis removes it from the active schedule and keeps it in Delivery History.`,
-    );
+    setDeliveryToMarkDelivered(delivery);
+  }
 
-    if (!confirmed) {
+  async function confirmMarkDelivered(deliveredAt) {
+    const delivery = deliveryToMarkDelivered;
+
+    if (!delivery || !deliveredAt) {
       return;
     }
 
-    const deliveredAt = new Date().toISOString();
     setMarkingDeliveredId(delivery.id);
     setError("");
 
@@ -514,6 +521,7 @@ export default function DeliveryDashboardPage({
         deliveryCompletionSource: "dashboardOverride",
         deliveryOverrideAt: deliveredAt,
       });
+      setDeliveryToMarkDelivered(null);
     } catch (updateError) {
       console.error("Unable to mark delivery complete:", updateError);
       setError("Unable to mark that delivery as delivered. Try again.");
@@ -823,6 +831,20 @@ export default function DeliveryDashboardPage({
           onClose={() => setViewingDelivery(null)}
         />
       ) : null}
+
+      <MarkDeliveredModal
+        delivery={deliveryToMarkDelivered}
+        isSaving={
+          Boolean(deliveryToMarkDelivered) &&
+          markingDeliveredId === deliveryToMarkDelivered?.id
+        }
+        onClose={() => {
+          if (!markingDeliveredId) {
+            setDeliveryToMarkDelivered(null);
+          }
+        }}
+        onConfirm={confirmMarkDelivered}
+      />
     </PageContainer>
   );
 }

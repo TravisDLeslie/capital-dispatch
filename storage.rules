@@ -51,6 +51,34 @@ service firebase.storage {
       );
     }
 
+    function canManageDispatchOrderCopies() {
+      return isAdmin() || (
+        isApproved() && (
+          userProfile().workView == "dispatch-ops" ||
+          hasAnyPermission([
+            "south",
+            "supplier-runs-add",
+            "supplier-runs-check",
+            "supplier-runs-dispatch",
+            "supplier-runs-calendar",
+            "south-calendar",
+            "their-truck-overview",
+            "their-truck-pos",
+            "their-truck-calendar",
+            "their-truck-history",
+            "po-calendar",
+            "receiving",
+            "deliveries",
+            "deliveries-add",
+            "deliveries-dispatch",
+            "deliveries-calendar",
+            "deliveries-queue",
+            "deliveries-history"
+          ])
+        )
+      );
+    }
+
     function isAllowedDeliveryOrderFile() {
       return request.resource.size <= 15 * 1024 * 1024 &&
         request.resource.contentType.matches(
@@ -63,6 +91,13 @@ service firebase.storage {
       allow create, update: if canManageDeliveryOrders() &&
         isAllowedDeliveryOrderFile();
       allow delete: if canManageDeliveryOrders();
+    }
+
+    match /dispatchOrderCopies/{recordType}/{recordId}/{fileName} {
+      allow read: if isApproved();
+      allow create, update: if canManageDispatchOrderCopies() &&
+        isAllowedDeliveryOrderFile();
+      allow delete: if canManageDispatchOrderCopies();
     }
 
     match /supplierRuns/{supplierRunId}/items/{itemId}/{fileName} {

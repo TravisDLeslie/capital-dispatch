@@ -81,6 +81,7 @@ import {
   subscribeToDeliveries,
   updateDelivery,
 } from "./utils/deliveryStorage";
+import { deleteDeliveryOrderFile } from "./utils/deliveryOrderStorage";
 import {
   addCustomer,
   subscribeToCustomers,
@@ -285,6 +286,7 @@ const VendorSettingsPage = lazy(() => import("./pages/VendorSettingsPage"));
 const YardTasksPage = lazy(() => import("./pages/YardTasksPage"));
 
 const DELETE_PO_CODE = "3105";
+const PAST_DELIVERY_DELETE_CODE = "1905";
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
 const LOGIN_RESTORE_TIMEOUT_MS = 12_000;
 const PROFILE_RESTORE_TIMEOUT_MS = 12_000;
@@ -1159,7 +1161,7 @@ type InventorySettings = {
   [key: string]: unknown;
 };
 
-function canDeleteRecord(label: string) {
+function canDeleteRecord(label: string, requiredCode = DELETE_PO_CODE) {
   const enteredCode = window.prompt(
     `Enter the internal delete code to delete ${label}.`,
   );
@@ -1168,7 +1170,7 @@ function canDeleteRecord(label: string) {
     return false;
   }
 
-  if (enteredCode.trim() !== DELETE_PO_CODE) {
+  if (enteredCode.trim() !== requiredCode) {
     window.alert("Incorrect delete code. Nothing was deleted.");
     return false;
   }
@@ -2478,7 +2480,23 @@ export default function App() {
         delivery.dispatchStatus !== "needsDispatch" &&
         delivery.driver &&
         delivery.hasHardware &&
-        !delivery.hardwareChecked,
+        !(
+          (Array.isArray(delivery.hardwarePhotos) &&
+            delivery.hardwarePhotos.some(
+              (photo) =>
+                Boolean(
+                  (photo as { dataUrl?: string } | null | undefined)?.dataUrl,
+                ),
+            )) ||
+          Boolean(
+            (
+              delivery.hardwarePhoto as
+                | { dataUrl?: string }
+                | null
+                | undefined
+            )?.dataUrl,
+          )
+        ),
     ).length,
     yardTasksOpen: yardTasks.filter(
       (yardTask) => yardTask.status !== "complete",
@@ -4787,6 +4805,56 @@ export default function App() {
     setSyncError("");
   }
 
+  async function handleUpdateCompletedDeliveryTime(
+    deliveryId: string,
+    deliveredAt: string,
+  ) {
+    const delivery = deliveries.find(
+      (currentDelivery) => currentDelivery.id === deliveryId,
+    );
+    const orderLabel = delivery?.orderNumber
+      ? `the delivered date for order ${delivery.orderNumber}`
+      : "this delivered date";
+
+    if (!canEditRecord(orderLabel)) {
+      return false;
+    }
+
+    await handleUpdateDelivery(deliveryId, {
+      deliveredAt,
+      deliveryOverrideAt: deliveredAt,
+      deliveryTimeCorrectedAt: new Date().toISOString(),
+    });
+
+    return true;
+  }
+
+  async function deleteDeliveryRecord(deliveryId: string) {
+    const delivery = deliveries.find(
+      (currentDelivery) => currentDelivery.id === deliveryId,
+    );
+
+    const deliveryOrderDocuments = Array.isArray(
+      delivery?.deliveryOrderDocuments,
+    )
+      ? delivery.deliveryOrderDocuments.filter((document) => document?.path)
+      : [];
+
+    if (deliveryOrderDocuments.length > 0) {
+      await Promise.all(
+        deliveryOrderDocuments.map((document) =>
+          deleteDeliveryOrderFile(document),
+        ),
+      );
+    }
+
+    const updatedDeliveries = await deleteDelivery(deliveryId);
+
+    setDeliveries(updatedDeliveries);
+    setEditingDeliveryId("");
+    setSyncError("");
+  }
+
   async function handleDeleteDelivery(deliveryId: string) {
     const delivery = deliveries.find(
       (currentDelivery) => currentDelivery.id === deliveryId,
@@ -4800,11 +4868,23 @@ export default function App() {
       return;
     }
 
-    const updatedDeliveries = await deleteDelivery(deliveryId);
+    await deleteDeliveryRecord(deliveryId);
+  }
 
-    setDeliveries(updatedDeliveries);
-    setEditingDeliveryId("");
-    setSyncError("");
+  async function handleDeletePastDelivery(deliveryId: string) {
+    const delivery = deliveries.find(
+      (currentDelivery) => currentDelivery.id === deliveryId,
+    );
+    const orderLabel =
+      typeof delivery?.orderNumber === "string"
+        ? `order ${delivery.orderNumber}`
+        : "this past delivery";
+
+    if (!canDeleteRecord(orderLabel, PAST_DELIVERY_DELETE_CODE)) {
+      return;
+    }
+
+    await deleteDeliveryRecord(deliveryId);
   }
 
   function handleEditDelivery(deliveryId: string) {
@@ -6539,15 +6619,7 @@ export default function App() {
           eyebrow="South"
           description="Dispatch and pickup work for South runs."
           icon={Truck}
-          primaryAction={
-            dashboardAllowedPageIds.includes("supplier-runs-add")
-              ? {
-                  label: "Add PO",
-                  icon: Plus,
-                  onClick: () => setCurrentPage("supplier-runs-add"),
-                }
-              : null
-          }
+          primaryAction={null}
           stats={[
             {
               icon: ShieldCheck,
@@ -6654,19 +6726,7 @@ export default function App() {
           description="Quick access to PO entry, PO lookup, pricing, and stock reference."
           icon={UsersRound}
           primaryAction={
-            dashboardAllowedPageIds.includes("supplier-runs-add")
-              ? {
-                  label: "Add South PO",
-                  icon: Plus,
-                  onClick: () => setCurrentPage("supplier-runs-add"),
-                }
-              : dashboardAllowedPageIds.includes("their-truck-pos")
-                ? {
-                    label: "Add Their Truck PO",
-                    icon: Plus,
-                    onClick: () => setCurrentPage("their-truck-pos"),
-                  }
-                : dashboardAllowedPageIds.includes("customers-add")
+            dashboardAllowedPageIds.includes("customers-add")
               ? {
                   label: "Add Customer",
                   icon: Plus,
@@ -6676,34 +6736,6 @@ export default function App() {
           }
           stats={[]}
           actions={[
-            dashboardAllowedPageIds.includes("supplier-runs-add")
-              ? {
-                  icon: Truck,
-                  label: "PO Request",
-                  title: "Add South PO",
-                  description:
-                    "Send a pickup request to dispatch for South runs.",
-                  metric: "+",
-                  metricLabel: "South",
-                  tone: "marketing",
-                  variant: "live",
-                  onClick: () => setCurrentPage("supplier-runs-add"),
-                }
-              : null,
-            dashboardAllowedPageIds.includes("their-truck-pos")
-              ? {
-                  icon: Warehouse,
-                  label: "Vendor Truck",
-                  title: "Add Their Truck PO",
-                  description:
-                    "Schedule a PO arriving on a supplier/vendor truck.",
-                  metric: "+",
-                  metricLabel: "Inbound",
-                  tone: "dispatch",
-                  variant: "default",
-                  onClick: () => setCurrentPage("their-truck-pos"),
-                }
-              : null,
             dashboardAllowedPageIds.includes("sales-converter")
               ? {
                   icon: Calculator,
@@ -7929,6 +7961,10 @@ export default function App() {
             deliveries={visibleDeliveries}
             onPageChange={navigateToPage}
             onUpdateDelivery={handleUpdateDelivery}
+            onUpdateDeliveredAt={handleUpdateCompletedDeliveryTime}
+            onDeleteDelivery={
+              isSuperAdmin ? handleDeletePastDelivery : undefined
+            }
             isSuperAdmin={isSuperAdmin}
           />
         );

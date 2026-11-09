@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
+import OrderCopyAttachments from "../components/OrderCopyAttachments";
 import PageContainer from "../components/PageContainer";
 import { formatDateInput, getDateInputValue } from "../utils/dateHelpers";
 import { isOpenSupplierRun } from "../utils/supplierRunStatus";
@@ -616,6 +617,21 @@ function TheirTruckCalendarEditor({
               Stock PO
             </label>
           </section>
+
+          <OrderCopyAttachments
+            recordType="their-truck"
+            recordId={theirTruckPO.id}
+            documents={draft.orderCopyDocuments}
+            onChange={async (orderCopyDocuments) => {
+              const updatedDraft = {
+                ...draft,
+                orderCopyDocuments,
+                updatedAt: new Date().toISOString(),
+              };
+              await onSave(updatedDraft);
+              setDraft(updatedDraft);
+            }}
+          />
 
           <section className="rounded-3xl border border-blue-100 bg-blue-50/40 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">

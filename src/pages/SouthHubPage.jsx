@@ -5,7 +5,6 @@ import {
   ClipboardList,
   History,
   PackageCheck,
-  Plus,
   Truck,
   Warehouse,
 } from "lucide-react";
@@ -292,20 +291,6 @@ export default function SouthHubPage({
       : null,
   ].filter(Boolean);
   const theirTruckActionCards = [
-    canOpen("their-truck-pos")
-      ? {
-          icon: Truck,
-          label: "Vendor Truck",
-          title: "Their Truck POs",
-          description:
-            "POs coming in on a vendor truck, tied to vendor cadence and receiving.",
-          metric: scheduledTheirTruckPOs.length,
-          metricLabel: "Scheduled",
-          tone: "dispatch",
-          variant: "default",
-          pageId: "their-truck-pos",
-        }
-      : null,
     canOpen("their-truck-calendar")
       ? {
           icon: Warehouse,
@@ -339,12 +324,6 @@ export default function SouthHubPage({
     activeActionTab === "theirTruck" ? theirTruckActionCards : southActionCards;
   const pageTitle = isDriverView ? "South" : "Fulfillment";
   const pageEyebrow = isDriverView ? "South" : "PO Routing";
-  const southLandingPage =
-    (canOpen("supplier-runs-add") && "supplier-runs-add") ||
-    (canOpen("supplier-runs-dispatch") && "supplier-runs-dispatch") ||
-    (canOpen("supplier-runs-check") && "supplier-runs-check") ||
-    (canOpen("supplier-runs-calendar") && "supplier-runs-calendar") ||
-    "south";
   const titleCalendarPage =
     !isDriverView && canOpen("po-calendar")
       ? "po-calendar"
@@ -395,110 +374,7 @@ export default function SouthHubPage({
           </p>
         </div>
 
-        {!isDriverView ? (
-          <div className="grid gap-2 sm:mt-1 sm:grid-cols-2">
-            {canOpen("supplier-runs-add") ? (
-              <button
-                type="button"
-                onClick={() => onPageChange("supplier-runs-add")}
-                className="inline-flex min-h-[48px] min-w-[160px] items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-[#FC2C38] px-4 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:px-5"
-              >
-                <Plus aria-hidden="true" className="h-5 w-5" strokeWidth={2.7} />
-                Add South Pickup
-              </button>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={() => onPageChange("their-truck-pos")}
-              className="inline-flex min-h-[48px] min-w-[100px] items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 sm:px-5"
-            >
-              <Plus aria-hidden="true" className="h-5 w-5" strokeWidth={2.7} />
-              PO
-            </button>
-          </div>
-        ) : canOpen("supplier-runs-add") ? (
-          <button
-            type="button"
-            onClick={() => onPageChange(southLandingPage)}
-            className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:mt-1"
-          >
-            <Plus aria-hidden="true" className="h-5 w-5" strokeWidth={2.7} />
-            Add PO
-          </button>
-        ) : null}
       </div>
-
-      {!isDriverView ? (
-        <section className="mb-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-                Fulfillment
-              </p>
-              <h2 className="mt-1 text-2xl font-black text-slate-950">
-                Choose how material is arriving
-              </h2>
-            </div>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            {canOpen("supplier-runs-add") ? (
-              <button
-                type="button"
-                onClick={() => onPageChange("supplier-runs-add")}
-                className="group flex items-center gap-4 rounded-2xl border border-red-200 bg-red-50/60 p-4 text-left transition hover:border-red-300 hover:bg-red-50"
-              >
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FC2C38] text-white">
-                  <Truck aria-hidden="true" className="h-6 w-6" strokeWidth={2.5} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-lg font-black text-slate-950">
-                    South Pickup
-                  </span>
-                  <span className="mt-1 block text-sm font-semibold text-slate-600">
-                    Our driver is picking it up from a supplier.
-                  </span>
-                </span>
-                <ArrowRight
-                  aria-hidden="true"
-                  className="h-5 w-5 shrink-0 text-[#FC2C38] transition group-hover:translate-x-1"
-                  strokeWidth={2.6}
-                />
-              </button>
-            ) : null}
-
-            {canOpen("their-truck-pos") ? (
-              <button
-                type="button"
-                onClick={() => onPageChange("their-truck-pos")}
-                className="group flex items-center gap-4 rounded-2xl border border-blue-200 bg-blue-50/60 p-4 text-left transition hover:border-blue-300 hover:bg-blue-50"
-              >
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white">
-                  <PackageCheck
-                    aria-hidden="true"
-                    className="h-6 w-6"
-                    strokeWidth={2.5}
-                  />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-lg font-black text-slate-950">
-                    Their Truck PO
-                  </span>
-                  <span className="mt-1 block text-sm font-semibold text-slate-600">
-                    Vendor truck or carrier is delivering to us.
-                  </span>
-                </span>
-                <ArrowRight
-                  aria-hidden="true"
-                  className="h-5 w-5 shrink-0 text-blue-700 transition group-hover:translate-x-1"
-                  strokeWidth={2.6}
-                />
-              </button>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
 
       <section className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">

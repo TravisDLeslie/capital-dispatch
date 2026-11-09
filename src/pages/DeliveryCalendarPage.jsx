@@ -149,6 +149,29 @@ function getCalendarMonthLabel(monthDate) {
   }).format(monthDate);
 }
 
+function getLocalDateKey(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function getNextFiveDays() {
+  const today = new Date(`${getTodayDateValue()}T12:00:00`);
+
+  return Array.from({ length: 5 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + index);
+
+    return {
+      date,
+      dateKey: getLocalDateKey(date),
+      isToday: index === 0,
+    };
+  });
+}
+
 function getCompactDateLabel(dateKey) {
   if (!dateKey) {
     return "Choose a date";
@@ -833,6 +856,26 @@ export default function DeliveryCalendarPage({
 
     return dateCounts;
   }, [safeDeliveries]);
+  const fiveDayOverview = useMemo(
+    () =>
+      getNextFiveDays().map((day) => {
+        const dayDeliveries = getDayDeliveries(
+          safeDeliveries,
+          day.dateKey,
+        );
+        const needsDispatchCount = dayDeliveries.filter(
+          deliveryNeedsDispatch,
+        ).length;
+
+        return {
+          ...day,
+          deliveryCount: dayDeliveries.length,
+          needsDispatchCount,
+          scheduledCount: dayDeliveries.length - needsDispatchCount,
+        };
+      }),
+    [safeDeliveries],
+  );
   const calendarDays = useMemo(
     () => getCalendarMonthDays(calendarMonth),
     [calendarMonth],
@@ -1132,6 +1175,102 @@ export default function DeliveryCalendarPage({
           ) : null}
         </div>
       </div>
+
+      <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+              Next 5 days
+            </p>
+            <p className="mt-1 text-sm font-bold text-slate-500">
+              Select a day to view its delivery schedule.
+            </p>
+          </div>
+          <CalendarDays
+            aria-hidden="true"
+            className="h-5 w-5 shrink-0 text-[#FC2C38]"
+          />
+        </div>
+
+        <div className="overflow-x-auto p-3 sm:p-4">
+          <div className="grid min-w-[46rem] grid-cols-5 gap-2">
+            {fiveDayOverview.map((day) => {
+              const isSelected = day.dateKey === selectedDate;
+              const weekdayLabel = new Intl.DateTimeFormat("en-US", {
+                weekday: "short",
+              }).format(day.date);
+              const dateLabel = new Intl.DateTimeFormat("en-US", {
+                month: "short",
+                day: "numeric",
+              }).format(day.date);
+
+              return (
+                <button
+                  key={day.dateKey}
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(day.dateKey);
+                    setCalendarMonth(
+                      new Date(
+                        day.date.getFullYear(),
+                        day.date.getMonth(),
+                        1,
+                      ),
+                    );
+                  }}
+                  className={`rounded-2xl border p-3 text-left transition focus:outline-none focus:ring-4 focus:ring-red-100 ${
+                    isSelected
+                      ? "border-[#FC2C38] bg-red-50 shadow-sm"
+                      : "border-slate-200 bg-slate-50 hover:border-red-200 hover:bg-white"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p
+                        className={`text-xs font-black uppercase tracking-[0.12em] ${
+                          isSelected ? "text-[#FC2C38]" : "text-slate-500"
+                        }`}
+                      >
+                        {day.isToday ? "Today" : weekdayLabel}
+                      </p>
+                      <p className="mt-1 text-lg font-black text-slate-950">
+                        {dateLabel}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex min-w-8 items-center justify-center rounded-full px-2 py-1 text-xs font-black ${
+                        day.deliveryCount > 0
+                          ? "bg-slate-950 text-white"
+                          : "bg-white text-slate-400"
+                      }`}
+                    >
+                      {day.deliveryCount}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] font-black uppercase tracking-[0.08em]">
+                    {day.needsDispatchCount > 0 ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-800">
+                        {day.needsDispatchCount} need dispatch
+                      </span>
+                    ) : null}
+                    {day.scheduledCount > 0 ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-800">
+                        {day.scheduledCount} scheduled
+                      </span>
+                    ) : null}
+                    {day.deliveryCount === 0 ? (
+                      <span className="rounded-full bg-white px-2 py-1 text-slate-400">
+                        No deliveries
+                      </span>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
       <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

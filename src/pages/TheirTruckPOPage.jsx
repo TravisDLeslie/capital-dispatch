@@ -6,6 +6,7 @@ import {
   Truck,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
+import OrderCopyAttachments from "../components/OrderCopyAttachments";
 import PageContainer from "../components/PageContainer";
 import SearchableSelect from "../components/SearchableSelect";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
@@ -758,6 +759,22 @@ export default function TheirTruckPOPage({
                     Order {theirTruckPO.orderNumber}
                   </p>
                 ) : null}
+
+                <div className="mt-4">
+                  <OrderCopyAttachments
+                    recordType="their-truck"
+                    recordId={theirTruckPO.id}
+                    documents={theirTruckPO.orderCopyDocuments}
+                    compact
+                    onChange={(orderCopyDocuments) =>
+                      onSaveTheirTruckPO?.({
+                        ...theirTruckPO,
+                        orderCopyDocuments,
+                        updatedAt: new Date().toISOString(),
+                      })
+                    }
+                  />
+                </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-slate-200 pt-3">
                   <button

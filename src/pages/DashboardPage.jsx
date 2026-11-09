@@ -642,14 +642,6 @@ export default function DashboardPage({
       accent: "from-red-500 to-[#FC2C38]",
       actions: [
         {
-          id: "supplier-runs-add",
-          title: "Add South PO",
-          description: "Create a pickup request.",
-          icon: Plus,
-          metric: "+",
-          metricLabel: "PO",
-        },
-        {
           id: "supplier-runs-dispatch",
           title: "Needs Dispatch",
           description: "Assign driver and truck.",
@@ -764,14 +756,6 @@ export default function DashboardPage({
       tone: "border-sky-200 bg-sky-50 text-sky-700",
       accent: "from-sky-500 to-sky-700",
       actions: [
-        {
-          id: "their-truck-pos",
-          title: "Their Truck POs",
-          description: "Add inbound vendor truck POs.",
-          icon: Plus,
-          metric: theirTruckOpenCount,
-          metricLabel: "Open",
-        },
         {
           id: "their-truck-calendar",
           title: "Calendar",

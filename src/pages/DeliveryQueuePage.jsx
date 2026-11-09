@@ -43,6 +43,8 @@ import {
 import { isDeliveryComplete } from "../utils/deliveryStatus";
 import { formatCustomerName } from "../utils/textFormatters";
 
+const MAX_DELIVERY_PROOF_PHOTOS = 10;
+
 function getDirectionsUrl(address) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
     address,
@@ -53,10 +55,6 @@ function getRouteDirectionsUrl(originAddress, destinationAddress) {
   return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(
     originAddress || "",
   )}&destination=${encodeURIComponent(destinationAddress || "")}`;
-}
-
-function getGoogleMapsApiKey() {
-  return import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 }
 
 function formatTimeLabel(value) {
@@ -135,6 +133,55 @@ function getDeliveryOrderDocuments(delivery) {
     : [];
 }
 
+function DeliveryOrderDocumentsPanel({ delivery, documents }) {
+  if (!Array.isArray(documents) || documents.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-black text-blue-950">
+            <FileText className="h-5 w-5" aria-hidden="true" />
+            Delivery Order Copy
+          </p>
+          <p className="mt-1 text-xs font-bold text-blue-700">
+            Open the attached photo or PDF for order {delivery.orderNumber}.
+          </p>
+        </div>
+        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-blue-700 shadow-sm">
+          {documents.length}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {documents.map((document, documentIndex) => (
+          <a
+            key={
+              document.id ||
+              document.path ||
+              `${delivery.id}-delivery-order-${documentIndex}`
+            }
+            href={document.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-white px-3 py-3 text-sm font-black text-slate-900 shadow-sm ring-1 ring-blue-100 transition hover:ring-blue-300"
+          >
+            <span className="min-w-0 truncate">
+              {document.name || `Delivery Order Copy ${documentIndex + 1}`}
+            </span>
+            <ExternalLink
+              className="h-4 w-4 shrink-0 text-blue-700"
+              aria-hidden="true"
+            />
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function getPhotoList(delivery, photoField, photosField) {
   const photos = Array.isArray(delivery?.[photosField])
     ? delivery[photosField].filter((photo) => photo?.dataUrl)
@@ -177,7 +224,7 @@ function loadImage(dataUrl) {
 async function createPhotoFromFile(file) {
   const originalDataUrl = await readFileAsDataUrl(file);
   const image = await loadImage(originalDataUrl);
-  const targetDataUrlLength = 140000;
+  const targetDataUrlLength = 70000;
   const maxWidth = 640;
   const scale = Math.min(maxWidth / image.width, 1);
   const width = Math.round(image.width * scale);
@@ -398,25 +445,6 @@ function getDeliveryItemsLabel(items, scopeSummary) {
   return `${items.length} ${items.length === 1 ? "item" : "items"}`;
 }
 
-function getDeliveryLocationPreview(delivery) {
-  const address = String(delivery?.address || "").trim();
-
-  if (!address) {
-    return "No address";
-  }
-
-  const addressParts = address
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  if (addressParts.length >= 2) {
-    return addressParts[1];
-  }
-
-  return addressParts[0] || address;
-}
-
 function getRouteOverviewTimeLabel(delivery) {
   if (delivery?.driverTargetArrivalTime) {
     return `Be there ${formatTimeLabel(delivery.driverTargetArrivalTime)}`;
@@ -462,23 +490,18 @@ function DeliveryRouteOverview({
   );
 
   return (
-    <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-            Daily Route
-          </p>
-          <p className="mt-1 text-sm font-bold text-slate-500">
-            Tap a stop to bring it into focus.
-          </p>
-        </div>
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+          Daily Route
+        </p>
 
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
           {deliveries.length} {deliveries.length === 1 ? "stop" : "stops"}
         </span>
       </div>
 
-      <div className="-mx-4 mt-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+      <div className="-mx-3 mt-2 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
         {deliveries.map((delivery, deliveryIndex) => {
           const isActive = delivery.id === activeDeliveryId;
           const status = getRouteOverviewStatus(
@@ -494,7 +517,7 @@ function DeliveryRouteOverview({
               key={delivery.id}
               type="button"
               onClick={() => onSelectDelivery(delivery.id)}
-              className={`min-w-[190px] rounded-2xl border p-4 text-left transition ${
+              className={`flex min-w-[150px] items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
                 isActive
                   ? "border-[#FC2C38] bg-red-50 shadow-sm"
                   : isComplete
@@ -505,47 +528,42 @@ function DeliveryRouteOverview({
               }`}
               aria-current={isActive ? "true" : undefined}
             >
-              <div className="flex items-center justify-between gap-3">
-                <span
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl text-sm font-black ${
-                    isActive
-                      ? "bg-[#FC2C38] text-white"
-                      : isComplete
-                        ? "bg-emerald-700 text-white"
-                        : "bg-white text-slate-700"
-                  }`}
-                >
-                  {isComplete ? (
-                    <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-                  ) : (
-                    String(deliveryIndex + 1).padStart(2, "0")
-                  )}
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black ${
+                  isActive
+                    ? "bg-[#FC2C38] text-white"
+                    : isComplete
+                      ? "bg-emerald-700 text-white"
+                      : "bg-white text-slate-700"
+                }`}
+              >
+                {isComplete ? (
+                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  deliveryIndex + 1
+                )}
+              </span>
+
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-black text-slate-950">
+                  {formatCustomerName(delivery.customerName)}
                 </span>
-
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${
-                    isActive
-                      ? "bg-white text-[#FC2C38]"
-                      : isComplete
-                        ? "bg-white text-emerald-700"
-                        : "bg-white text-slate-500"
-                  }`}
-                >
-                  {status}
+                <span className="mt-0.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.06em] text-slate-500">
+                  <span>{getRouteOverviewTimeLabel(delivery)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span
+                    className={
+                      isActive
+                        ? "text-[#FC2C38]"
+                        : isComplete
+                          ? "text-emerald-700"
+                          : "text-slate-500"
+                    }
+                  >
+                    {status}
+                  </span>
                 </span>
-              </div>
-
-              <p className="mt-3 truncate text-lg font-black text-slate-950">
-                {formatCustomerName(delivery.customerName)}
-              </p>
-
-              <p className="mt-1 truncate text-sm font-bold text-slate-500">
-                {getDeliveryLocationPreview(delivery)}
-              </p>
-
-              <p className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">
-                {getRouteOverviewTimeLabel(delivery)}
-              </p>
+              </span>
             </button>
           );
         })}
@@ -563,17 +581,16 @@ function RoutePreviewCard({ delivery }) {
     route: null,
     error: "",
   });
-  const googleMapsApiKey = getGoogleMapsApiKey();
+  const [staticMapFailed, setStaticMapFailed] = useState(false);
 
   const staticMapUrl = useMemo(() => {
     const encodedPolyline = routeState.route?.encodedPolyline;
 
-    if (!googleMapsApiKey || !encodedPolyline || !destinationAddress) {
+    if (!encodedPolyline || !destinationAddress) {
       return "";
     }
 
     const params = new URLSearchParams({
-      key: googleMapsApiKey,
       size: "640x320",
       scale: "2",
       maptype: "roadmap",
@@ -583,13 +600,16 @@ function RoutePreviewCard({ delivery }) {
     params.append("markers", `color:red|label:B|${destinationAddress}`);
     params.append("path", `color:0xff2a3dff|weight:5|enc:${encodedPolyline}`);
 
-    return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
+    return `/api/maps/static?${params.toString()}`;
   }, [
     destinationAddress,
-    googleMapsApiKey,
     originAddress,
     routeState.route?.encodedPolyline,
   ]);
+
+  useEffect(() => {
+    setStaticMapFailed(false);
+  }, [staticMapUrl]);
 
   useEffect(() => {
     if (!originAddress || !destinationAddress) {
@@ -664,17 +684,22 @@ function RoutePreviewCard({ delivery }) {
         </a>
       </div>
 
-      {staticMapUrl ? (
+      {staticMapUrl && !staticMapFailed ? (
         <img
           src={staticMapUrl}
           alt={`Route map to ${delivery.address}`}
           className="mt-4 h-44 w-full rounded-2xl border border-slate-200 object-cover"
+          onError={() => setStaticMapFailed(true)}
         />
       ) : (
         <div className="mt-4 flex h-36 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-sm font-bold text-slate-500">
           {routeState.status === "loading"
             ? "Loading route map..."
-            : "Map preview appears when Google Maps is configured."}
+            : staticMapFailed
+              ? "The map preview could not load. Tap Open Maps for live directions."
+              : routeState.error
+                ? "Route preview is temporarily unavailable."
+                : "Add a delivery address to preview the route."}
         </div>
       )}
 
@@ -716,8 +741,6 @@ const DRIVER_DELIVERY_STEPS = [
   "Complete",
 ];
 
-const MOBILE_DRIVER_DELIVERY_STEPS = ["Load", "Route", "Photos", "Done"];
-
 function DriverDeliveryInformation({
   delivery,
   items,
@@ -743,12 +766,15 @@ function DriverDeliveryInformation({
         <div className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-blue-100">
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.1em] text-slate-500">
             <Phone className="h-4 w-4 text-blue-700" aria-hidden="true" />
-            Phone Number
+            {isReturn ? "Pickup Contact" : "Delivery Contact"}
+          </p>
+          <p className="mt-1 text-base font-black text-slate-950">
+            {delivery.contactName || "No contact name entered"}
           </p>
           {contactPhone ? (
             <a
               href={`tel:${contactPhone}`}
-              className="mt-1 block text-base font-black text-blue-700 underline decoration-blue-200 underline-offset-4"
+              className="mt-1 block text-sm font-black text-blue-700 underline decoration-blue-200 underline-offset-4"
             >
               {contactPhone}
             </a>
@@ -838,21 +864,27 @@ function MobileDeliveryFlowCard({
   generalNotes,
   onPhotoChange,
   onPhotosChange,
-  onHardwareChecked,
   onCompleteDelivery,
   onViewPhoto,
   isFocusedDriverView = false,
 }) {
   const deliveryCardRef = useRef(null);
   const isReturn = isReturnDelivery(delivery);
-  const [loadedDeliveryKeys, setLoadedDeliveryKeys] = useState({});
+  const hasSpecialDeliveryType = ["priority", "hotShot", "return"].includes(
+    delivery.deliveryType,
+  );
   const items = Array.isArray(delivery.items) ? delivery.items : [];
   const deliveryOrderDocuments = getDeliveryOrderDocuments(delivery);
+  const proofPhotoCount = deliveryPhotos.length + hardwarePhotos.length;
+  const proofPhotoLimitReached =
+    proofPhotoCount >= MAX_DELIVERY_PROOF_PHOTOS;
+  const hasRequiredMaterialPhoto = deliveryPhotos.length > 0;
+  const hasRequiredHardwarePhoto =
+    !delivery.hasHardware || hardwarePhotos.length > 0;
+  const canCompleteDelivery =
+    hasRequiredMaterialPhoto && hasRequiredHardwarePhoto;
   const originAddress =
     delivery.deliveryOriginAddress || "3105 W State St, Boise, ID 83703";
-  const isMaterialLoaded = Boolean(loadedDeliveryKeys[delivery.id]);
-  const isHardwareLoaded = !delivery.hasHardware || Boolean(delivery.hardwareChecked);
-  const canLeaveYard = isMaterialLoaded && isHardwareLoaded;
   const stepStatus =
     deliveryStep === 1
       ? "EN ROUTE"
@@ -924,65 +956,45 @@ function MobileDeliveryFlowCard({
           </p>
         </div>
 
-        <button
-          type="button"
-          className="flex h-10 w-10 items-center justify-center rounded-full text-slate-900 transition hover:bg-slate-100"
-          aria-label="Message dispatch"
-        >
-          <MessageSquare className="h-5 w-5" aria-hidden="true" />
-        </button>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1.5 text-xs font-black text-slate-700">
+          {Math.min(deliveryStep + 1, 4)} / 4
+        </span>
       </div>
 
       <div className="space-y-4 p-4">
-        <div className="grid grid-cols-4 items-start gap-1">
-          {MOBILE_DRIVER_DELIVERY_STEPS.map((stepLabel, stepIndex) => {
-            const isActiveStep = deliveryStep === stepIndex;
-            const isCompleteStep = deliveryStep > stepIndex;
-
-            return (
-              <button
-                key={stepLabel}
-                type="button"
-                onClick={() => setDeliveryStep(delivery.id, stepIndex)}
-                className="min-w-0 text-center"
-                aria-current={isActiveStep ? "step" : undefined}
-              >
-                <span
-                  className={`mx-auto flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-black ${
-                    isActiveStep
-                      ? "bg-[#FC2C38] text-white"
-                      : isCompleteStep
-                        ? "bg-emerald-700 text-white"
-                        : "border border-slate-300 bg-slate-50 text-slate-500"
-                  }`}
-                >
-                  {isCompleteStep ? (
-                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  ) : (
-                    stepIndex + 1
-                  )}
-                </span>
-                <span
-                  className={`mt-1 block truncate text-[10px] font-black uppercase leading-3 tracking-[0.04em] ${
-                    isActiveStep ? "text-slate-950" : "text-slate-500"
-                  }`}
-                >
-                  {stepLabel}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
         {deliveryStep < 3 ? (
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
               {stepStatus}
             </p>
 
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">
-              {formatCustomerName(delivery.customerName)}
-            </h2>
+            {delivery.hasHardware ? (
+              <p className="mt-2 inline-flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-black uppercase tracking-[0.08em] text-[#FC2C38]">
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                Load Hardware
+              </p>
+            ) : null}
+
+            <div className="mt-2 flex items-start justify-between gap-3">
+              <h2 className="text-xl font-black tracking-tight text-slate-950">
+                {formatCustomerName(delivery.customerName)}
+              </h2>
+
+              {deliveryStep === 0 ? (
+                <a
+                  href={getRouteDirectionsUrl(originAddress, delivery.address)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-900 shadow-sm"
+                >
+                  <Navigation
+                    className="h-4 w-4 text-[#FC2C38]"
+                    aria-hidden="true"
+                  />
+                  Navigate
+                </a>
+              ) : null}
+            </div>
 
             <p className="text-base font-semibold text-slate-900">
               Order #{delivery.orderNumber}
@@ -992,7 +1004,7 @@ function MobileDeliveryFlowCard({
 
         {deliveryStep === 0 ? (
           <>
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
               <div className="flex min-w-0 items-start gap-3">
                 <MapPin
                   className="mt-1 h-5 w-5 shrink-0 text-slate-900"
@@ -1002,37 +1014,22 @@ function MobileDeliveryFlowCard({
                   {delivery.address}
                 </p>
               </div>
-
-              <a
-                href={getRouteDirectionsUrl(originAddress, delivery.address)}
-                target="_blank"
-                rel="noreferrer"
-                className="flex shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-900 shadow-sm"
-              >
-                <Navigation
-                  className="h-5 w-5 text-[#FC2C38]"
-                  aria-hidden="true"
-                />
-                Navigate
-              </a>
             </div>
 
             <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-slate-200 bg-white text-sm font-black text-slate-900">
-              <div className="flex items-center gap-2 border-b border-r border-slate-200 px-3 py-3">
-                <Clock className="h-4 w-4" aria-hidden="true" />
-                {formatDeliveryTypeLabel(delivery.deliveryType)}
-              </div>
-              <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-3">
+              {hasSpecialDeliveryType ? (
+                <div className="col-span-2 flex items-center gap-2 border-b border-slate-200 px-3 py-3">
+                  <Clock className="h-4 w-4" aria-hidden="true" />
+                  {formatDeliveryTypeLabel(delivery.deliveryType)}
+                </div>
+              ) : null}
+              <div className="flex items-center gap-2 border-r border-slate-200 px-3 py-3">
                 <Truck className="h-4 w-4" aria-hidden="true" />
                 {delivery.unloadType}
               </div>
-              <div className="flex items-center gap-2 border-r border-slate-200 px-3 py-3">
+              <div className="flex items-center gap-2 px-3 py-3">
                 <Package className="h-4 w-4" aria-hidden="true" />
                 {items.length} {items.length === 1 ? "Item" : "Items"}
-              </div>
-              <div className="flex items-center gap-2 px-3 py-3">
-                <ChevronDown className="h-4 w-4" aria-hidden="true" />
-                {scopeSummary.shortLabel || scopeSummary.label}
               </div>
             </div>
 
@@ -1104,60 +1101,15 @@ function MobileDeliveryFlowCard({
               </div>
             ) : null}
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-900">
-                Before You Leave
-              </p>
-
-              <label className="mt-4 flex items-center gap-3 text-sm font-semibold text-slate-900">
-                <input
-                  type="checkbox"
-                  checked={isMaterialLoaded}
-                  onChange={(event) =>
-                    setLoadedDeliveryKeys((currentLoadedDeliveryKeys) => ({
-                      ...currentLoadedDeliveryKeys,
-                      [delivery.id]: event.target.checked,
-                    }))
-                  }
-                  className="h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-red-200"
-                />
-                Material loaded
-              </label>
-
-              {delivery.hasHardware ? (
-                <label className="mt-4 flex items-center gap-3 text-sm font-semibold text-slate-900">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(delivery.hardwareChecked)}
-                    onChange={(event) =>
-                      onHardwareChecked(delivery, event.target.checked)
-                    }
-                    disabled={isUpdating}
-                    className="h-5 w-5 rounded border-slate-300 text-[#FC2C38] focus:ring-red-200"
-                  />
-                  Hardware loaded
-                </label>
-              ) : null}
-            </div>
-
             <button
               type="button"
-              onClick={() => {
-                if (canLeaveYard) {
-                  goToNextStep();
-                }
-              }}
-              disabled={!canLeaveYard || isUpdating}
+              onClick={goToNextStep}
+              disabled={isUpdating}
               className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#FC2C38] px-4 py-4 text-sm font-black uppercase tracking-[0.04em] text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
             >
               Ready To Leave
               <ArrowRight className="h-5 w-5" aria-hidden="true" />
             </button>
-            {!canLeaveYard ? (
-              <p className="text-center text-xs font-bold text-slate-500">
-                Check {delivery.hasHardware ? "material and hardware" : "material"} loaded before leaving.
-              </p>
-            ) : null}
           </>
         ) : null}
 
@@ -1211,6 +1163,14 @@ function MobileDeliveryFlowCard({
 
         {deliveryStep === 2 ? (
           <>
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+              <p className="text-sm font-black text-blue-900">
+                {proofPhotoCount} of {MAX_DELIVERY_PROOF_PHOTOS} proof photos saved
+              </p>
+              <p className="mt-1 text-xs font-bold text-blue-700">
+                Delivery and hardware photos share this total.
+              </p>
+            </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="flex items-center gap-3 text-sm font-black uppercase tracking-[0.08em] text-slate-900">
@@ -1237,7 +1197,7 @@ function MobileDeliveryFlowCard({
                     type="file"
                     accept="image/*"
                     capture="environment"
-                    disabled={isUpdating}
+                    disabled={isUpdating || proofPhotoLimitReached}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       onPhotoChange(
@@ -1259,7 +1219,7 @@ function MobileDeliveryFlowCard({
                     type="file"
                     accept="image/*"
                     multiple
-                    disabled={isUpdating}
+                    disabled={isUpdating || proofPhotoLimitReached}
                     onChange={(event) => {
                       const files = Array.from(event.target.files || []);
                       onPhotosChange(
@@ -1309,7 +1269,7 @@ function MobileDeliveryFlowCard({
                       type="file"
                       accept="image/*"
                       capture="environment"
-                      disabled={isUpdating}
+                        disabled={isUpdating || proofPhotoLimitReached}
                       onChange={(event) => {
                         const file = event.target.files?.[0];
                         onPhotoChange(
@@ -1331,7 +1291,7 @@ function MobileDeliveryFlowCard({
                       type="file"
                       accept="image/*"
                       multiple
-                      disabled={isUpdating}
+                        disabled={isUpdating || proofPhotoLimitReached}
                       onChange={(event) => {
                         const files = Array.from(event.target.files || []);
                         onPhotosChange(
@@ -1346,19 +1306,6 @@ function MobileDeliveryFlowCard({
                     />
                   </label>
                 </div>
-
-                <label className="mt-3 flex items-center gap-3 text-sm font-black text-slate-900">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(delivery.hardwareChecked)}
-                    onChange={(event) =>
-                      onHardwareChecked(delivery, event.target.checked)
-                    }
-                    disabled={isUpdating}
-                    className="h-5 w-5 rounded border-red-300 text-[#FC2C38] focus:ring-red-200"
-                  />
-                  Hardware delivered
-                </label>
 
                 <div className="mt-3">
                   <PhotoPreviewGrid
@@ -1442,9 +1389,9 @@ function MobileDeliveryFlowCard({
                   <span className="font-semibold text-slate-500">Hardware</span>
                   <span className="font-bold text-emerald-700">
                     {delivery.hasHardware
-                      ? delivery.hardwareChecked
+                      ? hardwarePhotos.length > 0
                         ? "Delivered"
-                        : "Needs check"
+                        : "Photo required"
                       : "None"}
                   </span>
                 </div>
@@ -1454,12 +1401,19 @@ function MobileDeliveryFlowCard({
             <button
               type="button"
               onClick={() => onCompleteDelivery(delivery)}
-              disabled={isUpdating}
+              disabled={isUpdating || !canCompleteDelivery}
               className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#FC2C38] px-4 py-4 text-sm font-black uppercase tracking-[0.04em] text-white shadow-sm disabled:opacity-60"
             >
               {isReturn ? "Complete Return Pickup" : "Complete Delivery"}
               <ArrowRight className="h-5 w-5" aria-hidden="true" />
             </button>
+            {!canCompleteDelivery ? (
+              <p className="text-center text-xs font-black text-red-700">
+                Add one material photo
+                {delivery.hasHardware ? " and one hardware photo" : ""} to
+                complete this delivery.
+              </p>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -1816,6 +1770,33 @@ export default function DeliveryQueuePage({
       return;
     }
 
+    const savedDeliveryPhotos = getPhotoList(
+      delivery,
+      "deliveryPhoto",
+      "deliveryPhotos",
+    );
+    const savedHardwarePhotos = getPhotoList(
+      delivery,
+      "hardwarePhoto",
+      "hardwarePhotos",
+    );
+    const remainingPhotoSlots = Math.max(
+      0,
+      MAX_DELIVERY_PROOF_PHOTOS -
+        savedDeliveryPhotos.length -
+        savedHardwarePhotos.length,
+    );
+
+    if (remainingPhotoSlots === 0) {
+      setError(
+        `This delivery already has the maximum of ${MAX_DELIVERY_PROOF_PHOTOS} delivery and hardware photos.`,
+      );
+      return;
+    }
+
+    const filesToSave = selectedFiles.slice(0, remainingPhotoSlots);
+    const skippedPhotoCount = selectedFiles.length - filesToSave.length;
+
     setError("");
     setUpdatingDeliveryId(delivery.id);
     setActiveDriverDeliveryId(delivery.id);
@@ -1828,7 +1809,7 @@ export default function DeliveryQueuePage({
     try {
       const photos = [];
 
-      for (const file of selectedFiles) {
+      for (const file of filesToSave) {
         photos.push(await createPhotoFromFile(file));
       }
 
@@ -1840,23 +1821,15 @@ export default function DeliveryQueuePage({
         [photoField]: latestPhoto,
         [photosField]: nextPhotos,
       });
+
+      if (skippedPhotoCount > 0) {
+        setError(
+          `Saved ${photos.length} photo${photos.length === 1 ? "" : "s"}. A delivery can have up to ${MAX_DELIVERY_PROOF_PHOTOS} delivery and hardware photos total.`,
+        );
+      }
     } catch (photoError) {
       console.error("Unable to save delivery photo:", photoError);
       setError("Unable to save that delivery photo. Try again.");
-    } finally {
-      setUpdatingDeliveryId("");
-    }
-  }
-
-  async function handleHardwareChecked(delivery, isChecked) {
-    setError("");
-    setUpdatingDeliveryId(delivery.id);
-    setActiveDriverDeliveryId(delivery.id);
-
-    try {
-      await onUpdateDelivery(delivery.id, {
-        hardwareChecked: isChecked,
-      });
     } finally {
       setUpdatingDeliveryId("");
     }
@@ -1974,7 +1947,7 @@ export default function DeliveryQueuePage({
 
     if (deliveryPhotos.length === 0) {
       setError(
-        `Add a delivery photo before completing order ${delivery.orderNumber}.`,
+        `Add a material photo before completing order ${delivery.orderNumber}.`,
       );
       return;
     }
@@ -1982,13 +1955,6 @@ export default function DeliveryQueuePage({
     if (delivery.hasHardware && hardwarePhotos.length === 0) {
       setError(
         `Add a hardware photo before completing order ${delivery.orderNumber}.`,
-      );
-      return;
-    }
-
-    if (delivery.hasHardware && !delivery.hardwareChecked) {
-      setError(
-        `Check off hardware delivered before completing order ${delivery.orderNumber}.`,
       );
       return;
     }
@@ -2098,7 +2064,6 @@ export default function DeliveryQueuePage({
                   generalNotes={currentDriverDelivery.generalNotes || ""}
                   onPhotoChange={handlePhotoChange}
                   onPhotosChange={handlePhotosChange}
-                  onHardwareChecked={handleHardwareChecked}
                   onCompleteDelivery={handleCompleteDelivery}
                   onViewPhoto={setViewingPhoto}
                   isFocusedDriverView
@@ -2319,6 +2284,17 @@ export default function DeliveryQueuePage({
                     "hardwarePhoto",
                     "hardwarePhotos",
                   );
+                  const proofPhotoCount =
+                    deliveryPhotos.length + hardwarePhotos.length;
+                  const proofPhotoLimitReached =
+                    proofPhotoCount >= MAX_DELIVERY_PROOF_PHOTOS;
+                  const hasRequiredMaterialPhoto = deliveryPhotos.length > 0;
+                  const hasRequiredHardwarePhoto =
+                    !delivery.hasHardware || hardwarePhotos.length > 0;
+                  const canCompleteDelivery =
+                    hasRequiredMaterialPhoto && hasRequiredHardwarePhoto;
+                  const deliveryOrderDocuments =
+                    getDeliveryOrderDocuments(delivery);
 
                   return (
                     <div
@@ -2383,7 +2359,6 @@ export default function DeliveryQueuePage({
                         generalNotes={generalNotes}
                         onPhotoChange={handlePhotoChange}
                         onPhotosChange={handlePhotosChange}
-                        onHardwareChecked={handleHardwareChecked}
                         onCompleteDelivery={handleCompleteDelivery}
                         onViewPhoto={setViewingPhoto}
                       />
@@ -2479,19 +2454,23 @@ export default function DeliveryQueuePage({
                               </span>
                             ) : null}
 
-                            <span
-                              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-black ${
-                                delivery.deliveryType === "return"
-                                  ? "bg-blue-50 text-blue-700"
-                                  : delivery.deliveryType === "hotShot"
-                                  ? "bg-red-50 text-[#FC2C38]"
-                                  : delivery.deliveryType === "priority"
-                                    ? "bg-amber-50 text-amber-800"
-                                    : "bg-white text-slate-700"
-                              }`}
-                            >
-                              {formatDeliveryTypeLabel(delivery.deliveryType)}
-                            </span>
+                            {[
+                              "return",
+                              "hotShot",
+                              "priority",
+                            ].includes(delivery.deliveryType) ? (
+                              <span
+                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-black ${
+                                  delivery.deliveryType === "return"
+                                    ? "bg-blue-50 text-blue-700"
+                                    : delivery.deliveryType === "hotShot"
+                                      ? "bg-red-50 text-[#FC2C38]"
+                                      : "bg-amber-50 text-amber-800"
+                                }`}
+                              >
+                                {formatDeliveryTypeLabel(delivery.deliveryType)}
+                              </span>
+                            ) : null}
 
                             {delivery.needsTarp ? (
                               <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-700">
@@ -2882,6 +2861,16 @@ export default function DeliveryQueuePage({
                         </div>
                       ) : null}
 
+                      {deliveryStep === 0 &&
+                      deliveryOrderDocuments.length > 0 ? (
+                        <div className="mt-4">
+                          <DeliveryOrderDocumentsPanel
+                            delivery={delivery}
+                            documents={deliveryOrderDocuments}
+                          />
+                        </div>
+                      ) : null}
+
                       {deliveryStep === 2 && delivery.hasHardware ? (
                         <section className="mt-4 rounded-2xl border-2 border-[#FC2C38] bg-red-50 p-4">
                           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -2897,29 +2886,11 @@ export default function DeliveryQueuePage({
                                 </p>
 
                                 <p className="mt-1 text-sm font-bold text-red-700">
-                                  Take a hardware photo and check it off
-                                  before completing this order.
+                                  At least one hardware photo is required before
+                                  completing this order.
                                 </p>
                               </div>
                             </div>
-
-                            <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-black text-slate-900 shadow-sm">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(
-                                  delivery.hardwareChecked,
-                                )}
-                                onChange={(event) =>
-                                  handleHardwareChecked(
-                                    delivery,
-                                    event.target.checked,
-                                  )
-                                }
-                                disabled={isUpdating}
-                                className="h-5 w-5 rounded border-red-300 text-[#FC2C38] focus:ring-red-200"
-                              />
-                              Hardware delivered
-                            </label>
                           </div>
 
                           <div className="mt-4 flex min-w-0 flex-col gap-3 rounded-2xl border border-red-200 bg-white p-4">
@@ -2939,7 +2910,7 @@ export default function DeliveryQueuePage({
                                   type="file"
                                   accept="image/*"
                                   capture="environment"
-                                  disabled={isUpdating}
+                                  disabled={isUpdating || proofPhotoLimitReached}
                                   onChange={(event) => {
                                     const file = event.target.files?.[0];
                                     handlePhotoChange(
@@ -2961,7 +2932,7 @@ export default function DeliveryQueuePage({
                                   type="file"
                                   accept="image/*"
                                   multiple
-                                  disabled={isUpdating}
+                                  disabled={isUpdating || proofPhotoLimitReached}
                                   onChange={(event) => {
                                     const files = Array.from(
                                       event.target.files || [],
@@ -3020,7 +2991,9 @@ export default function DeliveryQueuePage({
                         </section>
                       ) : null}
 
-                      {deliveryStep === 0 ? (
+                      {deliveryStep === 0 &&
+                      (scopeSummary.value !== "customItems" ||
+                        scopeSummary.detail) ? (
                       <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                         <p className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
                           <Package
@@ -3032,7 +3005,9 @@ export default function DeliveryQueuePage({
 
                         <div className="rounded-xl bg-slate-50 px-4 py-3">
                           <p className="text-sm font-black uppercase tracking-[0.12em] text-[#FC2C38]">
-                            {scopeSummary.label}
+                            {scopeSummary.value === "customItems"
+                              ? "Delivery Notes"
+                              : scopeSummary.label}
                           </p>
 
                           {scopeSummary.detail ? (
@@ -3047,13 +3022,18 @@ export default function DeliveryQueuePage({
 
                       {deliveryStep === 2 ? (
                       <section className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
-                        <p className="flex items-center gap-2 text-sm font-black text-slate-900">
-                          <Camera
-                            className="h-4 w-4 text-[#FC2C38]"
-                            aria-hidden="true"
-                          />
-                          Completion
-                        </p>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="flex items-center gap-2 text-sm font-black text-slate-900">
+                            <Camera
+                              className="h-4 w-4 text-[#FC2C38]"
+                              aria-hidden="true"
+                            />
+                            Completion
+                          </p>
+                          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                            {proofPhotoCount} / {MAX_DELIVERY_PROOF_PHOTOS} total photos
+                          </span>
+                        </div>
 
                         <div className="grid gap-3 lg:grid-cols-2">
                         <div className="flex min-w-0 flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4">
@@ -3062,7 +3042,7 @@ export default function DeliveryQueuePage({
                               className="h-4 w-4 text-[#FC2C38]"
                               aria-hidden="true"
                             />
-                            Delivery photo
+                            Material photo
                           </span>
 
                           <div className="grid gap-2 sm:grid-cols-2">
@@ -3073,7 +3053,7 @@ export default function DeliveryQueuePage({
                                 type="file"
                                 accept="image/*"
                                 capture="environment"
-                                disabled={isUpdating}
+                                disabled={isUpdating || proofPhotoLimitReached}
                                 onChange={(event) => {
                                   const file = event.target.files?.[0];
                                   handlePhotoChange(
@@ -3095,7 +3075,7 @@ export default function DeliveryQueuePage({
                                 type="file"
                                 accept="image/*"
                                 multiple
-                                disabled={isUpdating}
+                                disabled={isUpdating || proofPhotoLimitReached}
                                 onChange={(event) => {
                                   const files = Array.from(
                                     event.target.files || [],
@@ -3123,7 +3103,7 @@ export default function DeliveryQueuePage({
                             </span>
                           ) : (
                             <span className="max-w-full text-wrap text-xs font-semibold leading-5 text-slate-500">
-                              Take a clear photo after drop-off.
+                              At least one clear material photo is required after drop-off.
                             </span>
                           )}
                         </div>
@@ -3147,7 +3127,7 @@ export default function DeliveryQueuePage({
                               </p>
 
                               <p className="mt-1 text-sm font-bold text-emerald-800">
-                                Confirm photos, hardware, and condition before
+                                Confirm the required photos and condition before
                                 closing order {delivery.orderNumber}.
                               </p>
                             </div>
@@ -3155,7 +3135,7 @@ export default function DeliveryQueuePage({
                             <button
                               type="button"
                               onClick={() => handleCompleteDelivery(delivery)}
-                              disabled={isUpdating}
+                              disabled={isUpdating || !canCompleteDelivery}
                               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-700 px-4 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 sm:px-5 sm:py-4 lg:w-auto"
                             >
                               <CheckCircle2
@@ -3182,9 +3162,9 @@ export default function DeliveryQueuePage({
                               </p>
                               <p className="mt-1 text-base font-black text-slate-900">
                                 {delivery.hasHardware
-                                  ? delivery.hardwareChecked
+                                  ? hardwarePhotos.length > 0
                                     ? "Delivered"
-                                    : "Needs Check"
+                                    : "Photo Required"
                                   : "None"}
                               </p>
                             </div>
@@ -3198,6 +3178,15 @@ export default function DeliveryQueuePage({
                               </p>
                             </div>
                           </div>
+
+                          {!canCompleteDelivery ? (
+                            <p className="mt-3 text-sm font-black text-red-700">
+                              Add one material photo
+                              {delivery.hasHardware
+                                ? " and one hardware photo"
+                                : ""} before completing this delivery.
+                            </p>
+                          ) : null}
 
                           {deliveryPhotos.length || hardwarePhotos.length ? (
                             <div className="mt-4 grid gap-3 sm:grid-cols-2">
