@@ -17,7 +17,10 @@ service firebase.storage {
     function isApproved() {
       return signedIn() && (
         isBootstrapSuperAdmin() ||
-        userProfile().status == "approved"
+        (
+          userProfile().status == "approved" &&
+          userProfile().role != "supplier"
+        )
       );
     }
 
@@ -79,6 +82,24 @@ service firebase.storage {
       );
     }
 
+    function canUseSouthPhotos() {
+      return isAdmin() || hasAnyPermission([
+        "south",
+        "supplier-runs-check",
+        "supplier-runs-dispatch",
+        "supplier-runs-calendar",
+        "south-calendar",
+        "receiving",
+        "check-in",
+        "today",
+        "search",
+        "trace",
+        "sales",
+        "order-flow",
+        "order-builds"
+      ]);
+    }
+
     function isAllowedDeliveryOrderFile() {
       return request.resource.size <= 15 * 1024 * 1024 &&
         request.resource.contentType.matches(
@@ -101,7 +122,7 @@ service firebase.storage {
     }
 
     match /supplierRuns/{supplierRunId}/items/{itemId}/{fileName} {
-      allow read, write: if request.auth != null;
+      allow read, write: if canUseSouthPhotos();
     }
   }
 }

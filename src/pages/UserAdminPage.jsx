@@ -6,6 +6,7 @@ import PageContainer from "../components/PageContainer";
 const roles = [
   { value: "pending", label: "Pending" },
   { value: "customer", label: "Customer" },
+  { value: "supplier", label: "Supplier" },
   { value: "admin", label: "Admin" },
   { value: "superAdmin", label: "Super Admin" },
 ];
@@ -20,6 +21,7 @@ const workViews = [
   { value: "south", label: "Fulfillment" },
   { value: "delivery", label: "Delivery" },
   { value: "accounting", label: "Accounting" },
+  { value: "supplier", label: "Supplier Portal" },
 ];
 
 const dispatchOpsPermissionIds = [
@@ -151,6 +153,12 @@ const permissionGroups = [
     ],
   },
   {
+    title: "Supplier Portal",
+    permissions: [
+      { id: "supplier-chat", label: "Supplier Pricing Chat" },
+    ],
+  },
+  {
     title: "Admin",
     permissions: [
       { id: "admin", label: "Admin" },
@@ -199,6 +207,7 @@ function getUniqueOptions(options) {
 const rolePermissionPresets = {
   pending: [],
   customer: ["dashboard"],
+  supplier: ["supplier-chat"],
   admin: allPermissionIds.filter(
     (permissionId) =>
       !["user-admin", "fleet", "bouncie"].includes(permissionId),
@@ -325,7 +334,12 @@ function getUserPermissions(user) {
 }
 
 function getPresetRole(role) {
-  if (role === "superAdmin" || role === "admin" || role === "pending") {
+  if (
+    role === "superAdmin" ||
+    role === "admin" ||
+    role === "pending" ||
+    role === "supplier"
+  ) {
     return role;
   }
 
@@ -350,6 +364,7 @@ function getWorkView(user) {
 
 export default function UserAdminPage({
   users,
+  vendors,
   currentUserProfile,
   onUpdateUserProfile,
   onPageChange,
@@ -360,6 +375,7 @@ export default function UserAdminPage({
   const [error, setError] = useState("");
   const [openAccessPanels, setOpenAccessPanels] = useState({});
   const [openAccessGroups, setOpenAccessGroups] = useState({});
+  const vendorList = Array.isArray(vendors) ? vendors : [];
   const driverNameOptions = getUniqueOptions(
     users
       .filter(isActiveEmployee)
@@ -374,6 +390,8 @@ export default function UserAdminPage({
       employeeActive: user.employeeActive !== false,
       displayName: user.displayName || "",
       driverName: user.driverName || "",
+      vendorId: user.vendorId || "",
+      vendorName: user.vendorName || "",
       permissions: getUserPermissions(user),
       ...(drafts[user.id] || {}),
     };
@@ -414,6 +432,8 @@ export default function UserAdminPage({
         employeeActive: Boolean(draft.employeeActive),
         displayName: draft.displayName,
         driverName: draft.driverName,
+        vendorId: draft.role === "supplier" ? draft.vendorId : "",
+        vendorName: draft.role === "supplier" ? draft.vendorName : "",
         permissions: draft.permissions || [],
         approvedAt,
         approvedBy,
@@ -434,11 +454,18 @@ export default function UserAdminPage({
   }
 
   function applyRolePreset(userId, role) {
+    const user = users.find((savedUser) => savedUser.id === userId);
+    const currentDraft = user
+      ? getDraft(user)
+      : { workView: "operations", employeeActive: true };
+
     setDrafts((currentDrafts) => ({
       ...currentDrafts,
       [userId]: {
         ...(currentDrafts[userId] || {}),
         role,
+        workView: role === "supplier" ? "supplier" : currentDraft.workView,
+        employeeActive: role === "supplier" ? false : currentDraft.employeeActive,
         permissions: [...(rolePermissionPresets[role] || [])],
       },
     }));
@@ -455,12 +482,14 @@ export default function UserAdminPage({
         : workView === "main"
           ? mainPermissionIds
           : [];
-    const nextPermissions = [
-      ...new Set([
-        ...(currentDraft.permissions || []),
-        ...presetPermissions,
-      ]),
-    ];
+    const nextPermissions = workView === "supplier"
+      ? ["supplier-chat"]
+      : [
+          ...new Set([
+            ...(currentDraft.permissions || []),
+            ...presetPermissions,
+          ]),
+        ];
 
     setDrafts((currentDrafts) => ({
       ...currentDrafts,
@@ -565,6 +594,8 @@ export default function UserAdminPage({
             draft.employeeActive !== (user.employeeActive !== false) ||
             draft.displayName !== (user.displayName || "") ||
             draft.driverName !== (user.driverName || "") ||
+            draft.vendorId !== (user.vendorId || "") ||
+            draft.vendorName !== (user.vendorName || "") ||
             JSON.stringify([...(draft.permissions || [])].sort()) !==
               JSON.stringify(getUserPermissions(user).sort());
           const accessPanelIsOpen = Boolean(openAccessPanels[user.id]);
@@ -659,6 +690,33 @@ export default function UserAdminPage({
                       ))}
                     </select>
                   </label>
+
+                  {draft.role === "supplier" ? (
+                    <label className="block sm:col-span-2 xl:col-span-1">
+                      <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                        Bound Vendor
+                      </span>
+                      <select
+                        required
+                        value={draft.vendorId}
+                        onChange={(event) => {
+                          const vendor = vendorList.find(
+                            (item) => String(item.id || item.name) === event.target.value,
+                          );
+                          updateDraft(user.id, "vendorId", event.target.value);
+                          updateDraft(user.id, "vendorName", vendor?.name || "");
+                        }}
+                        className="w-full rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-950 outline-none focus:ring-4 focus:ring-emerald-100"
+                      >
+                        <option value="">Choose vendor</option>
+                        {vendorList.map((vendor) => (
+                          <option key={vendor.id || vendor.name} value={vendor.id || vendor.name}>
+                            {vendor.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
 
                   <label className="block">
                     <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">

@@ -17,8 +17,19 @@ service cloud.firestore {
     function isApproved() {
       return signedIn() && (
         isBootstrapSuperAdmin() ||
-        userProfile().status == "approved"
+        (
+          userProfile().status == "approved" &&
+          userProfile().role != "supplier"
+        )
       );
+    }
+
+    function isApprovedSupplier() {
+      return signedIn() &&
+        userProfile().status == "approved" &&
+        userProfile().role == "supplier" &&
+        userProfile().vendorId is string &&
+        userProfile().vendorId.size() > 0;
     }
 
     function role() {
@@ -42,6 +53,44 @@ service cloud.firestore {
       return isApproved() &&
         userProfile().permissions is list &&
         userProfile().permissions.hasAny(permissionIds);
+    }
+
+    function canUseSupplierChatInternal() {
+      return isAdmin() || hasAnyPermission(["supplier-chat"]);
+    }
+
+    function hasRecentSupplierChatVerification() {
+      return signedIn() &&
+        request.auth.token.auth_time is int &&
+        request.time < timestamp.value(
+          (request.auth.token.auth_time * 1000) + (30 * 60 * 1000)
+        );
+    }
+
+    function canAccessSupplierConversation(conversationData) {
+      return hasRecentSupplierChatVerification() &&
+        (
+          canUseSupplierChatInternal() ||
+          (
+            isApprovedSupplier() &&
+            conversationData.supplierParticipantUids is list &&
+            conversationData.supplierParticipantUids.hasAny([request.auth.uid]) &&
+            conversationData.vendorId == userProfile().vendorId
+          )
+        );
+    }
+
+    function supplierConversation(conversationId) {
+      return get(
+        /databases/$(database)/documents/supplierConversations/$(conversationId)
+      ).data;
+    }
+
+    function expectedMessageSenderName() {
+      return userProfile().displayName is string &&
+        userProfile().displayName.size() > 0
+          ? userProfile().displayName
+          : request.auth.token.email;
     }
 
     function isReceiving() {
@@ -293,7 +342,8 @@ service cloud.firestore {
         isSuperAdmin()
       );
 
-      allow list: if isSuperAdmin() || canManageDeliveryRoutes();
+      allow list: if isSuperAdmin() || canManageDeliveryRoutes() ||
+        canUseSupplierChatInternal();
 
       allow update: if isSuperAdmin() ||
         (
@@ -309,6 +359,119 @@ service cloud.firestore {
         );
 
       allow delete: if isSuperAdmin();
+    }
+
+    match /supplierInvitations/{invitationId} {
+      allow read: if canUseSupplierChatInternal() &&
+        hasRecentSupplierChatVerification();
+      allow create: if canUseSupplierChatInternal() &&
+        hasRecentSupplierChatVerification() &&
+        request.resource.data.keys().hasOnly([
+          "email",
+          "contactName",
+          "vendorId",
+          "vendorName",
+          "status",
+          "emailStatus",
+          "createdAt",
+          "updatedAt",
+          "createdBy"
+        ]) &&
+        request.resource.data.email is string &&
+        request.resource.data.email.size() > 3 &&
+        request.resource.data.email.size() <= 254 &&
+        request.resource.data.contactName is string &&
+        request.resource.data.contactName.size() > 0 &&
+        request.resource.data.contactName.size() <= 120 &&
+        request.resource.data.vendorId is string &&
+        request.resource.data.vendorId.size() > 0 &&
+        request.resource.data.vendorName is string &&
+        request.resource.data.vendorName.size() > 0 &&
+        request.resource.data.status == "pending" &&
+        request.resource.data.emailStatus == "queued" &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow update: if canUseSupplierChatInternal() &&
+        hasRecentSupplierChatVerification() &&
+        resource.data.status == "pending" &&
+        request.resource.data.status == "canceled" &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "status",
+          "canceledAt",
+          "canceledBy",
+          "updatedAt"
+        ]) &&
+        request.resource.data.canceledBy == request.auth.uid &&
+        request.resource.data.canceledAt == request.time &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.vendorId == resource.data.vendorId &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin() && hasRecentSupplierChatVerification();
+    }
+
+    match /supplierConversations/{conversationId} {
+      allow read: if canAccessSupplierConversation(resource.data);
+      allow create: if canUseSupplierChatInternal() &&
+        hasRecentSupplierChatVerification() &&
+        request.resource.data.vendorId is string &&
+        request.resource.data.supplierParticipantUids is list &&
+        request.resource.data.internalParticipantUids is list &&
+        request.resource.data.internalParticipantUids.hasAny([request.auth.uid]) &&
+        request.resource.data.supplierParticipantUids.size() > 0 &&
+        request.resource.data.internalParticipantUids.size() > 0;
+      allow update: if (
+          canUseSupplierChatInternal() &&
+          hasRecentSupplierChatVerification()
+        ) ||
+        (
+          canAccessSupplierConversation(resource.data) &&
+          request.resource.data.vendorId == resource.data.vendorId &&
+          request.resource.data.supplierParticipantUids == resource.data.supplierParticipantUids &&
+          request.resource.data.internalParticipantUids == resource.data.internalParticipantUids &&
+          request.resource.data.lastMessageBy == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "updatedAt",
+            "lastMessage",
+            "lastMessageBy"
+          ]) &&
+          request.resource.data.updatedAt == request.time
+        );
+      allow delete: if isAdmin() && hasRecentSupplierChatVerification();
+
+      match /messages/{messageId} {
+        allow read: if canAccessSupplierConversation(
+          supplierConversation(conversationId)
+        );
+        allow create: if canAccessSupplierConversation(
+            supplierConversation(conversationId)
+          ) &&
+          request.resource.data.keys().hasOnly([
+            "type",
+            "vendorId",
+            "senderUid",
+            "senderName",
+            "senderRole",
+            "text",
+            "createdAt",
+            "quote"
+          ]) &&
+          request.resource.data.senderUid == request.auth.uid &&
+          request.resource.data.senderName == expectedMessageSenderName() &&
+          (
+            !isApprovedSupplier() ||
+            request.resource.data.senderRole == "supplier"
+          ) &&
+          request.resource.data.vendorId == supplierConversation(conversationId).vendorId &&
+          request.resource.data.type in ["text", "quote"] &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() <= 5000 &&
+          request.resource.data.createdAt == request.time;
+        allow update, delete: if canUseSupplierChatInternal() &&
+          hasRecentSupplierChatVerification();
+      }
     }
 
     match /appSettings/{settingId} {

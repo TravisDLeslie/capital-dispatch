@@ -7,6 +7,7 @@ import {
   DollarSign,
   LogOut,
   LayoutDashboard,
+  MessagesSquare,
   Package,
   PackageCheck,
   Plus,
@@ -68,6 +69,11 @@ const navigationItems = [
     group: "Accounting",
     id: "accounting",
     label: "Accounting",
+  },
+  {
+    group: "Suppliers",
+    id: "supplier-chat",
+    label: "Supplier Pricing",
   },
   {
     group: "Admin",
@@ -351,6 +357,10 @@ function getCurrentPageGroup(currentPage) {
     return "Fleet";
   }
 
+  if (currentPage === "supplier-chat") {
+    return "Suppliers";
+  }
+
   return navigationItems.find((item) => item.id === currentPage)?.group || "";
 }
 
@@ -377,6 +387,10 @@ function getNavGroupIcon(group) {
 
   if (group === "Sales") {
     return UsersRound;
+  }
+
+  if (group === "Suppliers") {
+    return MessagesSquare;
   }
 
   if (group === "Yard Tasks") {
@@ -450,6 +464,7 @@ export default function AppHeader({
     South: false,
     Deliveries: false,
     Sales: false,
+    Suppliers: false,
     Documents: false,
     Accounting: false,
     Admin: false,
@@ -465,7 +480,11 @@ export default function AppHeader({
     .toUpperCase();
   const southGroupLabel = "Fulfillment";
   const isNewHomeHeader = isSuperAdmin && isNewAppShell;
-  const logoHomePageId = isNewHomeHeader ? "new-home" : "dashboard";
+  const logoHomePageId = isNewHomeHeader
+    ? "new-home"
+    : effectiveUserRole === "supplier"
+      ? "supplier-chat"
+      : "dashboard";
 
   useEffect(() => {
     const currentGroup = getCurrentPageGroup(currentPage);
@@ -483,6 +502,7 @@ export default function AppHeader({
       South: false,
       Deliveries: false,
       Sales: false,
+      Suppliers: false,
       Documents: false,
       Accounting: false,
       Admin: false,
@@ -761,7 +781,7 @@ export default function AppHeader({
       );
     }
 
-    return ["Dashboard", "Orders", "Dispatch", "South", "Deliveries", "Yard Tasks", "Sales", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
+    return ["Dashboard", "Orders", "Dispatch", "South", "Deliveries", "Yard Tasks", "Sales", "Suppliers", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
       const groupItems = navigationItems.filter((item) => {
         const pageIsAllowed =
           !allowedPageIds ||

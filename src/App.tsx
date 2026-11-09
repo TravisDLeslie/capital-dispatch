@@ -272,6 +272,7 @@ const WoodgrainPriceBookPage = lazy(
 const SouthHubPage = lazy(() => import("./pages/SouthHubPage"));
 const SouthOverviewPage = lazy(() => import("./pages/SouthOverviewPage"));
 const SupplierRunsPage = lazy(() => import("./pages/SupplierRunsPage"));
+const SupplierChatPage = lazy(() => import("./pages/SupplierChatPage"));
 const TodayPage = lazy(() => import("./pages/TodayPage"));
 const TheirTruckHistoryPage = lazy(
   () => import("./pages/TheirTruckHistoryPage"),
@@ -845,6 +846,8 @@ type UserProfile = {
   status?: string;
   employeeActive?: boolean;
   driverName?: string;
+  vendorId?: string;
+  vendorName?: string;
   approvedAt?: string | null;
   approvedBy?: string;
   [key: string]: unknown;
@@ -1245,7 +1248,12 @@ function getUserRole(
 }
 
 function getPresetRole(role: string) {
-  if (role === "superAdmin" || role === "admin" || role === "pending") {
+  if (
+    role === "superAdmin" ||
+    role === "admin" ||
+    role === "pending" ||
+    role === "supplier"
+  ) {
     return role;
   }
 
@@ -1260,7 +1268,7 @@ function getWorkView(userProfile: UserProfile | null, role: string) {
   }
 
   if (
-    ["driver", "sales", "receiving", "south", "delivery", "accounting"].includes(
+    ["driver", "sales", "receiving", "south", "delivery", "accounting", "supplier"].includes(
       role,
     )
   ) {
@@ -1332,6 +1340,7 @@ function getAllowedPageIdsForRole(role: string) {
       "vendor-settings",
       "pod-pickups",
       "sales-report",
+      "supplier-chat",
       "bouncie",
     ];
   }
@@ -1392,11 +1401,16 @@ function getAllowedPageIdsForRole(role: string) {
       "delivery-settings",
       "vendor-settings",
       "sales-report",
+      "supplier-chat",
     ];
   }
 
   if (role === "customer") {
     return ["dashboard"];
+  }
+
+  if (role === "supplier") {
+    return ["supplier-chat"];
   }
 
   return [];
@@ -1408,6 +1422,10 @@ function getAllowedPageIds(
   workView?: string,
 ) {
   const presetRole = getPresetRole(role);
+
+  if (presetRole === "supplier" || workView === "supplier") {
+    return ["supplier-chat"];
+  }
   const addParentPageIds = (pageIds: string[]) => {
     const nextPageIds = [...pageIds];
 
@@ -2266,6 +2284,7 @@ export default function App() {
   const canReadEmailList = effectiveAllowedPageIds.includes("email-list");
   const canReadSalesReport = effectiveAllowedPageIds.includes("sales-report");
   const canReadSalesOrders = effectiveAllowedPageIds.includes("sales-orders");
+  const canReadSupplierChat = effectiveAllowedPageIds.includes("supplier-chat");
   const canReadSalesOrderData = canReadSalesOrders || canReadDeliveries;
   const canReadCustomerPaymentLinks =
     canReadAccounting &&
@@ -2709,7 +2728,11 @@ export default function App() {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!isSuperAdmin && !canShareDeliveryRoutes) {
+    if (
+      !isSuperAdmin &&
+      !canShareDeliveryRoutes &&
+      !(canReadSupplierChat && userRole !== "supplier")
+    ) {
       setUsers([]);
       return;
     }
@@ -2724,7 +2747,7 @@ export default function App() {
         reportBackgroundSyncError(error);
       },
     );
-  }, [canShareDeliveryRoutes, isSuperAdmin]);
+  }, [canReadSupplierChat, canShareDeliveryRoutes, isSuperAdmin, userRole]);
 
   useEffect(() => {
     if (!isApproved || !canAssignSouthRoutes) {
@@ -2763,7 +2786,7 @@ export default function App() {
   }, [canReadAdmin, canReadDeliveries, isApproved]);
 
   useEffect(() => {
-    if (!isApproved) {
+    if (!isApproved || userRole === "supplier") {
       setVendorSettings(defaultVendorSettings);
       return () => {};
     }
@@ -2778,7 +2801,7 @@ export default function App() {
         reportBackgroundSyncError(error);
       },
     );
-  }, [isApproved]);
+  }, [isApproved, userRole]);
 
   useEffect(() => {
     if (!isApproved || !canReadDocuments) {
@@ -7502,8 +7525,24 @@ export default function App() {
         return (
           <UserAdminPage
             users={users}
+            vendors={activeVendors}
             currentUserProfile={userProfile}
             onUpdateUserProfile={handleUpdateUserProfile}
+            onPageChange={navigateToPage}
+          />
+        );
+
+      case "supplier-chat":
+        return (
+          <SupplierChatPage
+            currentUserProfile={{
+              ...userProfile,
+              id: currentUser?.uid || userProfile?.id || "",
+              uid: currentUser?.uid || userProfile?.uid || "",
+              email: currentUser?.email || userProfile?.email || "",
+            }}
+            users={users}
+            vendors={activeVendors}
             onPageChange={navigateToPage}
           />
         );
