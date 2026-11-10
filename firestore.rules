@@ -74,7 +74,7 @@ service cloud.firestore {
           (
             isApprovedSupplier() &&
             conversationData.supplierParticipantUids is list &&
-            conversationData.supplierParticipantUids.hasAny([request.auth.uid]) &&
+            request.auth.uid in conversationData.supplierParticipantUids &&
             conversationData.vendorId == userProfile().vendorId
           )
         );
