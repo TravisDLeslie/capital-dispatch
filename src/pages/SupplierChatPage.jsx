@@ -296,7 +296,7 @@ export default function SupplierChatPage({
           setSelectedConversationId("");
           setError(
             isSupplier
-              ? "This supplier account is not assigned to an available conversation yet. Ask a Capital Lumber administrator to confirm the supplier contact and vendor assignment."
+              ? "Supplier Chat could not load this account's assigned conversations. Ask a Capital Lumber administrator to confirm the supplier contact assignment."
               : "Supplier Chat access could not be confirmed. Unlock it again and verify your Supplier Chat permission.",
           );
           return;

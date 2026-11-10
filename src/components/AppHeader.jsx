@@ -479,6 +479,10 @@ export default function AppHeader({
     .charAt(0)
     .toUpperCase();
   const southGroupLabel = "Fulfillment";
+  const supplierVendorName =
+    effectiveUserRole === "supplier"
+      ? String(currentUserProfile?.vendorName || "").trim()
+      : "";
   const isNewHomeHeader = isSuperAdmin && isNewAppShell;
   const logoHomePageId = isNewHomeHeader
     ? "new-home"
@@ -1201,6 +1205,12 @@ export default function AppHeader({
                     "Signed in"}
                 </span>
 
+                {supplierVendorName ? (
+                  <span className="mt-1 block truncate text-[11px] font-black text-emerald-300">
+                    {supplierVendorName}
+                  </span>
+                ) : null}
+
                 {isSuperAdmin ? (
                   <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                     Super Admin
@@ -1338,6 +1348,12 @@ export default function AppHeader({
                       currentUser?.email ||
                       "Signed in"}
                   </span>
+
+                  {supplierVendorName ? (
+                    <span className="mt-0.5 block truncate text-[11px] font-black text-emerald-300">
+                      {supplierVendorName}
+                    </span>
+                  ) : null}
 
                   {isSuperAdmin ? (
                     <span className="mt-0.5 block text-[10px] font-black uppercase tracking-[0.14em] text-white/60">
