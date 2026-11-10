@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getIdTokenResult,
   GoogleAuthProvider,
-  reauthenticateWithPopup,
+  signInWithPopup,
 } from "firebase/auth";
 import {
   Ban,
@@ -297,7 +297,7 @@ export default function SupplierChatPage({
           setMessages([]);
           setSelectedConversationId("");
           setUnlockError(
-            "Supplier Chat could not verify the refreshed Google session. Please unlock it once more.",
+            "Supplier Chat access could not be confirmed. Unlock it again, or ask an admin to confirm this supplier is assigned to the conversation.",
           );
           return;
         }
@@ -335,34 +335,27 @@ export default function SupplierChatPage({
     setIsUnlocking(true);
     setUnlockError("");
     try {
-      let verifiedUser = auth.currentUser;
-      let tokenResult = await getIdTokenResult(verifiedUser, true);
-      let authenticationTime = new Date(tokenResult.authTime).getTime();
-
+      const expectedUserId = auth.currentUser.uid;
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: "select_account",
+        login_hint: auth.currentUser.email || "",
+      });
+      const credential = await signInWithPopup(auth, provider);
       if (
-        !Number.isFinite(authenticationTime) ||
-        Date.now() - authenticationTime >= CHAT_UNLOCK_WINDOW_MS
+        credential.user.uid !== expectedUserId ||
+        credential.user.uid !== currentUser.id
       ) {
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({
-          prompt: "select_account",
-          login_hint: verifiedUser.email || "",
-        });
-        const credential = await reauthenticateWithPopup(verifiedUser, provider);
-        verifiedUser = credential.user;
-        if (verifiedUser.uid !== currentUser.id) {
-          throw new Error("The verified Google account does not match the signed-in user.");
-        }
-        tokenResult = await getIdTokenResult(verifiedUser, true);
-        authenticationTime = new Date(tokenResult.authTime).getTime();
+        throw new Error("The verified Google account does not match the signed-in user.");
       }
-
+      const tokenResult = await getIdTokenResult(credential.user, true);
+      const authenticationTime = new Date(tokenResult.authTime).getTime();
       if (
         !Number.isFinite(authenticationTime) ||
         Date.now() - authenticationTime >= CHAT_UNLOCK_WINDOW_MS
       ) {
         throw new Error(
-          "Google did not return a recent authentication. Sign out, sign back in, and try again.",
+          "Google did not return a fresh sign-in. Sign out, sign back in, and try again.",
         );
       }
       const expiration = Date.now() + CHAT_UNLOCK_WINDOW_MS;
