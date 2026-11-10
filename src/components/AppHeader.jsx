@@ -726,6 +726,29 @@ export default function AppHeader({
   }
 
   function renderNavigation(isMobile = false) {
+    if (effectiveUserRole === "supplier") {
+      return (
+        <div className="py-2">
+          <button
+            type="button"
+            onClick={() => handlePageChange("supplier-chat")}
+            className={`flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-lg font-black transition ${
+              currentPage === "supplier-chat"
+                ? "bg-[#FC2C38] text-white shadow-sm"
+                : "text-white/90 hover:bg-white/10 hover:text-white"
+            }`}
+          >
+            <MessagesSquare
+              aria-hidden="true"
+              className="h-6 w-6 shrink-0"
+              strokeWidth={2.5}
+            />
+            <span className="min-w-0 flex-1 truncate">Supplier Portal</span>
+          </button>
+        </div>
+      );
+    }
+
     if (isNewHomeHeader) {
       return (
         <div className="space-y-3 py-2">

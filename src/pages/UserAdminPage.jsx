@@ -304,7 +304,12 @@ const statuses = [
 ];
 
 function isActiveEmployee(user) {
-  return user.status === "approved" && user.employeeActive !== false;
+  return (
+    user.status === "approved" &&
+    user.role !== "supplier" &&
+    user.workView !== "supplier" &&
+    user.employeeActive !== false
+  );
 }
 
 function getStatusClass(status) {
@@ -347,6 +352,10 @@ function getPresetRole(role) {
 }
 
 function getWorkView(user) {
+  if (user.role === "supplier") {
+    return "supplier";
+  }
+
   if (typeof user.workView === "string" && user.workView) {
     return user.workView;
   }
@@ -383,16 +392,19 @@ export default function UserAdminPage({
   );
 
   function getDraft(user) {
+    const role = getPresetRole(user.role || "pending");
+    const isSupplier = role === "supplier";
+
     return {
-      role: getPresetRole(user.role || "pending"),
-      workView: getWorkView(user),
+      role,
+      workView: isSupplier ? "supplier" : getWorkView(user),
       status: user.status || "pending",
-      employeeActive: user.employeeActive !== false,
+      employeeActive: isSupplier ? false : user.employeeActive !== false,
       displayName: user.displayName || "",
-      driverName: user.driverName || "",
+      driverName: isSupplier ? "" : user.driverName || "",
       vendorId: user.vendorId || "",
       vendorName: user.vendorName || "",
-      permissions: getUserPermissions(user),
+      permissions: isSupplier ? ["supplier-chat"] : getUserPermissions(user),
       ...(drafts[user.id] || {}),
     };
   }
@@ -411,6 +423,7 @@ export default function UserAdminPage({
 
   async function saveUser(user) {
     const draft = getDraft(user);
+    const isSupplier = draft.role === "supplier";
     const approvedAt =
       draft.status === "approved" && user.status !== "approved"
         ? new Date().toISOString()
@@ -427,14 +440,14 @@ export default function UserAdminPage({
     try {
       await onUpdateUserProfile(user.id, {
         role: draft.role,
-        workView: draft.workView || "operations",
+        workView: isSupplier ? "supplier" : draft.workView || "operations",
         status: draft.status,
-        employeeActive: Boolean(draft.employeeActive),
+        employeeActive: isSupplier ? false : Boolean(draft.employeeActive),
         displayName: draft.displayName,
-        driverName: draft.driverName,
-        vendorId: draft.role === "supplier" ? draft.vendorId : "",
-        vendorName: draft.role === "supplier" ? draft.vendorName : "",
-        permissions: draft.permissions || [],
+        driverName: isSupplier ? "" : draft.driverName,
+        vendorId: isSupplier ? draft.vendorId : "",
+        vendorName: isSupplier ? draft.vendorName : "",
+        permissions: isSupplier ? ["supplier-chat"] : draft.permissions || [],
         approvedAt,
         approvedBy,
       });
@@ -464,8 +477,19 @@ export default function UserAdminPage({
       [userId]: {
         ...(currentDrafts[userId] || {}),
         role,
-        workView: role === "supplier" ? "supplier" : currentDraft.workView,
-        employeeActive: role === "supplier" ? false : currentDraft.employeeActive,
+        workView:
+          role === "supplier"
+            ? "supplier"
+            : currentDraft.workView === "supplier"
+              ? "operations"
+              : currentDraft.workView,
+        employeeActive:
+          role === "supplier"
+            ? false
+            : currentDraft.role === "supplier"
+              ? true
+              : currentDraft.employeeActive,
+        driverName: role === "supplier" ? "" : currentDraft.driverName,
         permissions: [...(rolePermissionPresets[role] || [])],
       },
     }));
@@ -623,12 +647,18 @@ export default function UserAdminPage({
                     {user.status === "approved" ? (
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.12em] ${
-                          user.employeeActive === false
+                          user.role === "supplier"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : user.employeeActive === false
                             ? "bg-slate-100 text-slate-500"
                             : "bg-blue-100 text-blue-700"
                         }`}
                       >
-                        {user.employeeActive === false ? "inactive" : "active"}
+                        {user.role === "supplier"
+                          ? "Supplier Portal"
+                          : user.employeeActive === false
+                            ? "inactive"
+                            : "active"}
                       </span>
                     ) : null}
                   </div>
@@ -718,6 +748,7 @@ export default function UserAdminPage({
                     </label>
                   ) : null}
 
+                  {draft.role !== "supplier" ? (
                   <label className="block">
                     <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                       Employee
@@ -737,6 +768,7 @@ export default function UserAdminPage({
                       <option value="inactive">Inactive</option>
                     </select>
                   </label>
+                  ) : null}
 
                   <label className="block">
                     <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
@@ -760,6 +792,7 @@ export default function UserAdminPage({
                     </select>
                   </label>
 
+                  {draft.role !== "supplier" ? (
                   <label className="block">
                     <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                       Work View
@@ -781,7 +814,9 @@ export default function UserAdminPage({
                       ))}
                     </select>
                   </label>
+                  ) : null}
 
+                  {draft.role !== "supplier" ? (
                   <label className="block">
                     <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                       Driver Name
@@ -805,9 +840,21 @@ export default function UserAdminPage({
                       ))}
                     </select>
                   </label>
+                  ) : null}
                 </div>
               </div>
 
+              {draft.role === "supplier" ? (
+                <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">
+                    Supplier Portal Only
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-emerald-800">
+                    This account can only open Supplier Pricing Chat. It cannot
+                    be assigned as an employee or driver.
+                  </p>
+                </div>
+              ) : (
               <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
                 <button
                   type="button"
@@ -925,6 +972,7 @@ export default function UserAdminPage({
                 </div>
                 ) : null}
               </div>
+              )}
 
               <div className="mt-4 flex justify-end">
                 <button

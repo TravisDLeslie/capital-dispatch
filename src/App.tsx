@@ -732,13 +732,20 @@ function areEmployeeNamesEqual(
 }
 
 function isActiveEmployee(user: Partial<UserProfile> | null | undefined) {
-  return user?.status === "approved" && user?.employeeActive !== false;
+  return (
+    user?.status === "approved" &&
+    user?.role !== "supplier" &&
+    user?.workView !== "supplier" &&
+    user?.employeeActive !== false
+  );
 }
 
 function isAssignableDeliveryDriver(
   user: Partial<UserProfile> | null | undefined,
 ) {
   return (
+    user?.role !== "supplier" &&
+    user?.workView !== "supplier" &&
     user?.employeeActive !== false &&
     user?.status !== "disabled" &&
     user?.role !== "pending"
@@ -1261,6 +1268,10 @@ function getPresetRole(role: string) {
 }
 
 function getWorkView(userProfile: UserProfile | null, role: string) {
+  if (role === "supplier" || userProfile?.role === "supplier") {
+    return "supplier";
+  }
+
   const profileWorkView = userProfile?.workView;
 
   if (typeof profileWorkView === "string" && profileWorkView) {
@@ -2176,9 +2187,15 @@ export default function App() {
         getUserRole(selectedPreviewProfile, selectedPreviewProfile?.email),
       )
     : getWorkView(userProfile, rawUserRole);
-  const driverName = isSuperAdmin
-    ? selectedPreviewProfile?.driverName || ""
-    : userProfile?.driverName || "";
+  const isSupplierPortalUser =
+    !isSuperAdmin &&
+    (userRole === "supplier" || effectiveWorkView === "supplier");
+  const driverName =
+    effectiveUserRole === "supplier" || effectiveWorkView === "supplier"
+      ? ""
+      : isSuperAdmin
+        ? selectedPreviewProfile?.driverName || ""
+        : userProfile?.driverName || "";
   const driverNameAliases = useMemo(
     () =>
       getEmployeeNameAliases(
@@ -2909,6 +2926,25 @@ export default function App() {
         console.error("Unable to roll unassigned South POs forward:", error);
       });
   }, [canMaintainSouthSchedule, checkIns, isApproved, supplierRuns]);
+
+  useEffect(() => {
+    if (
+      !isApproved ||
+      !isSupplierPortalUser ||
+      currentPage === "supplier-chat"
+    ) {
+      return;
+    }
+
+    try {
+      sessionStorage.removeItem(REFRESH_PAGE_STORAGE_KEY);
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+
+    setIsNewAppShellActive(false);
+    setCurrentPage("supplier-chat");
+  }, [currentPage, isApproved, isSupplierPortalUser]);
 
   useEffect(() => {
     if (
@@ -4924,6 +4960,12 @@ export default function App() {
   }
 
   function navigateToPage(pageId: string) {
+    if (isSupplierPortalUser) {
+      setIsNewAppShellActive(false);
+      setCurrentPage("supplier-chat");
+      return;
+    }
+
     if (pageId === "deliveries-add") {
       setEditingDeliveryId("");
     }
@@ -6818,6 +6860,27 @@ export default function App() {
   }
 
   function renderCurrentPage() {
+    if (isSupplierPortalUser) {
+      return (
+        <SupplierChatPage
+          currentUserProfile={{
+            ...userProfile,
+            role: "supplier",
+            workView: "supplier",
+            employeeActive: false,
+            driverName: "",
+            permissions: ["supplier-chat"],
+            id: currentUser?.uid || userProfile?.id || "",
+            uid: currentUser?.uid || userProfile?.uid || "",
+            email: currentUser?.email || userProfile?.email || "",
+          }}
+          users={users}
+          vendors={activeVendors}
+          onPageChange={navigateToPage}
+        />
+      );
+    }
+
     if (currentPage === "receiving" && canReadReceiving) {
       return renderDashboardPage("receiving");
     }
