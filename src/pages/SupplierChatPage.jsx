@@ -5,10 +5,6 @@ import {
   reauthenticateWithPopup,
 } from "firebase/auth";
 import {
-  disableNetwork,
-  enableNetwork,
-} from "firebase/firestore";
-import {
   Ban,
   Building2,
   Calculator,
@@ -25,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import PageContainer from "../components/PageContainer";
-import { auth, db } from "../utils/firebase";
+import { auth } from "../utils/firebase";
 import {
   calculateLumberQuote,
   cancelSupplierInvitation,
@@ -339,17 +335,28 @@ export default function SupplierChatPage({
     setIsUnlocking(true);
     setUnlockError("");
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({
-        prompt: "select_account",
-        login_hint: auth.currentUser.email || "",
-      });
-      const credential = await reauthenticateWithPopup(auth.currentUser, provider);
-      if (credential.user.uid !== currentUser.id) {
-        throw new Error("The verified Google account does not match the signed-in user.");
+      let verifiedUser = auth.currentUser;
+      let tokenResult = await getIdTokenResult(verifiedUser, true);
+      let authenticationTime = new Date(tokenResult.authTime).getTime();
+
+      if (
+        !Number.isFinite(authenticationTime) ||
+        Date.now() - authenticationTime >= CHAT_UNLOCK_WINDOW_MS
+      ) {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({
+          prompt: "select_account",
+          login_hint: verifiedUser.email || "",
+        });
+        const credential = await reauthenticateWithPopup(verifiedUser, provider);
+        verifiedUser = credential.user;
+        if (verifiedUser.uid !== currentUser.id) {
+          throw new Error("The verified Google account does not match the signed-in user.");
+        }
+        tokenResult = await getIdTokenResult(verifiedUser, true);
+        authenticationTime = new Date(tokenResult.authTime).getTime();
       }
-      const tokenResult = await getIdTokenResult(credential.user, true);
-      const authenticationTime = new Date(tokenResult.authTime).getTime();
+
       if (
         !Number.isFinite(authenticationTime) ||
         Date.now() - authenticationTime >= CHAT_UNLOCK_WINDOW_MS
@@ -357,10 +364,6 @@ export default function SupplierChatPage({
         throw new Error(
           "Google did not return a recent authentication. Sign out, sign back in, and try again.",
         );
-      }
-      if (db) {
-        await disableNetwork(db);
-        await enableNetwork(db);
       }
       const expiration = Date.now() + CHAT_UNLOCK_WINDOW_MS;
       sessionStorage.setItem(
