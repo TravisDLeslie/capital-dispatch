@@ -5,6 +5,10 @@ import {
   reauthenticateWithPopup,
 } from "firebase/auth";
 import {
+  disableNetwork,
+  enableNetwork,
+} from "firebase/firestore";
+import {
   Ban,
   Building2,
   Calculator,
@@ -21,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import PageContainer from "../components/PageContainer";
-import { auth } from "../utils/firebase";
+import { auth, db } from "../utils/firebase";
 import {
   calculateLumberQuote,
   cancelSupplierInvitation,
@@ -281,6 +285,7 @@ export default function SupplierChatPage({
       vendorId: currentUser.vendorId,
       isInternal,
       onConversations: (nextConversations) => {
+        setError("");
         setConversations(nextConversations);
         setSelectedConversationId((currentId) =>
           nextConversations.some((item) => item.id === currentId)
@@ -288,7 +293,20 @@ export default function SupplierChatPage({
             : nextConversations[0]?.id || "",
         );
       },
-      onError: (nextError) => setError(nextError.message || "Unable to load supplier conversations."),
+      onError: (nextError) => {
+        if (nextError?.code === "permission-denied") {
+          sessionStorage.removeItem(chatUnlockStorageKey(currentUser.id));
+          setIsChatUnlocked(false);
+          setConversations([]);
+          setMessages([]);
+          setSelectedConversationId("");
+          setUnlockError(
+            "Supplier Chat could not verify the refreshed Google session. Please unlock it once more.",
+          );
+          return;
+        }
+        setError(nextError.message || "Unable to load supplier conversations.");
+      },
     });
   }, [currentUser.id, currentUser.vendorId, isInternal, isChatUnlocked]);
 
@@ -330,7 +348,20 @@ export default function SupplierChatPage({
       if (credential.user.uid !== currentUser.id) {
         throw new Error("The verified Google account does not match the signed-in user.");
       }
-      await credential.user.getIdToken(true);
+      const tokenResult = await getIdTokenResult(credential.user, true);
+      const authenticationTime = new Date(tokenResult.authTime).getTime();
+      if (
+        !Number.isFinite(authenticationTime) ||
+        Date.now() - authenticationTime >= CHAT_UNLOCK_WINDOW_MS
+      ) {
+        throw new Error(
+          "Google did not return a recent authentication. Sign out, sign back in, and try again.",
+        );
+      }
+      if (db) {
+        await disableNetwork(db);
+        await enableNetwork(db);
+      }
       const expiration = Date.now() + CHAT_UNLOCK_WINDOW_MS;
       sessionStorage.setItem(
         chatUnlockStorageKey(currentUser.id),
