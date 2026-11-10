@@ -157,6 +157,39 @@ export async function createSupplierConversation({
   });
 }
 
+export async function updateSupplierConversationAssignment({
+  conversationId,
+  supplierUser,
+  internalParticipantUids = [],
+}) {
+  const supplierUserId = String(supplierUser?.id || supplierUser?.uid || "").trim();
+  const vendorId = String(supplierUser?.vendorId || "").trim();
+  const vendorName = String(supplierUser?.vendorName || "").trim();
+  if (!db || !conversationId || !supplierUserId || !vendorId || !vendorName) {
+    throw new Error("Choose an approved supplier contact with a vendor assignment.");
+  }
+
+  const safeInternalParticipantUids = Array.from(
+    new Set(
+      (Array.isArray(internalParticipantUids) ? internalParticipantUids : [])
+        .map((userId) => String(userId || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  return updateDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId), {
+    vendorId,
+    vendorName,
+    title: `${vendorName} pricing`,
+    participantUids: [...safeInternalParticipantUids, supplierUserId],
+    supplierParticipantUids: [supplierUserId],
+    supplierContactName:
+      supplierUser.displayName || supplierUser.email || "Supplier contact",
+    supplierContactEmail: supplierUser.email || "",
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function sendSupplierMessage({
   conversationId,
   vendorId,

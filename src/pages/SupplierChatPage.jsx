@@ -31,6 +31,7 @@ import {
   subscribeToSupplierConversations,
   subscribeToSupplierInvitations,
   subscribeToSupplierMessages,
+  updateSupplierConversationAssignment,
 } from "../utils/supplierChatStorage";
 
 const emptyQuote = {
@@ -184,6 +185,7 @@ export default function SupplierChatPage({
   const [isSending, setIsSending] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showConversation, setShowConversation] = useState(false);
+  const [showAssignment, setShowAssignment] = useState(false);
   const [showQuote, setShowQuote] = useState(false);
   const [invite, setInvite] = useState({ email: "", contactName: "", vendorId: "" });
   const [inviteError, setInviteError] = useState("");
@@ -202,6 +204,8 @@ export default function SupplierChatPage({
     [invitations],
   );
   const [conversationDraft, setConversationDraft] = useState({ supplierUserId: "", vendorId: "" });
+  const [assignmentSupplierUserId, setAssignmentSupplierUserId] = useState("");
+  const [isUpdatingAssignment, setIsUpdatingAssignment] = useState(false);
   const [quote, setQuote] = useState(emptyQuote);
   const [isChatUnlocked, setIsChatUnlocked] = useState(false);
   const [isCheckingUnlock, setIsCheckingUnlock] = useState(true);
@@ -519,6 +523,40 @@ export default function SupplierChatPage({
     }
   }
 
+  async function handleUpdateAssignment(event) {
+    event.preventDefault();
+    if (!selectedConversation) return;
+    const supplierUser = supplierUsers.find(
+      (user) => user.id === assignmentSupplierUserId,
+    );
+    if (!supplierUser?.vendorId || !supplierUser?.vendorName) {
+      setError(
+        "Choose an approved supplier contact with a vendor company in User Access.",
+      );
+      return;
+    }
+
+    setError("");
+    setIsUpdatingAssignment(true);
+    try {
+      await updateSupplierConversationAssignment({
+        conversationId: selectedConversation.id,
+        supplierUser,
+        internalParticipantUids:
+          selectedConversation.internalParticipantUids?.length
+            ? selectedConversation.internalParticipantUids
+            : [currentUser.id],
+      });
+      setShowAssignment(false);
+    } catch (assignmentError) {
+      setError(
+        assignmentError?.message || "Unable to update supplier access.",
+      );
+    } finally {
+      setIsUpdatingAssignment(false);
+    }
+  }
+
   if (isCheckingUnlock) {
     return (
       <PageContainer>
@@ -639,9 +677,25 @@ export default function SupplierChatPage({
         <section className="flex min-h-[650px] min-w-0 flex-col">
           {selectedConversation ? (
             <>
-              <header className="border-b border-slate-200 px-5 py-4">
-                <h2 className="text-xl font-black text-slate-950">{selectedConversation.vendorName}</h2>
-                <p className="text-sm font-semibold text-slate-500">{selectedConversation.supplierContactName} · Secure pricing conversation</p>
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                <div>
+                  <h2 className="text-xl font-black text-slate-950">{selectedConversation.vendorName}</h2>
+                  <p className="text-sm font-semibold text-slate-500">{selectedConversation.supplierContactName} · Secure pricing conversation</p>
+                </div>
+                {isInternal ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignmentSupplierUserId(
+                        selectedConversation.supplierParticipantUids?.[0] || "",
+                      );
+                      setShowAssignment(true);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50"
+                  >
+                    <ShieldCheck className="h-4 w-4" /> Edit supplier access
+                  </button>
+                ) : null}
               </header>
               <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50/60 p-4 sm:p-6">
                 {messages.map((message) => {
@@ -800,6 +854,55 @@ export default function SupplierChatPage({
             <button type="submit" className="w-full rounded-xl bg-slate-950 px-5 py-3 font-black text-white">Start secure conversation</button>
           </form>
           {!supplierUsers.length ? <button type="button" onClick={() => onPageChange?.("user-admin")} className="mt-4 text-sm font-black text-blue-700">No approved suppliers yet — open User Access</button> : null}
+        </Dialog>
+      ) : null}
+
+      {showAssignment && selectedConversation ? (
+        <Dialog
+          title="Edit supplier access"
+          onClose={() => setShowAssignment(false)}
+        >
+          <form onSubmit={handleUpdateAssignment} className="mt-5 space-y-4">
+            <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-950">
+              Saving rewrites the conversation contact and vendor ID together. The
+              supplier will only see this conversation after both match their
+              approved User Access profile.
+            </p>
+            <label className="block text-xs font-black uppercase tracking-wide text-slate-500">
+              Approved supplier contact
+              <select
+                required
+                value={assignmentSupplierUserId}
+                onChange={(event) =>
+                  setAssignmentSupplierUserId(event.target.value)
+                }
+                className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold normal-case tracking-normal text-slate-900"
+              >
+                <option value="">Choose supplier contact</option>
+                {supplierUsers.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.displayName || user.email} · {user.vendorName || "Vendor not assigned"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAssignment(false)}
+                className="rounded-xl border border-slate-300 px-4 py-3 font-black text-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isUpdatingAssignment || !assignmentSupplierUserId}
+                className="rounded-xl bg-slate-950 px-5 py-3 font-black text-white disabled:opacity-50"
+              >
+                {isUpdatingAssignment ? "Saving…" : "Save supplier access"}
+              </button>
+            </div>
+          </form>
         </Dialog>
       ) : null}
 
