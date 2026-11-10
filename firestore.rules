@@ -439,7 +439,8 @@ service cloud.firestore {
           ]) &&
           request.resource.data.updatedAt == request.time
         );
-      allow delete: if isAdmin() && hasRecentSupplierChatVerification();
+      allow delete: if canUseSupplierChatInternal() &&
+        hasRecentSupplierChatVerification();
 
       match /messages/{messageId} {
         allow read: if canAccessSupplierConversation(

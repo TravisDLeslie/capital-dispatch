@@ -18,6 +18,7 @@ import {
   Plus,
   Send,
   ShieldCheck,
+  Trash2,
   X,
 } from "lucide-react";
 import PageContainer from "../components/PageContainer";
@@ -27,6 +28,7 @@ import {
   cancelSupplierInvitation,
   createSupplierConversation,
   createSupplierInvitation,
+  deleteSupplierConversation,
   sendSupplierMessage,
   subscribeToSupplierConversations,
   subscribeToSupplierInvitations,
@@ -206,6 +208,7 @@ export default function SupplierChatPage({
   const [conversationDraft, setConversationDraft] = useState({ supplierUserId: "", vendorId: "" });
   const [assignmentSupplierUserId, setAssignmentSupplierUserId] = useState("");
   const [isUpdatingAssignment, setIsUpdatingAssignment] = useState(false);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const [quote, setQuote] = useState(emptyQuote);
   const [isChatUnlocked, setIsChatUnlocked] = useState(false);
   const [isCheckingUnlock, setIsCheckingUnlock] = useState(true);
@@ -557,6 +560,31 @@ export default function SupplierChatPage({
     }
   }
 
+  async function handleDeleteConversation() {
+    if (!isInternal || !selectedConversation || isDeletingConversation) return;
+
+    const shouldDelete = window.confirm(
+      `Delete the ${selectedConversation.vendorName || "supplier"} conversation and all of its messages? This cannot be undone.`,
+    );
+    if (!shouldDelete) return;
+
+    setError("");
+    setIsDeletingConversation(true);
+    try {
+      await deleteSupplierConversation(selectedConversation.id);
+      setMessages([]);
+      setSelectedConversationId("");
+    } catch (deleteError) {
+      setError(
+        deleteError?.code === "permission-denied"
+          ? "Firebase denied the deletion. Deploy the updated Supplier Chat rules and unlock the chat again."
+          : deleteError?.message || "Unable to delete that conversation.",
+      );
+    } finally {
+      setIsDeletingConversation(false);
+    }
+  }
+
   if (isCheckingUnlock) {
     return (
       <PageContainer>
@@ -683,18 +711,29 @@ export default function SupplierChatPage({
                   <p className="text-sm font-semibold text-slate-500">{selectedConversation.supplierContactName} · Secure pricing conversation</p>
                 </div>
                 {isInternal ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAssignmentSupplierUserId(
-                        selectedConversation.supplierParticipantUids?.[0] || "",
-                      );
-                      setShowAssignment(true);
-                    }}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50"
-                  >
-                    <ShieldCheck className="h-4 w-4" /> Edit supplier access
-                  </button>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAssignmentSupplierUserId(
+                          selectedConversation.supplierParticipantUids?.[0] || "",
+                        );
+                        setShowAssignment(true);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50"
+                    >
+                      <ShieldCheck className="h-4 w-4" /> Edit supplier access
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteConversation}
+                      disabled={isDeletingConversation}
+                      className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {isDeletingConversation ? "Deleting…" : "Delete conversation"}
+                    </button>
+                  </div>
                 ) : null}
               </header>
               <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50/60 p-4 sm:p-6">

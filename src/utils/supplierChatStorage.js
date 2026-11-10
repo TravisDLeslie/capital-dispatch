@@ -1,12 +1,15 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   updateDoc,
+  writeBatch,
   where,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -58,6 +61,30 @@ export function subscribeToSupplierConversations({
     (snapshot) => onConversations(sortNewest(snapshot.docs.map(mapDocument))),
     onError,
   );
+}
+
+export async function deleteSupplierConversation(conversationId) {
+  if (!db || !conversationId) {
+    throw new Error("Choose a supplier conversation to delete.");
+  }
+
+  const conversationRef = doc(db, CONVERSATIONS_COLLECTION, conversationId);
+  const messagesSnapshot = await getDocs(
+    collection(conversationRef, "messages"),
+  );
+
+  // Firestore does not cascade subcollection deletes. Delete message documents
+  // in bounded batches before removing the conversation itself.
+  const messageDocs = messagesSnapshot.docs;
+  for (let index = 0; index < messageDocs.length; index += 450) {
+    const batch = writeBatch(db);
+    messageDocs.slice(index, index + 450).forEach((messageDocument) => {
+      batch.delete(messageDocument.ref);
+    });
+    await batch.commit();
+  }
+
+  await deleteDoc(conversationRef);
 }
 
 export function subscribeToSupplierMessages(
@@ -140,13 +167,14 @@ export async function createSupplierConversation({
   supplierUser,
   internalUser,
 }) {
+  const supplierUserId = String(supplierUser.uid || supplierUser.id || "").trim();
   return addDoc(collection(db, CONVERSATIONS_COLLECTION), {
     vendorId,
     vendorName,
     title: `${vendorName} pricing`,
-    participantUids: [internalUser.id, supplierUser.id],
+    participantUids: [internalUser.id, supplierUserId],
     internalParticipantUids: [internalUser.id],
-    supplierParticipantUids: [supplierUser.id],
+    supplierParticipantUids: [supplierUserId],
     supplierContactName:
       supplierUser.displayName || supplierUser.email || "Supplier contact",
     supplierContactEmail: supplierUser.email || "",
@@ -162,7 +190,7 @@ export async function updateSupplierConversationAssignment({
   supplierUser,
   internalParticipantUids = [],
 }) {
-  const supplierUserId = String(supplierUser?.id || supplierUser?.uid || "").trim();
+  const supplierUserId = String(supplierUser?.uid || supplierUser?.id || "").trim();
   const vendorId = String(supplierUser?.vendorId || "").trim();
   const vendorName = String(supplierUser?.vendorName || "").trim();
   if (!db || !conversationId || !supplierUserId || !vendorId || !vendorName) {
