@@ -1,7 +1,14 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import {
+  getIdTokenResult,
+  GoogleAuthProvider,
+  reauthenticateWithPopup,
+} from "firebase/auth";
+import { ChevronDown, Trash2 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
+import { auth } from "../utils/firebase";
+import { deleteSupplierAccount } from "../utils/userStorage";
 
 const roles = [
   { value: "pending", label: "Pending" },
@@ -380,6 +387,7 @@ export default function UserAdminPage({
 }) {
   const [drafts, setDrafts] = useState({});
   const [savingUserId, setSavingUserId] = useState("");
+  const [deletingUserId, setDeletingUserId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [openAccessPanels, setOpenAccessPanels] = useState({});
@@ -463,6 +471,57 @@ export default function UserAdminPage({
       setError("Unable to update that user. Check Firebase rules.");
     } finally {
       setSavingUserId("");
+    }
+  }
+
+  async function deleteSupplier(user) {
+    if (user.role !== "supplier") return;
+
+    const supplierName = user.displayName || user.email || "this supplier";
+    const confirmation = window.prompt(
+      `Delete ${supplierName} completely? This permanently removes the login, profile, invitations, conversations, and messages. Type DELETE to continue.`,
+    );
+    if (confirmation !== "DELETE") return;
+
+    setDeletingUserId(user.id);
+    setMessage("");
+    setError("");
+
+    try {
+      if (!auth?.currentUser) {
+        throw new Error("Your signed-in account could not be verified.");
+      }
+
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: "select_account",
+        login_hint: auth.currentUser.email || "",
+      });
+      const credential = await reauthenticateWithPopup(
+        auth.currentUser,
+        provider,
+      );
+      const tokenResult = await getIdTokenResult(credential.user, true);
+      const authTime = new Date(tokenResult.authTime).getTime();
+      if (
+        !Number.isFinite(authTime) ||
+        Date.now() - authTime >= 30 * 60 * 1000
+      ) {
+        throw new Error("Google did not return a fresh sign-in. Try again.");
+      }
+
+      const result = await deleteSupplierAccount(user.id);
+      setMessage(
+        `Deleted ${supplierName}, ${result?.deletedConversations || 0} conversation(s), and ${result?.deletedInvitations || 0} invitation(s).`,
+      );
+    } catch (deleteError) {
+      console.error("Unable to delete supplier account:", deleteError);
+      setError(
+        deleteError?.message ||
+          "Unable to delete that supplier account. Verify your Google account and try again.",
+      );
+    } finally {
+      setDeletingUserId("");
     }
   }
 
@@ -974,7 +1033,21 @@ export default function UserAdminPage({
               </div>
               )}
 
-              <div className="mt-4 flex justify-end">
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                {user.role === "supplier" &&
+                currentUserProfile?.role === "superAdmin" ? (
+                  <button
+                    type="button"
+                    onClick={() => deleteSupplier(user)}
+                    disabled={deletingUserId === user.id}
+                    className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-black text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {deletingUserId === user.id
+                      ? "Deleting account…"
+                      : "Delete supplier account"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => saveUser(user)}

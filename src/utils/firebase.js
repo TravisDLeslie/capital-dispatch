@@ -7,6 +7,7 @@ import {
   persistentMultipleTabManager,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { getFunctions } from "firebase/functions";
 
 function normalizeStorageBucket(value) {
   return String(value || "")
@@ -66,6 +67,10 @@ export const auth = firebaseApp ? getAuth(firebaseApp) : null;
 
 export const storage = firebaseApp && storageBucket
   ? getStorage(firebaseApp)
+  : null;
+
+export const functions = firebaseApp
+  ? getFunctions(firebaseApp, "us-central1")
   : null;
 
 export const firebaseStorageBucket = storageBucket;

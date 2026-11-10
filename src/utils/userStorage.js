@@ -8,7 +8,8 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "./firebase";
 
 const USERS_COLLECTION = "users";
 
@@ -138,4 +139,14 @@ export async function updateUserProfile(userId, updates) {
     ...updates,
     updatedAt: new Date().toISOString(),
   });
+}
+
+export async function deleteSupplierAccount(userId) {
+  if (!functions || !userId) {
+    throw new Error("The supplier account could not be deleted.");
+  }
+
+  const deleteAccount = httpsCallable(functions, "deleteSupplierAccount");
+  const result = await deleteAccount({ userId });
+  return result.data;
 }

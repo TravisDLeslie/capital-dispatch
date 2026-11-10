@@ -1,6 +1,8 @@
 const { initializeApp } = require("firebase-admin/app");
-const { FieldValue } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
+const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const { logger } = require("firebase-functions");
 const { Resend } = require("resend");
@@ -16,6 +18,132 @@ const appBaseUrl = defineString("APP_BASE_URL", {
   default: "https://dispatch.capitallumber.co",
   description: "Public Capital Lumber app URL.",
 });
+
+const CHAT_UNLOCK_WINDOW_SECONDS = 30 * 60;
+const BOOTSTRAP_SUPER_ADMIN_EMAIL = "travis@capitallumber.co";
+
+function normalizedEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+async function requireSupplierAccountAdministrator(request) {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Sign in before deleting a supplier account.");
+  }
+
+  const authenticationTime = Number(request.auth.token.auth_time || 0);
+  const tokenAgeSeconds = Math.floor(Date.now() / 1000) - authenticationTime;
+  if (
+    !Number.isFinite(authenticationTime) ||
+    authenticationTime <= 0 ||
+    tokenAgeSeconds > CHAT_UNLOCK_WINDOW_SECONDS
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Verify your Google account again before deleting a supplier account.",
+    );
+  }
+
+  const firestore = getFirestore();
+  const callerSnapshot = await firestore.doc(`users/${request.auth.uid}`).get();
+  const callerProfile = callerSnapshot.data() || {};
+  const callerEmail = normalizedEmail(
+    request.auth.token.email || callerProfile.email,
+  );
+  const isSuperAdmin =
+    callerProfile.role === "superAdmin" ||
+    callerEmail === BOOTSTRAP_SUPER_ADMIN_EMAIL;
+
+  if (callerProfile.status !== "approved" || !isSuperAdmin) {
+    throw new HttpsError(
+      "permission-denied",
+      "Only an approved super administrator can delete supplier accounts.",
+    );
+  }
+
+  return { firestore };
+}
+
+exports.deleteSupplierAccount = onCall(
+  { region: "us-central1", timeoutSeconds: 120 },
+  async (request) => {
+    const { firestore } = await requireSupplierAccountAdministrator(request);
+    const supplierUserId = String(request.data?.userId || "").trim();
+
+    if (!supplierUserId) {
+      throw new HttpsError("invalid-argument", "Choose a supplier account to delete.");
+    }
+    if (supplierUserId === request.auth.uid) {
+      throw new HttpsError("failed-precondition", "You cannot delete your own account.");
+    }
+
+    const supplierRef = firestore.doc(`users/${supplierUserId}`);
+    const supplierSnapshot = await supplierRef.get();
+    if (!supplierSnapshot.exists) {
+      throw new HttpsError("not-found", "That supplier account no longer exists.");
+    }
+
+    const supplierProfile = supplierSnapshot.data() || {};
+    if (supplierProfile.role !== "supplier") {
+      throw new HttpsError(
+        "failed-precondition",
+        "Only supplier portal accounts can be deleted with this action.",
+      );
+    }
+
+    const conversationsSnapshot = await firestore
+      .collection("supplierConversations")
+      .where("supplierParticipantUids", "array-contains", supplierUserId)
+      .get();
+
+    for (const conversationDocument of conversationsSnapshot.docs) {
+      await firestore.recursiveDelete(conversationDocument.ref);
+    }
+
+    const supplierEmail = normalizedEmail(supplierProfile.email);
+    let deletedInvitations = 0;
+    if (supplierEmail) {
+      const invitationsSnapshot = await firestore
+        .collection("supplierInvitations")
+        .where("email", "==", supplierEmail)
+        .get();
+      for (const invitationDocument of invitationsSnapshot.docs) {
+        await invitationDocument.ref.delete();
+        deletedInvitations += 1;
+      }
+    }
+
+    try {
+      await getAuth().deleteUser(supplierUserId);
+    } catch (error) {
+      if (error?.code !== "auth/user-not-found") {
+        logger.error("Supplier Auth deletion failed", {
+          supplierUserId,
+          error: error?.message || String(error),
+        });
+        throw new HttpsError(
+          "internal",
+          "The supplier conversations and invitations were removed, but the login could not be deleted. The user profile was kept so you can try again.",
+        );
+      }
+    }
+
+    await supplierRef.delete();
+
+    logger.info("Supplier account deleted", {
+      supplierUserId,
+      deletedConversations: conversationsSnapshot.size,
+      deletedInvitations,
+      deletedBy: request.auth.uid,
+    });
+
+    return {
+      deleted: true,
+      deletedConversations: conversationsSnapshot.size,
+      deletedInvitations,
+    };
+  },
+);
 
 function escapeHtml(value) {
   return String(value || "")
