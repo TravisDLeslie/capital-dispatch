@@ -68,15 +68,15 @@ service cloud.firestore {
     }
 
     function canAccessSupplierConversation(conversationData) {
-      return hasRecentSupplierChatVerification() &&
+      return (
+          canUseSupplierChatInternal() &&
+          hasRecentSupplierChatVerification()
+        ) ||
         (
-          canUseSupplierChatInternal() ||
-          (
-            isApprovedSupplier() &&
-            conversationData.supplierParticipantUids is list &&
-            conversationData.supplierParticipantUids.hasAny([request.auth.uid]) &&
-            conversationData.vendorId == userProfile().vendorId
-          )
+          isApprovedSupplier() &&
+          conversationData.supplierParticipantUids is list &&
+          conversationData.supplierParticipantUids.hasAny([request.auth.uid]) &&
+          conversationData.vendorId == userProfile().vendorId
         );
     }
 

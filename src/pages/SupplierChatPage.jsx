@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getIdTokenResult,
   GoogleAuthProvider,
-  signInWithPopup,
+  reauthenticateWithPopup,
 } from "firebase/auth";
 import {
   Ban,
@@ -291,20 +291,20 @@ export default function SupplierChatPage({
       },
       onError: (nextError) => {
         if (nextError?.code === "permission-denied") {
-          sessionStorage.removeItem(chatUnlockStorageKey(currentUser.id));
-          setIsChatUnlocked(false);
           setConversations([]);
           setMessages([]);
           setSelectedConversationId("");
-          setUnlockError(
-            "Supplier Chat access could not be confirmed. Unlock it again, or ask an admin to confirm this supplier is assigned to the conversation.",
+          setError(
+            isSupplier
+              ? "This supplier account is not assigned to an available conversation yet. Ask a Capital Lumber administrator to confirm the supplier contact and vendor assignment."
+              : "Supplier Chat access could not be confirmed. Unlock it again and verify your Supplier Chat permission.",
           );
           return;
         }
         setError(nextError.message || "Unable to load supplier conversations.");
       },
     });
-  }, [currentUser.id, currentUser.vendorId, isInternal, isChatUnlocked]);
+  }, [currentUser.id, currentUser.vendorId, isInternal, isChatUnlocked, isSupplier]);
 
   useEffect(() => {
     if (!isInternal || !isChatUnlocked) return undefined;
@@ -335,13 +335,14 @@ export default function SupplierChatPage({
     setIsUnlocking(true);
     setUnlockError("");
     try {
-      const expectedUserId = auth.currentUser.uid;
+      const signedInUser = auth.currentUser;
+      const expectedUserId = signedInUser.uid;
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({
         prompt: "select_account",
-        login_hint: auth.currentUser.email || "",
+        login_hint: signedInUser.email || "",
       });
-      const credential = await signInWithPopup(auth, provider);
+      const credential = await reauthenticateWithPopup(signedInUser, provider);
       if (
         credential.user.uid !== expectedUserId ||
         credential.user.uid !== currentUser.id
@@ -365,9 +366,11 @@ export default function SupplierChatPage({
       );
       setIsChatUnlocked(true);
     } catch (unlockFailure) {
+      const code = String(unlockFailure?.code || "");
       const message = String(unlockFailure?.message || "");
       setUnlockError(
-        message.includes("popup-closed-by-user")
+        code === "auth/popup-closed-by-user" ||
+          message.includes("popup-closed-by-user")
           ? "Verification was canceled. Supplier Chat remains locked."
           : message || "Unable to verify this account. Supplier Chat remains locked.",
       );
