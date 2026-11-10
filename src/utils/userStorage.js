@@ -1,15 +1,16 @@
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
   setDoc,
   updateDoc,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { db, functions } from "./firebase";
+import { auth, db } from "./firebase";
 
 const USERS_COLLECTION = "users";
 
@@ -142,11 +143,55 @@ export async function updateUserProfile(userId, updates) {
 }
 
 export async function deleteSupplierAccount(userId) {
-  if (!functions || !userId) {
+  if (!db || !auth?.currentUser || !userId) {
     throw new Error("The supplier account could not be deleted.");
   }
 
-  const deleteAccount = httpsCallable(functions, "deleteSupplierAccount");
-  const result = await deleteAccount({ userId });
-  return result.data;
+  const requestRef = await addDoc(
+    collection(db, "supplierAccountDeletionRequests"),
+    {
+      targetUserId: userId,
+      createdBy: auth.currentUser.uid,
+      status: "pending",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+  );
+
+  return new Promise((resolve, reject) => {
+    let unsubscribe = () => {};
+    const timeoutId = window.setTimeout(() => {
+      unsubscribe();
+      reject(
+        new Error(
+          "Supplier deletion is taking longer than expected. Refresh User Access to check whether the account was removed.",
+        ),
+      );
+    }, 120000);
+
+    unsubscribe = onSnapshot(
+      requestRef,
+      (requestSnapshot) => {
+        const requestData = requestSnapshot.data();
+        if (requestData?.status === "completed") {
+          window.clearTimeout(timeoutId);
+          unsubscribe();
+          resolve(requestData);
+        } else if (requestData?.status === "failed") {
+          window.clearTimeout(timeoutId);
+          unsubscribe();
+          reject(
+            new Error(
+              requestData.error || "The supplier account could not be deleted.",
+            ),
+          );
+        }
+      },
+      (snapshotError) => {
+        window.clearTimeout(timeoutId);
+        unsubscribe();
+        reject(snapshotError);
+      },
+    );
+  });
 }
