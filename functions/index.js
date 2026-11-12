@@ -235,6 +235,67 @@ exports.diagnoseSupplierChatAccess = onCall(
       emailConversationCount: emailSnapshot.docs.length,
     };
 
+    if (
+      assignedSnapshot.empty &&
+      emailSnapshot.docs.length === 0 &&
+      request.data?.createIfMissing === true
+    ) {
+      const authenticationTime = Number(request.auth.token.auth_time || 0);
+      const currentTime = Math.floor(Date.now() / 1000);
+      if (
+        !Number.isFinite(authenticationTime) ||
+        authenticationTime <= 0 ||
+        authenticationTime > currentTime + 60 ||
+        currentTime - authenticationTime >= 30 * 60
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Unlock Supplier Chat again before starting a conversation.",
+        );
+      }
+
+      const displayName =
+        String(profile.displayName || "").trim() ||
+        String(request.auth.token.name || "").trim() ||
+        email ||
+        "Supplier contact";
+      const conversationRef = firestore.collection("supplierConversations").doc();
+      const now = FieldValue.serverTimestamp();
+      await conversationRef.set({
+        vendorId,
+        vendorName,
+        title: `${vendorName} pricing`,
+        participantUids: [userId],
+        internalParticipantUids: [],
+        supplierParticipantUids: [userId],
+        supplierContactName: displayName,
+        supplierContactEmail: email,
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: userId,
+      });
+
+      logger.info("Supplier started conversation", {
+        conversationId: conversationRef.id,
+        supplierUserId: userId,
+        vendorId,
+      });
+      return {
+        ...baseResult,
+        assignedConversationCount: 1,
+        matchingVendorConversationCount: 1,
+        emailConversationCount: 1,
+        authorizedConversationIds: [conversationRef.id],
+        conversationId: conversationRef.id,
+        created: true,
+        code: "SC-ACCESS-002",
+        title: "Conversation started",
+        message: "The supplier conversation is ready.",
+        action: "Send the first message to Capital Lumber.",
+      };
+    }
+
     if (assignedSnapshot.empty && emailSnapshot.docs.length > 0) {
       return {
         ...baseResult,

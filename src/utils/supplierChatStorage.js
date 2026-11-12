@@ -8,7 +8,9 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -16,6 +18,7 @@ import { db, functions } from "./firebase";
 
 const CONVERSATIONS_COLLECTION = "supplierConversations";
 const INVITATIONS_COLLECTION = "supplierInvitations";
+const SAVED_QUOTES_COLLECTION = "supplierQuotes";
 
 export async function claimSupplierInvitation(invitationId) {
   const normalizedInvitationId = String(invitationId || "").trim();
@@ -33,7 +36,7 @@ export async function claimSupplierInvitation(invitationId) {
   return response.data;
 }
 
-export async function diagnoseSupplierChatAccess() {
+export async function diagnoseSupplierChatAccess(options = {}) {
   if (!functions) {
     throw new Error("Supplier Chat diagnostics are unavailable.");
   }
@@ -42,8 +45,12 @@ export async function diagnoseSupplierChatAccess() {
     functions,
     "diagnoseSupplierChatAccess",
   );
-  const response = await diagnoseAccess({});
+  const response = await diagnoseAccess(options);
   return response.data;
+}
+
+export async function startSupplierConversation() {
+  return diagnoseSupplierChatAccess({ createIfMissing: true });
 }
 
 function mapDocument(snapshot) {
@@ -98,6 +105,10 @@ export function subscribeToSupplierConversations({
         : [];
 
       if (conversationIds.length === 0) {
+        if (diagnostic?.code === "SC-ASSIGNMENT-002") {
+          onConversations([]);
+          return;
+        }
         const assignmentError = new Error(
           diagnostic?.message || "No supplier conversations are assigned to this account.",
         );
@@ -319,10 +330,103 @@ export async function sendSupplierMessage({
   await updateDoc(doc(db, CONVERSATIONS_COLLECTION, conversationId), {
     updatedAt: serverTimestamp(),
     lastMessage: quote
-      ? `${quote.productName || "Product"} pricing`
+      ? quote.kind === "request"
+        ? `Pricing requested for ${quote.items?.[0]?.productName || quote.productName || "product"}`
+        : `${quote.items?.[0]?.productName || quote.productName || "Product"} pricing`
       : message.text.slice(0, 160),
     lastMessageBy: message.senderUid,
   });
+}
+
+export async function updateSupplierQuoteStatus({
+  conversationId,
+  messageId,
+  status,
+}) {
+  if (!db || !conversationId || !messageId || !status) {
+    throw new Error("That pricing status could not be updated.");
+  }
+
+  await updateDoc(
+    doc(
+      db,
+      CONVERSATIONS_COLLECTION,
+      conversationId,
+      "messages",
+      messageId,
+    ),
+    {
+      "quote.status": status,
+      "quote.statusUpdatedAt": serverTimestamp(),
+    },
+  );
+}
+
+export function subscribeToSupplierQuotes({
+  vendorId,
+  onQuotes,
+  onError,
+}) {
+  const normalizedVendorId = String(vendorId || "").trim();
+  if (!db || !normalizedVendorId) {
+    onQuotes([]);
+    return () => {};
+  }
+
+  return onSnapshot(
+    query(
+      collection(db, SAVED_QUOTES_COLLECTION),
+      where("vendorId", "==", normalizedVendorId),
+    ),
+    (snapshot) => onQuotes(sortNewest(snapshot.docs.map(mapDocument))),
+    onError,
+  );
+}
+
+export async function saveSupplierQuote({
+  conversation,
+  message,
+  savedBy,
+}) {
+  const conversationId = String(conversation?.id || "").trim();
+  const messageId = String(message?.id || "").trim();
+  const vendorId = String(conversation?.vendorId || message?.vendorId || "").trim();
+  const savedById = String(savedBy?.id || savedBy?.uid || "").trim();
+  if (
+    !db ||
+    !conversationId ||
+    !messageId ||
+    !vendorId ||
+    !savedById ||
+    !message?.quote ||
+    message.quote.kind === "request"
+  ) {
+    throw new Error("That supplier quote could not be saved.");
+  }
+
+  const quoteId = `${conversationId}__${messageId}`;
+  await setDoc(
+    doc(db, SAVED_QUOTES_COLLECTION, quoteId),
+    {
+      vendorId,
+      vendorName: conversation.vendorName || "Supplier",
+      conversationId,
+      messageId,
+      quote: message.quote,
+      quotedAt: message.createdAt || null,
+      quotedByUid: message.senderUid || "",
+      quotedByName: message.senderName || conversation.supplierContactName || "Supplier contact",
+      supplierContactName: conversation.supplierContactName || message.senderName || "Supplier contact",
+      supplierContactEmail: conversation.supplierContactEmail || "",
+      savedBy: savedById,
+      savedByName: savedBy.displayName || savedBy.email || "Capital Lumber",
+      savedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  return quoteId;
 }
 
 export function calculateLumberQuote({
@@ -352,6 +456,10 @@ export function calculateLumberQuote({
     pricePerMbf = dimensions.quotedPrice;
     pricePerPiece = (boardFeetEach / 1000) * pricePerMbf;
     extendedPrice = thousandBoardFeet * pricePerMbf;
+  } else if (priceUnit === "BF") {
+    extendedPrice = totalBoardFeet * dimensions.quotedPrice;
+    pricePerPiece = boardFeetEach * dimensions.quotedPrice;
+    pricePerMbf = dimensions.quotedPrice * 1000;
   } else if (priceUnit === "LF") {
     extendedPrice =
       dimensions.quantity * dimensions.length * dimensions.quotedPrice;

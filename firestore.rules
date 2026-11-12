@@ -497,6 +497,30 @@ service cloud.firestore {
       }
     }
 
+    match /supplierQuotes/{quoteId} {
+      allow read: if canUseSupplierChatInternal() &&
+        hasRecentSupplierChatVerification();
+      allow create: if canUseSupplierChatInternal() &&
+        hasRecentSupplierChatVerification() &&
+        request.resource.data.vendorId is string &&
+        request.resource.data.conversationId is string &&
+        request.resource.data.messageId is string &&
+        request.resource.data.quote is map &&
+        request.resource.data.savedBy == request.auth.uid &&
+        request.resource.data.savedAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow update: if canUseSupplierChatInternal() &&
+        hasRecentSupplierChatVerification() &&
+        request.resource.data.vendorId == resource.data.vendorId &&
+        request.resource.data.conversationId == resource.data.conversationId &&
+        request.resource.data.messageId == resource.data.messageId &&
+        request.resource.data.savedBy == request.auth.uid &&
+        request.resource.data.savedAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow delete: if canUseSupplierChatInternal() &&
+        hasRecentSupplierChatVerification();
+    }
+
     match /appSettings/{settingId} {
       allow read: if isApproved();
       allow create, update, delete: if isAdmin();
