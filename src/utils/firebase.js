@@ -6,6 +6,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
 
 function normalizeStorageBucket(value) {
@@ -63,6 +64,10 @@ function createFirestoreDatabase(app) {
 export const db = createFirestoreDatabase(firebaseApp);
 
 export const auth = firebaseApp ? getAuth(firebaseApp) : null;
+
+export const functions = firebaseApp
+  ? getFunctions(firebaseApp, "us-central1")
+  : null;
 
 export const storage = firebaseApp && storageBucket
   ? getStorage(firebaseApp)

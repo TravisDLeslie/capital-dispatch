@@ -749,7 +749,7 @@ function DriverDeliveryInformation({
   generalNotes,
 }) {
   const isReturn = isReturnDelivery(delivery);
-  const notes = [deliveryLocationNotes, generalNotes]
+  const notes = [delivery.returnNotes, deliveryLocationNotes, generalNotes]
     .map((note) => String(note || "").trim())
     .filter((note, index, allNotes) => note && allNotes.indexOf(note) === index);
 
@@ -2058,10 +2058,15 @@ export default function DeliveryQueuePage({
                   }
                   deliveryLocationNotes={
                     currentDriverDelivery.deliveryLocationNotes ||
+                    currentDriverDelivery.returnNotes ||
                     currentDriverDelivery.deliveryNotes ||
                     ""
                   }
-                  generalNotes={currentDriverDelivery.generalNotes || ""}
+                  generalNotes={
+                    currentDriverDelivery.generalNotes ||
+                    currentDriverDelivery.returnNotes ||
+                    ""
+                  }
                   onPhotoChange={handlePhotoChange}
                   onPhotosChange={handlePhotosChange}
                   onCompleteDelivery={handleCompleteDelivery}
@@ -2265,9 +2270,11 @@ export default function DeliveryQueuePage({
                     delivery.contactPhone || delivery.phoneNumber || "";
                   const deliveryLocationNotes =
                     delivery.deliveryLocationNotes ||
+                    delivery.returnNotes ||
                     delivery.deliveryNotes ||
                     "";
-                  const generalNotes = delivery.generalNotes || "";
+                  const generalNotes =
+                    delivery.generalNotes || delivery.returnNotes || "";
                   const scopeSummary = getDeliveryScopeSummary(delivery);
                   const deliveryIsOpen = isDeliveryOpen(
                     delivery.id,

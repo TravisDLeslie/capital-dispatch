@@ -12,10 +12,40 @@ import {
   writeBatch,
   where,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { httpsCallable } from "firebase/functions";
+import { db, functions } from "./firebase";
 
 const CONVERSATIONS_COLLECTION = "supplierConversations";
 const INVITATIONS_COLLECTION = "supplierInvitations";
+
+export async function claimSupplierInvitation(invitationId) {
+  const normalizedInvitationId = String(invitationId || "").trim();
+  if (!functions || !normalizedInvitationId) {
+    throw new Error("The supplier invitation could not be verified.");
+  }
+
+  const claimInvitation = httpsCallable(
+    functions,
+    "claimSupplierInvitation",
+  );
+  const response = await claimInvitation({
+    invitationId: normalizedInvitationId,
+  });
+  return response.data;
+}
+
+export async function diagnoseSupplierChatAccess() {
+  if (!functions) {
+    throw new Error("Supplier Chat diagnostics are unavailable.");
+  }
+
+  const diagnoseAccess = httpsCallable(
+    functions,
+    "diagnoseSupplierChatAccess",
+  );
+  const response = await diagnoseAccess({});
+  return response.data;
+}
 
 function mapDocument(snapshot) {
   return { id: snapshot.id, ...snapshot.data() };

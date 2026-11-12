@@ -122,6 +122,7 @@ import {
   subscribeToUsers,
   updateUserProfile,
 } from "./utils/userStorage";
+import { claimSupplierInvitation } from "./utils/supplierChatStorage";
 import {
   addEmailListEntry,
   deleteEmailListEntry,
@@ -2682,7 +2683,26 @@ export default function App() {
       setIsProfileLoading(false);
     }, PROFILE_RESTORE_TIMEOUT_MS);
 
-    ensureUserProfile(currentUser, SUPER_ADMIN_EMAILS)
+    const supplierInvitationId = new URLSearchParams(
+      window.location.search,
+    ).get("supplierInvite")?.trim();
+    const prepareUserProfile = async () => {
+      if (supplierInvitationId) {
+        await claimSupplierInvitation(supplierInvitationId);
+
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.delete("supplierInvite");
+        window.history.replaceState(
+          {},
+          "",
+          `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
+        );
+      }
+
+      return ensureUserProfile(currentUser, SUPER_ADMIN_EMAILS);
+    };
+
+    prepareUserProfile()
       .then((savedUserProfile) => {
         if (!isMounted) {
           return;
@@ -2731,7 +2751,11 @@ export default function App() {
             });
             setSyncError("");
           } else {
-            setSyncError(getFirebaseErrorMessage(error));
+            setSyncError(
+              supplierInvitationId
+                ? error.message || "The supplier invitation could not be applied."
+                : getFirebaseErrorMessage(error),
+            );
           }
           setIsProfileLoading(false);
         }
@@ -4382,6 +4406,18 @@ export default function App() {
     let sourceOrderNumber = String(orderPayload.orderNumber || "").trim();
     const handoffType = String(orderPayload.orderMethod || "willCall");
     const isDeliveryOrder = handoffType === "delivery" || isReturnOrder;
+    const returnDate = isReturnOrder
+      ? String(orderPayload.returnDate || orderPayload.deliveryDate || "").trim()
+      : "";
+    const returnNotes = isReturnOrder
+      ? String(orderPayload.returnNotes || orderPayload.deliveryNotes || "").trim()
+      : "";
+    const scheduledDeliveryDate = isReturnOrder
+      ? returnDate
+      : String(orderPayload.deliveryDate || "").trim();
+    const savedDeliveryNotes = isReturnOrder
+      ? returnNotes
+      : String(orderPayload.deliveryNotes || "").trim();
 
     if (isReturnOrder) {
       const usedReturnNumbers = new Set(
@@ -4433,7 +4469,9 @@ export default function App() {
       orderKind,
       handoffType,
       deliveryAddress: String(orderPayload.deliveryAddress || "").trim(),
-      deliveryDate: String(orderPayload.deliveryDate || "").trim(),
+      deliveryDate: scheduledDeliveryDate,
+      returnDate,
+      returnNotes,
       deliveryTitle,
       hasHardware: !isReturnOrder && isDeliveryOrder && Boolean(orderPayload.hasHardware),
       needsTarp: !isReturnOrder && isDeliveryOrder && Boolean(orderPayload.needsTarp),
@@ -4441,7 +4479,7 @@ export default function App() {
         ? String(orderPayload.unloadType || "Forklift")
         : "",
       deliveryNotes: isDeliveryOrder
-        ? String(orderPayload.deliveryNotes || "").trim()
+        ? savedDeliveryNotes
         : "",
       phoneNumber: String(orderPayload.phoneNumber || "").trim(),
       poNumbers,
@@ -4625,13 +4663,15 @@ export default function App() {
         deliveryType: isReturnOrder ? "return" : "Standard",
         routeStopType: isReturnOrder ? "returnPickup" : "delivery",
         returnNumber: isReturnOrder ? sourceOrderNumber : "",
+        returnDate,
+        returnNotes,
         unloadType: String(orderPayload.unloadType || "Forklift"),
         hasHardware: isReturnOrder ? false : Boolean(orderPayload.hasHardware),
         needsTarp: isReturnOrder ? false : Boolean(orderPayload.needsTarp),
         hardwareChecked: false,
         deliveryLocationNotes: "",
-        generalNotes: String(orderPayload.deliveryNotes || "").trim(),
-        deliveryNotes: String(orderPayload.deliveryNotes || "").trim(),
+        generalNotes: savedDeliveryNotes,
+        deliveryNotes: savedDeliveryNotes,
         items: cleanItems.map((item) => ({
           id: String(item.id || createId()),
           quantity: item.quantity,
@@ -4649,7 +4689,7 @@ export default function App() {
         dispatchStatus: "needsDispatch",
         deliveryScope: isReturnOrder ? "return" : "full",
         deliveryScopeNotes: "",
-        deliveryDate: String(orderPayload.deliveryDate || "").trim(),
+        deliveryDate: scheduledDeliveryDate,
         deliveryTimeSlot: "",
         deliveryOriginName: "Capital Lumber",
         deliveryOriginAddress: capitalLumberAddress,
@@ -4675,7 +4715,9 @@ export default function App() {
       phoneNumber: String(orderPayload.phoneNumber || "").trim(),
       handoffType: String(orderPayload.orderMethod || "willCall"),
       orderKind,
-      deliveryDate: String(orderPayload.deliveryDate || "").trim(),
+      deliveryDate: scheduledDeliveryDate,
+      returnDate,
+      returnNotes,
       deliveryTitle,
       status: "waiting",
       waitingItems: isReturnOrder

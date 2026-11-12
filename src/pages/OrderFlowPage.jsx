@@ -802,6 +802,7 @@ export default function OrderFlowPage({
     (isReturnOrder ? /^R\d{6}$/.test(orderNumber) : orderNumber) &&
       customerName &&
       savedItems.length > 0 &&
+      (!isReturnOrder || deliveryDate) &&
       (!["delivery", "return"].includes(orderMethod) || deliveryAddress),
   );
   const validStockItems = useMemo(
@@ -1202,11 +1203,13 @@ export default function OrderFlowPage({
       orderMethod,
       deliveryAddress,
       deliveryDate,
+      returnDate: isReturnOrder ? deliveryDate : "",
       deliveryTitle,
       hasHardware: isReturnOrder ? false : isDeliveryOrder ? hasHardware : false,
       needsTarp: isReturnOrder ? false : isDeliveryOrder ? needsTarp : false,
       unloadType: isReturnOrder ? returnLoadType : isDeliveryOrder ? unloadType : "",
       deliveryNotes: isDeliveryOrder ? deliveryNotes : "",
+      returnNotes: isReturnOrder ? deliveryNotes.trim() : "",
       routeEta: isDeliveryOrder ? routeEta : null,
       routeEtaStatus: isDeliveryOrder ? routeEtaStatus : "idle",
       items: savedItems,
@@ -1419,10 +1422,10 @@ export default function OrderFlowPage({
               <SelectedHandoffIcon className="h-4 w-4" aria-hidden="true" />
               {selectedHandoff.label}
             </span>
-            {orderMethod === "delivery" ? (
+            {["delivery", "return"].includes(orderMethod) ? (
               <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-right">
                 <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-                  Delivery Date
+                  {isReturnOrder ? "Return Date" : "Delivery Date"}
                 </p>
                 <p className="text-sm font-black text-slate-950">
                   {deliveryDateText}
@@ -1843,7 +1846,7 @@ export default function OrderFlowPage({
           </div>
 
           <section className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700">
                   PO Items
@@ -1855,14 +1858,6 @@ export default function OrderFlowPage({
                   Add every item before saving. They will stay together under PO {stockPoNumber || "000-000"}.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={addStockItem}
-                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white transition hover:bg-slate-800"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Add Item
-              </button>
             </div>
 
             <div className="mt-4 space-y-3">
@@ -1952,6 +1947,15 @@ export default function OrderFlowPage({
                 </div>
               ))}
             </div>
+
+            <button
+              type="button"
+              onClick={addStockItem}
+              className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Add Item
+            </button>
           </section>
 
           <div className="mt-5">
@@ -2611,23 +2615,45 @@ export default function OrderFlowPage({
 
           {isReturnOrder ? (
             <div className="rounded-3xl border border-violet-200 bg-violet-50/60 p-4">
-              <Field label="Return Pickup Address">
-                <div className="relative">
-                  <MapPin
-                    className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-violet-500"
-                    aria-hidden="true"
+              <div className="grid gap-3 xl:grid-cols-[180px_1fr] xl:items-start">
+                <Field label="Return Date">
+                  <TextInput
+                    type="date"
+                    value={deliveryDate}
+                    onChange={(event) => setDeliveryDate(event.target.value)}
                   />
-                  <AddressAutocompleteInput
-                    value={deliveryAddress}
-                    onChange={setDeliveryAddress}
-                    autoComplete="off"
-                    enableLocalFallback
-                    placeholder="Start typing the return pickup address..."
-                    showStatus={false}
-                    className="w-full rounded-2xl border border-violet-200 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                </Field>
+
+                <Field label="Return Pickup Address">
+                  <div className="relative">
+                    <MapPin
+                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-violet-500"
+                      aria-hidden="true"
+                    />
+                    <AddressAutocompleteInput
+                      value={deliveryAddress}
+                      onChange={setDeliveryAddress}
+                      autoComplete="off"
+                      enableLocalFallback
+                      placeholder="Start typing the return pickup address..."
+                      showStatus={false}
+                      className="w-full rounded-2xl border border-violet-200 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                    />
+                  </div>
+                </Field>
+              </div>
+
+              <div className="mt-3">
+                <Field label="Return Notes">
+                  <textarea
+                    value={deliveryNotes}
+                    onChange={(event) => setDeliveryNotes(event.target.value)}
+                    placeholder="What is being returned, its condition, pickup location, who to ask for, or anything the driver should know..."
+                    rows={3}
+                    className="w-full resize-none rounded-2xl border border-violet-200 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
                   />
-                </div>
-              </Field>
+                </Field>
+              </div>
             </div>
           ) : orderMethod === "delivery" ? (
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
@@ -3084,7 +3110,11 @@ export default function OrderFlowPage({
         <button
           type="button"
           onClick={addItem}
-          className="mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-100 px-4 text-sm font-black text-slate-700 transition hover:border-slate-400 hover:bg-slate-200"
+          className={`mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-sm font-black transition ${
+            isReturnOrder
+              ? "bg-violet-600 text-white shadow-sm hover:bg-violet-700"
+              : "bg-slate-950 text-white shadow-sm hover:bg-slate-800"
+          }`}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
           Add Item
@@ -3346,6 +3376,11 @@ export default function OrderFlowPage({
                       </p>
                     ) : null}
                   </div>
+                ) : null}
+                {isReturnOrder ? (
+                  <p className="mt-2 text-sm font-black text-violet-700">
+                    Return date: {deliveryDateText}
+                  </p>
                 ) : null}
                 {routeEta?.durationText ? (
                   <p className="mt-2 text-sm font-black text-emerald-700">

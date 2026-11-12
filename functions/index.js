@@ -2,6 +2,7 @@ const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { FieldValue, getFirestore } = require("firebase-admin/firestore");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const { logger } = require("firebase-functions");
 const { Resend } = require("resend");
@@ -23,6 +24,253 @@ const BOOTSTRAP_SUPER_ADMIN_EMAIL = "travis@capitallumber.co";
 function normalizedEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
+
+exports.claimSupplierInvitation = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Sign in with the Google account that received this invitation.",
+      );
+    }
+
+    const invitationId = String(request.data?.invitationId || "").trim();
+    const userId = request.auth.uid;
+    const signedInEmail = normalizedEmail(request.auth.token.email);
+
+    if (!invitationId) {
+      throw new HttpsError("invalid-argument", "The supplier invitation is missing.");
+    }
+    if (!signedInEmail) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The signed-in Google account does not have an email address.",
+      );
+    }
+
+    const firestore = getFirestore();
+    const invitationRef = firestore.doc(`supplierInvitations/${invitationId}`);
+    const userRef = firestore.doc(`users/${userId}`);
+
+    return firestore.runTransaction(async (transaction) => {
+      const invitationSnapshot = await transaction.get(invitationRef);
+      if (!invitationSnapshot.exists) {
+        throw new HttpsError("not-found", "This supplier invitation no longer exists.");
+      }
+
+      const invitation = invitationSnapshot.data() || {};
+      const invitationEmail = normalizedEmail(invitation.email);
+      const invitationStatus = String(invitation.status || "pending");
+      const isExistingClaim =
+        invitationStatus === "claimed" && invitation.claimedBy === userId;
+
+      if (invitationEmail !== signedInEmail) {
+        throw new HttpsError(
+          "permission-denied",
+          `This invitation belongs to ${invitationEmail || "another email address"}. Sign in with that Google account.`,
+        );
+      }
+      if (invitationStatus !== "pending" && !isExistingClaim) {
+        throw new HttpsError(
+          "failed-precondition",
+          invitationStatus === "canceled"
+            ? "This supplier invitation was canceled."
+            : "This supplier invitation has already been used.",
+        );
+      }
+      if (!invitation.vendorId || !invitation.vendorName) {
+        throw new HttpsError(
+          "failed-precondition",
+          "This invitation is missing its vendor assignment. Ask Capital Lumber to create a new invitation.",
+        );
+      }
+
+      const userSnapshot = await transaction.get(userRef);
+      const existingProfile = userSnapshot.data() || {};
+      const existingRole = String(existingProfile.role || "").trim();
+      if (existingRole && !["pending", "supplier"].includes(existingRole)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "This Google account is already assigned to a Capital Lumber employee profile.",
+        );
+      }
+
+      const now = FieldValue.serverTimestamp();
+      const displayName =
+        String(existingProfile.displayName || "").trim() ||
+        String(invitation.contactName || "").trim() ||
+        String(request.auth.token.name || "").trim();
+      const profile = {
+        uid: userId,
+        email: signedInEmail,
+        displayName,
+        photoURL:
+          String(existingProfile.photoURL || "").trim() ||
+          String(request.auth.token.picture || "").trim(),
+        role: "supplier",
+        status: existingProfile.status === "approved" ? "approved" : "pending",
+        workView: "supplier",
+        employeeActive: false,
+        driverName: "",
+        vendorId: invitation.vendorId,
+        vendorName: invitation.vendorName,
+        permissions: ["supplier-chat"],
+        supplierInvitationId: invitationId,
+        supplierInvitedBy: invitation.createdBy || "",
+        supplierInvitationClaimedAt: now,
+        lastLoginAt: now,
+        updatedAt: now,
+      };
+      if (!userSnapshot.exists) profile.createdAt = now;
+
+      transaction.set(userRef, profile, { merge: true });
+      if (!isExistingClaim) {
+        transaction.update(invitationRef, {
+          status: "claimed",
+          claimedBy: userId,
+          claimedAt: now,
+          updatedAt: now,
+        });
+      }
+
+      return {
+        role: "supplier",
+        status: profile.status,
+        workView: "supplier",
+        vendorId: invitation.vendorId,
+        vendorName: invitation.vendorName,
+      };
+    });
+  },
+);
+
+exports.diagnoseSupplierChatAccess = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign in before checking Supplier Chat.");
+    }
+
+    const firestore = getFirestore();
+    const userId = request.auth.uid;
+    const email = normalizedEmail(request.auth.token.email);
+    const userSnapshot = await firestore.doc(`users/${userId}`).get();
+
+    if (!userSnapshot.exists) {
+      return {
+        code: "SC-PROFILE-001",
+        title: "Supplier profile is missing",
+        message: "User Access does not contain a profile for this Google account.",
+        action: "Ask an administrator to have the supplier reopen the original invitation link.",
+        userId,
+        email,
+      };
+    }
+
+    const profile = userSnapshot.data() || {};
+    const role = String(profile.role || "").trim();
+    const status = String(profile.status || "").trim();
+    const vendorId = String(profile.vendorId || "").trim();
+    const vendorName = String(profile.vendorName || "").trim();
+    const baseResult = {
+      userId,
+      email,
+      role,
+      status,
+      workView: String(profile.workView || "").trim(),
+      vendorId,
+      vendorName,
+    };
+
+    if (role !== "supplier") {
+      return {
+        ...baseResult,
+        code: "SC-PROFILE-002",
+        title: "Account role is not Supplier",
+        message: `User Access currently lists this account as ${role || "no role"}.`,
+        action: "Set the role to Supplier; the Supplier work view and chat-only permission should follow automatically.",
+      };
+    }
+    if (status !== "approved") {
+      return {
+        ...baseResult,
+        code: "SC-PROFILE-003",
+        title: "Supplier account is not approved",
+        message: `User Access currently shows ${status || "no approval status"}.`,
+        action: "Approve this supplier in User Access.",
+      };
+    }
+    if (!vendorId) {
+      return {
+        ...baseResult,
+        code: "SC-PROFILE-004",
+        title: "Vendor assignment is missing",
+        message: "The supplier profile is approved but has no vendor ID.",
+        action: "Choose the supplier's vendor in User Access and save the profile.",
+      };
+    }
+
+    const assignedSnapshot = await firestore
+      .collection("supplierConversations")
+      .where("supplierParticipantUids", "array-contains", userId)
+      .get();
+    const emailSnapshot = email
+      ? await firestore
+          .collection("supplierConversations")
+          .where("supplierContactEmail", "==", email)
+          .get()
+      : { docs: [] };
+    const matchingVendorCount = assignedSnapshot.docs.filter(
+      (document) => String(document.data()?.vendorId || "") === vendorId,
+    ).length;
+    const counts = {
+      assignedConversationCount: assignedSnapshot.size,
+      matchingVendorConversationCount: matchingVendorCount,
+      emailConversationCount: emailSnapshot.docs.length,
+    };
+
+    if (assignedSnapshot.empty && emailSnapshot.docs.length > 0) {
+      return {
+        ...baseResult,
+        ...counts,
+        code: "SC-ASSIGNMENT-001",
+        title: "Conversation is linked to an old account",
+        message: "A conversation uses this email, but its supplier user ID does not match the current Google account.",
+        action: "Open the conversation as an administrator and use Edit supplier access to assign this supplier account.",
+      };
+    }
+    if (assignedSnapshot.empty) {
+      return {
+        ...baseResult,
+        ...counts,
+        code: "SC-ASSIGNMENT-002",
+        title: "No conversation is assigned",
+        message: "The supplier profile is valid, but no conversation includes this supplier account.",
+        action: "Create a conversation or edit an existing conversation and assign this supplier contact.",
+      };
+    }
+    if (matchingVendorCount === 0) {
+      return {
+        ...baseResult,
+        ...counts,
+        code: "SC-ASSIGNMENT-003",
+        title: "Conversation vendor does not match",
+        message: "The supplier is assigned to a conversation, but its vendor ID differs from User Access.",
+        action: "Make the conversation vendor and the supplier's User Access vendor match.",
+      };
+    }
+
+    return {
+      ...baseResult,
+      ...counts,
+      code: "SC-ACCESS-001",
+      title: "Profile and assignment are valid",
+      message: "The supplier profile, vendor, and conversation assignment all match. Firestore rules or the refreshed Google session rejected the browser request.",
+      action: "Deploy the latest Firestore rules, then sign out, sign back in, and unlock Supplier Chat again.",
+    };
+  },
+);
 
 exports.processSupplierAccountDeletion = onDocumentCreated(
   {

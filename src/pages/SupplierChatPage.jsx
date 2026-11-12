@@ -29,6 +29,7 @@ import {
   createSupplierConversation,
   createSupplierInvitation,
   deleteSupplierConversation,
+  diagnoseSupplierChatAccess,
   sendSupplierMessage,
   subscribeToSupplierConversations,
   subscribeToSupplierInvitations,
@@ -70,6 +71,37 @@ function formatDate(value) {
   if (!value) return "";
   const date = typeof value?.toDate === "function" ? value.toDate() : new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+}
+
+function formatSupplierChatDiagnostic(diagnostic) {
+  if (!diagnostic) return "";
+
+  return [
+    `Supplier Chat diagnostic: ${diagnostic.code || "Unknown"}`,
+    diagnostic.title ? `Issue: ${diagnostic.title}` : "",
+    diagnostic.message ? `Finding: ${diagnostic.message}` : "",
+    diagnostic.action ? `Next step: ${diagnostic.action}` : "",
+    diagnostic.email ? `Email: ${diagnostic.email}` : "",
+    diagnostic.userId ? `User ID: ${diagnostic.userId}` : "",
+    diagnostic.role ? `Role: ${diagnostic.role}` : "",
+    diagnostic.status ? `Status: ${diagnostic.status}` : "",
+    diagnostic.workView ? `Work view: ${diagnostic.workView}` : "",
+    diagnostic.vendorName || diagnostic.vendorId
+      ? `Vendor: ${diagnostic.vendorName || "Not named"} (${diagnostic.vendorId || "No vendor ID"})`
+      : "Vendor: Not assigned",
+    Number.isFinite(diagnostic.assignedConversationCount)
+      ? `Conversations assigned to user ID: ${diagnostic.assignedConversationCount}`
+      : "",
+    Number.isFinite(diagnostic.matchingVendorConversationCount)
+      ? `Conversations matching vendor: ${diagnostic.matchingVendorConversationCount}`
+      : "",
+    diagnostic.firestoreCode
+      ? `Firestore code: ${diagnostic.firestoreCode}`
+      : "",
+    diagnostic.firestoreMessage
+      ? `Firestore message: ${diagnostic.firestoreMessage}`
+      : "",
+  ].filter(Boolean).join("\n");
 }
 
 async function copyToClipboard(value) {
@@ -184,6 +216,8 @@ export default function SupplierChatPage({
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [messageText, setMessageText] = useState("");
   const [error, setError] = useState("");
+  const [conversationDiagnostic, setConversationDiagnostic] = useState(null);
+  const [diagnosticCopyStatus, setDiagnosticCopyStatus] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [showConversation, setShowConversation] = useState(false);
@@ -198,7 +232,7 @@ export default function SupplierChatPage({
   const [showInvitationLog, setShowInvitationLog] = useState(false);
 
   const activeInvitations = useMemo(
-    () => invitations.filter((invitation) => invitation.status !== "canceled"),
+    () => invitations.filter((invitation) => invitation.status === "pending"),
     [invitations],
   );
   const canceledInvitations = useMemo(
@@ -283,12 +317,34 @@ export default function SupplierChatPage({
 
   useEffect(() => {
     if (!currentUser.id || !isChatUnlocked) return undefined;
+    if (isSupplier && !String(currentUser.vendorId || "").trim()) {
+      setConversations([]);
+      setMessages([]);
+      setSelectedConversationId("");
+      setError("This supplier account is approved but does not have a vendor assignment.");
+      setConversationDiagnostic({
+        code: "SC-PROFILE-004",
+        title: "Vendor assignment is missing",
+        message: "User Access did not provide a vendor ID for this supplier account.",
+        action: "Ask a Capital Lumber administrator to select the vendor in User Access and save the account.",
+        userId: currentUser.id,
+        email: currentUser.email || "",
+        role: currentUser.role || "",
+        status: currentUser.status || "",
+        workView: currentUser.workView || "",
+        vendorId: "",
+        vendorName: currentUser.vendorName || "",
+      });
+      return undefined;
+    }
     return subscribeToSupplierConversations({
       userId: currentUser.id,
       vendorId: currentUser.vendorId,
       isInternal,
       onConversations: (nextConversations) => {
         setError("");
+        setConversationDiagnostic(null);
+        setDiagnosticCopyStatus("");
         setConversations(nextConversations);
         setSelectedConversationId((currentId) =>
           nextConversations.some((item) => item.id === currentId)
@@ -296,22 +352,90 @@ export default function SupplierChatPage({
             : nextConversations[0]?.id || "",
         );
       },
-      onError: (nextError) => {
+      onError: async (nextError) => {
         if (nextError?.code === "permission-denied") {
           setConversations([]);
           setMessages([]);
           setSelectedConversationId("");
-          setError(
-            isSupplier
-              ? "Supplier Chat could not load this account's assigned conversations. Ask a Capital Lumber administrator to confirm the supplier contact assignment."
-              : "Supplier Chat access could not be confirmed. Unlock it again and verify your Supplier Chat permission.",
-          );
+          if (isSupplier) {
+            try {
+              const diagnostic = await diagnoseSupplierChatAccess();
+              setConversationDiagnostic({
+                ...diagnostic,
+                firestoreCode: nextError.code,
+                firestoreMessage: nextError.message || "",
+              });
+              setError(diagnostic.message || "Supplier Chat access was denied.");
+            } catch (diagnosticError) {
+              setConversationDiagnostic({
+                code: "SC-DIAGNOSTIC-001",
+                title: "Conversation access was denied",
+                message: "Firestore denied the conversation list, and the secure diagnostic could not finish.",
+                action: "Confirm the latest Cloud Functions and Firestore rules are deployed, then sign out and sign back in.",
+                userId: currentUser.id,
+                email: currentUser.email || "",
+                role: currentUser.role || "",
+                status: currentUser.status || "",
+                vendorId: currentUser.vendorId || "",
+                vendorName: currentUser.vendorName || "",
+                firestoreCode: nextError.code,
+                firestoreMessage: nextError.message || "",
+                diagnosticError: diagnosticError?.message || "",
+              });
+              setError("Supplier Chat access was denied. Open the diagnostic details below.");
+            }
+          } else {
+            setConversationDiagnostic(null);
+            setError("Supplier Chat access could not be confirmed. Unlock it again and verify your Supplier Chat permission.");
+          }
           return;
         }
-        setError(nextError.message || "Unable to load supplier conversations.");
+        const errorCode = String(nextError?.code || "unknown");
+        const isMissingIndex =
+          errorCode === "failed-precondition" &&
+          String(nextError?.message || "").toLowerCase().includes("index");
+        const diagnostic = {
+          code: isMissingIndex
+            ? "SC-INDEX-001"
+            : errorCode === "unavailable"
+              ? "SC-NETWORK-001"
+              : "SC-LOAD-001",
+          title: isMissingIndex
+            ? "Supplier Chat index is missing"
+            : errorCode === "unavailable"
+              ? "Supplier Chat is temporarily offline"
+              : "Supplier conversations could not load",
+          message: isMissingIndex
+            ? "Firestore needs the Supplier Chat conversation index before it can run this search."
+            : errorCode === "unavailable"
+              ? "The device could not reach Firestore. Check the connection and try again."
+              : nextError?.message || "Unable to load supplier conversations.",
+          action: isMissingIndex
+            ? "Deploy firestore.indexes.json to the production Firebase project."
+            : "Refresh the page. If this continues, send the diagnostic code to Capital Lumber.",
+          userId: currentUser.id,
+          email: currentUser.email || "",
+          vendorId: currentUser.vendorId || "",
+          vendorName: currentUser.vendorName || "",
+          firestoreCode: errorCode,
+          firestoreMessage: nextError?.message || "",
+        };
+        setConversationDiagnostic(diagnostic);
+        setError(diagnostic.message);
       },
     });
-  }, [currentUser.id, currentUser.vendorId, isInternal, isChatUnlocked, isSupplier]);
+  }, [
+    currentUser.email,
+    currentUser.id,
+    currentUser.role,
+    currentUser.status,
+    currentUser.vendorId,
+    currentUser.vendorName,
+    currentUser.workView,
+    isInternal,
+    isChatUnlocked,
+    isSupplier,
+  ]);
 
   useEffect(() => {
     if (!isInternal || !isChatUnlocked) return undefined;
@@ -662,25 +786,114 @@ export default function SupplierChatPage({
         ) : null}
       </div>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-          <ShieldCheck className="h-5 w-5 text-emerald-700" />
-          <p className="mt-2 font-black text-emerald-950">Vendor isolated</p>
-          <p className="mt-1 text-xs font-semibold text-emerald-800">Suppliers only see conversations they are explicitly assigned.</p>
+      <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="min-w-0 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 sm:p-4">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-700 sm:h-5 sm:w-5" />
+            <p className="min-w-0 text-[11px] font-black leading-tight text-emerald-950 sm:text-sm">
+              Vendor isolated
+            </p>
+          </div>
+          <p className="mt-1 hidden text-xs font-semibold text-emerald-800 md:block">Suppliers only see conversations they are explicitly assigned.</p>
         </div>
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-          <Calculator className="h-5 w-5 text-blue-700" />
-          <p className="mt-2 font-black text-blue-950">MBF conversion</p>
-          <p className="mt-1 text-xs font-semibold text-blue-800">Convert piece, LF, and per-thousand quotes consistently.</p>
+        <div className="min-w-0 rounded-2xl border border-blue-200 bg-blue-50 p-3 sm:p-4">
+          <div className="flex items-center gap-2">
+            <Calculator className="h-4 w-4 shrink-0 text-blue-700 sm:h-5 sm:w-5" />
+            <p className="min-w-0 text-[11px] font-black leading-tight text-blue-950 sm:text-sm">
+              MBF conversion
+            </p>
+          </div>
+          <p className="mt-1 hidden text-xs font-semibold text-blue-800 md:block">Convert piece, LF, and per-thousand quotes consistently.</p>
         </div>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <PackageSearch className="h-5 w-5 text-amber-700" />
-          <p className="mt-2 font-black text-amber-950">Pricing history</p>
-          <p className="mt-1 text-xs font-semibold text-amber-800">Structured quotes stay beside the supplier discussion.</p>
+        <div className="min-w-0 rounded-2xl border border-amber-200 bg-amber-50 p-3 sm:p-4">
+          <div className="flex items-center gap-2">
+            <PackageSearch className="h-4 w-4 shrink-0 text-amber-700 sm:h-5 sm:w-5" />
+            <p className="min-w-0 text-[11px] font-black leading-tight text-amber-950 sm:text-sm">
+              Pricing history
+            </p>
+          </div>
+          <p className="mt-1 hidden text-xs font-semibold text-amber-800 md:block">Structured quotes stay beside the supplier discussion.</p>
         </div>
       </div>
 
-      {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</div> : null}
+      {error ? (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-4 text-red-800">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-black">
+                {conversationDiagnostic?.title || "Supplier Chat error"}
+              </p>
+              <p className="mt-1 text-sm font-semibold leading-6">{error}</p>
+              {conversationDiagnostic?.action ? (
+                <p className="mt-2 text-xs font-bold leading-5 text-red-700">
+                  Next step: {conversationDiagnostic.action}
+                </p>
+              ) : null}
+            </div>
+            {conversationDiagnostic ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await copyToClipboard(
+                      formatSupplierChatDiagnostic(conversationDiagnostic),
+                    );
+                    setDiagnosticCopyStatus("Copied");
+                  } catch {
+                    setDiagnosticCopyStatus("Copy failed");
+                  }
+                }}
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-black text-red-700"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {diagnosticCopyStatus || "Copy diagnostic"}
+              </button>
+            ) : null}
+          </div>
+          {conversationDiagnostic ? (
+            <details className="mt-3 rounded-lg border border-red-200 bg-white/70 px-3 py-2">
+              <summary className="cursor-pointer text-xs font-black uppercase tracking-wide text-red-700">
+                Diagnostic {conversationDiagnostic.code}
+              </summary>
+              <dl className="mt-3 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-2">
+                <div>
+                  <dt className="font-black uppercase text-red-500">Account</dt>
+                  <dd className="mt-0.5 break-all font-semibold text-slate-700">
+                    {conversationDiagnostic.email || "Email unavailable"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-black uppercase text-red-500">Vendor</dt>
+                  <dd className="mt-0.5 break-all font-semibold text-slate-700">
+                    {conversationDiagnostic.vendorName || "Not assigned"}
+                    {conversationDiagnostic.vendorId
+                      ? ` · ${conversationDiagnostic.vendorId}`
+                      : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-black uppercase text-red-500">Profile</dt>
+                  <dd className="mt-0.5 font-semibold text-slate-700">
+                    {conversationDiagnostic.role || "No role"} · {conversationDiagnostic.status || "No status"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-black uppercase text-red-500">Firestore</dt>
+                  <dd className="mt-0.5 break-words font-semibold text-slate-700">
+                    {conversationDiagnostic.firestoreCode || "Not reached"}
+                  </dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="font-black uppercase text-red-500">User ID</dt>
+                  <dd className="mt-0.5 break-all font-mono text-[11px] text-slate-600">
+                    {conversationDiagnostic.userId || "Unavailable"}
+                  </dd>
+                </div>
+              </dl>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid min-h-[650px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="border-b border-slate-200 bg-slate-50 p-3 lg:border-b-0 lg:border-r">
@@ -698,7 +911,13 @@ export default function SupplierChatPage({
                 <p className="mt-3 truncate text-xs font-semibold text-slate-400">{conversation.lastMessage || "Conversation ready"}</p>
               </button>
             ))}
-            {!conversations.length ? <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm font-semibold text-slate-500">No supplier conversations yet.</p> : null}
+            {!conversations.length ? (
+              <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-sm font-semibold text-slate-500">
+                {error
+                  ? "Conversation list unavailable until the issue above is fixed."
+                  : `No conversation is assigned${currentUser.vendorName ? ` for ${currentUser.vendorName}` : ""} yet.`}
+              </p>
+            ) : null}
           </div>
         </aside>
 
