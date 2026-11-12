@@ -8052,8 +8052,9 @@ export default function App() {
       case "deliveries-queued-upcoming":
         return (
           <QueuedUpcomingDeliveriesPage
-            deliveries={deliveries}
+            deliveries={visibleDeliveries}
             orderBuilds={orderBuilds}
+            isDriverView={isDeliveryDriverScopedView}
             onPageChange={navigateToPage}
           />
         );

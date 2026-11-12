@@ -1143,7 +1143,23 @@ export default function SupplierChatPage({
 
   return (
     <PageContainer>
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      {isSupplier ? (
+        <div className="mb-3 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:hidden">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-950 text-white">
+            <LockKeyhole className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+              Secure supplier chat
+            </p>
+            <p className="truncate text-lg font-black text-slate-950">
+              {currentUser.vendorName || "Supplier Pricing"}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className={`mb-6 flex-col gap-4 lg:flex-row lg:items-end lg:justify-between ${isSupplier ? "hidden sm:flex" : "flex"}`}>
         <div>
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
             <LockKeyhole className="h-4 w-4" /> Secure supplier portal
@@ -1165,7 +1181,7 @@ export default function SupplierChatPage({
         ) : null}
       </div>
 
-      <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
+      <div className={`mb-4 grid-cols-3 gap-2 sm:gap-3 ${isSupplier ? "hidden sm:grid" : "grid"}`}>
         <div className="min-w-0 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 sm:p-4">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-700 sm:h-5 sm:w-5" />
@@ -1275,7 +1291,7 @@ export default function SupplierChatPage({
       ) : null}
 
       <div className="grid min-h-[650px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-10rem)] lg:max-h-[900px] lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="border-b border-slate-200 bg-slate-50 p-3 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+        <aside className={`border-b border-slate-200 bg-slate-50 p-3 lg:overflow-y-auto lg:border-b-0 lg:border-r ${isSupplier ? "hidden lg:block" : "block"}`}>
           <p className="px-2 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Conversations</p>
           <div className="space-y-2">
             {conversations.map((conversation) => (
@@ -1305,14 +1321,14 @@ export default function SupplierChatPage({
         <section className="flex h-[70dvh] min-h-[560px] min-w-0 flex-col lg:h-full lg:min-h-0">
           {selectedConversation ? (
             <>
-              <header className="flex shrink-0 flex-nowrap items-center gap-4 overflow-x-auto border-b border-slate-200 px-5 py-4">
+              <header className="flex shrink-0 flex-nowrap items-center gap-4 overflow-x-auto border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
                 <div className="flex min-w-0 flex-1 items-center gap-2 whitespace-nowrap">
-                  <h2 className="max-w-[38%] truncate text-xl font-black text-slate-950">
+                  <h2 className="max-w-[45%] truncate text-base font-black text-slate-950 sm:max-w-[38%] sm:text-xl">
                     {selectedConversation.vendorName}
                   </h2>
                   <span className="shrink-0 text-slate-300" aria-hidden="true">·</span>
-                  <p className="min-w-0 truncate text-sm font-semibold text-slate-500">
-                    {selectedConversation.supplierContactName} · Secure pricing conversation
+                  <p className="min-w-0 truncate text-xs font-semibold text-slate-500 sm:text-sm">
+                    {selectedConversation.supplierContactName}<span className="hidden sm:inline"> · Secure pricing conversation</span>
                   </p>
                 </div>
                 {isInternal ? (

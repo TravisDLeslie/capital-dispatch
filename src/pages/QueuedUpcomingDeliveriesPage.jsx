@@ -85,6 +85,17 @@ function getDateGroupLabel(value) {
     : formatDate(value);
 }
 
+function getUpcomingDateValues(dayCount = 3) {
+  const today = new Date(`${getTodayDateValue()}T12:00:00`);
+
+  return Array.from({ length: dayCount }, (_, dayIndex) => {
+    const date = new Date(today);
+    date.setDate(date.getDate() + dayIndex);
+
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  });
+}
+
 function formatDurationMinutes(value) {
   const totalMinutes = Math.max(0, Math.round(Number(value) || 0));
   const hours = Math.floor(totalMinutes / 60);
@@ -217,6 +228,31 @@ function getQueuedDeliveries(deliveries) {
     });
 }
 
+function getDriverUpcomingDeliveries(deliveries) {
+  const upcomingDateValues = new Set(getUpcomingDateValues());
+
+  return (Array.isArray(deliveries) ? deliveries : [])
+    .filter(
+      (delivery) =>
+        delivery &&
+        typeof delivery === "object" &&
+        !isDeliveryComplete(delivery) &&
+        upcomingDateValues.has(String(delivery.deliveryDate || "")),
+    )
+    .sort((first, second) => {
+      const firstDate = String(first.deliveryDate || "9999-99-99");
+      const secondDate = String(second.deliveryDate || "9999-99-99");
+
+      if (firstDate !== secondDate) {
+        return firstDate.localeCompare(secondDate);
+      }
+
+      return String(first.deliveryTimeSlot || "99:99").localeCompare(
+        String(second.deliveryTimeSlot || "99:99"),
+      );
+    });
+}
+
 function ShipmentBadge({ shipmentType }) {
   if (!shipmentType) {
     return (
@@ -254,7 +290,7 @@ function PlanningStat({ label, value, tone = "slate" }) {
   );
 }
 
-function DeliveryCard({ delivery, orderBuilds, routeMetric }) {
+function DeliveryCard({ delivery, orderBuilds, routeMetric, isDriverView }) {
   const build = getDeliveryOrderBuild(delivery, orderBuilds);
   const buildItems = getBuildItems(build);
   const items = Array.isArray(delivery.items) ? delivery.items : [];
@@ -288,8 +324,14 @@ function DeliveryCard({ delivery, orderBuilds, routeMetric }) {
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
               Order {delivery.orderNumber || "Not entered"}
             </p>
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] text-amber-800">
-              Awaiting dispatch
+            <span
+              className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] ${
+                isDriverView
+                  ? "bg-emerald-100 text-emerald-800"
+                  : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              {isDriverView ? "Assigned to you" : "Awaiting dispatch"}
             </span>
           </div>
           <h2 className="mt-1 truncate text-xl font-black text-slate-950">
@@ -434,7 +476,13 @@ function DeliveryCard({ delivery, orderBuilds, routeMetric }) {
   );
 }
 
-function DeliveryDateGroup({ dateKey, deliveries, orderBuilds, routeMetrics }) {
+function DeliveryDateGroup({
+  dateKey,
+  deliveries,
+  orderBuilds,
+  routeMetrics,
+  isDriverView,
+}) {
   const itemCount = deliveries.reduce(
     (total, delivery) =>
       total + (Array.isArray(delivery.items) ? delivery.items.length : 0),
@@ -494,6 +542,7 @@ function DeliveryDateGroup({ dateKey, deliveries, orderBuilds, routeMetrics }) {
             delivery={delivery}
             orderBuilds={orderBuilds}
             routeMetric={routeMetrics[String(delivery.id || "")]}
+            isDriverView={isDriverView}
           />
         ))}
       </div>
@@ -505,19 +554,24 @@ function DeliveryDateGroup({ dateKey, deliveries, orderBuilds, routeMetrics }) {
  * @param {{
  *   deliveries?: Array<Record<string, any>>;
  *   orderBuilds?: Array<Record<string, any>>;
+ *   isDriverView?: boolean;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
 export default function QueuedUpcomingDeliveriesPage({
   deliveries = [],
   orderBuilds = [],
+  isDriverView = false,
   onPageChange,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [routeMetrics, setRouteMetrics] = useState({});
   const queuedDeliveries = useMemo(
-    () => getQueuedDeliveries(deliveries),
-    [deliveries],
+    () =>
+      isDriverView
+        ? getDriverUpcomingDeliveries(deliveries)
+        : getQueuedDeliveries(deliveries),
+    [deliveries, isDriverView],
   );
 
   useEffect(() => {
@@ -684,32 +738,72 @@ export default function QueuedUpcomingDeliveriesPage({
 
     return counts;
   }, [queuedDeliveries, orderBuilds]);
+  const driverDateSummaries = useMemo(
+    () =>
+      getUpcomingDateValues().map((dateValue) => ({
+        dateValue,
+        label: getDateGroupLabel(dateValue),
+        count: queuedDeliveries.filter(
+          (delivery) => String(delivery.deliveryDate || "") === dateValue,
+        ).length,
+      })),
+    [queuedDeliveries],
+  );
 
   return (
     <PageContainer>
       <Breadcrumbs
         items={[
           { label: "Deliveries", onClick: () => onPageChange?.("deliveries") },
-          { label: "Queued Upcoming Deliveries" },
+          {
+            label: isDriverView
+              ? "Upcoming Deliveries"
+              : "Queued Upcoming Deliveries",
+          },
         ]}
       />
 
       <div>
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
-            Before Dispatch
+            {isDriverView ? "Your Schedule" : "Before Dispatch"}
           </p>
-          <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-            Queued Upcoming Deliveries
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">
+            {isDriverView ? "Upcoming Deliveries" : "Queued Upcoming Deliveries"}
           </h1>
-          <p className="mt-2 max-w-3xl text-lg font-semibold leading-7 text-slate-500">
-            Review every delivery that has been set up and is still waiting for
-            a driver and truck. No map—just the delivery and material details.
+          <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-500 sm:text-lg sm:leading-7">
+            {isDriverView
+              ? "See every delivery assigned to you for today and the next two calendar days."
+              : "Review every delivery that has been set up and is still waiting for a driver and truck. No map—just the delivery and material details."}
           </p>
         </div>
 
       </div>
 
+      {isDriverView ? (
+        <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
+          {driverDateSummaries.map((dateSummary) => (
+            <div
+              key={dateSummary.dateValue}
+              className={`min-w-0 rounded-2xl border p-3 sm:rounded-3xl sm:p-4 ${
+                dateSummary.count > 0
+                  ? "border-blue-200 bg-blue-50"
+                  : "border-slate-200 bg-slate-50"
+              }`}
+            >
+              <p className="truncate text-[9px] font-black uppercase tracking-[0.08em] text-slate-500 sm:text-xs">
+                {dateSummary.label}
+              </p>
+              <p className="mt-1 text-2xl font-black text-slate-950 sm:mt-2 sm:text-4xl">
+                {dateSummary.count}
+              </p>
+              <p className="text-[10px] font-bold text-slate-500 sm:text-sm">
+                {dateSummary.count === 1 ? "Delivery" : "Deliveries"}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">
@@ -755,6 +849,7 @@ export default function QueuedUpcomingDeliveriesPage({
           </div>
         </div>
       </div>
+      )}
 
       <label className="relative mt-6 block">
         <Search
@@ -779,16 +874,25 @@ export default function QueuedUpcomingDeliveriesPage({
               deliveries={dateDeliveries}
               orderBuilds={orderBuilds}
               routeMetrics={routeMetrics}
+              isDriverView={isDriverView}
             />
           ))
         ) : (
           <EmptyState
             icon={searchTerm ? Search : Package}
-            title={searchTerm ? "No queued deliveries match" : "The queue is clear"}
+            title={
+              searchTerm
+                ? `No ${isDriverView ? "upcoming" : "queued"} deliveries match`
+                : isDriverView
+                  ? "No upcoming deliveries"
+                  : "The queue is clear"
+            }
             description={
               searchTerm
                 ? "Try another order number, customer, address, or item."
-                : "Deliveries that still need dispatch will appear here as soon as they are created."
+                : isDriverView
+                  ? "You have no assigned deliveries scheduled for today or the next two calendar days."
+                  : "Deliveries that still need dispatch will appear here as soon as they are created."
             }
           />
         )}
