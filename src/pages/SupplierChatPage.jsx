@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getIdTokenResult,
   GoogleAuthProvider,
@@ -360,6 +360,8 @@ export default function SupplierChatPage({
   );
   const [conversations, setConversations] = useState([]);
   const [messages, setMessages] = useState([]);
+  const messageListRef = useRef(null);
+  const lastScrolledConversationIdRef = useRef("");
   const [savedQuotes, setSavedQuotes] = useState([]);
   const [invitations, setInvitations] = useState([]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
@@ -642,6 +644,23 @@ export default function SupplierChatPage({
       (nextError) => setError(nextError.message || "Unable to load messages."),
     );
   }, [isChatUnlocked, selectedConversationId]);
+
+  useEffect(() => {
+    const messageList = messageListRef.current;
+    if (!messageList || !selectedConversationId) return undefined;
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      const isSameConversation =
+        lastScrolledConversationIdRef.current === selectedConversationId;
+      messageList.scrollTo({
+        top: messageList.scrollHeight,
+        behavior: isSameConversation ? "smooth" : "auto",
+      });
+      lastScrolledConversationIdRef.current = selectedConversationId;
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [messages.length, selectedConversationId]);
 
   useEffect(() => {
     const vendorId = selectedConversation?.vendorId;
@@ -1255,8 +1274,8 @@ export default function SupplierChatPage({
         </div>
       ) : null}
 
-      <div className="grid min-h-[650px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[300px_minmax(0,1fr)]">
-        <aside className="border-b border-slate-200 bg-slate-50 p-3 lg:border-b-0 lg:border-r">
+      <div className="grid min-h-[650px] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:h-[calc(100dvh-10rem)] lg:max-h-[900px] lg:grid-cols-[300px_minmax(0,1fr)]">
+        <aside className="border-b border-slate-200 bg-slate-50 p-3 lg:overflow-y-auto lg:border-b-0 lg:border-r">
           <p className="px-2 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Conversations</p>
           <div className="space-y-2">
             {conversations.map((conversation) => (
@@ -1283,10 +1302,10 @@ export default function SupplierChatPage({
           </div>
         </aside>
 
-        <section className="flex min-h-[650px] min-w-0 flex-col">
+        <section className="flex h-[70dvh] min-h-[560px] min-w-0 flex-col lg:h-full lg:min-h-0">
           {selectedConversation ? (
             <>
-              <header className="flex flex-nowrap items-center gap-4 overflow-x-auto border-b border-slate-200 px-5 py-4">
+              <header className="flex shrink-0 flex-nowrap items-center gap-4 overflow-x-auto border-b border-slate-200 px-5 py-4">
                 <div className="flex min-w-0 flex-1 items-center gap-2 whitespace-nowrap">
                   <h2 className="max-w-[38%] truncate text-xl font-black text-slate-950">
                     {selectedConversation.vendorName}
@@ -1333,7 +1352,7 @@ export default function SupplierChatPage({
                   </div>
                 ) : null}
               </header>
-              <div className="flex-1 space-y-3 overflow-y-auto bg-white p-4 sm:p-6">
+              <div ref={messageListRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-white p-4 sm:p-6">
                 {messages.map((message) => {
                   const isMine = message.senderUid === currentUser.id;
                   const isVendorMessage = selectedConversation.supplierParticipantUids?.includes(
@@ -1383,7 +1402,7 @@ export default function SupplierChatPage({
                 })}
                 {!messages.length ? <div className="mx-auto max-w-md py-20 text-center"><MessageSquareText className="mx-auto h-9 w-9 text-slate-300" /><p className="mt-3 font-black text-slate-700">Start the supplier conversation</p><p className="mt-1 text-sm text-slate-500">Messages and structured prices will be recorded here.</p></div> : null}
               </div>
-              <footer className="border-t border-[#D1D1D6] bg-white p-4">
+              <footer className="shrink-0 border-t border-[#D1D1D6] bg-white p-4">
                 <form onSubmit={handleSend} className="flex flex-col gap-2 sm:flex-row">
                   <textarea value={messageText} onChange={(event) => setMessageText(event.target.value)} rows={2} placeholder="Ask about pricing, stock, lead time, or availability..." className="min-h-12 flex-1 resize-none rounded-[18px] border border-[#C7C7CC] bg-white px-4 py-3 text-[15px] outline-none focus:border-[#007AFF] focus:ring-4 focus:ring-blue-100" />
                   <button
@@ -1687,7 +1706,7 @@ export default function SupplierChatPage({
                 return (
                   <div key={index} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Item {index + 1}</p>
+                      <p className="text-sm font-black uppercase tracking-[0.12em] text-slate-500">Item {index + 1}</p>
                       {quote.items.length > 1 ? (
                         <button type="button" onClick={() => removeQuoteItem(index)} className="text-xs font-black text-red-600">Remove</button>
                       ) : null}
@@ -1698,15 +1717,15 @@ export default function SupplierChatPage({
                       value={item.productName}
                       onChange={(event) => updateQuoteItem(index, { productName: event.target.value })}
                       placeholder="Item or product description"
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold"
+                      className="w-full rounded-xl border border-slate-300 px-4 py-3.5 text-base font-semibold sm:text-lg"
                     />
 
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <label className="text-[10px] font-black uppercase text-slate-500">
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                         Quantity
-                        <input type="number" min="0" step="any" value={item.quantity} onChange={(event) => updateQuoteItem(index, { quantity: event.target.value })} placeholder="Qty" className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold normal-case text-slate-900" />
+                        <input type="number" min="0" step="any" value={item.quantity} onChange={(event) => updateQuoteItem(index, { quantity: event.target.value })} placeholder="Qty" className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900" />
                       </label>
-                      <label className="flex min-w-0 items-center justify-between gap-2 text-[10px] font-black uppercase text-slate-500">
+                      <label className="flex min-w-0 items-center justify-between gap-3 text-xs font-black uppercase text-slate-500 sm:text-sm">
                         <span className="leading-tight">
                           {quote.kind === "request" ? "Price request per" : "Price basis"}
                         </span>
@@ -1714,7 +1733,7 @@ export default function SupplierChatPage({
                           value={item.priceUnit}
                           onChange={(event) => updateQuoteItem(index, { priceUnit: event.target.value })}
                           aria-label={quote.kind === "request" ? "Requested pricing unit" : "Price basis unit"}
-                          className="min-w-[6.75rem] rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-black normal-case text-slate-900"
+                          className="min-w-[7.5rem] rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black normal-case text-slate-900"
                         >
                           {PRICE_UNITS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                         </select>
@@ -1723,37 +1742,37 @@ export default function SupplierChatPage({
 
                     {quote.kind === "request" ? (
                       <>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          <label className="text-[10px] font-black uppercase text-slate-500">
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                             Profile / finish wanted
                             <input
                               value={item.profile}
                               onChange={(event) => updateQuoteItem(index, { profile: event.target.value })}
                               placeholder="Resawn, S4S, S4S EE"
-                              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold normal-case text-slate-900"
+                              className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900"
                             />
                           </label>
-                          <label className="text-[10px] font-black uppercase text-slate-500">
+                          <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                             Lengths / quantities needed
                             <input
                               value={item.availableQuantities}
                               onChange={(event) => updateQuoteItem(index, { availableQuantities: event.target.value })}
                               placeholder="35 @ 16', 40 @ 18'"
-                              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold normal-case text-slate-900"
+                              className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900"
                             />
                           </label>
                         </div>
 
                         <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                          <summary className="cursor-pointer text-xs font-black text-slate-600">Add species, grade, or size</summary>
+                          <summary className="cursor-pointer text-sm font-black text-slate-600">Add species, grade, or size</summary>
                           <div className="mt-2 grid grid-cols-2 gap-2">
-                            <input value={item.species} onChange={(event) => updateQuoteItem(index, { species: event.target.value })} placeholder="Species" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                            <input value={item.grade} onChange={(event) => updateQuoteItem(index, { grade: event.target.value })} placeholder="Grade" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                            <input value={item.species} onChange={(event) => updateQuoteItem(index, { species: event.target.value })} placeholder="Species" className="rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
+                            <input value={item.grade} onChange={(event) => updateQuoteItem(index, { grade: event.target.value })} placeholder="Grade" className="rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
                           </div>
                           <div className="mt-2 grid grid-cols-3 gap-2">
-                            <input type="number" min="0" step="any" value={item.thickness} onChange={(event) => updateQuoteItem(index, { thickness: event.target.value })} placeholder="Thickness" className="min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                            <input type="number" min="0" step="any" value={item.width} onChange={(event) => updateQuoteItem(index, { width: event.target.value })} placeholder="Width" className="min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                            <input type="number" min="0" step="any" value={item.length} onChange={(event) => updateQuoteItem(index, { length: event.target.value })} placeholder="Length (ft)" className="min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                            <input type="number" min="0" step="any" value={item.thickness} onChange={(event) => updateQuoteItem(index, { thickness: event.target.value })} placeholder="Thickness" className="min-w-0 rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
+                            <input type="number" min="0" step="any" value={item.width} onChange={(event) => updateQuoteItem(index, { width: event.target.value })} placeholder="Width" className="min-w-0 rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
+                            <input type="number" min="0" step="any" value={item.length} onChange={(event) => updateQuoteItem(index, { length: event.target.value })} placeholder="Length (ft)" className="min-w-0 rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
                           </div>
                         </details>
                       </>
@@ -1761,40 +1780,40 @@ export default function SupplierChatPage({
 
                     {quote.kind !== "request" ? (
                       <>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                          <label className="text-[10px] font-black uppercase text-slate-500">
+                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                          <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                             Price
-                            <input required type="number" min="0" step="any" value={item.quotedPrice} onChange={(event) => updateQuoteItem(index, { quotedPrice: event.target.value })} placeholder="$0.00" className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold normal-case text-slate-900" />
+                            <input required type="number" min="0" step="any" value={item.quotedPrice} onChange={(event) => updateQuoteItem(index, { quotedPrice: event.target.value })} placeholder="$0.00" className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900" />
                           </label>
-                          <label className="text-[10px] font-black uppercase text-slate-500">
+                          <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                             Availability
-                            <select value={item.availability} onChange={(event) => updateQuoteItem(index, { availability: event.target.value })} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold normal-case text-slate-900">
+                            <select value={item.availability} onChange={(event) => updateQuoteItem(index, { availability: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold normal-case text-slate-900">
                               {['Available', 'In stock', 'Limited', 'Special order', 'Backordered', 'Not available'].map((value) => <option key={value}>{value}</option>)}
                             </select>
                           </label>
-                          <label className="text-[10px] font-black uppercase text-slate-500">
+                          <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                             Lead time
-                            <input value={item.leadTime} onChange={(event) => updateQuoteItem(index, { leadTime: event.target.value })} placeholder="In stock or 3 days" className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold normal-case text-slate-900" />
+                            <input value={item.leadTime} onChange={(event) => updateQuoteItem(index, { leadTime: event.target.value })} placeholder="In stock or 3 days" className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900" />
                           </label>
                         </div>
 
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                          <label className="text-[10px] font-black uppercase text-slate-500">
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                             Profile / finish
                             <input
                               value={item.profile}
                               onChange={(event) => updateQuoteItem(index, { profile: event.target.value })}
                               placeholder="Resawn, S4S, S4S EE"
-                              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold normal-case text-slate-900"
+                              className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900"
                             />
                           </label>
-                          <label className="text-[10px] font-black uppercase text-slate-500">
+                          <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                             Available qty / lengths
                             <input
                               value={item.availableQuantities}
                               onChange={(event) => updateQuoteItem(index, { availableQuantities: event.target.value })}
                               placeholder="35 @ 16', 40 @ 18'"
-                              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-semibold normal-case text-slate-900"
+                              className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900"
                             />
                           </label>
                         </div>
@@ -1803,19 +1822,19 @@ export default function SupplierChatPage({
                           <div className={`mt-3 grid gap-2 rounded-xl bg-blue-50 p-3 ${needsAllDimensions ? "grid-cols-3" : "grid-cols-1"}`}>
                             {needsAllDimensions ? (
                               <>
-                                <input required type="number" min="0" step="any" value={item.thickness} onChange={(event) => updateQuoteItem(index, { thickness: event.target.value })} placeholder="Thickness" className="min-w-0 rounded-lg border border-blue-200 px-2 py-2 text-sm" />
-                                <input required type="number" min="0" step="any" value={item.width} onChange={(event) => updateQuoteItem(index, { width: event.target.value })} placeholder="Width" className="min-w-0 rounded-lg border border-blue-200 px-2 py-2 text-sm" />
+                                <input required type="number" min="0" step="any" value={item.thickness} onChange={(event) => updateQuoteItem(index, { thickness: event.target.value })} placeholder="Thickness" className="min-w-0 rounded-lg border border-blue-200 px-3 py-2.5 text-base" />
+                                <input required type="number" min="0" step="any" value={item.width} onChange={(event) => updateQuoteItem(index, { width: event.target.value })} placeholder="Width" className="min-w-0 rounded-lg border border-blue-200 px-3 py-2.5 text-base" />
                               </>
                             ) : null}
-                            <input required type="number" min="0" step="any" value={item.length} onChange={(event) => updateQuoteItem(index, { length: event.target.value })} placeholder="Length (ft)" className="min-w-0 rounded-lg border border-blue-200 px-2 py-2 text-sm" />
+                            <input required type="number" min="0" step="any" value={item.length} onChange={(event) => updateQuoteItem(index, { length: event.target.value })} placeholder="Length (ft)" className="min-w-0 rounded-lg border border-blue-200 px-3 py-2.5 text-base" />
                           </div>
                         ) : null}
 
                         <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                          <summary className="cursor-pointer text-xs font-black text-slate-600">Optional product details</summary>
+                          <summary className="cursor-pointer text-sm font-black text-slate-600">Optional product details</summary>
                           <div className="mt-2 grid grid-cols-2 gap-2">
-                            <input value={item.species} onChange={(event) => updateQuoteItem(index, { species: event.target.value })} placeholder="Species" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-                            <input value={item.grade} onChange={(event) => updateQuoteItem(index, { grade: event.target.value })} placeholder="Grade" className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                            <input value={item.species} onChange={(event) => updateQuoteItem(index, { species: event.target.value })} placeholder="Species" className="rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
+                            <input value={item.grade} onChange={(event) => updateQuoteItem(index, { grade: event.target.value })} placeholder="Grade" className="rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
                           </div>
                         </details>
 
@@ -1831,17 +1850,17 @@ export default function SupplierChatPage({
               })}
             </div>
 
-            <button type="button" onClick={addQuoteItem} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+            <button type="button" onClick={addQuoteItem} className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3.5 text-base font-black text-slate-700">
               <Plus className="h-4 w-4" /> Add another item
             </button>
 
             {quote.kind !== "request" ? (
               <label className="block rounded-xl border border-slate-300 px-4 py-2 text-xs font-bold text-slate-500">
                 Valid until (optional)
-                <input type="date" value={quote.validUntil} onChange={(event) => setQuote({ ...quote, validUntil: event.target.value })} className="mt-1 block w-full text-sm text-slate-900 outline-none" />
+                <input type="date" value={quote.validUntil} onChange={(event) => setQuote({ ...quote, validUntil: event.target.value })} className="mt-1 block w-full py-1 text-base text-slate-900 outline-none" />
               </label>
             ) : null}
-            <textarea value={quote.notes} onChange={(event) => setQuote({ ...quote, notes: event.target.value })} placeholder={quote.kind === "request" ? "Details, grade, delivery location, or timing needed" : "Pricing or availability notes"} className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm" rows={2} />
+            <textarea value={quote.notes} onChange={(event) => setQuote({ ...quote, notes: event.target.value })} placeholder={quote.kind === "request" ? "Details, grade, delivery location, or timing needed" : "Pricing or availability notes"} className="w-full rounded-xl border border-slate-300 px-4 py-3.5 text-base leading-6" rows={3} />
             <button type="submit" disabled={isSending} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 font-black text-white disabled:opacity-50 ${quote.kind === "request" ? "bg-violet-600" : "bg-emerald-600"}`}>
               <Check className="h-4 w-4" />
               {isSending ? "Sending…" : quote.kind === "request" ? "Send pricing request" : quote.revisionOf ? "Send revised quote" : "Send quote"}
