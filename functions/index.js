@@ -224,6 +224,11 @@ exports.diagnoseSupplierChatAccess = onCall(
     const matchingVendorCount = assignedSnapshot.docs.filter(
       (document) => String(document.data()?.vendorId || "") === vendorId,
     ).length;
+    const authorizedConversationIds = assignedSnapshot.docs
+      .filter(
+        (document) => String(document.data()?.vendorId || "") === vendorId,
+      )
+      .map((document) => document.id);
     const counts = {
       assignedConversationCount: assignedSnapshot.size,
       matchingVendorConversationCount: matchingVendorCount,
@@ -264,6 +269,7 @@ exports.diagnoseSupplierChatAccess = onCall(
     return {
       ...baseResult,
       ...counts,
+      authorizedConversationIds,
       code: "SC-ACCESS-001",
       title: "Profile and assignment are valid",
       message: "The supplier profile, vendor, and conversation assignment all match. Firestore rules or the refreshed Google session rejected the browser request.",

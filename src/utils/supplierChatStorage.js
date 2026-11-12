@@ -10,7 +10,6 @@ import {
   serverTimestamp,
   updateDoc,
   writeBatch,
-  where,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "./firebase";
@@ -67,7 +66,6 @@ function sortNewest(items) {
 
 export function subscribeToSupplierConversations({
   userId,
-  vendorId,
   isInternal,
   onConversations,
   onError,
@@ -78,19 +76,59 @@ export function subscribeToSupplierConversations({
   }
 
   const conversationsRef = collection(db, CONVERSATIONS_COLLECTION);
-  const conversationsQuery = isInternal
-    ? query(conversationsRef, orderBy("updatedAt", "desc"))
-    : query(
-        conversationsRef,
-        where("vendorId", "==", vendorId),
-        where("supplierParticipantUids", "array-contains", userId),
-      );
+  if (isInternal) {
+    return onSnapshot(
+      query(conversationsRef, orderBy("updatedAt", "desc")),
+      (snapshot) => onConversations(sortNewest(snapshot.docs.map(mapDocument))),
+      onError,
+    );
+  }
 
-  return onSnapshot(
-    conversationsQuery,
-    (snapshot) => onConversations(sortNewest(snapshot.docs.map(mapDocument))),
-    onError,
-  );
+  let active = true;
+  let subscriptions = [];
+  const conversationsById = new Map();
+
+  diagnoseSupplierChatAccess()
+    .then((diagnostic) => {
+      if (!active) return;
+      const conversationIds = Array.isArray(
+        diagnostic?.authorizedConversationIds,
+      )
+        ? diagnostic.authorizedConversationIds
+        : [];
+
+      if (conversationIds.length === 0) {
+        const assignmentError = new Error(
+          diagnostic?.message || "No supplier conversations are assigned to this account.",
+        );
+        assignmentError.code = diagnostic?.code || "supplier-chat/no-assignment";
+        onError(assignmentError);
+        return;
+      }
+
+      subscriptions = conversationIds.map((conversationId) =>
+        onSnapshot(
+          doc(db, CONVERSATIONS_COLLECTION, conversationId),
+          (snapshot) => {
+            if (!active) return;
+            if (snapshot.exists()) {
+              conversationsById.set(conversationId, mapDocument(snapshot));
+            } else {
+              conversationsById.delete(conversationId);
+            }
+            onConversations(sortNewest([...conversationsById.values()]));
+          },
+          onError,
+        ),
+      );
+    })
+    .catch(onError);
+
+  return () => {
+    active = false;
+    subscriptions.forEach((unsubscribe) => unsubscribe());
+    subscriptions = [];
+  };
 }
 
 export async function deleteSupplierConversation(conversationId) {
