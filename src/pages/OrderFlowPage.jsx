@@ -2534,21 +2534,6 @@ export default function OrderFlowPage({
                 isReturnOrder ? "cursor-default bg-violet-50 text-violet-800" : ""
               }`}
             />
-            {duplicateOrderMatch ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setReviewedDuplicateOrderKey(duplicateOrderKey);
-                  setViewingDuplicateOrderNumber(duplicateOrderNumber);
-                }}
-                className="mt-2 flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2 text-left text-xs font-black text-amber-900 transition hover:bg-amber-100"
-              >
-                <span>
-                  This order already exists for {duplicateOrderCustomer}.
-                </span>
-                <span className="shrink-0 underline">View it</span>
-              </button>
-            ) : null}
           </Field>
 
           <Field label="Business Name">
@@ -2660,6 +2645,29 @@ export default function OrderFlowPage({
             </div>
           </Field>
         </div>
+
+        {duplicateOrderMatch ? (
+          <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-amber-700">
+                Duplicate order number
+              </p>
+              <p className="mt-1 text-sm font-bold text-amber-950">
+                Order {duplicateOrderNumber} already exists for {duplicateOrderCustomer}.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setReviewedDuplicateOrderKey(duplicateOrderKey);
+                setViewingDuplicateOrderNumber(duplicateOrderNumber);
+              }}
+              className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl bg-amber-900 px-4 text-sm font-black text-white transition hover:bg-amber-800"
+            >
+              View existing order
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <section className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
