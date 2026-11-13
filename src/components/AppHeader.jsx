@@ -28,7 +28,7 @@ const navigationItems = [
   {
     group: "Orders",
     id: "order-flow",
-    label: "New Customer Order",
+    label: "New Order",
   },
   {
     group: "Orders",
