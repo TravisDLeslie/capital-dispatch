@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
 import Breadcrumbs from "../components/Breadcrumbs";
+import OrderDetailsModal from "../components/OrderDetailsModal";
 import PageContainer from "../components/PageContainer";
 import SearchableSelect from "../components/SearchableSelect";
 import cashAccounts from "../data/cashAccounts.json";
@@ -536,6 +537,17 @@ function formatOrderNumberInput(value) {
   return `${digitsOnly.slice(0, 3)}-${digitsOnly.slice(3)}`;
 }
 
+function normalizeOrderNumberForMatch(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function getRecordOrderNumber(record) {
+  return String(record?.orderNumber || record?.sourceOrderNumber || "").trim();
+}
+
 function createReturnOrderNumber() {
   const randomValues = new Uint32Array(1);
 
@@ -672,6 +684,7 @@ function ChoiceButton({
  *   vendorOptions?: string[];
  *   supplierAddressMap?: Record<string, string>;
  *   removedInventoryItemNumbers?: string[];
+ *   existingOrderSources?: Record<string, Array<Record<string, any>>>;
  *   onProcessOrder?: (orderPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onProcessStockPO?: (stockPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onPageChange?: (pageId: string) => void;
@@ -683,6 +696,7 @@ export default function OrderFlowPage({
   vendorOptions = [],
   supplierAddressMap = {},
   removedInventoryItemNumbers = [],
+  existingOrderSources = {},
   onProcessOrder,
   onProcessStockPO,
   onPageChange,
@@ -712,6 +726,12 @@ export default function OrderFlowPage({
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
   const [processError, setProcessError] = useState("");
   const [processSummary, setProcessSummary] = useState(null);
+  const [isDuplicateOrderPromptOpen, setIsDuplicateOrderPromptOpen] =
+    useState(false);
+  const [viewingDuplicateOrderNumber, setViewingDuplicateOrderNumber] =
+    useState("");
+  const [reviewedDuplicateOrderKey, setReviewedDuplicateOrderKey] =
+    useState("");
   const [orderImportStatus, setOrderImportStatus] = useState("idle");
   const [orderImportError, setOrderImportError] = useState("");
   const [orderImportFileName, setOrderImportFileName] = useState("");
@@ -798,6 +818,54 @@ export default function OrderFlowPage({
     [items],
   );
   const isReturnOrder = orderEntryMode === "return";
+  const duplicateOrderMatch = useMemo(() => {
+    if (isReturnOrder) {
+      return null;
+    }
+
+    const orderKey = normalizeOrderNumberForMatch(orderNumber);
+
+    if (orderKey.length !== 6) {
+      return null;
+    }
+
+    const sourceGroups = [
+      existingOrderSources.orderBuilds,
+      existingOrderSources.salesOrders,
+      existingOrderSources.deliveries,
+      existingOrderSources.supplierRuns,
+      existingOrderSources.theirTruckPOs,
+    ];
+
+    for (const sourceGroup of sourceGroups) {
+      const match = (Array.isArray(sourceGroup) ? sourceGroup : []).find(
+        (record) =>
+          normalizeOrderNumberForMatch(getRecordOrderNumber(record)) ===
+          orderKey,
+      );
+
+      if (match) {
+        return match;
+      }
+    }
+
+    return null;
+  }, [existingOrderSources, isReturnOrder, orderNumber]);
+  const duplicateOrderNumber = duplicateOrderMatch
+    ? getRecordOrderNumber(duplicateOrderMatch) || orderNumber
+    : "";
+  const duplicateOrderKey = normalizeOrderNumberForMatch(duplicateOrderNumber);
+  const duplicateOrderWasReviewed = Boolean(
+    duplicateOrderKey && reviewedDuplicateOrderKey === duplicateOrderKey,
+  );
+  const duplicateOrderCustomer = duplicateOrderMatch
+    ? String(
+        duplicateOrderMatch.businessName ||
+          duplicateOrderMatch.customerName ||
+          duplicateOrderMatch.customer ||
+          "Existing customer",
+      ).trim()
+    : "";
   const canProcessOrder = Boolean(
     (isReturnOrder ? /^R\d{6}$/.test(orderNumber) : orderNumber) &&
       customerName &&
@@ -1188,7 +1256,7 @@ export default function OrderFlowPage({
     setIsOrderImportReviewOpen(false);
   }
 
-  function buildOrderPayload() {
+  function buildOrderPayload({ allowDuplicateOrder = false } = {}) {
     const isDeliveryOrder = ["delivery", "return"].includes(orderMethod);
 
     return {
@@ -1214,6 +1282,7 @@ export default function OrderFlowPage({
       routeEtaStatus: isDeliveryOrder ? routeEtaStatus : "idle",
       items: savedItems,
       createdBy: currentUser,
+      allowDuplicateOrder,
     };
   }
 
@@ -1264,8 +1333,13 @@ export default function OrderFlowPage({
     setAccountNumber(matchingCustomer.accountNumber);
   }
 
-  async function processOrder() {
+  async function processOrder({ allowDuplicateOrder = false } = {}) {
     if (!canProcessOrder || isProcessingOrder) {
+      return;
+    }
+
+    if (duplicateOrderMatch && !allowDuplicateOrder) {
+      setIsDuplicateOrderPromptOpen(true);
       return;
     }
 
@@ -1279,7 +1353,9 @@ export default function OrderFlowPage({
     setProcessSummary(null);
 
     try {
-      const summary = await onProcessOrder(buildOrderPayload());
+      const summary = await onProcessOrder(
+        buildOrderPayload({ allowDuplicateOrder }),
+      );
       setProcessSummary(summary || {});
       onPageChange?.("dashboard");
     } catch (error) {
@@ -1633,7 +1709,7 @@ export default function OrderFlowPage({
 
           <button
             type="button"
-            onClick={processOrder}
+            onClick={() => processOrder()}
             disabled={!canProcessOrder || isProcessingOrder}
             className="mt-5 inline-flex min-h-[64px] w-full items-center justify-center rounded-[1.5rem] bg-[#FC2C38] px-6 text-xl font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
@@ -2446,6 +2522,8 @@ export default function OrderFlowPage({
               onChange={(event) => {
                 if (!isReturnOrder) {
                   setOrderNumber(formatOrderNumberInput(event.target.value));
+                  setIsDuplicateOrderPromptOpen(false);
+                  setReviewedDuplicateOrderKey("");
                 }
               }}
               placeholder={isReturnOrder ? "R000000" : "019-390"}
@@ -2456,6 +2534,21 @@ export default function OrderFlowPage({
                 isReturnOrder ? "cursor-default bg-violet-50 text-violet-800" : ""
               }`}
             />
+            {duplicateOrderMatch ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setReviewedDuplicateOrderKey(duplicateOrderKey);
+                  setViewingDuplicateOrderNumber(duplicateOrderNumber);
+                }}
+                className="mt-2 flex w-full items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2 text-left text-xs font-black text-amber-900 transition hover:bg-amber-100"
+              >
+                <span>
+                  This order already exists for {duplicateOrderCustomer}.
+                </span>
+                <span className="shrink-0 underline">View it</span>
+              </button>
+            ) : null}
           </Field>
 
           <Field label="Business Name">
@@ -3460,7 +3553,7 @@ export default function OrderFlowPage({
 
           <button
             type="button"
-            onClick={processOrder}
+            onClick={() => processOrder()}
             disabled={!canProcessOrder || isProcessingOrder}
             className="mt-5 inline-flex min-h-[64px] w-full items-center justify-center rounded-[1.5rem] bg-[#FC2C38] px-6 text-xl font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
@@ -3477,6 +3570,77 @@ export default function OrderFlowPage({
           ) : null}
         </section>
       )}
+
+      {isDuplicateOrderPromptOpen && duplicateOrderMatch ? (
+        <div className="fixed inset-0 z-[70] flex items-end bg-slate-950/55 p-0 sm:items-center sm:p-6">
+          <div className="mx-auto w-full max-w-xl rounded-t-[2rem] border border-slate-200 bg-white p-5 shadow-2xl sm:rounded-[2rem] sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">
+                  Duplicate order number
+                </p>
+                <h2 className="mt-2 text-2xl font-black text-slate-950">
+                  Order {duplicateOrderNumber} already exists
+                </h2>
+                <p className="mt-2 text-sm font-bold leading-6 text-slate-600">
+                  Check the existing order for {duplicateOrderCustomer} before
+                  creating another order with the same number.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDuplicateOrderPromptOpen(false)}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                aria-label="Close duplicate order warning"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDuplicateOrderPromptOpen(false);
+                  setReviewedDuplicateOrderKey(duplicateOrderKey);
+                  setViewingDuplicateOrderNumber(duplicateOrderNumber);
+                }}
+                className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-slate-950 px-5 text-base font-black text-white transition hover:bg-slate-800"
+              >
+                View existing order
+              </button>
+              {duplicateOrderWasReviewed ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDuplicateOrderPromptOpen(false);
+                    void processOrder({ allowDuplicateOrder: true });
+                  }}
+                  className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-amber-300 bg-amber-50 px-5 text-base font-black text-amber-900 transition hover:bg-amber-100"
+                >
+                  Create another anyway
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="inline-flex min-h-14 cursor-not-allowed items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-5 text-base font-black text-slate-400"
+                >
+                  Review order first
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {viewingDuplicateOrderNumber ? (
+        <OrderDetailsModal
+          orderNumber={viewingDuplicateOrderNumber}
+          sources={existingOrderSources}
+          onClose={() => setViewingDuplicateOrderNumber("")}
+        />
+      ) : null}
 
       {editingItem ? (
         <div className="fixed inset-0 z-50 flex items-end bg-slate-950/50 p-0 sm:items-center sm:p-6">

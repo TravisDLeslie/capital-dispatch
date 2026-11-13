@@ -4449,6 +4449,24 @@ export default function App() {
       } else {
         sourceOrderNumber = requestedReturnNumber;
       }
+    } else {
+      const sourceOrderKey = normalizeSearchNumber(sourceOrderNumber);
+      const duplicateOrder = [...orderBuilds, ...salesOrders].find(
+        (record) =>
+          normalizeSearchNumber(
+            record.orderNumber || record.sourceOrderNumber,
+          ) === sourceOrderKey,
+      );
+
+      if (
+        sourceOrderKey.length === 6 &&
+        duplicateOrder &&
+        orderPayload.allowDuplicateOrder !== true
+      ) {
+        throw new Error(
+          `Order ${sourceOrderNumber} already exists. Review it before creating another order with the same number.`,
+        );
+      }
     }
     const poNumbers = Array.from(
       new Set(cleanItems.map((item) => item.poNumber).filter(Boolean)),
@@ -7689,6 +7707,14 @@ export default function App() {
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
             removedInventoryItemNumbers={inventorySettings.removedItemNumbers}
+            existingOrderSources={{
+              salesOrders,
+              orderBuilds,
+              supplierRuns: southLookupSupplierRuns,
+              theirTruckPOs,
+              deliveries,
+              checkIns,
+            }}
             onProcessOrder={handleProcessOrderFlow}
             onProcessStockPO={handleProcessStockPO}
             onPageChange={navigateToPage}
