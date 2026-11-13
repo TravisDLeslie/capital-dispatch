@@ -83,6 +83,20 @@ function priceUnitLabel(value) {
   return PRICE_UNITS.find(([unit]) => unit === value)?.[1] || value || "Unit";
 }
 
+function quoteDimensionLabel(item) {
+  const thickness = String(item?.thickness || "").trim();
+  const width = String(item?.width || "").trim();
+  const length = String(item?.length || "").trim();
+  if (!thickness || !width || !length) return "";
+  return `${thickness}\" × ${width}\" × ${length}'`;
+}
+
+function quoteItemLabel(item, index = 0) {
+  return String(item?.productName || "").trim()
+    || (quoteDimensionLabel(item) ? `${quoteDimensionLabel(item)} lumber` : "")
+    || `Item ${index + 1}`;
+}
+
 const CHAT_UNLOCK_WINDOW_MS = 30 * 60 * 1000;
 
 function chatUnlockStorageKey(userId) {
@@ -242,13 +256,13 @@ function QuoteCard({
           <div key={`${item.productName}-${index}`} className="rounded-xl bg-slate-50 p-2 sm:p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate text-xs font-black sm:text-sm">{item.productName || `Item ${index + 1}`}</p>
+                <p className="truncate text-xs font-black sm:text-sm">{quoteItemLabel(item, index)}</p>
                 <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500 sm:text-xs">
                   {item.quantity ? `Qty ${item.quantity}` : "Quantity open"}
                   {item.profile ? ` · ${item.profile}` : ""}
                   {item.species ? ` · ${item.species}` : ""}
                   {item.grade ? ` · ${item.grade}` : ""}
-                  {item.thickness && item.width ? ` · ${item.thickness} × ${item.width}${item.length ? ` × ${item.length}'` : ""}` : item.length ? ` · ${item.length}'` : ""}
+                  {item.productName && quoteDimensionLabel(item) ? ` · ${quoteDimensionLabel(item)}` : ""}
                 </p>
               </div>
               {!isRequest ? (
@@ -818,7 +832,9 @@ export default function SupplierChatPage({
 
   async function handleSendQuote(event) {
     event.preventDefault();
-    const validItems = quote.items.filter((item) => item.productName.trim());
+    const validItems = quote.items.filter(
+      (item) => item.productName.trim() || quoteDimensionLabel(item),
+    );
     if (!selectedConversation || validItems.length === 0) return;
     setIsSending(true);
     setError("");
@@ -840,8 +856,8 @@ export default function SupplierChatPage({
         vendorId: selectedConversation.vendorId,
         sender: currentUser,
         text: quote.kind === "request"
-          ? `Pricing requested for ${items[0].productName}`
-          : `Pricing for ${items[0].productName}`,
+          ? `Pricing requested for ${quoteItemLabel(items[0])}`
+          : `Pricing for ${quoteItemLabel(items[0])}`,
         quote: {
           ...quote,
           items,
@@ -1706,6 +1722,7 @@ export default function SupplierChatPage({
         <Dialog
           title={quote.kind === "request" ? "Request a supplier quote" : quote.revisionOf ? "Revise supplier quote" : "Add supplier pricing"}
           onClose={() => setShowQuote(false)}
+          wide
         >
           <form onSubmit={handleSendQuote} className="mt-4 space-y-4">
             <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-600">
@@ -1716,9 +1733,8 @@ export default function SupplierChatPage({
 
             <div className="space-y-3">
               {quote.items.map((item, index) => {
-                const needsAllDimensions = item.priceUnit === "BF" || item.priceUnit === "MBF";
-                const needsLength = item.priceUnit === "LF";
                 const calculation = quoteCalculations[index] || calculateLumberQuote(item);
+                const hasDimensions = Boolean(item.thickness && item.width && item.length);
                 return (
                   <div key={index} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
                     <div className="mb-3 flex items-center justify-between gap-3">
@@ -1728,28 +1744,75 @@ export default function SupplierChatPage({
                       ) : null}
                     </div>
 
-                    <input
-                      required
-                      value={item.productName}
-                      onChange={(event) => updateQuoteItem(index, { productName: event.target.value })}
-                      placeholder="Item or product description"
-                      className="w-full rounded-xl border border-slate-300 px-4 py-3.5 text-base font-semibold sm:text-lg"
-                    />
+                    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3 sm:p-4">
+                      <div className="flex flex-wrap items-end justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">Dimensions first</p>
+                          <p className="mt-0.5 text-xs font-semibold text-slate-600">Thickness × width × length</p>
+                        </div>
+                        {hasDimensions ? (
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-blue-800 shadow-sm">
+                            {quoteDimensionLabel(item)}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2 sm:gap-3">
+                        <label className="min-w-0 text-[10px] font-black uppercase text-slate-500 sm:text-xs">
+                          Thick
+                          <div className="relative mt-1">
+                            <input required type="number" min="0" step="any" inputMode="decimal" value={item.thickness} onChange={(event) => updateQuoteItem(index, { thickness: event.target.value })} placeholder="2" className="h-12 w-full min-w-0 rounded-xl border border-blue-200 bg-white px-2 pr-6 text-center text-lg font-black text-slate-950 sm:px-4 sm:text-xl" />
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">\"</span>
+                          </div>
+                        </label>
+                        <label className="min-w-0 text-[10px] font-black uppercase text-slate-500 sm:text-xs">
+                          Wide
+                          <div className="relative mt-1">
+                            <input required type="number" min="0" step="any" inputMode="decimal" value={item.width} onChange={(event) => updateQuoteItem(index, { width: event.target.value })} placeholder="4" className="h-12 w-full min-w-0 rounded-xl border border-blue-200 bg-white px-2 pr-6 text-center text-lg font-black text-slate-950 sm:px-4 sm:text-xl" />
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">\"</span>
+                          </div>
+                        </label>
+                        <label className="min-w-0 text-[10px] font-black uppercase text-slate-500 sm:text-xs">
+                          Long
+                          <div className="relative mt-1">
+                            <input required type="number" min="0" step="any" inputMode="decimal" value={item.length} onChange={(event) => updateQuoteItem(index, { length: event.target.value })} placeholder="16" className="h-12 w-full min-w-0 rounded-xl border border-blue-200 bg-white px-2 pr-6 text-center text-lg font-black text-slate-950 sm:px-4 sm:text-xl" />
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">'</span>
+                          </div>
+                        </label>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+                        <div className="rounded-xl bg-white px-2 py-2">
+                          <p className="text-[9px] font-black uppercase text-slate-400">Board feet each</p>
+                          <p className="text-sm font-black text-slate-950">{calculation.boardFeetEach ? calculation.boardFeetEach.toFixed(2) : "—"}</p>
+                        </div>
+                        <div className="rounded-xl bg-white px-2 py-2">
+                          <p className="text-[9px] font-black uppercase text-slate-400">Total board feet</p>
+                          <p className="text-sm font-black text-blue-800">{calculation.totalBoardFeet ? calculation.totalBoardFeet.toFixed(2) : "—"}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <label className="mt-4 block text-xs font-black uppercase text-slate-500 sm:text-sm">
+                      Product / grade <span className="font-bold text-slate-400">(optional)</span>
+                      <input
+                        value={item.productName}
+                        onChange={(event) => updateQuoteItem(index, { productName: event.target.value })}
+                        placeholder="Species, grade, or product name"
+                        className="mt-1.5 h-14 w-full rounded-xl border border-slate-300 px-4 text-base font-semibold normal-case text-slate-900 sm:text-lg"
+                      />
+                    </label>
 
                     <div className="mt-4 grid grid-cols-2 gap-3">
                       <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                         Quantity
-                        <input type="number" min="0" step="any" value={item.quantity} onChange={(event) => updateQuoteItem(index, { quantity: event.target.value })} placeholder="Qty" className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900" />
+                        <input type="number" min="0" step="any" inputMode="decimal" value={item.quantity} onChange={(event) => updateQuoteItem(index, { quantity: event.target.value })} placeholder="Qty" className="mt-1.5 h-14 w-full rounded-xl border border-slate-300 px-3 text-lg font-black normal-case text-slate-900" />
                       </label>
-                      <label className="flex min-w-0 items-center justify-between gap-3 text-xs font-black uppercase text-slate-500 sm:text-sm">
-                        <span className="leading-tight">
-                          {quote.kind === "request" ? "Price request per" : "Price basis"}
-                        </span>
+                      <label className="min-w-0 text-xs font-black uppercase text-slate-500 sm:text-sm">
+                        {quote.kind === "request" ? "Price request per" : "Price basis"}
                         <select
                           value={item.priceUnit}
                           onChange={(event) => updateQuoteItem(index, { priceUnit: event.target.value })}
                           aria-label={quote.kind === "request" ? "Requested pricing unit" : "Price basis unit"}
-                          className="min-w-[7.5rem] rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-black normal-case text-slate-900"
+                          className="mt-1.5 h-14 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black normal-case text-slate-900"
                         >
                           {PRICE_UNITS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                         </select>
@@ -1758,8 +1821,8 @@ export default function SupplierChatPage({
 
                     {quote.kind === "request" ? (
                       <>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                          <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
+                        <div className="mt-4">
+                          <label className="col-span-2 text-xs font-black uppercase text-slate-500 sm:col-span-1 sm:text-sm">
                             Profile / finish wanted
                             <input
                               value={item.profile}
@@ -1768,27 +1831,13 @@ export default function SupplierChatPage({
                               className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900"
                             />
                           </label>
-                          <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
-                            Lengths / quantities needed
-                            <input
-                              value={item.availableQuantities}
-                              onChange={(event) => updateQuoteItem(index, { availableQuantities: event.target.value })}
-                              placeholder="35 @ 16', 40 @ 18'"
-                              className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900"
-                            />
-                          </label>
                         </div>
 
                         <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                          <summary className="cursor-pointer text-sm font-black text-slate-600">Add species, grade, or size</summary>
+                          <summary className="cursor-pointer text-sm font-black text-slate-600">Add species or grade</summary>
                           <div className="mt-2 grid grid-cols-2 gap-2">
                             <input value={item.species} onChange={(event) => updateQuoteItem(index, { species: event.target.value })} placeholder="Species" className="rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
                             <input value={item.grade} onChange={(event) => updateQuoteItem(index, { grade: event.target.value })} placeholder="Grade" className="rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
-                          </div>
-                          <div className="mt-2 grid grid-cols-3 gap-2">
-                            <input type="number" min="0" step="any" value={item.thickness} onChange={(event) => updateQuoteItem(index, { thickness: event.target.value })} placeholder="Thickness" className="min-w-0 rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
-                            <input type="number" min="0" step="any" value={item.width} onChange={(event) => updateQuoteItem(index, { width: event.target.value })} placeholder="Width" className="min-w-0 rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
-                            <input type="number" min="0" step="any" value={item.length} onChange={(event) => updateQuoteItem(index, { length: event.target.value })} placeholder="Length (ft)" className="min-w-0 rounded-lg border border-slate-300 px-3 py-2.5 text-base" />
                           </div>
                         </details>
                       </>
@@ -1796,20 +1845,20 @@ export default function SupplierChatPage({
 
                     {quote.kind !== "request" ? (
                       <>
-                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                           <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                             Price
-                            <input required type="number" min="0" step="any" value={item.quotedPrice} onChange={(event) => updateQuoteItem(index, { quotedPrice: event.target.value })} placeholder="$0.00" className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900" />
+                            <input required type="number" min="0" step="any" inputMode="decimal" value={item.quotedPrice} onChange={(event) => updateQuoteItem(index, { quotedPrice: event.target.value })} placeholder="$0.00" className="mt-1.5 h-14 w-full rounded-xl border border-slate-300 px-4 text-lg font-black normal-case text-slate-900" />
                           </label>
                           <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
                             Availability
-                            <select value={item.availability} onChange={(event) => updateQuoteItem(index, { availability: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold normal-case text-slate-900">
+                            <select value={item.availability} onChange={(event) => updateQuoteItem(index, { availability: event.target.value })} className="mt-1.5 h-14 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-black normal-case text-slate-900">
                               {['Available', 'In stock', 'Limited', 'Special order', 'Backordered', 'Not available'].map((value) => <option key={value}>{value}</option>)}
                             </select>
                           </label>
-                          <label className="text-xs font-black uppercase text-slate-500 sm:text-sm">
+                          <label className="col-span-2 text-xs font-black uppercase text-slate-500 sm:col-span-1 sm:text-sm">
                             Lead time
-                            <input value={item.leadTime} onChange={(event) => updateQuoteItem(index, { leadTime: event.target.value })} placeholder="In stock or 3 days" className="mt-1.5 w-full rounded-xl border border-slate-300 px-4 py-3 text-base font-semibold normal-case text-slate-900" />
+                            <input value={item.leadTime} onChange={(event) => updateQuoteItem(index, { leadTime: event.target.value })} placeholder="In stock or 3 days" className="mt-1.5 h-14 w-full rounded-xl border border-slate-300 px-3 text-base font-semibold normal-case text-slate-900" />
                           </label>
                         </div>
 
@@ -1833,18 +1882,6 @@ export default function SupplierChatPage({
                             />
                           </label>
                         </div>
-
-                        {needsAllDimensions || needsLength ? (
-                          <div className={`mt-3 grid gap-2 rounded-xl bg-blue-50 p-3 ${needsAllDimensions ? "grid-cols-3" : "grid-cols-1"}`}>
-                            {needsAllDimensions ? (
-                              <>
-                                <input required type="number" min="0" step="any" value={item.thickness} onChange={(event) => updateQuoteItem(index, { thickness: event.target.value })} placeholder="Thickness" className="min-w-0 rounded-lg border border-blue-200 px-3 py-2.5 text-base" />
-                                <input required type="number" min="0" step="any" value={item.width} onChange={(event) => updateQuoteItem(index, { width: event.target.value })} placeholder="Width" className="min-w-0 rounded-lg border border-blue-200 px-3 py-2.5 text-base" />
-                              </>
-                            ) : null}
-                            <input required type="number" min="0" step="any" value={item.length} onChange={(event) => updateQuoteItem(index, { length: event.target.value })} placeholder="Length (ft)" className="min-w-0 rounded-lg border border-blue-200 px-3 py-2.5 text-base" />
-                          </div>
-                        ) : null}
 
                         <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                           <summary className="cursor-pointer text-sm font-black text-slate-600">Optional product details</summary>
