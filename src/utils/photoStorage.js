@@ -86,6 +86,108 @@ export async function compressImageFile(file, options = {}) {
   };
 }
 
+async function createImagePreviewDataUrl(file, options = {}) {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(originalDataUrl);
+  const maxWidth = options.maxWidth || 360;
+  const scale = Math.min(maxWidth / image.width, 1);
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+
+  canvas.width = width;
+  canvas.height = height;
+  context.drawImage(image, 0, 0, width, height);
+
+  return canvas.toDataURL("image/jpeg", options.quality || 0.68);
+}
+
+export async function uploadReceivingPhoto({
+  materialId,
+  category = "location",
+  file,
+}) {
+  if (!storage) {
+    throw new Error("Firebase Storage is not configured.");
+  }
+
+  const capturedAt = new Date().toISOString();
+  const safeMaterialId = safePathSegment(materialId, "receiving material ID");
+  const safeCategory = safePathSegment(category, "receiving photo category");
+  const [{ blob, width, height }, dataUrl] = await Promise.all([
+    compressImageFile(file, {
+      maxWidth: 2048,
+      quality: 0.86,
+    }),
+    createImagePreviewDataUrl(file),
+  ]);
+  const fileName = `${Date.now()}-${safeFileName(file.name || category)}.jpg`;
+  const path = `receiving/${safeMaterialId}/${safeCategory}/${fileName}`;
+  const photoRef = ref(storage, path);
+
+  await uploadBytes(photoRef, blob, {
+    contentType: "image/jpeg",
+  });
+
+  const url = await getDownloadURL(photoRef);
+
+  return {
+    url,
+    path,
+    dataUrl,
+    name: file.name || fileName,
+    type: "image/jpeg",
+    size: blob.size,
+    width,
+    height,
+    capturedAt,
+  };
+}
+
+export async function uploadDeliveryProofPhoto({
+  deliveryId,
+  category = "material",
+  file,
+}) {
+  if (!storage) {
+    throw new Error("Firebase Storage is not configured.");
+  }
+
+  const capturedAt = new Date().toISOString();
+  const safeDeliveryId = safePathSegment(deliveryId, "delivery ID");
+  const safeCategory = safePathSegment(category, "delivery photo category");
+  const [{ blob, width, height }, previewUrl] = await Promise.all([
+    compressImageFile(file, {
+      maxWidth: 2048,
+      quality: 0.86,
+    }),
+    createImagePreviewDataUrl(file),
+  ]);
+  const fileName = `${Date.now()}-${safeFileName(file.name || category)}.jpg`;
+  const path = `deliveries/${safeDeliveryId}/proof-photos/${safeCategory}/${fileName}`;
+  const photoRef = ref(storage, path);
+
+  await uploadBytes(photoRef, blob, {
+    contentType: "image/jpeg",
+  });
+
+  const url = await getDownloadURL(photoRef);
+
+  return {
+    url,
+    path,
+    dataUrl: url,
+    previewUrl,
+    name: file.name || fileName,
+    type: "image/jpeg",
+    size: blob.size,
+    width,
+    height,
+    capturedAt,
+  };
+}
+
 export async function uploadSupplierRunPickupPhoto({
   supplierRunId,
   itemId,

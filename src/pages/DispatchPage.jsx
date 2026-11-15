@@ -125,9 +125,9 @@ function MetricPill({ value, label, tone = "slate" }) {
         : "bg-slate-50 text-slate-800";
 
   return (
-    <div className={`rounded-2xl px-4 py-3 text-center ${toneClass}`}>
-      <p className="text-3xl font-black leading-none">{value}</p>
-      <p className="mt-1 text-[0.68rem] font-black uppercase tracking-[0.18em] opacity-70">
+    <div className={`rounded-xl px-3 py-2 text-center ${toneClass}`}>
+      <p className="text-xl font-black leading-none">{value}</p>
+      <p className="mt-1 text-[0.58rem] font-black uppercase tracking-[0.16em] opacity-70">
         {label}
       </p>
     </div>
@@ -145,23 +145,25 @@ function SummaryTile({ icon: Icon, label, value, detail, tone = "slate" }) {
           : "border-slate-200 bg-white text-slate-700";
 
   return (
-    <div className={`rounded-3xl border p-4 shadow-sm ${toneClass}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] opacity-75">
+    <div
+      className={`flex min-h-20 items-center gap-3 rounded-2xl border px-3 py-2.5 shadow-sm sm:px-4 ${toneClass}`}
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/80 shadow-sm">
+        <Icon aria-hidden="true" className="h-4.5 w-4.5" strokeWidth={2.5} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate text-[0.62rem] font-black uppercase tracking-[0.16em] opacity-75">
             {label}
           </p>
-          <p className="mt-2 text-3xl font-black leading-none text-slate-950">
+          <p className="shrink-0 text-2xl font-black leading-none text-slate-950">
             {value}
           </p>
         </div>
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
-          <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
-        </span>
+        <p className="mt-1 truncate text-xs font-bold text-slate-500" title={detail}>
+          {detail}
+        </p>
       </div>
-      <p className="mt-3 text-sm font-bold leading-snug text-slate-500">
-        {detail}
-      </p>
     </div>
   );
 }
@@ -181,10 +183,10 @@ function QueueRow({ label, title, meta, date, tone, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 text-left transition hover:border-slate-300 hover:shadow-sm"
+      className="group flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left transition hover:border-slate-300 hover:shadow-sm sm:px-3"
     >
       <span
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-black ${
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-black ${
           tone === "delivery"
             ? "bg-blue-50 text-blue-700"
             : "bg-red-50 text-[#FC2C38]"
@@ -193,19 +195,19 @@ function QueueRow({ label, title, meta, date, tone, onClick }) {
         {label}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-base font-black text-slate-950">
+        <span className="block truncate text-sm font-black text-slate-950">
           {title}
         </span>
         <span
           title={meta}
-          className="mt-0.5 block line-clamp-2 text-sm font-bold leading-5 text-slate-500"
+          className="mt-0.5 block truncate text-xs font-bold text-slate-500"
         >
           {meta}
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-2">
         <span
-          className={`max-w-28 whitespace-nowrap rounded-full px-3 py-1 text-center text-[0.68rem] font-black uppercase tracking-[0.1em] ${dateClass}`}
+          className={`max-w-28 whitespace-nowrap rounded-full px-2.5 py-1 text-center text-[0.6rem] font-black uppercase tracking-[0.08em] ${dateClass}`}
         >
           {getRelativeDateLabel(date)}
         </span>
@@ -250,31 +252,31 @@ function QueuePanel({
 
   return (
     <section
-      className={`relative min-w-0 overflow-hidden rounded-[1.75rem] border p-5 shadow-sm transition sm:p-6 ${
+      className={`relative min-w-0 overflow-hidden rounded-2xl border p-3.5 shadow-sm transition sm:p-4 ${
         toneStyles.card
       } ${disabled ? "opacity-50" : ""}`}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-center gap-3">
         <div
-          className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${toneStyles.icon}`}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneStyles.icon}`}
         >
-          <Icon aria-hidden="true" className="h-7 w-7" strokeWidth={2.4} />
+          <Icon aria-hidden="true" className="h-5 w-5" strokeWidth={2.4} />
         </div>
         <div className="min-w-0 flex-1">
           <p
-            className={`text-xs font-black uppercase tracking-[0.22em] ${toneStyles.eyebrow}`}
+            className={`text-[0.62rem] font-black uppercase tracking-[0.2em] ${toneStyles.eyebrow}`}
           >
             {eyebrow}
           </p>
-          <h2 className="mt-1 text-2xl font-black text-slate-950 sm:text-3xl">
+          <h2 className="mt-0.5 text-xl font-black leading-tight text-slate-950 sm:text-2xl">
             {title}
           </h2>
-          <p className="mt-2 text-base font-bold leading-relaxed text-slate-600">
+          <p className="mt-0.5 truncate text-xs font-bold text-slate-500 sm:text-sm" title={description}>
             {description}
           </p>
         </div>
-        <div className="hidden shrink-0 flex-col items-end gap-3 sm:flex">
-          <div className="flex items-center gap-3">
+        <div className="hidden shrink-0 items-center gap-2 sm:flex">
+          <div className="flex items-center gap-2">
             <MetricPill
               value={count}
               label="waiting"
@@ -290,7 +292,7 @@ function QueuePanel({
             type="button"
             onClick={onClick}
             disabled={disabled}
-            className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black text-white shadow-sm transition ${
+            className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-4 text-xs font-black text-white shadow-sm transition ${
               tone === "delivery"
                 ? "bg-blue-700 hover:bg-blue-800"
                 : "bg-[#FC2C38] hover:bg-red-600"
@@ -306,7 +308,7 @@ function QueuePanel({
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3 sm:hidden">
+      <div className="mt-3 flex items-center justify-between gap-3 sm:hidden">
         <div className="flex gap-2">
           <MetricPill
             value={count}
@@ -334,7 +336,7 @@ function QueuePanel({
         </button>
       </div>
 
-      <div className="mt-5 grid min-w-0 gap-2">
+      <div className="mt-3 grid min-w-0 gap-1.5">
         {rows.length > 0 ? (
           rows
             .slice(0, 4)
@@ -350,7 +352,7 @@ function QueuePanel({
               />
             ))
         ) : (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-4 text-sm font-bold text-slate-500">
+          <div className="rounded-xl border border-dashed border-slate-200 bg-white/70 px-3 py-2.5 text-xs font-bold text-slate-500">
             Nothing waiting right now.
           </div>
         )}
@@ -441,28 +443,28 @@ export default function DispatchPage({
       : mobilePanels[0]?.id || "south";
 
   return (
-    <PageContainer>
+    <PageContainer className="xl:py-5">
       <Breadcrumbs items={[{ label: "Dispatch" }]} />
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#FC2C38]">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#FC2C38]">
             Dispatch
           </p>
-          <h1 className="mt-2 text-5xl font-black tracking-tight text-slate-950">
+          <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
             Needs Dispatch
           </h1>
-          <p className="mt-3 max-w-3xl text-xl font-bold leading-relaxed text-slate-500">
+          <p className="mt-1 max-w-3xl text-sm font-bold text-slate-500 sm:text-base">
             Assign the South pickups and delivery orders that are waiting for a driver or truck.
           </p>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black uppercase tracking-[0.14em] text-white">
+        <div className="inline-flex w-fit items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-white">
           <ClipboardCheck aria-hidden="true" className="h-5 w-5" />
           {southQueue.length + deliveryQueue.length} total waiting
         </div>
       </div>
 
-      <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryTile
           icon={ClipboardCheck}
           label="Total Waiting"
@@ -498,7 +500,7 @@ export default function DispatchPage({
       </div>
 
       {mobilePanels.length > 1 ? (
-        <div className="mt-6 grid grid-cols-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm xl:hidden">
+        <div className="mt-4 grid grid-cols-2 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm xl:hidden">
           {mobilePanels.map((panel) => (
             <button
               key={panel.id}
@@ -517,7 +519,7 @@ export default function DispatchPage({
         </div>
       ) : null}
 
-      <div className="mt-5 grid gap-5 xl:mt-8 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+      <div className="mt-4 grid gap-3">
         {canDispatchSouth ? (
           <div className={`min-w-0 ${activePanelId === "south" ? "" : "hidden xl:block"}`}>
             <QueuePanel

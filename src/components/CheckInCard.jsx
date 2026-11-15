@@ -52,20 +52,32 @@ function getSourceItemDescription(item, index) {
   );
 }
 
+function getPhotoPreviewUrl(photo) {
+  return String(photo?.dataUrl || photo?.url || "").trim();
+}
+
+function getPhotoFullUrl(photo) {
+  return String(photo?.url || photo?.dataUrl || "").trim();
+}
+
 function getMaterialLocationPhotos(material) {
   if (Array.isArray(material.locationPhotos)) {
-    return material.locationPhotos.filter((photo) => photo?.dataUrl);
+    return material.locationPhotos.filter((photo) => getPhotoPreviewUrl(photo));
   }
 
-  return material.locationPhoto?.dataUrl ? [material.locationPhoto] : [];
+  return getPhotoPreviewUrl(material.locationPhoto)
+    ? [material.locationPhoto]
+    : [];
 }
 
 function getMaterialDamagePhotos(material) {
   if (Array.isArray(material.damagePhotos)) {
-    return material.damagePhotos.filter((photo) => photo?.dataUrl);
+    return material.damagePhotos.filter((photo) => getPhotoPreviewUrl(photo));
   }
 
-  return material.damagePhoto?.dataUrl ? [material.damagePhoto] : [];
+  return getPhotoPreviewUrl(material.damagePhoto)
+    ? [material.damagePhoto]
+    : [];
 }
 
 export default function CheckInCard({
@@ -324,17 +336,19 @@ export default function CheckInCard({
     firstLocationPhotoMaterial
       ? getMaterialLocationPhotos(firstLocationPhotoMaterial)[0]
       : null;
-  const locationPhoto = firstLocationPhoto?.dataUrl
+  const firstLocationPhotoUrl = getPhotoFullUrl(firstLocationPhoto);
+  const legacyLocationPhotoUrl = getPhotoFullUrl(checkIn.locationPhoto);
+  const locationPhoto = firstLocationPhotoUrl
     ? {
-        dataUrl: firstLocationPhoto.dataUrl,
+        dataUrl: firstLocationPhotoUrl,
         title: "Location Photo",
         subtitle:
           firstLocationPhotoMaterial.description ||
           "Material location",
       }
-    : checkIn.locationPhoto?.dataUrl
+    : legacyLocationPhotoUrl
       ? {
-          dataUrl: checkIn.locationPhoto.dataUrl,
+          dataUrl: legacyLocationPhotoUrl,
           title: "Location Photo",
           subtitle:
             "Wide photo of where the material was placed",
@@ -385,27 +399,31 @@ export default function CheckInCard({
       count +
       getMaterialLocationPhotos(material).length +
       getMaterialDamagePhotos(material).length,
-    checkIn.locationPhoto?.dataUrl ? 1 : 0,
+    legacyLocationPhotoUrl ? 1 : 0,
   );
   const hasAnyPhoto = materialPhotoCount > 0;
   const previewPhotos = [];
   const seenPreviewPhotoUrls = new Set();
 
   function addPreviewPhoto(photo, title, subtitle, tone = "location") {
-    if (!photo?.dataUrl || seenPreviewPhotoUrls.has(photo.dataUrl)) {
+    const previewUrl = getPhotoPreviewUrl(photo);
+    const fullUrl = getPhotoFullUrl(photo);
+
+    if (!previewUrl || !fullUrl || seenPreviewPhotoUrls.has(fullUrl)) {
       return;
     }
 
-    seenPreviewPhotoUrls.add(photo.dataUrl);
+    seenPreviewPhotoUrls.add(fullUrl);
     previewPhotos.push({
-      dataUrl: photo.dataUrl,
+      dataUrl: fullUrl,
+      previewUrl,
       title,
       subtitle,
       tone,
     });
   }
 
-  if (checkIn.locationPhoto?.dataUrl) {
+  if (legacyLocationPhotoUrl) {
     addPreviewPhoto(
       checkIn.locationPhoto,
       "PO Location Photo",
@@ -977,7 +995,7 @@ export default function CheckInCard({
                   >
                     <div className="relative">
                       <img
-                        src={photo.dataUrl}
+                        src={photo.previewUrl || photo.dataUrl}
                         alt={`${photo.title} for PO ${checkIn.poNumber}`}
                         className="h-28 w-full object-cover sm:h-32 lg:h-36"
                       />
@@ -1358,7 +1376,7 @@ export default function CheckInCard({
                               type="button"
                               onClick={() =>
                                 setViewingPhoto({
-                                  dataUrl: photo.dataUrl,
+                                  dataUrl: getPhotoFullUrl(photo),
                                   title: `Item ${index + 1} Location Photo ${photoIndex + 1}`,
                                   subtitle: material.description,
                                 })
@@ -1366,7 +1384,7 @@ export default function CheckInCard({
                               className="block w-full overflow-hidden rounded-xl border border-[#DCE4EF] bg-white text-left"
                             >
                               <img
-                                src={photo.dataUrl}
+                                src={getPhotoPreviewUrl(photo)}
                                 alt={`Location ${photoIndex + 1} for item ${index + 1}`}
                                 className="h-32 w-full object-cover sm:h-44 lg:h-56"
                               />
@@ -1389,7 +1407,7 @@ export default function CheckInCard({
                               type="button"
                               onClick={() =>
                                 setViewingPhoto({
-                                  dataUrl: photo.dataUrl,
+                                  dataUrl: getPhotoFullUrl(photo),
                                   title: `Item ${index + 1} Damage Photo ${photoIndex + 1}`,
                                   subtitle: material.description,
                                 })
@@ -1397,7 +1415,7 @@ export default function CheckInCard({
                               className="block w-full overflow-hidden rounded-xl border border-red-200 bg-white text-left"
                             >
                               <img
-                                src={photo.dataUrl}
+                                src={getPhotoPreviewUrl(photo)}
                                 alt={`Damage ${photoIndex + 1} for item ${index + 1}`}
                                 className="h-32 w-full object-cover sm:h-44 lg:h-56"
                               />

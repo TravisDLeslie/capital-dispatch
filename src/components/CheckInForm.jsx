@@ -24,6 +24,7 @@ import {
 } from "../data/options";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
+import { uploadReceivingPhoto } from "../utils/photoStorage";
 import { formatCustomerName } from "../utils/textFormatters";
 import SearchableSelect from "./SearchableSelect";
 
@@ -323,6 +324,8 @@ function createMaterialFromPoItem(item, sourceType) {
       [item.quantity, item.description].filter(Boolean).join(" ") ||
       item.description ||
       "",
+    quantity: String(item.quantity || item.qty || "").trim(),
+    sourceDescription: String(item.description || "").trim(),
     sourceItemId: item.id || "",
     sourceType,
   };
@@ -529,68 +532,6 @@ function getMatchingTheirTruckPOsForPo(poNumber, theirTruckPOs) {
         normalizePoNumber(theirTruckPO?.poNumber) === normalizedPoNumber,
     )
     .sort(sortTheirTruckPOsByRecent);
-}
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadImage(dataUrl) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = dataUrl;
-  });
-}
-
-async function createLocationPhoto(file) {
-  const originalDataUrl = await readFileAsDataUrl(file);
-  const image = await loadImage(originalDataUrl);
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-  const targetDataUrlLength = 45000;
-  const minQuality = 0.26;
-  let maxWidth = 720;
-  let dataUrl = "";
-
-  while (maxWidth >= 420) {
-    const scale = Math.min(maxWidth / image.width, 1);
-    const width = Math.max(1, Math.round(image.width * scale));
-    const height = Math.max(1, Math.round(image.height * scale));
-
-    canvas.width = width;
-    canvas.height = height;
-    context.drawImage(image, 0, 0, width, height);
-
-    let quality = 0.62;
-    dataUrl = canvas.toDataURL("image/jpeg", quality);
-
-    while (dataUrl.length > targetDataUrlLength && quality > minQuality) {
-      quality = Math.max(minQuality, quality - 0.08);
-      dataUrl = canvas.toDataURL("image/jpeg", quality);
-    }
-
-    if (dataUrl.length <= targetDataUrlLength || maxWidth <= 420) {
-      break;
-    }
-
-    maxWidth -= 120;
-  }
-
-  return {
-    dataUrl,
-    name: file.name,
-    type: "image/jpeg",
-    capturedAt: new Date().toISOString(),
-  };
 }
 
 export default function CheckInForm({
@@ -1257,7 +1198,17 @@ export default function CheckInForm({
     clearError();
 
     try {
-      const photos = await Promise.all(files.map(createLocationPhoto));
+      const category =
+        photoField === "damagePhoto" ? "damage" : "location";
+      const photos = await Promise.all(
+        files.map((file) =>
+          uploadReceivingPhoto({
+            materialId,
+            category,
+            file,
+          }),
+        ),
+      );
       setMaterials((currentMaterials) =>
         currentMaterials.map((material) => {
           if (material.id !== materialId) {
@@ -1520,6 +1471,8 @@ export default function CheckInForm({
     const cleanedMaterials = enteredMaterials.map((material) => ({
       id: material.id,
       description: material.description.trim(),
+      quantity: String(material.quantity || "").trim(),
+      sourceDescription: String(material.sourceDescription || "").trim(),
       location: findMatchingOption(material.location, locations),
       locationPhoto: getMaterialLocationPhotos(material)[0] || null,
       locationPhotos: getMaterialLocationPhotos(material),
@@ -2583,7 +2536,7 @@ export default function CheckInForm({
                             className="relative overflow-hidden rounded-xl border border-slate-200 bg-white"
                           >
                             <img
-                              src={photo.dataUrl}
+                              src={photo.dataUrl || photo.url}
                               alt={`Location preview ${photoIndex + 1} for material ${index + 1}`}
                               className="h-28 w-full object-cover sm:h-32"
                             />
@@ -2681,7 +2634,7 @@ export default function CheckInForm({
                               className="relative overflow-hidden rounded-xl border border-red-200 bg-white"
                             >
                               <img
-                                src={photo.dataUrl}
+                                src={photo.dataUrl || photo.url}
                                 alt={`Damage preview ${photoIndex + 1} for material ${index + 1}`}
                                 className="h-28 w-full object-cover sm:h-32"
                               />

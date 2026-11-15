@@ -537,7 +537,11 @@ function getDeliveryDateGroupLabel(dateKey) {
   return formatDateLabel(dateKey);
 }
 
-function DeliveryDateGroupHeader({ dateKey, deliveries }) {
+function DeliveryDateGroupHeader({
+  dateKey,
+  deliveries,
+  connected = false,
+}) {
   const safeDeliveries = Array.isArray(deliveries) ? deliveries : [];
   const needsDispatchCount = safeDeliveries.filter(
     (delivery) =>
@@ -545,13 +549,19 @@ function DeliveryDateGroupHeader({ dateKey, deliveries }) {
   ).length;
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div
+      className={`flex flex-col gap-2 border border-slate-200 bg-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${
+        connected
+          ? "mt-6 rounded-t-3xl border-b-slate-300 border-l-4 border-l-[#FC2C38] first:mt-0"
+          : "rounded-2xl"
+      }`}
+    >
       <div className="flex items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#FC2C38] shadow-sm">
           <CalendarDays className="h-5 w-5" aria-hidden="true" />
         </span>
         <div>
-          <p className="text-sm font-black text-slate-950">
+          <p className="text-base font-black text-slate-950">
             {getDeliveryDateGroupLabel(dateKey)}
           </p>
           <p className="text-xs font-bold text-slate-500">
@@ -980,6 +990,28 @@ function assignmentsReadyForSchedule(assignments, driverOptions) {
   );
 }
 
+function isDeliveryAssigned(delivery, vehicleOptions = []) {
+  if (delivery?.dispatchStatus === "assigned") {
+    return true;
+  }
+
+  const assignments = getInitialAssignments(delivery);
+
+  return assignments.length > 0 && assignments.every(
+    (assignment) =>
+      Boolean(String(assignment.driver || "").trim()) &&
+      (vehicleOptions.length === 0 ||
+        Boolean(
+          String(
+            assignment.vehicleId ||
+              assignment.vehicleTitle ||
+              assignment.vehicleBadge ||
+              "",
+          ).trim(),
+        )),
+  );
+}
+
 function isDeliveryComplete(delivery) {
   return Boolean(
     delivery.status === "complete" || delivery.completedAt || delivery.deliveredAt,
@@ -1296,6 +1328,7 @@ function DispatchDetailSection({
 function DeliveryDispatchOverview({
   deliveries,
   totalDeliveries,
+  assignedDeliveriesCount,
   deliveryDates,
   routeMetrics,
   driverOptions,
@@ -1320,15 +1353,12 @@ function DeliveryDispatchOverview({
   deliveryOrderInputRefs,
   onDeliveryOrderUpload,
   onPreviewDeliveryOrder,
+  onOpenUpcoming,
 }) {
   const needsAssignmentCount = totalDeliveries.filter(
     (delivery) =>
       delivery.dispatchStatus === "needsDispatch" || !delivery.driver,
   ).length;
-  const assignedCount = Math.max(
-    0,
-    totalDeliveries.length - needsAssignmentCount,
-  );
 
   function getDriverSummary(delivery) {
     const assignmentDrivers = Array.isArray(delivery.dispatchAssignments)
@@ -1418,14 +1448,18 @@ function DeliveryDispatchOverview({
                 Need dispatch
               </p>
             </div>
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-center">
+            <button
+              type="button"
+              onClick={onOpenUpcoming}
+              className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-center transition hover:border-emerald-300 hover:bg-emerald-100 focus:outline-none focus:ring-4 focus:ring-emerald-100"
+            >
               <p className="text-2xl font-black text-emerald-800">
-                {assignedCount}
+                {assignedDeliveriesCount}
               </p>
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
-                Assigned
+                In Upcoming
               </p>
-            </div>
+            </button>
           </div>
         </div>
 
@@ -1483,7 +1517,7 @@ function DeliveryDispatchOverview({
         </div>
 
         {deliveries.length > 0 ? (
-          <div className="space-y-2">
+          <div>
             {deliveries.map((delivery, index) => {
               const needsAssignment =
                 delivery.dispatchStatus === "needsDispatch" ||
@@ -1509,6 +1543,12 @@ function DeliveryDispatchOverview({
                   : null;
               const startsDateGroup =
                 deliveryDateKey !== previousDeliveryDateKey;
+              const nextDeliveryDateKey =
+                index < deliveries.length - 1
+                  ? getDeliveryDateGroupKey(deliveries[index + 1])
+                  : null;
+              const endsDateGroup =
+                deliveryDateKey !== nextDeliveryDateKey;
               const dateGroupDeliveries = startsDateGroup
                 ? deliveries.filter(
                     (groupDelivery) =>
@@ -1523,11 +1563,16 @@ function DeliveryDispatchOverview({
                     <DeliveryDateGroupHeader
                       dateKey={deliveryDateKey}
                       deliveries={dateGroupDeliveries}
+                      connected
                     />
                   ) : null}
                   <article
                     id={`delivery-lineup-${delivery.id}`}
-                    className="grid min-w-0 gap-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 transition hover:border-slate-300 hover:shadow-sm xl:grid-cols-[minmax(160px,0.9fr)_minmax(240px,1.15fr)_minmax(300px,1.3fr)_minmax(210px,0.95fr)_minmax(180px,0.75fr)] xl:grid-rows-[minmax(132px,1fr)_auto] xl:items-stretch"
+                    className={`grid min-w-0 gap-3 overflow-hidden border border-t-0 border-slate-200 bg-white p-3 transition hover:bg-slate-50/60 xl:grid-cols-[minmax(160px,0.9fr)_minmax(240px,1.15fr)_minmax(300px,1.3fr)_minmax(210px,0.95fr)_minmax(180px,0.75fr)] xl:grid-rows-[minmax(132px,1fr)_auto] xl:items-stretch ${
+                      endsDateGroup
+                        ? "mb-6 rounded-b-3xl shadow-sm"
+                        : "rounded-none"
+                    }`}
                   >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-sm font-black text-[#FC2C38]">
@@ -2708,7 +2753,11 @@ export default function DeliveryDispatchPage({
   const availableDeliveryDates = useMemo(
     () =>
       deliveries
-        .filter((delivery) => delivery.status !== "complete")
+        .filter(
+          (delivery) =>
+            delivery.status !== "complete" &&
+            !isDeliveryAssigned(delivery, vehicleOptions),
+        )
         .map((delivery) => {
           const schedule =
             draftSchedules[delivery.id] ||
@@ -2717,7 +2766,16 @@ export default function DeliveryDispatchPage({
           return schedule.deliveryDate || "";
         })
         .filter(Boolean),
-    [deliveries, draftSchedules, safeDeliveryOriginOptions],
+    [deliveries, draftSchedules, safeDeliveryOriginOptions, vehicleOptions],
+  );
+  const assignedDeliveriesCount = useMemo(
+    () =>
+      deliveries.filter(
+        (delivery) =>
+          delivery.status !== "complete" &&
+          isDeliveryAssigned(delivery, vehicleOptions),
+      ).length,
+    [deliveries, vehicleOptions],
   );
   const routeMapDeliveries = useMemo(
     () =>
@@ -2725,6 +2783,7 @@ export default function DeliveryDispatchPage({
         .filter(
           (delivery) =>
             delivery.status !== "complete" &&
+            !isDeliveryAssigned(delivery, vehicleOptions) &&
             (!routeMapDate || delivery.deliveryDate === routeMapDate),
         )
         .map((delivery) => {
@@ -2758,6 +2817,7 @@ export default function DeliveryDispatchPage({
       draftSchedules,
       routeMapDate,
       safeDeliveryOriginOptions,
+      vehicleOptions,
     ],
   );
 
@@ -3152,9 +3212,9 @@ export default function DeliveryDispatchPage({
               vehicleTitle: primaryAssignment.vehicleTitle,
               vehicleBadge: primaryAssignment.vehicleBadge,
               dispatchAssignments: assignments,
-              dispatchStatus: completeAssignment ? "assigned" : "needsDispatch",
             }
           : {}),
+        dispatchStatus: completeAssignment ? "assigned" : "needsDispatch",
         deliveryDate: schedule.deliveryDate,
         deliveryTimeSlot: schedule.deliveryTimeSlot,
         deliveryOriginName: schedule.deliveryOriginName,
@@ -3436,6 +3496,7 @@ export default function DeliveryDispatchPage({
       <DeliveryDispatchOverview
         deliveries={visibleRouteMapDeliveries}
         totalDeliveries={routeMapDeliveries}
+        assignedDeliveriesCount={assignedDeliveriesCount}
         deliveryDates={availableDeliveryDates}
         routeMetrics={routeMetrics}
         driverOptions={driverOptions}
@@ -3469,6 +3530,7 @@ export default function DeliveryDispatchPage({
         deliveryOrderInputRefs={deliveryOrderInputRefs}
         onDeliveryOrderUpload={handleDeliveryOrderUpload}
         onPreviewDeliveryOrder={setPreviewedDeliveryOrder}
+        onOpenUpcoming={() => onPageChange?.("deliveries-upcoming")}
       />
 
       {SHOW_DELIVERY_DISPATCH_MAP ? (

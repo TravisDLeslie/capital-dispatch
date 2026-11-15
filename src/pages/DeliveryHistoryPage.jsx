@@ -11,6 +11,7 @@ import {
   MapPin,
   Package,
   Phone,
+  RotateCcw,
   Search,
   ShieldCheck,
   Trash2,
@@ -24,6 +25,7 @@ import MarkDeliveredModal from "../components/MarkDeliveredModal";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
+import { uploadDeliveryProofPhoto } from "../utils/photoStorage";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const MAX_DELIVERY_PROOF_PHOTOS = 10;
@@ -206,7 +208,7 @@ function PhotoPreview({
       }`}
     >
       <img
-        src={photo.dataUrl}
+        src={photo.previewUrl || photo.dataUrl}
         alt={label}
         className="h-48 w-full bg-slate-100 object-contain sm:h-64"
       />
@@ -240,57 +242,6 @@ function getPhotoList(delivery, photoField, photosField) {
   }
 
   return [legacyPhoto, ...photos];
-}
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadImage(dataUrl) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = dataUrl;
-  });
-}
-
-async function createPhotoFromFile(file) {
-  const originalDataUrl = await readFileAsDataUrl(file);
-  const image = await loadImage(originalDataUrl);
-  const targetDataUrlLength = 70000;
-  const maxWidth = 640;
-  const scale = Math.min(maxWidth / image.width, 1);
-  const width = Math.round(image.width * scale);
-  const height = Math.round(image.height * scale);
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  canvas.width = width;
-  canvas.height = height;
-  context.drawImage(image, 0, 0, width, height);
-
-  let quality = 0.68;
-  let dataUrl = canvas.toDataURL("image/jpeg", quality);
-
-  while (dataUrl.length > targetDataUrlLength && quality > 0.26) {
-    quality -= 0.08;
-    dataUrl = canvas.toDataURL("image/jpeg", quality);
-  }
-
-  return {
-    name: file.name,
-    type: "image/jpeg",
-    dataUrl,
-    capturedAt: new Date().toISOString(),
-  };
 }
 
 function CompletedPhotoUpload({
@@ -391,6 +342,7 @@ export default function DeliveryHistoryPage({
   onPageChange,
   onUpdateDelivery,
   onUpdateDeliveredAt,
+  onRestoreDelivery,
   onDeleteDelivery,
   isSuperAdmin = false,
 }) {
@@ -401,6 +353,9 @@ export default function DeliveryHistoryPage({
   const [photoError, setPhotoError] = useState("");
   const [editingDeliveryDate, setEditingDeliveryDate] = useState(null);
   const [updatingDeliveredAt, setUpdatingDeliveredAt] = useState(false);
+  const [deliveryToRestore, setDeliveryToRestore] = useState(null);
+  const [restoringDeliveryId, setRestoringDeliveryId] = useState("");
+  const [restoreError, setRestoreError] = useState("");
   const [deletingDeliveryId, setDeletingDeliveryId] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const resultsRef = useRef(null);
@@ -637,9 +592,16 @@ export default function DeliveryHistoryPage({
 
     try {
       const newPhotos = [];
+      const category = photosField === "hardwarePhotos" ? "hardware" : "material";
 
       for (const file of filesToSave) {
-        newPhotos.push(await createPhotoFromFile(file));
+        newPhotos.push(
+          await uploadDeliveryProofPhoto({
+            deliveryId: delivery.id,
+            category,
+            file,
+          }),
+        );
       }
 
       const currentPhotos = getPhotoList(delivery, photoField, photosField);
@@ -740,6 +702,42 @@ export default function DeliveryHistoryPage({
       );
     } finally {
       setDeletingDeliveryId("");
+    }
+  }
+
+  async function handleRestoreCompletedDelivery() {
+    if (
+      !deliveryToRestore?.id ||
+      !onRestoreDelivery ||
+      restoringDeliveryId
+    ) {
+      return;
+    }
+
+    setRestoreError("");
+    setRestoringDeliveryId(deliveryToRestore.id);
+
+    try {
+      const didRestore = await onRestoreDelivery(deliveryToRestore.id);
+
+      if (didRestore !== false) {
+        setOpenDeliveryKeys((currentOpenDeliveryKeys) => {
+          const nextOpenDeliveryKeys = { ...currentOpenDeliveryKeys };
+          delete nextOpenDeliveryKeys[deliveryToRestore.id];
+          return nextOpenDeliveryKeys;
+        });
+        setDeliveryToRestore(null);
+      }
+    } catch (restoreDeliveryError) {
+      console.error(
+        "Unable to return completed delivery to dispatch:",
+        restoreDeliveryError,
+      );
+      setRestoreError(
+        "Unable to return that delivery to dispatch. Check your connection and try again.",
+      );
+    } finally {
+      setRestoringDeliveryId("");
     }
   }
 
@@ -1094,7 +1092,9 @@ export default function DeliveryHistoryPage({
 
                 {deliveryIsOpen ? (
                 <>
-                {onUpdateDeliveredAt || onDeleteDelivery ? (
+                {onUpdateDeliveredAt ||
+                onRestoreDelivery ||
+                onDeleteDelivery ? (
                   <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">
@@ -1108,6 +1108,20 @@ export default function DeliveryHistoryPage({
                       </p>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
+                      {onRestoreDelivery ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRestoreError("");
+                            setDeliveryToRestore(delivery);
+                          }}
+                          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-amber-300 bg-white px-4 text-sm font-black text-amber-800 shadow-sm transition hover:bg-amber-50"
+                        >
+                          <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                          Wasn&apos;t Delivered
+                        </button>
+                      ) : null}
+
                       {onUpdateDeliveredAt ? (
                         <button
                           type="button"
@@ -1399,6 +1413,71 @@ export default function DeliveryHistoryPage({
         }}
         onConfirm={handleUpdateDeliveredAt}
       />
+
+      {deliveryToRestore ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="restore-delivery-title"
+        >
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl sm:p-7">
+            <div className="flex items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-800">
+                <RotateCcw className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+                  Return to dispatch
+                </p>
+                <h2
+                  id="restore-delivery-title"
+                  className="mt-1 text-2xl font-black tracking-tight text-slate-950"
+                >
+                  Wasn&apos;t this delivered?
+                </h2>
+              </div>
+            </div>
+
+            <p className="mt-5 text-sm font-bold leading-6 text-slate-600">
+              Order {deliveryToRestore.orderNumber || "—"} will be removed
+              from Past Deliveries and returned to the dispatch queue. Its
+              order details, schedule, attachments, and existing assignment
+              will stay saved.
+            </p>
+
+            {restoreError ? (
+              <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
+                {restoreError}
+              </p>
+            ) : null}
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!restoringDeliveryId) {
+                    setDeliveryToRestore(null);
+                    setRestoreError("");
+                  }
+                }}
+                disabled={Boolean(restoringDeliveryId)}
+                className="min-h-12 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={handleRestoreCompletedDelivery}
+                disabled={Boolean(restoringDeliveryId)}
+                className="min-h-12 rounded-2xl bg-amber-500 px-4 text-sm font-black text-slate-950 shadow-sm transition hover:bg-amber-400 disabled:cursor-wait disabled:opacity-60"
+              >
+                {restoringDeliveryId ? "Returning..." : "Yes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }

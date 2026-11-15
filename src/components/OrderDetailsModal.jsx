@@ -2,13 +2,19 @@ import {
   CalendarDays,
   CheckCircle2,
   MapPin,
+  Maximize2,
   Package,
   Phone,
   Truck,
   X,
 } from "lucide-react";
-import { useEffect, useMemo } from "react";
-import { getPOReceivingSummary } from "../utils/poReceivingSummary";
+import { useEffect, useMemo, useState } from "react";
+import ReceivingLocationPhotosModal from "./ReceivingLocationPhotosModal";
+import {
+  getPOReceivingSummary,
+  getReceivingItemStates,
+  getWaitingReceivingItems,
+} from "../utils/poReceivingSummary";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const pathLabels = {
@@ -125,6 +131,7 @@ export default function OrderDetailsModal({
   sources = {},
   onClose,
 }) {
+  const [viewingReceivingPhotos, setViewingReceivingPhotos] = useState(null);
   const orderDetails = useMemo(() => {
     const orderKey = normalizeOrderNumber(orderNumber);
     const orderBuilds = Array.isArray(sources.orderBuilds)
@@ -251,23 +258,25 @@ export default function OrderDetailsModal({
         poNumber,
         expectedItems.length,
       );
-      const receivedDescriptions = new Set(
-        summary.receivedItems.map((item) =>
-          normalizeItemDescription(item),
-        ),
+      const itemReceivingStates = getReceivingItemStates(
+        expectedItems,
+        summary.receivedItems,
       );
-      const waitingItems = summary.isReceived
-        ? summary.isPartial
-          ? expectedItems.filter(
-              (item) => !receivedDescriptions.has(normalizeItemDescription(item)),
-            )
-          : []
-        : expectedItems;
+      const waitingItems = getWaitingReceivingItems(itemReceivingStates);
+      const isPartial = summary.isReceived && waitingItems.length > 0;
 
       return {
         poNumber,
         ...summary,
+        key: !summary.isReceived ? "pending" : isPartial ? "partial" : "received",
+        label: !summary.isReceived
+          ? "Not received yet"
+          : isPartial
+            ? "Partially received"
+            : "Received",
+        isPartial,
         expectedItems,
+        itemReceivingStates,
         waitingItems,
       };
     });
@@ -320,13 +329,18 @@ export default function OrderDetailsModal({
   useEffect(() => {
     function closeOnEscape(event) {
       if (event.key === "Escape") {
+        if (viewingReceivingPhotos) {
+          setViewingReceivingPhotos(null);
+          return;
+        }
+
         onClose?.();
       }
     }
 
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  }, [onClose, viewingReceivingPhotos]);
 
   if (!orderNumber) {
     return null;
@@ -579,17 +593,47 @@ export default function OrderDetailsModal({
                     {summary.receivingPhotos.length > 0 ? (
                       <div className="mt-3 flex gap-2">
                         {summary.receivingPhotos.slice(0, 3).map((photo) => (
-                          <img
+                          <button
+                            type="button"
                             key={photo.id || photo.dataUrl}
-                            src={photo.dataUrl}
-                            alt={photo.title || `Receiving photo for PO ${summary.poNumber}`}
-                            className="h-14 w-14 rounded-lg border border-slate-200 object-cover"
-                          />
+                            onClick={() =>
+                              setViewingReceivingPhotos({
+                                poNumber: summary.poNumber,
+                                locationLabel: summary.locationLabel,
+                                photos: summary.receivingPhotos,
+                              })
+                            }
+                            className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 text-left transition hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            aria-label={`Enlarge receiving photos for PO ${summary.poNumber}`}
+                          >
+                            <img
+                              src={photo.dataUrl}
+                              alt={photo.title || `Receiving photo for PO ${summary.poNumber}`}
+                              className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                            />
+                            <span className="absolute inset-0 flex items-center justify-center bg-slate-950/0 text-white transition group-hover:bg-slate-950/35 group-focus-visible:bg-slate-950/35">
+                              <Maximize2
+                                className="h-5 w-5 opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100"
+                                aria-hidden="true"
+                              />
+                            </span>
+                          </button>
                         ))}
                         {summary.receivingPhotos.length > 3 ? (
-                          <span className="flex h-14 min-w-14 items-center justify-center rounded-lg bg-slate-100 px-2 text-xs font-black text-slate-600">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setViewingReceivingPhotos({
+                                poNumber: summary.poNumber,
+                                locationLabel: summary.locationLabel,
+                                photos: summary.receivingPhotos,
+                              })
+                            }
+                            className="flex h-14 min-w-14 items-center justify-center rounded-lg bg-slate-100 px-2 text-xs font-black text-slate-600 transition hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            aria-label={`View all ${summary.receivingPhotos.length} receiving photos for PO ${summary.poNumber}`}
+                          >
                             +{summary.receivingPhotos.length - 3}
-                          </span>
+                          </button>
                         ) : null}
                       </div>
                     ) : null}
@@ -670,17 +714,17 @@ export default function OrderDetailsModal({
                     normalizeOrderNumber(summary.poNumber) ===
                     normalizeOrderNumber(item?.poNumber),
                 );
-                const matchedReceivedItem =
-                  receivingSummary?.receivedItems.find(
-                    (receivedItem) =>
-                      normalizeItemDescription(receivedItem) ===
-                      normalizeItemDescription(item),
+                const itemReceivingState =
+                  receivingSummary?.itemReceivingStates.find(
+                    ({ expectedItem }) =>
+                      expectedItem === item ||
+                      (item?.id && expectedItem?.id === item.id),
                   );
-                const isItemReceived = Boolean(
-                  matchedReceivedItem ||
-                    (receivingSummary?.isReceived &&
-                      !receivingSummary?.isPartial),
-                );
+                const matchedReceivedItem =
+                  itemReceivingState?.matchedReceivedItems.find(
+                    (receivedItem) => receivedItem?.location,
+                  ) || itemReceivingState?.matchedReceivedItems[0];
+                const isItemReceived = Boolean(itemReceivingState?.isReceived);
                 const receivedLocation =
                   matchedReceivedItem?.location ||
                   (isItemReceived ? receivingSummary?.locationLabel : "");
@@ -774,6 +818,15 @@ export default function OrderDetailsModal({
           ) : null}
         </div>
       </div>
+
+      {viewingReceivingPhotos ? (
+        <ReceivingLocationPhotosModal
+          poNumber={viewingReceivingPhotos.poNumber}
+          locationLabel={viewingReceivingPhotos.locationLabel}
+          photos={viewingReceivingPhotos.photos}
+          onClose={() => setViewingReceivingPhotos(null)}
+        />
+      ) : null}
     </div>
   );
 }

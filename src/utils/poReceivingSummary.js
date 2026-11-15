@@ -102,17 +102,190 @@ function formatReceivedDate(date) {
 }
 
 function getPhotoDataUrl(photo) {
-  return String(photo?.dataUrl || photo?.url || "").trim();
+  return String(photo?.url || photo?.dataUrl || "").trim();
 }
 
 function getMaterialDescription(material, index) {
   return String(
-    material?.description ||
+    material?.sourceDescription ||
+      material?.description ||
       material?.itemDescription ||
       material?.name ||
       material?.itemName ||
       `Item ${index + 1}`,
   ).trim();
+}
+
+function getMaterialQuantityAndDescription(material, index) {
+  const explicitQuantity = String(
+    material?.quantity || material?.qty || "",
+  ).trim();
+  const sourceDescription = String(material?.sourceDescription || "").trim();
+  const description = getMaterialDescription(material, index);
+
+  if (explicitQuantity || sourceDescription || !material?.sourceItemId) {
+    return {
+      quantity: explicitQuantity,
+      description,
+    };
+  }
+
+  const legacyAutoFilledMatch = description.match(
+    /^\s*(?:qty\s*)?(\d+(?:\.\d+)?)\s+[·-]?\s*(.+)$/i,
+  );
+
+  if (!legacyAutoFilledMatch) {
+    return {
+      quantity: "",
+      description,
+    };
+  }
+
+  return {
+    quantity: legacyAutoFilledMatch[1],
+    description: legacyAutoFilledMatch[2].trim(),
+  };
+}
+
+function getExpectedItemDescription(item) {
+  return String(
+    item?.description ||
+      item?.materialDescription ||
+      item?.itemDescription ||
+      item?.name ||
+      "Item description not entered",
+  ).trim();
+}
+
+function normalizeItemDescription(item) {
+  return getExpectedItemDescription(item)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function getNumericItemQuantity(item) {
+  const value = String(item?.quantity || item?.qty || "")
+    .trim()
+    .replace(/^qty\s*/i, "");
+  const numericValue = Number(value.replace(/,/g, ""));
+
+  return Number.isFinite(numericValue) && numericValue >= 0
+    ? numericValue
+    : null;
+}
+
+export function getReceivingItemStates(expectedItems = [], receivedItems = []) {
+  const availableReceivedItems = receivedItems.map((item) => ({
+    item,
+    remainingQuantity: getNumericItemQuantity(item),
+    used: false,
+  }));
+
+  return expectedItems.map((expectedItem) => {
+    const expectedDescription = normalizeItemDescription(expectedItem);
+    const expectedQuantity = getNumericItemQuantity(expectedItem);
+    const expectedSourceItemId = String(expectedItem?.id || "").trim();
+    const matchedReceivedItems = [];
+    const matchesExpectedItem = ({ item, used }) => {
+      if (used) {
+        return false;
+      }
+
+      const receivedSourceItemId = String(item?.sourceItemId || "").trim();
+
+      if (expectedSourceItemId && receivedSourceItemId) {
+        return expectedSourceItemId === receivedSourceItemId;
+      }
+
+      return normalizeItemDescription(item) === expectedDescription;
+    };
+
+    if (expectedQuantity === null) {
+      const matchingItem = availableReceivedItems.find(matchesExpectedItem);
+
+      if (!matchingItem) {
+        return {
+          expectedItem,
+          isReceived: false,
+          matchedReceivedItems,
+          remainingQuantity: null,
+        };
+      }
+
+      matchingItem.used = true;
+      matchedReceivedItems.push(matchingItem.item);
+      return {
+        expectedItem,
+        isReceived: true,
+        matchedReceivedItems,
+        remainingQuantity: 0,
+      };
+    }
+
+    let remainingExpectedQuantity = expectedQuantity;
+
+    availableReceivedItems.forEach((receivedEntry) => {
+      if (
+        remainingExpectedQuantity <= 0 ||
+        !matchesExpectedItem(receivedEntry)
+      ) {
+        return;
+      }
+
+      if (receivedEntry.remainingQuantity === null) {
+        receivedEntry.used = true;
+        matchedReceivedItems.push(receivedEntry.item);
+        remainingExpectedQuantity = 0;
+        return;
+      }
+
+      const quantityToApply = Math.min(
+        remainingExpectedQuantity,
+        receivedEntry.remainingQuantity,
+      );
+
+      remainingExpectedQuantity -= quantityToApply;
+      receivedEntry.remainingQuantity -= quantityToApply;
+
+      if (quantityToApply > 0) {
+        matchedReceivedItems.push(receivedEntry.item);
+      }
+
+      if (receivedEntry.remainingQuantity <= 0) {
+        receivedEntry.used = true;
+      }
+    });
+
+    return {
+      expectedItem,
+      isReceived: remainingExpectedQuantity <= 0,
+      matchedReceivedItems,
+      remainingQuantity: remainingExpectedQuantity,
+    };
+  });
+}
+
+export function getWaitingReceivingItems(itemReceivingStates = []) {
+  return itemReceivingStates.flatMap(
+    ({ expectedItem, isReceived, remainingQuantity }) => {
+      if (isReceived) {
+        return [];
+      }
+
+      if (remainingQuantity === null) {
+        return [expectedItem];
+      }
+
+      return [
+        {
+          ...expectedItem,
+          quantity: Number.isInteger(remainingQuantity)
+            ? String(remainingQuantity)
+            : String(Number(remainingQuantity.toFixed(3))),
+        },
+      ];
+    },
+  );
 }
 
 function getReceivingLocationPhotos(matchingCheckIns, poNumber) {
@@ -195,10 +368,18 @@ function getReceivedItems(matchingCheckIns) {
     );
 
     getCheckInMaterials(checkIn).forEach((material, materialIndex) => {
-      const description = getMaterialDescription(material, materialIndex);
-      const quantity = String(material?.quantity || material?.qty || "").trim();
+      const { description, quantity } = getMaterialQuantityAndDescription(
+        material,
+        materialIndex,
+      );
       const location = String(material?.location || fallbackLocation).trim();
-      const itemKey = [description, quantity, location]
+      const itemKey = [
+        checkIn?.id || "check-in",
+        material?.id || materialIndex,
+        description,
+        quantity,
+        location,
+      ]
         .join("|")
         .toLowerCase();
 
@@ -213,6 +394,7 @@ function getReceivedItems(matchingCheckIns) {
         quantity,
         location,
         receivedDateLabel,
+        sourceItemId: String(material?.sourceItemId || "").trim(),
       });
     });
   });

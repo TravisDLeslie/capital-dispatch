@@ -6,14 +6,15 @@ import {
   Package,
   Search,
   Truck,
-  Warehouse,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
+import OrderDetailsModal from "../components/OrderDetailsModal";
 import PageContainer from "../components/PageContainer";
 import { capitalLumberAddress } from "../data/options";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
 import {
+  deliveryTimeSlotOptions,
   deliveryLoadBufferMinutes,
   getDeliveryDurationMinutes,
   getTimeSlotLabel,
@@ -211,8 +212,7 @@ function getQueuedDeliveries(deliveries) {
       (delivery) =>
         delivery &&
         typeof delivery === "object" &&
-        !isDeliveryComplete(delivery) &&
-        (delivery.dispatchStatus === "needsDispatch" || !delivery.driver),
+        !isDeliveryComplete(delivery),
     )
     .sort((first, second) => {
       const firstDate = String(first.deliveryDate || "9999-99-99");
@@ -271,26 +271,61 @@ function ShipmentBadge({ shipmentType }) {
   );
 }
 
-function PlanningStat({ label, value, tone = "slate" }) {
-  const toneClasses = {
-    slate: "border-slate-200 bg-slate-50 text-slate-700",
-    blue: "border-blue-200 bg-blue-50 text-blue-800",
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-800",
-  };
+function getAssignedDriver(delivery) {
+  const assignedDriver = Array.isArray(delivery?.dispatchAssignments)
+    ? delivery.dispatchAssignments.find((assignment) => assignment?.driver)
+        ?.driver
+    : "";
 
   return (
-    <div
-      className={`flex min-w-0 items-center justify-between gap-2 rounded-xl border px-2.5 py-1.5 ${toneClasses[tone]}`}
-    >
-      <p className="shrink-0 text-[9px] font-black uppercase tracking-[0.12em] opacity-70">
-        {label}
-      </p>
-      <p className="truncate text-xs font-black">{value}</p>
-    </div>
+    assignedDriver ||
+    (Array.isArray(delivery?.drivers)
+      ? delivery.drivers.find(Boolean)
+      : "") ||
+    delivery?.driver ||
+    ""
   );
 }
 
-function DeliveryCard({ delivery, orderBuilds, routeMetric, isDriverView }) {
+function getAssignedTruck(delivery) {
+  const assignedTruck = Array.isArray(delivery?.dispatchAssignments)
+    ? delivery.dispatchAssignments.find(
+        (assignment) =>
+          assignment?.vehicleTitle ||
+          assignment?.vehicleBadge ||
+          assignment?.vehicleId,
+      )
+    : null;
+
+  return String(
+    assignedTruck?.vehicleBadge ||
+      assignedTruck?.vehicleTitle ||
+      delivery?.vehicleBadge ||
+      delivery?.vehicleTitle ||
+      "",
+  ).trim();
+}
+
+function isAssignedDelivery(delivery) {
+  return (
+    delivery?.dispatchStatus === "assigned" ||
+    Boolean(getAssignedDriver(delivery) && getAssignedTruck(delivery))
+  );
+}
+
+function DeliveryCard({
+  delivery,
+  orderBuilds,
+  routeMetric,
+  isDriverView,
+  canAssign,
+  canUnassign,
+  isAssigning,
+  isUnassigning,
+  onAssign,
+  onUnassign,
+  onViewOrder,
+}) {
   const build = getDeliveryOrderBuild(delivery, orderBuilds);
   const buildItems = getBuildItems(build);
   const items = Array.isArray(delivery.items) ? delivery.items : [];
@@ -311,166 +346,157 @@ function DeliveryCard({ delivery, orderBuilds, routeMetric, isDriverView }) {
     ).values(),
   ];
   const timing = getDeliveryTiming(delivery, routeMetric);
-  const contactPhone = delivery.contactPhone || delivery.phoneNumber;
+  const driver = getAssignedDriver(delivery);
+  const truck = getAssignedTruck(delivery);
+  const needsDispatch = !isAssignedDelivery(delivery);
   const scheduleLabel = delivery.deliveryTimeSlot
     ? getTimeSlotLabel(delivery.deliveryTimeSlot)
     : "Time not scheduled";
+  const routeLabel =
+    routeMetric?.status === "ready"
+      ? `${routeMetric.direction ? `${routeMetric.direction} · ` : ""}${routeMetric.durationText} · ${routeMetric.distanceText}`
+      : routeMetric?.status === "loading"
+        ? "Calculating route..."
+        : routeMetric?.status === "missing"
+          ? "Address not entered"
+          : "Route unavailable";
+  const primaryItem = items[0]?.description || "No item details";
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="grid gap-3 border-b border-slate-200 bg-slate-50/80 p-4 lg:grid-cols-[0.95fr_1.15fr_1.1fr] lg:items-start">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-              Order {delivery.orderNumber || "Not entered"}
-            </p>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.1em] ${
-                isDriverView
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-amber-100 text-amber-800"
-              }`}
-            >
-              {isDriverView ? "Assigned to you" : "Awaiting dispatch"}
-            </span>
-          </div>
-          <h2 className="mt-1 truncate text-xl font-black text-slate-950">
-            {delivery.deliveryTitle ||
-              formatCustomerName(delivery.customerName) ||
-              "No customer name"}
-          </h2>
-          {delivery.deliveryTitle ? (
-            <p className="truncate text-xs font-black text-slate-500">
-              {formatCustomerName(delivery.customerName) || "No customer name"}
-            </p>
-          ) : null}
-          {contactPhone ? (
-            <p className="text-xs font-bold text-slate-500">
-              {contactPhone}
-            </p>
-          ) : null}
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {sourceTypes.length > 0 ? (
-              sourceTypes.map((shipmentType) => (
-                <ShipmentBadge
-                  key={shipmentType.label}
-                  shipmentType={shipmentType}
-                />
-              ))
-            ) : (
-              <ShipmentBadge shipmentType={null} />
-            )}
-          </div>
-        </div>
-
-        <div className="grid gap-1.5 text-xs font-bold text-slate-600">
-          <span className="inline-flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-blue-600" aria-hidden="true" />
-            {scheduleLabel}
+    <article
+      className={`relative flex min-w-0 flex-col overflow-hidden rounded-2xl border p-3.5 shadow-sm transition ${
+        needsDispatch
+          ? "border-amber-200 bg-white hover:border-amber-300 hover:bg-amber-50/30"
+          : "border-emerald-300 bg-emerald-50/30 ring-1 ring-emerald-100 hover:border-emerald-400 hover:bg-emerald-50/60"
+      }`}
+    >
+      <span
+        className={`absolute inset-y-0 left-0 w-1 ${
+          needsDispatch ? "bg-amber-400" : "bg-emerald-500"
+        }`}
+        aria-hidden="true"
+      />
+      <div className="flex items-start justify-between gap-2">
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-[#FC2C38]">
+          <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{formatDate(delivery.deliveryDate)}</span>
+        </span>
+        {!isDriverView && needsDispatch && canAssign ? (
+          <button
+            type="button"
+            onClick={() => onAssign?.(delivery)}
+            disabled={isAssigning}
+            className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-amber-800 shadow-sm transition hover:bg-amber-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-wait disabled:opacity-60"
+            title="Assign a leave time, driver, and truck"
+          >
+            {isAssigning ? "Saving..." : "Needs dispatch"}
+          </button>
+        ) : !isDriverView && !needsDispatch && canUnassign ? (
+          <button
+            type="button"
+            onClick={() => onUnassign?.(delivery)}
+            disabled={isUnassigning}
+            className="shrink-0 rounded-full bg-emerald-600 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-100 disabled:cursor-wait disabled:opacity-60"
+            title="Unassign this delivery and return it to Dispatch"
+          >
+            {isUnassigning ? "Updating..." : "Assigned"}
+          </button>
+        ) : (
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] shadow-sm ${
+              isDriverView || !needsDispatch
+                ? "bg-emerald-600 text-white"
+                : "bg-amber-100 text-amber-800"
+            }`}
+          >
+            {isDriverView
+              ? "Assigned to you"
+              : needsDispatch
+                ? "Needs dispatch"
+                : "Assigned"}
           </span>
-          <span className="inline-flex min-w-0 items-center gap-2">
-            <MapPin className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
-            <span className="truncate">{delivery.address || "Address not entered"}</span>
-          </span>
-          <span className="inline-flex min-w-0 items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-blue-800">
-            <Clock3 className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
-            <span className="truncate">
-              {routeMetric?.status === "ready"
-                ? `${routeMetric.direction ? `${routeMetric.direction} of Capital · ` : ""}${routeMetric.durationText} · ${routeMetric.distanceText}`
-                : routeMetric?.status === "loading"
-                  ? "Calculating time and miles from Capital..."
-                  : routeMetric?.status === "missing"
-                    ? "Add an address for time and miles"
-                    : "Time and miles from Capital unavailable"}
-            </span>
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          <PlanningStat
-            label="One way"
-            value={
-              timing.driveMinutes > 0
-                ? formatDurationMinutes(timing.driveMinutes)
-                : "Calculating"
-            }
-            tone="blue"
-          />
-          <PlanningStat
-            label="At delivery"
-            value={formatDurationMinutes(timing.serviceMinutes)}
-          />
-          <PlanningStat
-            label="Rough total"
-            value={
-              timing.totalMinutes
-                ? formatDurationMinutes(timing.totalMinutes)
-                : "Pending route"
-            }
-            tone="emerald"
-          />
-          <PlanningStat
-            label="Load"
-            value={`${items.length} item${items.length === 1 ? "" : "s"} · ${delivery.unloadType || "Normal"}`}
-          />
-        </div>
+        )}
       </div>
 
-      <div className="p-3.5">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-              Material &amp; vendors
-            </p>
-            <p className="text-xs font-bold text-slate-600">
-              {vendors.length > 0
-                ? vendors.join(" · ")
-                : "Vendor information has not been entered."}
-            </p>
-          </div>
+      <h3 className="mt-2 truncate text-base font-black text-slate-950">
+        {delivery.deliveryTitle ||
+          formatCustomerName(delivery.customerName) ||
+          "No customer name"}
+      </h3>
+      <p className="mt-0.5 truncate text-xs font-bold text-slate-500">
+        Order {delivery.orderNumber || "—"} · {scheduleLabel}
+      </p>
+      {delivery.deliveryTitle ? (
+        <p className="mt-0.5 truncate text-[11px] font-bold text-slate-500">
+          {formatCustomerName(delivery.customerName) || "No customer name"}
+        </p>
+      ) : null}
 
-          <div className="flex flex-wrap gap-1.5 text-[10px] font-black text-slate-600">
-            <span className="rounded-full bg-slate-100 px-2.5 py-1">
-              {delivery.unloadType || "Normal"}
-            </span>
-            {delivery.needsTarp ? (
-              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
-                Tarp
-              </span>
-            ) : null}
-          </div>
-        </div>
+      <div className="mt-3 grid gap-1.5 text-[11px] font-bold text-slate-600">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <MapPin className="h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+          <span className="truncate">{delivery.address || "Address not entered"}</span>
+        </span>
+        <span className="flex min-w-0 items-center gap-1.5 rounded-lg bg-blue-50 px-2 py-1.5 text-blue-800">
+          <Clock3 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">{routeLabel}</span>
+        </span>
+      </div>
 
-        {items.length > 0 ? (
-          <div className="grid gap-1.5 xl:grid-cols-2">
-            {itemDetails.map(({ item, shipmentType, vendor }, index) => {
-              return (
-                <div
-                  key={item.id || `${delivery.id}-item-${index}`}
-                  className="grid gap-2 rounded-xl border border-slate-200 px-3 py-2 sm:grid-cols-[auto_1fr_auto] sm:items-center"
-                >
-                  <span className="flex h-7 min-w-7 items-center justify-center rounded-lg bg-slate-950 px-1.5 text-xs font-black text-white">
-                    {item.quantity || index + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-slate-900">
-                      {item.description || "Delivery item"}
-                    </p>
-                    <p className="truncate text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
-                      Vendor: {vendor || "Not entered"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                    <ShipmentBadge shipmentType={shipmentType} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {sourceTypes.length > 0 ? (
+          sourceTypes.map((shipmentType) => (
+            <ShipmentBadge
+              key={shipmentType.label}
+              shipmentType={shipmentType}
+            />
+          ))
         ) : (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-xs font-bold text-slate-500">
-            No item details were added to this delivery.
-          </div>
+          <ShipmentBadge shipmentType={null} />
         )}
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-slate-600">
+          {items.length} item{items.length === 1 ? "" : "s"}
+        </span>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-slate-600">
+          {delivery.unloadType || "Normal"}
+        </span>
+        {timing.totalMinutes ? (
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-emerald-700">
+            {formatDurationMinutes(timing.totalMinutes)} total
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 px-2.5 py-2">
+        <p className="truncate text-xs font-black text-slate-800">{primaryItem}</p>
+        <p className="mt-0.5 truncate text-[10px] font-bold text-slate-500">
+          {items.length > 1 ? `+${items.length - 1} more · ` : ""}
+          {vendors.length > 0 ? vendors.join(" · ") : "Vendor not entered"}
+        </p>
+      </div>
+
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+        <span
+          className={`flex min-w-0 items-center gap-1.5 truncate rounded-lg px-2 py-1 text-[11px] font-black ${
+            needsDispatch
+              ? "bg-amber-50 text-amber-800"
+              : "bg-emerald-100 text-emerald-800"
+          }`}
+        >
+          <Truck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate">
+            {driver
+              ? `${driver}${truck ? ` · ${truck}` : ""}`
+              : "Driver not assigned"}
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => onViewOrder?.(delivery)}
+          className="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[10px] font-black text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950"
+        >
+          View order
+        </button>
       </div>
     </article>
   );
@@ -482,6 +508,13 @@ function DeliveryDateGroup({
   orderBuilds,
   routeMetrics,
   isDriverView,
+  canAssign,
+  canUnassign,
+  assigningDeliveryId,
+  unassigningDeliveryId,
+  onAssign,
+  onUnassign,
+  onViewOrder,
 }) {
   const itemCount = deliveries.reduce(
     (total, delivery) =>
@@ -489,6 +522,7 @@ function DeliveryDateGroup({
     0,
   );
   const shipmentLabels = new Set();
+  const assignedCount = deliveries.filter(isAssignedDelivery).length;
 
   deliveries.forEach((delivery) => {
     const buildItems = getBuildItems(
@@ -529,13 +563,18 @@ function DeliveryDateGroup({
           <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-black text-white">
             {deliveries.length} deliver{deliveries.length === 1 ? "y" : "ies"}
           </span>
+          {assignedCount > 0 ? (
+            <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white shadow-sm">
+              {assignedCount} assigned
+            </span>
+          ) : null}
           <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-600">
             {itemCount} item{itemCount === 1 ? "" : "s"}
           </span>
         </div>
       </div>
 
-      <div className="grid gap-2">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {deliveries.map((delivery) => (
           <DeliveryCard
             key={delivery.id}
@@ -543,6 +582,17 @@ function DeliveryDateGroup({
             orderBuilds={orderBuilds}
             routeMetric={routeMetrics[String(delivery.id || "")]}
             isDriverView={isDriverView}
+            canAssign={canAssign}
+            canUnassign={canUnassign}
+            isAssigning={
+              assigningDeliveryId === String(delivery.id || "")
+            }
+            isUnassigning={
+              unassigningDeliveryId === String(delivery.id || "")
+            }
+            onAssign={onAssign}
+            onUnassign={onUnassign}
+            onViewOrder={onViewOrder}
           />
         ))}
       </div>
@@ -554,18 +604,44 @@ function DeliveryDateGroup({
  * @param {{
  *   deliveries?: Array<Record<string, any>>;
  *   orderBuilds?: Array<Record<string, any>>;
+ *   supplierRuns?: Array<Record<string, any>>;
+ *   theirTruckPOs?: Array<Record<string, any>>;
+ *   checkIns?: Array<Record<string, any>>;
+ *   driverOptions?: string[];
+ *   vehicleOptions?: Array<{id: string; title: string; badge?: string}>;
  *   isDriverView?: boolean;
+ *   canEditDeliveries?: boolean;
+ *   onUpdateDelivery?: (deliveryId: string, updates: Record<string, any>) => Promise<void>;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
 export default function QueuedUpcomingDeliveriesPage({
   deliveries = [],
   orderBuilds = [],
+  supplierRuns = [],
+  theirTruckPOs = [],
+  checkIns = [],
+  driverOptions = [],
+  vehicleOptions = [],
   isDriverView = false,
+  canEditDeliveries = false,
+  onUpdateDelivery,
   onPageChange,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [routeMetrics, setRouteMetrics] = useState({});
+  const [viewingDelivery, setViewingDelivery] = useState(null);
+  const [deliveryToAssign, setDeliveryToAssign] = useState(null);
+  const [assignmentDraft, setAssignmentDraft] = useState({
+    deliveryTimeSlot: "",
+    driver: "",
+    vehicleId: "",
+  });
+  const [assigningDeliveryId, setAssigningDeliveryId] = useState("");
+  const [assignmentError, setAssignmentError] = useState("");
+  const [deliveryToUnassign, setDeliveryToUnassign] = useState(null);
+  const [unassigningDeliveryId, setUnassigningDeliveryId] = useState("");
+  const [unassignError, setUnassignError] = useState("");
   const queuedDeliveries = useMemo(
     () =>
       isDriverView
@@ -738,6 +814,14 @@ export default function QueuedUpcomingDeliveriesPage({
 
     return counts;
   }, [queuedDeliveries, orderBuilds]);
+  const assignmentCounts = useMemo(() => {
+    const assigned = queuedDeliveries.filter(isAssignedDelivery).length;
+
+    return {
+      assigned,
+      needsDispatch: Math.max(0, queuedDeliveries.length - assigned),
+    };
+  }, [queuedDeliveries]);
   const driverDateSummaries = useMemo(
     () =>
       getUpcomingDateValues().map((dateValue) => ({
@@ -750,6 +834,130 @@ export default function QueuedUpcomingDeliveriesPage({
     [queuedDeliveries],
   );
 
+  function openAssignmentModal(delivery) {
+    const assignedTruck = Array.isArray(delivery?.dispatchAssignments)
+      ? delivery.dispatchAssignments.find(
+          (assignment) =>
+            assignment?.vehicleId ||
+            assignment?.vehicleTitle ||
+            assignment?.vehicleBadge,
+        )
+      : null;
+    const currentVehicleId = String(
+      assignedTruck?.vehicleId || delivery?.vehicleId || "",
+    );
+    const currentVehicleTitle = String(
+      assignedTruck?.vehicleTitle || delivery?.vehicleTitle || "",
+    );
+    const currentVehicleBadge = String(
+      assignedTruck?.vehicleBadge || delivery?.vehicleBadge || "",
+    );
+    const matchingVehicle = vehicleOptions.find(
+      (vehicle) =>
+        String(vehicle?.id || "") === currentVehicleId ||
+        (currentVehicleTitle && vehicle?.title === currentVehicleTitle) ||
+        (currentVehicleBadge && vehicle?.badge === currentVehicleBadge),
+    );
+
+    setAssignmentDraft({
+      deliveryTimeSlot: String(delivery?.deliveryTimeSlot || ""),
+      driver: getAssignedDriver(delivery),
+      vehicleId: String(matchingVehicle?.id || currentVehicleId || ""),
+    });
+    setAssignmentError("");
+    setDeliveryToAssign(delivery);
+  }
+
+  async function handleConfirmAssignment() {
+    const deliveryId = String(deliveryToAssign?.id || "");
+    const driver = String(assignmentDraft.driver || "").trim();
+    const deliveryTimeSlot = String(
+      assignmentDraft.deliveryTimeSlot || "",
+    ).trim();
+    const vehicle = vehicleOptions.find(
+      (vehicleOption) =>
+        String(vehicleOption?.id || "") === assignmentDraft.vehicleId,
+    );
+
+    if (!deliveryId || !onUpdateDelivery) {
+      return;
+    }
+
+    if (!deliveryTimeSlot || !driver || !vehicle) {
+      setAssignmentError("Choose a leave time, driver, and truck to continue.");
+      return;
+    }
+
+    setAssigningDeliveryId(deliveryId);
+    setAssignmentError("");
+
+    try {
+      const assignment = {
+        id: "truck-1",
+        driver,
+        vehicleId: vehicle.id,
+        vehicleTitle: vehicle.title,
+        vehicleBadge: vehicle.badge || "",
+      };
+
+      await onUpdateDelivery(deliveryId, {
+        deliveryTimeSlot,
+        driver,
+        drivers: [driver],
+        vehicleId: assignment.vehicleId,
+        vehicleTitle: assignment.vehicleTitle,
+        vehicleBadge: assignment.vehicleBadge,
+        dispatchAssignments: [assignment],
+        dispatchStatus: "assigned",
+        status: deliveryToAssign.status || "open",
+      });
+      setDeliveryToAssign(null);
+    } catch (error) {
+      console.error("Unable to assign delivery:", error);
+      setAssignmentError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save this delivery assignment.",
+      );
+    } finally {
+      setAssigningDeliveryId("");
+    }
+  }
+
+  async function handleConfirmUnassign() {
+    const deliveryId = String(deliveryToUnassign?.id || "");
+
+    if (!deliveryId || !onUpdateDelivery) {
+      return;
+    }
+
+    setUnassigningDeliveryId(deliveryId);
+    setUnassignError("");
+
+    try {
+      await onUpdateDelivery(deliveryId, {
+        driver: "",
+        drivers: [],
+        vehicleId: "",
+        vehicleTitle: "",
+        vehicleBadge: "",
+        dispatchAssignments: [],
+        dispatchStatus: "needsDispatch",
+        deliveryRouteOrder: null,
+      });
+      setDeliveryToUnassign(null);
+    } catch (error) {
+      console.error("Unable to unassign delivery:", error);
+      setUnassignError(
+        error instanceof Error
+          ? error.message
+          : "Unable to return this delivery to Dispatch.",
+      );
+    } finally {
+      setUnassigningDeliveryId("");
+    }
+  }
+
   return (
     <PageContainer>
       <Breadcrumbs
@@ -758,7 +966,7 @@ export default function QueuedUpcomingDeliveriesPage({
           {
             label: isDriverView
               ? "Upcoming Deliveries"
-              : "Queued Upcoming Deliveries",
+              : "Upcoming Deliveries",
           },
         ]}
       />
@@ -769,23 +977,23 @@ export default function QueuedUpcomingDeliveriesPage({
             {isDriverView ? "Your Schedule" : "Before Dispatch"}
           </p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">
-            {isDriverView ? "Upcoming Deliveries" : "Queued Upcoming Deliveries"}
+            Upcoming Deliveries
           </h1>
           <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-500 sm:text-lg sm:leading-7">
             {isDriverView
               ? "See every delivery assigned to you for today and the next two calendar days."
-              : "Review every delivery that has been set up and is still waiting for a driver and truck. No map—just the delivery and material details."}
+              : "Assigned deliveries live here after dispatch. Green cards are ready to go; yellow cards still need a driver or truck."}
           </p>
         </div>
 
       </div>
 
       {isDriverView ? (
-        <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="mt-5 grid grid-cols-3 gap-2">
           {driverDateSummaries.map((dateSummary) => (
             <div
               key={dateSummary.dateValue}
-              className={`min-w-0 rounded-2xl border p-3 sm:rounded-3xl sm:p-4 ${
+              className={`min-w-0 rounded-2xl border px-3 py-2.5 ${
                 dateSummary.count > 0
                   ? "border-blue-200 bg-blue-50"
                   : "border-slate-200 bg-slate-50"
@@ -794,58 +1002,58 @@ export default function QueuedUpcomingDeliveriesPage({
               <p className="truncate text-[9px] font-black uppercase tracking-[0.08em] text-slate-500 sm:text-xs">
                 {dateSummary.label}
               </p>
-              <p className="mt-1 text-2xl font-black text-slate-950 sm:mt-2 sm:text-4xl">
+              <p className="mt-1 text-2xl font-black text-slate-950">
                 {dateSummary.count}
               </p>
-              <p className="text-[10px] font-bold text-slate-500 sm:text-sm">
+              <p className="text-[10px] font-bold text-slate-500 sm:text-xs">
                 {dateSummary.count === 1 ? "Delivery" : "Deliveries"}
               </p>
             </div>
           ))}
         </div>
       ) : (
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">
-            Waiting
+      <div className="mt-6 grid gap-2 sm:grid-cols-3">
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 px-3.5 py-3 shadow-sm ring-1 ring-emerald-100">
+          <div>
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-800">
+            Assigned
           </p>
-          <p className="mt-2 text-4xl font-black text-slate-950">
-            {queuedDeliveries.length}
+          <p className="mt-1 text-sm font-bold text-emerald-900">
+            Ready for drivers
           </p>
-          <p className="mt-1 text-sm font-bold text-slate-600">
-            Deliveries not dispatched
+          </div>
+          <p className="text-3xl font-black text-emerald-800">
+            {assignmentCounts.assigned}
           </p>
         </div>
-        <div className="rounded-3xl border border-red-200 bg-red-50 p-4">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-red-700">
-                South
-              </p>
-              <p className="mt-2 text-4xl font-black text-slate-950">
-                {shipmentCounts.south}
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">
+                Needs dispatch
               </p>
               <p className="mt-1 text-sm font-bold text-slate-600">
-                Material lines
+                Driver or truck missing
               </p>
             </div>
-            <Truck className="h-8 w-8 text-red-500" aria-hidden="true" />
+            <p className="text-3xl font-black text-amber-800">
+              {assignmentCounts.needsDispatch}
+            </p>
           </div>
         </div>
-        <div className="rounded-3xl border border-blue-200 bg-blue-50 p-4">
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3.5 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
-                Their Truck
-              </p>
-              <p className="mt-2 text-4xl font-black text-slate-950">
-                {shipmentCounts.theirTruck}
+                Total upcoming
               </p>
               <p className="mt-1 text-sm font-bold text-slate-600">
-                Material lines
+                South {shipmentCounts.south} · Their Truck {shipmentCounts.theirTruck}
               </p>
             </div>
-            <Warehouse className="h-8 w-8 text-blue-500" aria-hidden="true" />
+            <p className="text-3xl font-black text-slate-950">
+              {queuedDeliveries.length}
+            </p>
           </div>
         </div>
       </div>
@@ -875,6 +1083,24 @@ export default function QueuedUpcomingDeliveriesPage({
               orderBuilds={orderBuilds}
               routeMetrics={routeMetrics}
               isDriverView={isDriverView}
+              canAssign={
+                !isDriverView &&
+                canEditDeliveries &&
+                Boolean(onUpdateDelivery)
+              }
+              canUnassign={
+                !isDriverView &&
+                canEditDeliveries &&
+                Boolean(onUpdateDelivery)
+              }
+              assigningDeliveryId={assigningDeliveryId}
+              unassigningDeliveryId={unassigningDeliveryId}
+              onAssign={openAssignmentModal}
+              onUnassign={(delivery) => {
+                setUnassignError("");
+                setDeliveryToUnassign(delivery);
+              }}
+              onViewOrder={setViewingDelivery}
             />
           ))
         ) : (
@@ -885,18 +1111,238 @@ export default function QueuedUpcomingDeliveriesPage({
                 ? `No ${isDriverView ? "upcoming" : "queued"} deliveries match`
                 : isDriverView
                   ? "No upcoming deliveries"
-                  : "The queue is clear"
+                  : "No upcoming deliveries"
             }
             description={
               searchTerm
                 ? "Try another order number, customer, address, or item."
                 : isDriverView
                   ? "You have no assigned deliveries scheduled for today or the next two calendar days."
-                  : "Deliveries that still need dispatch will appear here as soon as they are created."
+                  : "Active deliveries will appear here after they are created."
             }
           />
         )}
       </section>
+
+      {viewingDelivery ? (
+        <OrderDetailsModal
+          orderNumber={
+            viewingDelivery.sourceOrderNumber || viewingDelivery.orderNumber
+          }
+          sources={{
+            orderBuilds,
+            supplierRuns,
+            theirTruckPOs,
+            deliveries,
+            checkIns,
+          }}
+          onClose={() => setViewingDelivery(null)}
+        />
+      ) : null}
+
+      {deliveryToAssign ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="assign-delivery-title"
+          onClick={() => {
+            if (!assigningDeliveryId) {
+              setDeliveryToAssign(null);
+              setAssignmentError("");
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+              Quick Dispatch
+            </p>
+            <h2
+              id="assign-delivery-title"
+              className="mt-2 text-2xl font-black tracking-tight text-slate-950"
+            >
+              Assign order {deliveryToAssign.orderNumber || "—"}
+            </h2>
+            <p className="mt-1 truncate text-sm font-bold text-slate-500">
+              {formatCustomerName(deliveryToAssign.customerName) ||
+                "No customer name"}
+              {deliveryToAssign.deliveryDate
+                ? ` · ${formatDate(deliveryToAssign.deliveryDate)}`
+                : " · Date not set"}
+            </p>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">
+                  Leave time
+                </span>
+                <select
+                  value={assignmentDraft.deliveryTimeSlot}
+                  onChange={(event) =>
+                    setAssignmentDraft((currentDraft) => ({
+                      ...currentDraft,
+                      deliveryTimeSlot: event.target.value,
+                    }))
+                  }
+                  disabled={Boolean(assigningDeliveryId)}
+                  className="block min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
+                >
+                  <option value="">Choose time...</option>
+                  {deliveryTimeSlotOptions.map((timeSlot) => (
+                    <option key={timeSlot.value} value={timeSlot.value}>
+                      {timeSlot.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">
+                  Driver
+                </span>
+                <select
+                  value={assignmentDraft.driver}
+                  onChange={(event) =>
+                    setAssignmentDraft((currentDraft) => ({
+                      ...currentDraft,
+                      driver: event.target.value,
+                    }))
+                  }
+                  disabled={Boolean(assigningDeliveryId)}
+                  className="block min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
+                >
+                  <option value="">Choose driver...</option>
+                  {driverOptions.map((driverName) => (
+                    <option key={driverName} value={driverName}>
+                      {driverName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">
+                  Truck
+                </span>
+                <select
+                  value={assignmentDraft.vehicleId}
+                  onChange={(event) =>
+                    setAssignmentDraft((currentDraft) => ({
+                      ...currentDraft,
+                      vehicleId: event.target.value,
+                    }))
+                  }
+                  disabled={Boolean(assigningDeliveryId)}
+                  className="block min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
+                >
+                  <option value="">Choose truck...</option>
+                  {vehicleOptions.map((vehicle) => (
+                    <option key={vehicle.id} value={vehicle.id}>
+                      {vehicle.badge
+                        ? `${vehicle.badge} - ${vehicle.title}`
+                        : vehicle.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {assignmentError ? (
+              <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                {assignmentError}
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeliveryToAssign(null);
+                  setAssignmentError("");
+                }}
+                disabled={Boolean(assigningDeliveryId)}
+                className="min-h-12 rounded-xl border border-slate-300 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAssignment}
+                disabled={Boolean(assigningDeliveryId)}
+                className="min-h-12 rounded-xl bg-slate-950 px-7 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
+              >
+                {assigningDeliveryId ? "Saving..." : "Save assignment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deliveryToUnassign ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="unassign-delivery-title"
+          onClick={() => {
+            if (!unassigningDeliveryId) {
+              setDeliveryToUnassign(null);
+              setUnassignError("");
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+              Return to Dispatch
+            </p>
+            <h2
+              id="unassign-delivery-title"
+              className="mt-2 text-2xl font-black tracking-tight text-slate-950"
+            >
+              Unassign order {deliveryToUnassign.orderNumber || "—"}?
+            </h2>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+              This removes the current driver and truck and sends the delivery
+              back to Dispatch. The delivery date, time, address, and order
+              details will stay the same.
+            </p>
+
+            {unassignError ? (
+              <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                {unassignError}
+              </p>
+            ) : null}
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeliveryToUnassign(null);
+                  setUnassignError("");
+                }}
+                disabled={Boolean(unassigningDeliveryId)}
+                className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+              >
+                No, keep assigned
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUnassign}
+                disabled={Boolean(unassigningDeliveryId)}
+                className="min-h-12 rounded-xl bg-[#FC2C38] px-4 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+              >
+                {unassigningDeliveryId ? "Unassigning..." : "Yes, unassign"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }

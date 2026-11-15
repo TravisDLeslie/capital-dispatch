@@ -114,11 +114,27 @@ service firebase.storage {
       allow delete: if canManageDeliveryOrders();
     }
 
+    match /deliveries/{deliveryId}/proof-photos/{category}/{fileName} {
+      allow read: if isApproved();
+      allow create, update: if canManageDeliveryOrders() &&
+        request.resource.size <= 12 * 1024 * 1024 &&
+        request.resource.contentType.matches("image/.*");
+      allow delete: if canManageDeliveryOrders();
+    }
+
     match /dispatchOrderCopies/{recordType}/{recordId}/{fileName} {
       allow read: if isApproved();
       allow create, update: if canManageDispatchOrderCopies() &&
         isAllowedDeliveryOrderFile();
       allow delete: if canManageDispatchOrderCopies();
+    }
+
+    match /receiving/{materialId}/{category}/{fileName} {
+      allow read: if isApproved();
+      allow create, update: if canUseSouthPhotos() &&
+        request.resource.size <= 12 * 1024 * 1024 &&
+        request.resource.contentType.matches("image/.*");
+      allow delete: if canUseSouthPhotos();
     }
 
     match /supplierRuns/{supplierRunId}/items/{itemId}/{fileName} {

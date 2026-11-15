@@ -92,6 +92,7 @@ function getOpenSupplierRuns(supplierRuns, driverName, aliasMap) {
   return supplierRuns.filter(
     (supplierRun) =>
       isOpenSupplierRun(supplierRun) &&
+      isTodayOrFutureSupplierRun(supplierRun) &&
       supplierRun.dispatchStatus !== "needsDispatch" &&
       areDriverNamesEqual(
         getDriverName(supplierRun.driver),
@@ -99,6 +100,14 @@ function getOpenSupplierRuns(supplierRuns, driverName, aliasMap) {
         aliasMap,
       ),
   );
+}
+
+function isTodayOrFutureSupplierRun(supplierRun) {
+  const pickupDate = String(
+    supplierRun?.pickupDate || supplierRun?.scheduledDate || "",
+  ).slice(0, 10);
+
+  return !pickupDate || pickupDate >= getTodayDateKey();
 }
 
 function getOpenDeliveries(deliveries, driverName, aliasMap) {
@@ -118,7 +127,12 @@ function getOpenDeliveries(deliveries, driverName, aliasMap) {
 }
 
 function getTodayDateKey() {
-  return new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function isTodayOrFutureDelivery(delivery) {
@@ -207,6 +221,24 @@ function getDriverOptions(employeeOptions) {
   );
 }
 
+function getDriverFirstName(driverName) {
+  return String(driverName || "Driver").trim().split(/\s+/)[0] || "Driver";
+}
+
+function getDaypartGreeting() {
+  const hour = new Date().getHours();
+
+  if (hour < 12) {
+    return "morning";
+  }
+
+  if (hour < 17) {
+    return "afternoon";
+  }
+
+  return "evening";
+}
+
 function DriverRouteCard({
   title,
   eyebrow,
@@ -216,28 +248,42 @@ function DriverRouteCard({
   icon: Icon,
   onClick,
   disabled = false,
+  tone = "delivery",
 }) {
+  const isSouth = tone === "south";
+  const activeAccent = isSouth ? "bg-blue-600" : "bg-[#FC2C38]";
+  const activeIcon = isSouth
+    ? "bg-blue-50 text-blue-700"
+    : "bg-red-50 text-[#FC2C38]";
+  const activeEyebrow = isSouth ? "text-blue-700" : "text-[#FC2C38]";
+  const activeHover = isSouth
+    ? "hover:border-blue-200"
+    : "hover:border-red-100";
+  const activeArrow = isSouth
+    ? "bg-blue-700 group-hover:bg-blue-800"
+    : "bg-slate-950 group-hover:bg-[#FC2C38]";
+
   return (
     <button
       type="button"
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
-      className={`group flex min-h-[150px] w-full items-stretch overflow-hidden rounded-3xl border text-left shadow-sm transition ${
+      className={`group flex min-h-[132px] w-full items-stretch overflow-hidden rounded-3xl border text-left shadow-sm transition sm:min-h-[150px] ${
         disabled
           ? "cursor-default border-slate-200 bg-slate-50"
-          : "border-slate-200 bg-white hover:-translate-y-0.5 hover:border-red-100 hover:shadow-md"
+          : `border-slate-200 bg-white hover:-translate-y-0.5 hover:shadow-md ${activeHover}`
       }`}
     >
       <span
         className={`flex w-2 shrink-0 ${
-          disabled ? "bg-slate-300" : "bg-[#FC2C38]"
+          disabled ? "bg-slate-300" : activeAccent
         }`}
         aria-hidden="true"
       />
-      <span className="flex flex-1 items-center gap-4 p-5 sm:p-6">
+      <span className="flex flex-1 items-center gap-3 p-4 sm:gap-4 sm:p-6">
         <span
           className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl ${
-            disabled ? "bg-white text-slate-400" : "bg-red-50 text-[#FC2C38]"
+            disabled ? "bg-white text-slate-400" : activeIcon
           }`}
         >
           <Icon aria-hidden="true" className="h-7 w-7" strokeWidth={2.4} />
@@ -245,12 +291,12 @@ function DriverRouteCard({
         <span className="min-w-0 flex-1">
           <span
             className={`block text-xs font-black uppercase tracking-[0.18em] ${
-              disabled ? "text-slate-400" : "text-[#FC2C38]"
+              disabled ? "text-slate-400" : activeEyebrow
             }`}
           >
             {eyebrow}
           </span>
-          <span className="mt-1 block text-2xl font-black text-slate-950 sm:text-3xl">
+          <span className="mt-1 block text-xl font-black text-slate-950 sm:text-3xl">
             {title}
           </span>
           <span className="mt-2 block text-sm font-black text-slate-700">
@@ -264,7 +310,9 @@ function DriverRouteCard({
           </span>
         </span>
         {!disabled ? (
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white transition group-hover:bg-[#FC2C38]">
+          <span
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white transition sm:h-12 sm:w-12 ${activeArrow}`}
+          >
             <ArrowRight
               aria-hidden="true"
               className="h-5 w-5"
@@ -292,6 +340,7 @@ function DriverRouteOverview({
     <section className="mb-5 grid gap-4 lg:grid-cols-2">
       <DriverRouteCard
         icon={Route}
+        tone="south"
         eyebrow="South Route"
         title={openSupplierRuns.length > 0 ? "South Pickups" : "No South Route"}
         primary={
@@ -317,6 +366,7 @@ function DriverRouteOverview({
 
       <DriverRouteCard
         icon={Truck}
+        tone="delivery"
         eyebrow="Delivery Route"
         title={nextDelivery?.customerName || "No Delivery Route"}
         primary={
@@ -381,6 +431,9 @@ export default function DriverDashboardPage({
   const openDeliveries = activeDriver
     ? getOpenDeliveries(deliveries, activeDriver, driverAliasMap)
     : [];
+  const driverFirstName = getDriverFirstName(activeDriver);
+  const daypartGreeting = getDaypartGreeting();
+
   return (
     <PageContainer>
       <div className="mb-6">
@@ -390,11 +443,16 @@ export default function DriverDashboardPage({
 
         <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-900">
-              Driver Dashboard
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
+              Good {daypartGreeting}, {driverFirstName}{" "}
+              <span aria-hidden="true">👋</span>
             </h1>
-            <p className="mt-2 text-lg font-semibold text-slate-500">
-              Today’s route, deliveries, photos, and the fastest way into the work.
+            <p className="mt-2 text-base font-bold text-slate-700 sm:text-lg">
+              Let&apos;s have a great day out there.
+            </p>
+            <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-500 sm:text-base">
+              Drive safe, take pride in every delivery, and remember that you&apos;re
+              the face of Capital Lumber on every jobsite.
             </p>
           </div>
 

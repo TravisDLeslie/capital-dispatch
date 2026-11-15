@@ -60,7 +60,10 @@ import {
   getOrderFulfillmentBadgeClass,
   getOrderFulfillmentBadges,
 } from "./utils/orderFulfillment";
-import { getPOReceivingSummary } from "./utils/poReceivingSummary";
+import {
+  getPOReceivingSummary,
+  getReceivingItemStates,
+} from "./utils/poReceivingSummary";
 import {
   isAssignedOpenSupplierRun,
   isOpenSupplierRun,
@@ -977,7 +980,9 @@ type Delivery = {
   deliveryPhotos?: unknown[];
   hardwarePhoto?: unknown | null;
   hardwarePhotos?: unknown[];
+  delivered?: boolean;
   deliveredAt?: string;
+  completedAt?: string | null;
   dispatchStatus?: string;
   deliveryScope?: string;
   deliveryScopeNotes?: string;
@@ -1925,6 +1930,8 @@ export default function App() {
         return "dashboard";
       }
     });
+  const [navigationGroupOverride, setNavigationGroupOverride] =
+    useState("");
   const [isNewAppShellActive, setIsNewAppShellActive] = useState(false);
   const [previewUserId, setPreviewUserId] =
     useState("");
@@ -1933,6 +1940,10 @@ export default function App() {
     useState("");
   const [viewingDashboardOrderNumber, setViewingDashboardOrderNumber] =
     useState("");
+  const [
+    viewingDeliveryCalendarOrderNumber,
+    setViewingDeliveryCalendarOrderNumber,
+  ] = useState("");
   const [viewingDashboardDelivery, setViewingDashboardDelivery] =
     useState<Record<string, unknown> | null>(null);
   const [receivingDashboardSearch, setReceivingDashboardSearch] =
@@ -4231,18 +4242,36 @@ export default function App() {
 
     if (linkedTheirTruckPO) {
       try {
-        const completedAt = String(checkIn.checkedInAt || new Date().toISOString());
+        const expectedItems = Array.isArray(linkedTheirTruckPO.items)
+          ? linkedTheirTruckPO.items
+          : [];
+        const receivingSummary = getPOReceivingSummary(
+          updatedCheckIns,
+          linkedTheirTruckPO.poNumber,
+          expectedItems.length,
+        );
+        const itemReceivingStates = getReceivingItemStates(
+          expectedItems,
+          receivingSummary.receivedItems,
+        );
+        const hasOutstandingItems =
+          expectedItems.length === 0 ||
+          itemReceivingStates.some(({ isReceived }) => !isReceived);
+        const receivedAt = String(
+          checkIn.checkedInAt || new Date().toISOString(),
+        );
         const updatedTheirTruckPOs = await saveTheirTruckPO({
           ...linkedTheirTruckPO,
-          status: "complete",
-          completedAt,
+          status: hasOutstandingItems ? "partial" : "complete",
+          completedAt: hasOutstandingItems ? "" : receivedAt,
+          lastReceivedAt: receivedAt,
           receivedCheckInId: checkIn.id,
         });
 
         setTheirTruckPOs(updatedTheirTruckPOs);
       } catch (error) {
         console.error(
-          "Check-in saved, but the linked Their Truck PO could not be completed:",
+          "Check-in saved, but the linked Their Truck PO receiving status could not be reconciled:",
           error,
         );
       }
@@ -4476,6 +4505,8 @@ export default function App() {
       name: currentUserCreator.name,
       email: currentUserCreator.email,
     };
+    const orderedBy =
+      String(orderPayload.orderedBy || creator.name).trim() || creator.name;
 
     const salesOrder: SalesOrder = {
       id: orderId,
@@ -4504,6 +4535,7 @@ export default function App() {
       items: cleanItems,
       status: "processed",
       source: "new-order-flow",
+      orderedBy,
       createdBy: creator,
       createdByName: creator.name,
       createdByEmail: creator.email,
@@ -4536,7 +4568,7 @@ export default function App() {
           firstItem.routeDate || String(orderPayload.deliveryDate || ""),
         pickupDate:
           firstItem.routeDate || String(orderPayload.deliveryDate || ""),
-        orderedBy: creator.name,
+        orderedBy,
         customerName: customerDisplayName,
         orderNumber: sourceOrderNumber,
         driver: "",
@@ -4597,7 +4629,7 @@ export default function App() {
         createdByName: creator.name,
         createdByEmail: creator.email,
         createdById: creator.id,
-        orderedBy: creator.name,
+        orderedBy,
         sourceOrderId: orderId,
         sourceOrderNumber,
         sentToDeliveryCalendarAt: now,
@@ -4716,6 +4748,7 @@ export default function App() {
         status: "open",
         sourceOrderId: orderId,
         sourceOrderNumber,
+        orderedBy,
         createdAt: now,
         updatedAt: now,
       };
@@ -4750,6 +4783,7 @@ export default function App() {
         String(podPickup.id || ""),
       ),
       linkedDeliveryId: createdDelivery?.id || "",
+      orderedBy,
       createdBy: creator,
       createdAt: now,
       updatedAt: now,
@@ -4780,6 +4814,9 @@ export default function App() {
     const fulfillmentMethod = String(
       stockPayload.fulfillmentMethod || "wePickup",
     );
+    const orderedBy =
+      String(stockPayload.orderedBy || currentUserCreator.name).trim() ||
+      currentUserCreator.name;
     const rawItems = Array.isArray(stockPayload.items)
       ? stockPayload.items
       : [
@@ -4820,7 +4857,7 @@ export default function App() {
         vendor,
         scheduledDate,
         pickupDate: scheduledDate,
-        orderedBy: currentUserCreator.name,
+        orderedBy,
         customerName: "Capital Lumber Stock",
         orderNumber: "",
         driver: "",
@@ -4866,7 +4903,7 @@ export default function App() {
       createdByName: currentUserCreator.name,
       createdByEmail: currentUserCreator.email,
       createdById: currentUserCreator.id,
-      orderedBy: currentUserCreator.name,
+      orderedBy,
       supplierNote: notes,
       items: stockItems,
       createdAt: now,
@@ -4948,6 +4985,47 @@ export default function App() {
     return true;
   }
 
+  async function handleRestorePastDelivery(deliveryId: string) {
+    const delivery = deliveries.find(
+      (currentDelivery) => currentDelivery.id === deliveryId,
+    );
+
+    if (!delivery) {
+      return false;
+    }
+
+    const hasExistingAssignment =
+      delivery.dispatchStatus === "assigned" ||
+      Boolean(String(delivery.driver || "").trim()) ||
+      (Array.isArray(delivery.dispatchAssignments) &&
+        delivery.dispatchAssignments.some((assignment) =>
+          Boolean(String(assignment?.driver || "").trim()),
+        ));
+    const reopenedAt = new Date().toISOString();
+
+    await handleUpdateDelivery(deliveryId, {
+      status: "open",
+      delivered: false,
+      deliveredAt: "",
+      completedAt: null,
+      deliveryCompletionSource: "",
+      deliveryOverrideAt: "",
+      deliveryTimeCorrectedAt: "",
+      dispatchStatus: hasExistingAssignment ? "assigned" : "needsDispatch",
+      hardwareChecked: false,
+      items: Array.isArray(delivery.items)
+        ? delivery.items.map((item) => ({
+            ...item,
+            delivered: false,
+          }))
+        : [],
+      reopenedAt,
+      reopenedFromDeliveredAt: String(delivery.deliveredAt || ""),
+    });
+
+    return true;
+  }
+
   async function deleteDeliveryRecord(deliveryId: string) {
     const delivery = deliveries.find(
       (currentDelivery) => currentDelivery.id === deliveryId,
@@ -5015,13 +5093,39 @@ export default function App() {
     setCurrentPage("deliveries-add");
   }
 
+  function handleEditOrderFromDelivery(delivery: Delivery) {
+    if (!canReadOrderBuilds) {
+      return;
+    }
+
+    try {
+      sessionStorage.setItem(
+        "dispatch-cl-edit-order-build",
+        JSON.stringify({
+          sourceOrderId: String(delivery.sourceOrderId || ""),
+          orderNumber: String(
+            delivery.sourceOrderNumber || delivery.orderNumber || "",
+          ),
+        }),
+      );
+    } catch {
+      // Open Orders can still be reached if browser storage is unavailable.
+    }
+
+    setCurrentPage("order-builds");
+  }
+
   function handleCancelEditDelivery() {
     setEditingDeliveryId("");
   }
 
-  function navigateToPage(pageId: string) {
+  function navigateToPage(
+    pageId: string,
+    options: { navigationGroup?: string } = {},
+  ) {
     if (isSupplierPortalUser) {
       setIsNewAppShellActive(false);
+      setNavigationGroupOverride("");
       setCurrentPage("supplier-chat");
       return;
     }
@@ -5034,6 +5138,7 @@ export default function App() {
       setIsNewAppShellActive(true);
     }
 
+    setNavigationGroupOverride(options.navigationGroup || "");
     setCurrentPage(pageId);
   }
 
@@ -7703,6 +7808,7 @@ export default function App() {
         return effectiveAllowedPageIds.includes("order-flow") ? (
           <OrderFlowPage
             currentUser={currentUserCreator}
+            employeeOptions={approvedEmployeeNames}
             customers={customers}
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
@@ -7766,7 +7872,12 @@ export default function App() {
               supplierRuns={supplierRuns}
               deliveries={deliveries}
               allowedPageIds={effectiveAllowedPageIds}
-              onPageChange={navigateToPage}
+              onPageChange={(pageId: string) =>
+                navigateToPage(pageId, {
+                  navigationGroup:
+                    pageId === "deliveries-dispatch" ? "Dispatch" : "",
+                })
+              }
             />
           </FeatureErrorBoundary>
         ) : null;
@@ -8080,7 +8191,14 @@ export default function App() {
           <QueuedUpcomingDeliveriesPage
             deliveries={visibleDeliveries}
             orderBuilds={orderBuilds}
+            supplierRuns={southLookupSupplierRuns}
+            theirTruckPOs={theirTruckPOs}
+            checkIns={checkIns}
+            driverOptions={deliveryDriverOptions}
+            vehicleOptions={southVehicleOptions}
             isDriverView={isDeliveryDriverScopedView}
+            canEditDeliveries={canEditDeliveryDetails}
+            onUpdateDelivery={handleUpdateDelivery}
             onPageChange={navigateToPage}
           />
         );
@@ -8117,13 +8235,39 @@ export default function App() {
 
       case "deliveries-calendar":
         return (
-          <DeliveryCalendarPage
-            deliveries={visibleDeliveries}
-            canEditDeliveries={canEditDeliveryDetails}
-            onEditDelivery={handleEditDelivery}
-            onUpdateDelivery={handleUpdateDelivery}
-            onPageChange={navigateToPage}
-          />
+          <>
+            <DeliveryCalendarPage
+              deliveries={visibleDeliveries}
+              canEditDeliveries={canEditDeliveryDetails}
+              onEditDelivery={handleEditDelivery}
+              onViewOrder={(delivery: Delivery) =>
+                setViewingDeliveryCalendarOrderNumber(
+                  String(
+                    delivery.sourceOrderNumber || delivery.orderNumber || "",
+                  ),
+                )
+              }
+              onEditOrder={
+                canReadOrderBuilds ? handleEditOrderFromDelivery : undefined
+              }
+              onUpdateDelivery={handleUpdateDelivery}
+              onPageChange={navigateToPage}
+            />
+
+            {viewingDeliveryCalendarOrderNumber ? (
+              <OrderDetailsModal
+                orderNumber={viewingDeliveryCalendarOrderNumber}
+                sources={{
+                  orderBuilds,
+                  supplierRuns: southLookupSupplierRuns,
+                  theirTruckPOs,
+                  deliveries,
+                  checkIns,
+                }}
+                onClose={() => setViewingDeliveryCalendarOrderNumber("")}
+              />
+            ) : null}
+          </>
         );
 
       case "deliveries-history":
@@ -8133,6 +8277,7 @@ export default function App() {
             onPageChange={navigateToPage}
             onUpdateDelivery={handleUpdateDelivery}
             onUpdateDeliveredAt={handleUpdateCompletedDeliveryTime}
+            onRestoreDelivery={handleRestorePastDelivery}
             onDeleteDelivery={
               isSuperAdmin ? handleDeletePastDelivery : undefined
             }
@@ -8430,6 +8575,11 @@ export default function App() {
         <>
           <AppHeader
             currentPage={currentPage}
+            navigationGroupOverride={
+              currentPage === "deliveries-dispatch"
+                ? navigationGroupOverride
+                : ""
+            }
             onPageChange={navigateToPage}
             currentUser={currentUser}
             currentUserProfile={userProfile}

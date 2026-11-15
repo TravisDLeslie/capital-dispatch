@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Archive,
   CalendarDays,
@@ -426,6 +426,51 @@ export default function OrderBuildsPage({
     setEditDraft(createEditDraft(build, deliveries));
     setEditError("");
   }
+
+  useEffect(() => {
+    let editTarget;
+
+    try {
+      const storedTarget = sessionStorage.getItem(
+        "dispatch-cl-edit-order-build",
+      );
+
+      editTarget = storedTarget ? JSON.parse(storedTarget) : null;
+    } catch {
+      editTarget = null;
+    }
+
+    if (!editTarget) {
+      return;
+    }
+
+    const targetSourceOrderId = String(editTarget.sourceOrderId || "");
+    const targetOrderNumber = normalizeOrderSearch(editTarget.orderNumber);
+    const targetBuild = builds.find((build) => {
+      const buildSourceIds = [build.id, build.orderId, build.sourceOrderId]
+        .map((value) => String(value || ""))
+        .filter(Boolean);
+
+      return (
+        (targetSourceOrderId &&
+          buildSourceIds.includes(targetSourceOrderId)) ||
+        (targetOrderNumber &&
+          normalizeOrderSearch(build.orderNumber) === targetOrderNumber)
+      );
+    });
+
+    if (!targetBuild) {
+      return;
+    }
+
+    try {
+      sessionStorage.removeItem("dispatch-cl-edit-order-build");
+    } catch {
+      // The editor can still open if browser storage cleanup is unavailable.
+    }
+
+    openEditor(targetBuild);
+  }, [builds, deliveries]);
 
   function toggleBuild(buildId) {
     setExpandedBuildIds((currentIds) => {

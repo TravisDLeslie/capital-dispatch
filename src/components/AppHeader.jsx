@@ -423,6 +423,7 @@ function getNavGroupIcon(group) {
 /**
  * @param {{
  *   currentPage: string;
+ *   navigationGroupOverride?: string;
  *   onPageChange: (pageId: string) => void;
  *   currentUser: Record<string, any> | null;
  *   currentUserProfile: Record<string, any> | null;
@@ -440,6 +441,7 @@ function getNavGroupIcon(group) {
  */
 export default function AppHeader({
   currentPage,
+  navigationGroupOverride = "",
   onPageChange,
   currentUser,
   currentUserProfile,
@@ -491,7 +493,8 @@ export default function AppHeader({
       : "dashboard";
 
   useEffect(() => {
-    const currentGroup = getCurrentPageGroup(currentPage);
+    const currentGroup =
+      navigationGroupOverride || getCurrentPageGroup(currentPage);
 
     if (!currentGroup) {
       return;
@@ -513,7 +516,7 @@ export default function AppHeader({
       Fleet: false,
       [currentGroup]: true,
     });
-  }, [allowedPageIds, currentPage]);
+  }, [allowedPageIds, currentPage, navigationGroupOverride]);
 
   function handlePageChange(pageId) {
     onPageChange(pageId);
@@ -883,7 +886,8 @@ export default function AppHeader({
       const isGroupOpen = openNavGroups[group];
       const NavGroupIcon = getNavGroupIcon(group);
       const hasGroupItems = groupItems.length > 0;
-      const currentPageGroup = getCurrentPageGroup(currentPage);
+      const currentPageGroup =
+        navigationGroupOverride || getCurrentPageGroup(currentPage);
       const groupIsActive = currentPageGroup === group;
       const southDropdownLinks =
         group === "South" ? getSouthDropdownLinks() : [];
@@ -1272,7 +1276,7 @@ export default function AppHeader({
               </span>
 
               <span className="hidden text-sm font-black sm:block">
-                {getCurrentPageLabel(currentPage)}
+                {navigationGroupOverride || getCurrentPageLabel(currentPage)}
               </span>
             </button>
 

@@ -4,7 +4,9 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Edit3,
+  Eye,
   MapPin,
   Package,
   Truck,
@@ -183,6 +185,205 @@ function getCompactDateLabel(dateKey) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(`${dateKey}T12:00:00`));
+}
+
+function DeliveryMoveDatePicker({
+  value,
+  deliveryDates,
+  onChange,
+  disabled = false,
+}) {
+  const selectedDate = getDeliveryDateKey(value);
+  const initialDate = selectedDate || getTodayDateValue();
+  const [isOpen, setIsOpen] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const date = new Date(`${initialDate}T12:00:00`);
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  });
+  const pickerRef = useRef(null);
+  const calendarDays = useMemo(
+    () => getCalendarMonthDays(visibleMonth),
+    [visibleMonth],
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function handleOutsidePointer(event) {
+      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsidePointer);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsidePointer);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isOpen]);
+
+  function togglePicker() {
+    if (disabled) {
+      return;
+    }
+
+    const date = new Date(`${initialDate}T12:00:00`);
+
+    if (!Number.isNaN(date.getTime())) {
+      setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    }
+
+    setIsOpen((currentValue) => !currentValue);
+  }
+
+  function selectDate(dateKey) {
+    onChange?.(dateKey);
+    setIsOpen(false);
+  }
+
+  return (
+    <div ref={pickerRef} className="relative">
+      <button
+        type="button"
+        onClick={togglePicker}
+        disabled={disabled}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border border-slate-300 bg-white px-3 py-2 text-left text-sm font-black text-slate-900 outline-none transition hover:border-slate-400 focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:cursor-wait disabled:opacity-60"
+      >
+        <span>{getCompactDateLabel(selectedDate)}</span>
+        <CalendarDays
+          className="h-5 w-5 shrink-0 text-[#FC2C38]"
+          aria-hidden="true"
+        />
+      </button>
+
+      {isOpen ? (
+        <div
+          role="dialog"
+          aria-label="Choose new delivery date"
+          className="absolute left-0 top-[calc(100%+0.6rem)] z-50 w-[min(22rem,calc(100vw-3rem))] rounded-[26px] border border-slate-200 bg-white p-5 shadow-2xl"
+        >
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                setVisibleMonth(
+                  (currentMonth) =>
+                    new Date(
+                      currentMonth.getFullYear(),
+                      currentMonth.getMonth() - 1,
+                      1,
+                    ),
+                )
+              }
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950"
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+            </button>
+
+            <p className="text-lg font-black text-slate-950">
+              {getCalendarMonthLabel(visibleMonth)}
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                setVisibleMonth(
+                  (currentMonth) =>
+                    new Date(
+                      currentMonth.getFullYear(),
+                      currentMonth.getMonth() + 1,
+                      1,
+                    ),
+                )
+              }
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950"
+              aria-label="Next month"
+            >
+              <ChevronRight className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+              (weekday) => (
+                <span
+                  key={weekday}
+                  className="py-2 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400"
+                >
+                  {weekday}
+                </span>
+              ),
+            )}
+
+            {calendarDays.map((day) => {
+              const isSelected = day.dateKey === selectedDate;
+              const isToday = day.dateKey === getTodayDateValue();
+              const deliveryCount = deliveryDates?.get(day.dateKey) || 0;
+
+              return (
+                <button
+                  key={day.dateKey}
+                  type="button"
+                  onClick={() => selectDate(day.dateKey)}
+                  title={
+                    deliveryCount > 0
+                      ? `${deliveryCount} ${
+                          deliveryCount === 1 ? "delivery" : "deliveries"
+                        }`
+                      : undefined
+                  }
+                  className={`relative flex h-12 items-center justify-center rounded-xl text-sm font-black transition focus:outline-none focus:ring-2 focus:ring-red-300 ${
+                    isSelected
+                      ? "bg-[#FC2C38] text-white shadow-sm"
+                      : day.isCurrentMonth
+                        ? "text-slate-800 hover:bg-slate-100"
+                        : "text-slate-300 hover:bg-slate-50"
+                  } ${isToday && !isSelected ? "ring-1 ring-red-300" : ""}`}
+                >
+                  {day.date.getDate()}
+                  {deliveryCount > 0 ? (
+                    <span
+                      className={`absolute bottom-1.5 h-1.5 w-1.5 rounded-full ${
+                        isSelected ? "bg-white" : "bg-[#FC2C38]"
+                      }`}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
+            <span className="inline-flex items-center gap-2 text-xs font-bold text-slate-500">
+              <span className="h-2 w-2 rounded-full bg-[#FC2C38]" />
+              Delivery scheduled
+            </span>
+            <button
+              type="button"
+              onClick={() => selectDate(getTodayDateValue())}
+              className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+            >
+              Today
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function getDayDeliveries(deliveries, selectedDate) {
@@ -614,9 +815,12 @@ function DeliveryTimelineBoard({
 function CompactDeliveryCard({
   delivery,
   deliveries,
+  deliveryDates,
   expanded,
   canEditDeliveries,
   onEditDelivery,
+  onViewOrder,
+  onEditOrder,
   onUpdateDelivery,
   isUpdating,
   onToggle,
@@ -641,16 +845,6 @@ function CompactDeliveryCard({
           </p>
         </div>
 
-        {canEditDeliveries ? (
-          <button
-            type="button"
-            onClick={() => onEditDelivery(delivery.id)}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100"
-            aria-label={`Edit delivery ${delivery.orderNumber}`}
-          >
-            <Edit3 className="h-4 w-4" aria-hidden="true" />
-          </button>
-        ) : null}
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -698,6 +892,43 @@ function CompactDeliveryCard({
 
       {expanded ? (
         <div className="mt-3 space-y-3">
+          {canEditDeliveries || onViewOrder || onEditOrder ? (
+            <div className="grid gap-2 sm:grid-cols-3">
+              {canEditDeliveries ? (
+                <button
+                  type="button"
+                  onClick={() => onEditDelivery(delivery.id)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
+                >
+                  <Edit3 className="h-4 w-4" aria-hidden="true" />
+                  Edit Delivery
+                </button>
+              ) : null}
+
+              {onViewOrder ? (
+                <button
+                  type="button"
+                  onClick={() => onViewOrder(delivery)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                  View Order
+                </button>
+              ) : null}
+
+              {onEditOrder ? (
+                <button
+                  type="button"
+                  onClick={() => onEditOrder(delivery)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+                >
+                  <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                  Edit Order
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="rounded-xl bg-white px-4 py-3">
             <p className="flex items-start gap-2 text-sm font-black text-slate-900">
               <MapPin
@@ -728,22 +959,21 @@ function CompactDeliveryCard({
               </p>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block">
+                <div className="block">
                   <span className="mb-1 block text-xs font-black text-slate-500">
                     Date
                   </span>
-                  <input
-                    type="date"
+                  <DeliveryMoveDatePicker
                     value={getDeliveryDateKey(delivery.deliveryDate)}
-                    onChange={(event) =>
+                    deliveryDates={deliveryDates}
+                    onChange={(dateKey) =>
                       onUpdateDelivery(delivery, {
-                        deliveryDate: event.target.value,
+                        deliveryDate: dateKey,
                       })
                     }
                     disabled={isUpdating}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                   />
-                </label>
+                </div>
 
                 <label className="block">
                   <span className="mb-1 block text-xs font-black text-slate-500">
@@ -810,6 +1040,8 @@ export default function DeliveryCalendarPage({
   deliveries,
   canEditDeliveries = false,
   onEditDelivery,
+  onViewOrder,
+  onEditOrder,
   onUpdateDelivery,
   onPageChange,
 }) {
@@ -823,12 +1055,14 @@ export default function DeliveryCalendarPage({
     [deliveries],
   );
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
+  const [hasSelectedDay, setHasSelectedDay] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const today = new Date(`${getTodayDateValue()}T12:00:00`);
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
   const calendarPickerRef = useRef(null);
+  const selectedDeliveryDetailRef = useRef(null);
   const [expandedDeliveryIds, setExpandedDeliveryIds] = useState({});
   const [selectedTimelineDeliveryId, setSelectedTimelineDeliveryId] =
     useState("");
@@ -902,17 +1136,23 @@ export default function DeliveryCalendarPage({
   const selectedTimelineDelivery =
     scheduledDeliveries.find(
       (delivery) => delivery.id === selectedTimelineDeliveryId,
-    ) || scheduledDeliveries[0];
+    ) || null;
 
   useEffect(() => {
     if (
+      !hasSelectedDay &&
       selectedDate === getTodayDateValue() &&
       dayDeliveries.length === 0 &&
       fallbackDeliveryDate
     ) {
       setSelectedDate(fallbackDeliveryDate);
     }
-  }, [dayDeliveries.length, fallbackDeliveryDate, selectedDate]);
+  }, [
+    dayDeliveries.length,
+    fallbackDeliveryDate,
+    hasSelectedDay,
+    selectedDate,
+  ]);
 
   useEffect(() => {
     function handleOutsidePointer(event) {
@@ -939,6 +1179,10 @@ export default function DeliveryCalendarPage({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [isDatePickerOpen]);
+
+  useEffect(() => {
+    setSelectedTimelineDeliveryId("");
+  }, [selectedDate]);
 
   function openDatePicker() {
     const selectedDateValue = new Date(`${selectedDate}T12:00:00`);
@@ -967,11 +1211,40 @@ export default function DeliveryCalendarPage({
     );
   }
 
+  function selectDay(dateKey, date = null) {
+    setSelectedDate(dateKey);
+    setHasSelectedDay(true);
+    setStatusFilter("all");
+    setSelectedTimelineDeliveryId("");
+
+    const selectedDay = date || new Date(`${dateKey}T12:00:00`);
+
+    if (!Number.isNaN(selectedDay.getTime())) {
+      setCalendarMonth(
+        new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1),
+      );
+    }
+  }
+
   function toggleDelivery(deliveryId) {
     setExpandedDeliveryIds((currentExpandedDeliveryIds) => ({
       ...currentExpandedDeliveryIds,
       [deliveryId]: !currentExpandedDeliveryIds[deliveryId],
     }));
+  }
+
+  function selectTimelineDelivery(deliveryId) {
+    if (!deliveryId) {
+      return;
+    }
+
+    setSelectedTimelineDeliveryId(deliveryId);
+    window.setTimeout(() => {
+      selectedDeliveryDetailRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
   }
 
   function toggleDriverSection(driverKey) {
@@ -1118,7 +1391,7 @@ export default function DeliveryCalendarPage({
                       key={day.dateKey}
                       type="button"
                       onClick={() => {
-                        setSelectedDate(day.dateKey);
+                        selectDay(day.dateKey, day.date);
                         setIsDatePickerOpen(false);
                       }}
                       title={
@@ -1160,10 +1433,7 @@ export default function DeliveryCalendarPage({
                   onClick={() => {
                     const today = getTodayDateValue();
                     const todayDate = new Date(`${today}T12:00:00`);
-                    setSelectedDate(today);
-                    setCalendarMonth(
-                      new Date(todayDate.getFullYear(), todayDate.getMonth(), 1),
-                    );
+                    selectDay(today, todayDate);
                     setIsDatePickerOpen(false);
                   }}
                   className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
@@ -1195,7 +1465,8 @@ export default function DeliveryCalendarPage({
         <div className="overflow-x-auto p-3 sm:p-4">
           <div className="grid min-w-[46rem] grid-cols-5 gap-2">
             {fiveDayOverview.map((day) => {
-              const isSelected = day.dateKey === selectedDate;
+              const isSelected =
+                hasSelectedDay && day.dateKey === selectedDate;
               const weekdayLabel = new Intl.DateTimeFormat("en-US", {
                 weekday: "short",
               }).format(day.date);
@@ -1208,16 +1479,7 @@ export default function DeliveryCalendarPage({
                 <button
                   key={day.dateKey}
                   type="button"
-                  onClick={() => {
-                    setSelectedDate(day.dateKey);
-                    setCalendarMonth(
-                      new Date(
-                        day.date.getFullYear(),
-                        day.date.getMonth(),
-                        1,
-                      ),
-                    );
-                  }}
+                  onClick={() => selectDay(day.dateKey, day.date)}
                   className={`rounded-2xl border p-3 text-left transition focus:outline-none focus:ring-4 focus:ring-red-100 ${
                     isSelected
                       ? "border-[#FC2C38] bg-red-50 shadow-sm"
@@ -1272,7 +1534,8 @@ export default function DeliveryCalendarPage({
         </div>
       </section>
 
-      <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      {hasSelectedDay ? (
+        <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-black text-slate-900">
@@ -1339,7 +1602,21 @@ export default function DeliveryCalendarPage({
             </button>
           </div>
         </div>
-      </section>
+        </section>
+      ) : (
+        <section className="mb-6 rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center">
+          <CalendarDays
+            aria-hidden="true"
+            className="mx-auto h-7 w-7 text-[#FC2C38]"
+          />
+          <p className="mt-3 text-lg font-black text-slate-950">
+            Select a day to view its orders
+          </p>
+          <p className="mt-1 text-sm font-semibold text-slate-500">
+            Delivery details stay tucked away until you choose a day above.
+          </p>
+        </section>
+      )}
 
       {error ? (
         <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
@@ -1347,7 +1624,7 @@ export default function DeliveryCalendarPage({
         </div>
       ) : null}
 
-      {dayDeliveries.length === 0 ? (
+      {!hasSelectedDay ? null : dayDeliveries.length === 0 ? (
         <EmptyState
           title="No deliveries on this date"
           description="Deliveries that need dispatch and scheduled deliveries will both appear here."
@@ -1359,14 +1636,7 @@ export default function DeliveryCalendarPage({
             scheduledDeliveries={scheduledDeliveries}
             statusFilter={statusFilter}
             onOpenDispatch={() => onPageChange?.("deliveries-dispatch")}
-            onSelectScheduledDelivery={(deliveryId) => {
-              setSelectedTimelineDeliveryId(deliveryId);
-              window.setTimeout(() => {
-                document
-                  .getElementById("delivery-calendar-day-board")
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }, 0);
-            }}
+            onSelectScheduledDelivery={selectTimelineDelivery}
           />
 
           {statusFilter !== "needsDispatch" &&
@@ -1376,17 +1646,23 @@ export default function DeliveryCalendarPage({
             driverNames={driverNames}
             deliveriesByDriver={deliveriesByDriver}
             selectedDeliveryId={selectedTimelineDelivery?.id || ""}
-            onSelectDelivery={setSelectedTimelineDeliveryId}
+            onSelectDelivery={selectTimelineDelivery}
           />
 
           {selectedTimelineDelivery ? (
-            <div className="mt-5 hidden xl:block">
+            <div
+              ref={selectedDeliveryDetailRef}
+              className="mt-5 hidden scroll-mt-5 xl:block"
+            >
               <CompactDeliveryCard
                 delivery={selectedTimelineDelivery}
                 deliveries={safeDeliveries}
+                deliveryDates={deliveryDates}
                 expanded
                 canEditDeliveries={canEditDeliveries}
                 onEditDelivery={onEditDelivery}
+                onViewOrder={onViewOrder}
+                onEditOrder={onEditOrder}
                 onUpdateDelivery={handleMoveDelivery}
                 isUpdating={updatingDeliveryId === selectedTimelineDelivery.id}
                 onToggle={toggleDelivery}
@@ -1421,9 +1697,12 @@ export default function DeliveryCalendarPage({
                       key={delivery.id}
                       delivery={delivery}
                       deliveries={safeDeliveries}
+                      deliveryDates={deliveryDates}
                       expanded={Boolean(expandedDeliveryIds[delivery.id])}
                       canEditDeliveries={canEditDeliveries}
                       onEditDelivery={onEditDelivery}
+                      onViewOrder={onViewOrder}
+                      onEditOrder={onEditOrder}
                       onUpdateDelivery={handleMoveDelivery}
                       isUpdating={updatingDeliveryId === delivery.id}
                       onToggle={toggleDelivery}
@@ -1482,9 +1761,12 @@ export default function DeliveryCalendarPage({
                         key={delivery.id}
                         delivery={delivery}
                         deliveries={safeDeliveries}
+                        deliveryDates={deliveryDates}
                         expanded={Boolean(expandedDeliveryIds[delivery.id])}
                         canEditDeliveries={canEditDeliveries}
                         onEditDelivery={onEditDelivery}
+                        onViewOrder={onViewOrder}
+                        onEditOrder={onEditOrder}
                         onUpdateDelivery={handleMoveDelivery}
                         isUpdating={updatingDeliveryId === delivery.id}
                         onToggle={toggleDelivery}

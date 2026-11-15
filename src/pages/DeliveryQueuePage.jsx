@@ -41,6 +41,7 @@ import {
   scheduleWindowsOverlap,
 } from "../utils/deliverySchedule";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
+import { uploadDeliveryProofPhoto } from "../utils/photoStorage";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const MAX_DELIVERY_PROOF_PHOTOS = 10;
@@ -201,57 +202,6 @@ function getPhotoList(delivery, photoField, photosField) {
   return [legacyPhoto, ...photos];
 }
 
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadImage(dataUrl) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = dataUrl;
-  });
-}
-
-async function createPhotoFromFile(file) {
-  const originalDataUrl = await readFileAsDataUrl(file);
-  const image = await loadImage(originalDataUrl);
-  const targetDataUrlLength = 70000;
-  const maxWidth = 640;
-  const scale = Math.min(maxWidth / image.width, 1);
-  const width = Math.round(image.width * scale);
-  const height = Math.round(image.height * scale);
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-
-  canvas.width = width;
-  canvas.height = height;
-  context.drawImage(image, 0, 0, width, height);
-
-  let quality = 0.68;
-  let dataUrl = canvas.toDataURL("image/jpeg", quality);
-
-  while (dataUrl.length > targetDataUrlLength && quality > 0.26) {
-    quality -= 0.08;
-    dataUrl = canvas.toDataURL("image/jpeg", quality);
-  }
-
-  return {
-    name: file.name,
-    type: "image/jpeg",
-    dataUrl,
-    capturedAt: new Date().toISOString(),
-  };
-}
-
 function groupDeliveriesByDriver(deliveries) {
   const sortedDeliveries = sortDeliveriesBySchedule(deliveries);
 
@@ -406,7 +356,7 @@ function PhotoPreview({ photo, label, onView }) {
       className="block w-full overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:border-red-200"
     >
       <img
-        src={photo.dataUrl}
+        src={photo.previewUrl || photo.dataUrl}
         alt={label}
         className="h-56 w-full bg-slate-100 object-contain sm:h-72"
       />
@@ -1808,9 +1758,16 @@ export default function DeliveryQueuePage({
 
     try {
       const photos = [];
+      const category = photosField === "hardwarePhotos" ? "hardware" : "material";
 
       for (const file of filesToSave) {
-        photos.push(await createPhotoFromFile(file));
+        photos.push(
+          await uploadDeliveryProofPhoto({
+            deliveryId: delivery.id,
+            category,
+            file,
+          }),
+        );
       }
 
       const currentPhotos = getPhotoList(delivery, photoField, photosField);

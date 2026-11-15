@@ -21,7 +21,7 @@ export default function ReceivingLocationPhotosModal({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/70 p-4"
+      className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm sm:p-5"
       role="dialog"
       aria-modal="true"
       aria-labelledby="receiving-location-photos-title"

@@ -5,7 +5,6 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
-  CircleHelp,
   ExternalLink,
   FileText,
   FileUp,
@@ -346,7 +345,7 @@ function getItemDateValue(item) {
 function Field({ label, children }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
+      <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 sm:text-[11px]">
         {label}
       </span>
       {children}
@@ -358,8 +357,78 @@ function TextInput({ className = "", ...props }) {
   return (
     <input
       {...props}
-      className={`w-full rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100 ${className}`}
+      className={`w-full rounded-xl border border-slate-300 bg-slate-100 px-3.5 py-2.5 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100 ${className}`}
     />
+  );
+}
+
+function OrderEntryToolbar({
+  mode,
+  orderedBy,
+  orderedByOptions,
+  onModeChange,
+  onOrderedByChange,
+}) {
+  const orderTypes = [
+    { id: "customer", label: "Customer Order" },
+    { id: "stock", label: "Stock Order" },
+    { id: "return", label: "Return" },
+  ];
+
+  return (
+    <div className="mb-3 grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(250px,330px)] lg:items-end">
+      <div>
+        <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
+          Order type
+        </p>
+        <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
+          {orderTypes.map((orderType) => {
+            const isSelected = mode === orderType.id;
+
+            return (
+              <button
+                key={orderType.id}
+                type="button"
+                onClick={() => onModeChange(orderType.id)}
+                aria-pressed={isSelected}
+                className={`min-h-10 cursor-pointer rounded-lg border px-2.5 py-2 text-sm font-black transition-all duration-150 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-100 ${
+                  isSelected
+                    ? "border-slate-950 bg-slate-950 text-white shadow-md"
+                    : "border-slate-200 bg-white/70 text-slate-600 shadow-sm hover:-translate-y-0.5 hover:border-slate-400 hover:bg-white hover:text-slate-950 hover:shadow-md active:translate-y-0 active:bg-slate-200"
+                }`}
+              >
+                {orderType.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <Field label="Ordered by">
+        <div className="group relative">
+          <UserRound
+            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition-colors group-hover:text-slate-700 group-focus-within:text-[#FC2C38]"
+            aria-hidden="true"
+          />
+          <select
+            value={orderedBy}
+            onChange={(event) => onOrderedByChange(event.target.value)}
+            className="w-full cursor-pointer appearance-none rounded-xl border border-slate-300 bg-slate-100 py-2.5 pl-12 pr-12 text-base font-black text-slate-900 outline-none transition-all duration-150 hover:-translate-y-0.5 hover:border-slate-500 hover:bg-white hover:shadow-md focus:translate-y-0 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
+          >
+            <option value="">Select who placed the order...</option>
+            {orderedByOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition-colors group-hover:text-slate-700 group-focus-within:text-[#FC2C38]"
+            aria-hidden="true"
+          />
+        </div>
+      </Field>
+    </div>
   );
 }
 
@@ -680,6 +749,7 @@ function ChoiceButton({
 /**
  * @param {{
  *   currentUser?: { id?: string; name?: string; email?: string } | null;
+ *   employeeOptions?: string[];
  *   customers?: Array<Record<string, any>>;
  *   vendorOptions?: string[];
  *   supplierAddressMap?: Record<string, string>;
@@ -692,6 +762,7 @@ function ChoiceButton({
  */
 export default function OrderFlowPage({
   currentUser = null,
+  employeeOptions = [],
   customers = [],
   vendorOptions = [],
   supplierAddressMap = {},
@@ -754,6 +825,24 @@ export default function OrderFlowPage({
   const [isProcessingStockPO, setIsProcessingStockPO] = useState(false);
   const [stockProcessError, setStockProcessError] = useState("");
   const [stockProcessSummary, setStockProcessSummary] = useState(null);
+  const [orderedBy, setOrderedBy] = useState(() =>
+    String(currentUser?.name || "").trim(),
+  );
+  const orderedByOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [...(Array.isArray(employeeOptions) ? employeeOptions : []), currentUser?.name]
+            .map((option) => String(option || "").trim())
+            .filter(Boolean),
+        ),
+      ).sort((firstOption, secondOption) =>
+        firstOption.localeCompare(secondOption, "en-US", {
+          sensitivity: "base",
+        }),
+      ),
+    [currentUser?.name, employeeOptions],
+  );
   const customerAccountOptions = useMemo(
     () => buildCustomerAccountOptions(customers),
     [customers],
@@ -868,6 +957,7 @@ export default function OrderFlowPage({
     : "";
   const canProcessOrder = Boolean(
     (isReturnOrder ? /^R\d{6}$/.test(orderNumber) : orderNumber) &&
+      orderedBy &&
       customerName &&
       savedItems.length > 0 &&
       (!isReturnOrder || deliveryDate) &&
@@ -880,10 +970,19 @@ export default function OrderFlowPage({
   );
   const canProcessStockPO = Boolean(
     /^\d{3}-\d{3}$/.test(stockPoNumber) &&
+      orderedBy &&
       stockVendor.trim() &&
       stockScheduledDate &&
       validStockItems.length > 0,
   );
+
+  useEffect(() => {
+    const currentUserName = String(currentUser?.name || "").trim();
+
+    if (!orderedBy && currentUserName) {
+      setOrderedBy(currentUserName);
+    }
+  }, [currentUser?.name, orderedBy]);
 
   useEffect(() => {
     if (orderMethod !== "delivery") {
@@ -1063,6 +1162,33 @@ export default function OrderFlowPage({
   function saveItem(itemId) {
     updateItem(itemId, { saved: true });
     setActiveItemId(null);
+  }
+
+  function saveItemAndAddAnother(itemId) {
+    const sourceItem = items.find((item) => item.id === itemId);
+
+    if (!sourceItem) {
+      return;
+    }
+
+    const nextItem = createBlankItem({
+      path: isReturnOrder ? "inStock" : sourceItem.path,
+      poNumber: isReturnOrder ? "" : sourceItem.poNumber || "",
+      vendor: isReturnOrder ? "" : sourceItem.vendor || "",
+      supplierAddress: isReturnOrder
+        ? ""
+        : sourceItem.supplierAddress || "",
+      routeDate: isReturnOrder ? "" : sourceItem.routeDate || "",
+      supplierDate: isReturnOrder ? "" : sourceItem.supplierDate || "",
+    });
+
+    setItems((currentItems) => [
+      ...currentItems.map((item) =>
+        item.id === itemId ? { ...item, saved: true } : item,
+      ),
+      nextItem,
+    ]);
+    setActiveItemId(nextItem.id);
   }
 
   function editItem(itemId) {
@@ -1268,6 +1394,7 @@ export default function OrderFlowPage({
       customerId: linkedCustomerAccount?.customerId || "",
       customerAccountType: linkedCustomerAccount?.accountType || "",
       orderKind: isReturnOrder ? "return" : "customer",
+      orderedBy,
       orderMethod,
       deliveryAddress,
       deliveryDate,
@@ -1436,6 +1563,7 @@ export default function OrderFlowPage({
           easilyDamaged: Boolean(item.easilyDamaged),
         })),
         notes: stockDriverNotesEnabled ? stockNotes : "",
+        orderedBy,
         createdBy: currentUser,
       });
       setStockProcessSummary(summary || {});
@@ -1773,51 +1901,43 @@ export default function OrderFlowPage({
       <PageContainer>
         <Breadcrumbs items={[{ label: "Orders" }, { label: "Stock PO" }]} />
 
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">
               Internal Stock
             </p>
-            <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
+            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
               New Stock PO
             </h1>
-            <p className="mt-2 max-w-2xl text-lg font-bold text-slate-500">
+            <p className="mt-1 max-w-2xl text-sm font-bold text-slate-500">
               Enter one PO for Capital Lumber stock and send it to South pickup
               or Their Truck delivery.
             </p>
           </div>
 
-          <div className="inline-flex w-full rounded-2xl border border-slate-200 bg-slate-100 p-1 lg:w-auto">
-            <button
-              type="button"
-              onClick={showCustomerOrder}
-              className="flex-1 rounded-xl px-5 py-3 text-sm font-black text-slate-500 transition hover:text-slate-900 lg:flex-none"
-            >
-              New Customer Order
-            </button>
-            <button
-              type="button"
-              className="flex-1 rounded-xl bg-white px-5 py-3 text-sm font-black text-emerald-700 shadow-sm lg:flex-none"
-            >
-              Stock PO
-            </button>
-            <button
-              type="button"
-              onClick={showReturnOrder}
-              className="flex-1 rounded-xl px-5 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-50 lg:flex-none"
-            >
-              Return
-            </button>
-          </div>
         </div>
 
-        <section className="rounded-[2rem] border border-emerald-200 bg-white p-4 shadow-sm sm:p-6">
-          <div className="flex items-start gap-3 border-b border-slate-100 pb-5">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-              <Warehouse className="h-6 w-6" aria-hidden="true" />
+        <OrderEntryToolbar
+          mode="stock"
+          orderedBy={orderedBy}
+          orderedByOptions={orderedByOptions}
+          onOrderedByChange={setOrderedBy}
+          onModeChange={(nextMode) => {
+            if (nextMode === "customer") {
+              showCustomerOrder();
+            } else if (nextMode === "return") {
+              showReturnOrder();
+            }
+          }}
+        />
+
+        <section className="rounded-2xl border border-emerald-200 bg-white p-3.5 shadow-sm sm:p-4">
+          <div className="flex items-start gap-3 border-b border-slate-100 pb-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+              <Warehouse className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
-              <h2 className="text-2xl font-black text-slate-950">
+              <h2 className="text-xl font-black text-slate-950">
                 Stock purchase order
               </h2>
               <p className="mt-1 text-sm font-bold text-slate-500">
@@ -1826,7 +1946,7 @@ export default function OrderFlowPage({
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
             <Field label="PO Number">
               <TextInput
                 value={stockPoNumber}
@@ -1863,7 +1983,7 @@ export default function OrderFlowPage({
             </div>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-3">
             <p className="mb-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
               How is it getting here?
             </p>
@@ -1871,7 +1991,7 @@ export default function OrderFlowPage({
               <button
                 type="button"
                 onClick={() => setStockFulfillmentMethod("wePickup")}
-                className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition ${
+                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
                   stockFulfillmentMethod === "wePickup"
                     ? "border-[#FC2C38] bg-red-50 ring-4 ring-red-100"
                     : "border-slate-200 bg-slate-50 hover:bg-white"
@@ -1888,7 +2008,7 @@ export default function OrderFlowPage({
               <button
                 type="button"
                 onClick={() => setStockFulfillmentMethod("supplierDelivery")}
-                className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition ${
+                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
                   stockFulfillmentMethod === "supplierDelivery"
                     ? "border-blue-500 bg-blue-50 ring-4 ring-blue-100"
                     : "border-slate-200 bg-slate-50 hover:bg-white"
@@ -1905,7 +2025,7 @@ export default function OrderFlowPage({
             </div>
           </div>
 
-          <div className="mt-5 max-w-xs">
+          <div className="mt-3 max-w-xs">
             <Field
               label={
                 stockFulfillmentMethod === "wePickup"
@@ -1921,7 +2041,7 @@ export default function OrderFlowPage({
             </Field>
           </div>
 
-          <section className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+          <section className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
             <div>
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700">
@@ -1936,7 +2056,7 @@ export default function OrderFlowPage({
               </div>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-2.5">
               {stockItems.map((item, index) => (
                 <div
                   key={item.id}
@@ -2126,7 +2246,7 @@ export default function OrderFlowPage({
         ]}
       />
 
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
@@ -2143,42 +2263,14 @@ export default function OrderFlowPage({
               </button>
             ) : null}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
+          <div className="mt-1 flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
               {isReturnOrder ? "New Return" : "New Customer Order"}
             </h1>
-            {isReturnOrder ? (
-              <button
-                type="button"
-                onClick={showCustomerOrder}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
-                <FileText className="h-4 w-4" aria-hidden="true" />
-                Customer Order
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setOrderEntryMode("stock")}
-              className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-black text-emerald-800 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100"
-            >
-              <Warehouse className="h-4 w-4" aria-hidden="true" />
-              Stock PO
-            </button>
-            {!isReturnOrder ? (
-              <button
-                type="button"
-                onClick={showReturnOrder}
-                className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2.5 text-sm font-black text-violet-800 shadow-sm transition hover:border-violet-300 hover:bg-violet-100"
-              >
-                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                Return
-              </button>
-            ) : null}
           </div>
         </div>
 
-        <div className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 shadow-sm lg:w-auto lg:min-w-[420px]">
+        <div className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm lg:w-auto lg:min-w-[360px]">
           <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
@@ -2195,7 +2287,7 @@ export default function OrderFlowPage({
                 ) : null}
               </div>
               <div className="text-right">
-                <p className="text-2xl font-black tracking-tight text-slate-950">
+                <p className="text-xl font-black tracking-tight text-slate-950">
                   {orderNumber || (isReturnOrder ? "R000000" : "000-000")}
                 </p>
                 <p className="text-xs font-bold text-slate-500">
@@ -2219,6 +2311,22 @@ export default function OrderFlowPage({
           </div>
         </div>
       </div>
+
+      <OrderEntryToolbar
+        mode={orderEntryMode}
+        orderedBy={orderedBy}
+        orderedByOptions={orderedByOptions}
+        onOrderedByChange={setOrderedBy}
+        onModeChange={(nextMode) => {
+          if (nextMode === "customer") {
+            showCustomerOrder();
+          } else if (nextMode === "stock") {
+            setOrderEntryMode("stock");
+          } else {
+            showReturnOrder();
+          }
+        }}
+      />
 
       {isOrderImportOpen ? (
         <div
@@ -2500,8 +2608,8 @@ export default function OrderFlowPage({
         </div>
       ) : null}
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center justify-between gap-3">
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-3.5">
+        <div className="mb-2 flex items-center justify-between gap-3">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
               Step 1
@@ -2515,7 +2623,7 @@ export default function OrderFlowPage({
           </span>
         </div>
 
-        <div className="grid gap-3 xl:grid-cols-[170px_1fr_1fr_190px_150px] xl:items-end">
+        <div className="grid gap-2.5 xl:grid-cols-[150px_minmax(180px,1.1fr)_minmax(170px,1fr)_170px_135px] xl:items-end">
           <Field label={isReturnOrder ? "Return #" : "Order #"}>
             <TextInput
               value={orderNumber}
@@ -2530,7 +2638,7 @@ export default function OrderFlowPage({
               inputMode={isReturnOrder ? "text" : "numeric"}
               maxLength={7}
               readOnly={isReturnOrder}
-              className={`text-2xl font-black ${
+              className={`text-xl font-black ${
                 isReturnOrder ? "cursor-default bg-violet-50 text-violet-800" : ""
               }`}
             />
@@ -2670,10 +2778,12 @@ export default function OrderFlowPage({
         ) : null}
       </section>
 
-      <section className="mt-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-3.5">
         <div
-          className={`grid gap-4 xl:items-start ${
-            isReturnOrder ? "xl:grid-cols-[300px_1fr]" : "xl:grid-cols-[360px_1fr]"
+          className={`grid gap-3 ${
+            isReturnOrder
+              ? "xl:grid-cols-[260px_1fr] xl:items-start"
+              : "lg:grid-cols-[minmax(180px,1fr)_minmax(420px,560px)] lg:items-end"
           }`}
         >
           <div>
@@ -2684,8 +2794,15 @@ export default function OrderFlowPage({
               {isReturnOrder ? "Return pickup" : "Customer handoff"}
             </h2>
 
-            {!isReturnOrder ? (
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {isReturnOrder ? (
+              <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
+                Enter the address where the material needs to be picked up.
+              </p>
+            ) : null}
+          </div>
+
+          {!isReturnOrder ? (
+            <div className="grid grid-cols-3 gap-1.5">
               {handoffOptions.filter((option) => option.id !== "return").map((option) => {
                 const OptionIcon = option.icon;
                 const isSelected = orderMethod === option.id;
@@ -2695,7 +2812,7 @@ export default function OrderFlowPage({
                     key={option.id}
                     type="button"
                     onClick={() => setOrderMethod(option.id)}
-                    className={`inline-flex min-h-[54px] items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-sm font-black transition ${
+                    className={`inline-flex min-h-12 items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-xs font-black transition sm:gap-2 sm:px-3 sm:text-sm ${
                       isSelected
                         ? "border-[#FC2C38] bg-red-50 text-[#FC2C38] ring-4 ring-red-100"
                         : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-white"
@@ -2707,15 +2824,10 @@ export default function OrderFlowPage({
                 );
               })}
             </div>
-            ) : (
-              <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-                Enter the address where the material needs to be picked up.
-              </p>
-            )}
-          </div>
+          ) : null}
 
           {isReturnOrder ? (
-            <div className="rounded-3xl border border-violet-200 bg-violet-50/60 p-4">
+            <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-3">
               <div className="grid gap-3 xl:grid-cols-[180px_1fr] xl:items-start">
                 <Field label="Return Date">
                   <TextInput
@@ -2744,21 +2856,24 @@ export default function OrderFlowPage({
                 </Field>
               </div>
 
-              <div className="mt-3">
+              <div className="mt-2">
                 <Field label="Return Notes">
                   <textarea
                     value={deliveryNotes}
                     onChange={(event) => setDeliveryNotes(event.target.value)}
                     placeholder="What is being returned, its condition, pickup location, who to ask for, or anything the driver should know..."
-                    rows={3}
-                    className="w-full resize-none rounded-2xl border border-violet-200 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                    rows={2}
+                    className="w-full resize-none rounded-xl border border-violet-200 bg-white px-3.5 py-2.5 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
                   />
                 </Field>
               </div>
             </div>
-          ) : orderMethod === "delivery" ? (
-            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
-              <div className="grid gap-3 xl:grid-cols-[180px_1fr_190px] xl:items-start">
+          ) : null}
+        </div>
+
+        {!isReturnOrder && orderMethod === "delivery" ? (
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div className="grid gap-2.5 xl:grid-cols-[155px_minmax(260px,1fr)_210px_160px] xl:items-end">
                 <Field label="Delivery Date">
                   <TextInput
                     type="date"
@@ -2767,35 +2882,33 @@ export default function OrderFlowPage({
                   />
                 </Field>
 
-                <div className="grid gap-3">
-                  <Field label="Delivery Address">
-                    <div className="relative">
-                      <MapPin
-                        className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
-                        aria-hidden="true"
-                      />
-                      <AddressAutocompleteInput
-                        value={deliveryAddress}
-                        onChange={setDeliveryAddress}
-                        autoComplete="off"
-                        enableLocalFallback
-                        placeholder="Start typing the delivery address..."
-                        showStatus={false}
-                        className="w-full rounded-2xl border border-slate-300 bg-slate-100 py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
-                      />
-                    </div>
-                  </Field>
-
-                  <Field label="Delivery Title">
-                    <TextInput
-                      value={deliveryTitle}
-                      onChange={(event) => setDeliveryTitle(event.target.value)}
-                      placeholder="Order 1, Basement, etc."
+                <Field label="Delivery Address">
+                  <div className="relative">
+                    <MapPin
+                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+                      aria-hidden="true"
                     />
-                  </Field>
-                </div>
+                    <AddressAutocompleteInput
+                      value={deliveryAddress}
+                      onChange={setDeliveryAddress}
+                      autoComplete="off"
+                      enableLocalFallback
+                      placeholder="Start typing the delivery address..."
+                      showStatus={false}
+                      className="w-full rounded-xl border border-slate-300 bg-slate-100 py-2.5 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
+                    />
+                  </div>
+                </Field>
 
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                <Field label="Delivery Title">
+                  <TextInput
+                    value={deliveryTitle}
+                    onChange={(event) => setDeliveryTitle(event.target.value)}
+                    placeholder="Order 1, Basement, etc."
+                  />
+                </Field>
+
+                <div className="min-h-[46px] rounded-xl border border-slate-200 bg-white px-3 py-2">
                   <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
                     Route ETA
                   </p>
@@ -2823,36 +2936,20 @@ export default function OrderFlowPage({
                 {routeEtaMessage ||
                   "Route time calculates from Capital Lumber once an address is entered."}
               </p>
-            </div>
-          ) : (
-            <div
-              className={`rounded-2xl border px-4 py-3 ${
-                orderMethod === "pod"
-                  ? "border-amber-200 bg-amber-50 text-amber-900"
-                  : "border-blue-200 bg-blue-50 text-blue-900"
-              }`}
-            >
-              <p className="text-xs font-black uppercase tracking-[0.14em] opacity-70">
-                {selectedHandoff.label}
-              </p>
-              <p className="mt-1 font-black">
-                {selectedHandoff.description}
-              </p>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : null}
       </section>
 
-      <section className="mt-5 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-3.5">
         <div>
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
               Step 3
             </p>
-            <h2 className="mt-1 text-2xl font-black text-slate-950">
+            <h2 className="text-xl font-black text-slate-950">
               {isReturnOrder ? "Return items" : "Items & fulfillment"}
             </h2>
-            <p className="mt-1 text-sm font-bold text-slate-500">
+            <p className="mt-0.5 text-xs font-bold text-slate-500 sm:text-sm">
               {isReturnOrder
                 ? "Add every item that needs to come back to Capital Lumber."
                 : "Add material from Capital Lumber's yard or from a supplier."}
@@ -2860,10 +2957,8 @@ export default function OrderFlowPage({
           </div>
         </div>
 
-        <div className="mt-5 grid gap-2">
+        <div className="mt-3 grid gap-2">
           {items.map((item, index) => {
-            const itemPath = getPath(item.path);
-            const PathIcon = itemPath.icon;
             const isActive = activeItemId === item.id || !item.saved;
             const isYardStock = item.path === "inStock";
             const supplierSetupComplete = Boolean(
@@ -2958,14 +3053,14 @@ export default function OrderFlowPage({
                 key={item.id}
                 className="rounded-3xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm"
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-sm font-black text-blue-700 shadow-sm">
                       {index + 1}
                     </span>
                     <div className="min-w-0">
                       <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-600">
-                        Active Material
+                        Item {index + 1}
                       </p>
                       <p className="truncate text-lg font-black text-slate-950">
                         {item.description || "New material"}
@@ -2983,10 +3078,10 @@ export default function OrderFlowPage({
                 </div>
 
                 <div
-                  className={`mt-4 grid gap-3 ${
+                  className={`mt-3 grid gap-3 ${
                     isReturnOrder
                       ? "lg:grid-cols-[110px_180px_minmax(220px,1fr)]"
-                      : "lg:grid-cols-[110px_180px_minmax(220px,1fr)_220px]"
+                      : "lg:grid-cols-[110px_220px_minmax(280px,1fr)]"
                   }`}
                 >
                   <Field label="Qty">
@@ -3072,47 +3167,54 @@ export default function OrderFlowPage({
                       }
                     />
                   </Field>
-                  {!isReturnOrder ? (
-                  <Field label="Fulfillment">
-                    <div className="relative">
-                      <PathIcon
-                        className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                        aria-hidden="true"
-                      />
-                      <select
-                        value={item.path}
-                        onChange={(event) => {
-                          const path = event.target.value;
-                          updateItem(item.id, {
-                            path,
-                            ...(path === "inStock"
-                              ? {
-                                  vendor: "",
-                                  supplierAddress: "",
-                                  poNumber: "",
-                                  routeDate: "",
-                                  supplierDate: "",
-                                }
-                              : {}),
-                          });
-                        }}
-                        className="w-full cursor-pointer appearance-none rounded-2xl border border-slate-300 bg-slate-100 py-3 pl-11 pr-12 text-base font-black text-slate-900 outline-none transition hover:border-blue-400 hover:bg-white focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
-                      >
-                        {activeFulfillmentPaths.map((path) => (
-                          <option key={path.id} value={path.id}>
-                            {path.label}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown
-                        className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-blue-700"
-                        strokeWidth={2.75}
-                        aria-hidden="true"
-                      />
-                    </div>
-                  </Field>
-                  ) : null}
                 </div>
+
+                {!isReturnOrder ? (
+                  <div className="mt-3">
+                    <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 sm:text-[11px]">
+                      Where is this material coming from?
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                      {activeFulfillmentPaths.map((path) => {
+                        const OptionIcon = path.icon;
+                        const isSelected = item.path === path.id;
+
+                        return (
+                          <button
+                            key={path.id}
+                            type="button"
+                            onClick={() =>
+                              updateItem(item.id, {
+                                path: path.id,
+                                ...(path.id === "inStock"
+                                  ? {
+                                      vendor: "",
+                                      supplierAddress: "",
+                                      poNumber: "",
+                                      routeDate: "",
+                                      supplierDate: "",
+                                    }
+                                  : {}),
+                              })
+                            }
+                            className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-black transition ${
+                              isSelected
+                                ? `${path.activeTone} ring-2`
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-50"
+                            }`}
+                            aria-pressed={isSelected}
+                          >
+                            <OptionIcon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            <span>{path.shortLabel}</span>
+                            {isSelected ? (
+                              <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
 
                 {isReturnOrder ? (
                   <div className="mt-4 flex items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4">
@@ -3142,65 +3244,112 @@ export default function OrderFlowPage({
                       </p>
                     </div>
                   </div>
-                ) : supplierSetupComplete ? (
-                  <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-slate-950">
-                        {item.vendor} · PO {item.poNumber}
-                      </p>
-                      <p className="mt-1 text-xs font-bold text-slate-500">
-                        {getItemDateLabel(item.path)}: {getItemDateValue(item)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingItemId(item.id)}
-                      className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-                    >
-                      Edit Supplier / PO
-                    </button>
-                  </div>
                 ) : (
-                  <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-700 shadow-sm">
-                        <CircleHelp className="h-5 w-5" aria-hidden="true" />
-                      </span>
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
-                          Next: Supplier / PO
+                  <div className="mt-3 rounded-2xl border border-blue-200 bg-white p-3 shadow-sm">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2">
+                        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-blue-700">
+                          Supplier / PO
                         </p>
-                        <p className="mt-1 text-sm font-bold leading-5 text-slate-700">
-                          Choose <span className="font-black">We Pickup</span> for South or{" "}
-                          <span className="font-black">Supplier Delivery</span> for Their Truck.
-                          Then add the vendor, PO number, and pickup or delivery date.
-                        </p>
+                        {supplierSetupComplete ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-emerald-700">
+                            <Check className="h-3 w-3" aria-hidden="true" />
+                            Ready
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-amber-800">
+                            Complete these fields
+                          </span>
+                        )}
                       </div>
+                      <p className="text-xs font-bold text-slate-500">
+                        Reused automatically on the next item
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditingItemId(item.id)}
-                      className="inline-flex shrink-0 items-center justify-center rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-800"
-                    >
-                      Open Supplier / PO
-                    </button>
+
+                    <div className="mt-2.5 grid gap-2 md:grid-cols-[minmax(200px,1.35fr)_150px_180px_auto] md:items-end">
+                      <Field label="Vendor">
+                        <SearchableSelect
+                          value={item.vendor}
+                          options={vendorOptions}
+                          onChange={(vendor) => updateItemVendor(item.id, vendor)}
+                          allowCustomValue
+                          placeholder="Vendor"
+                          accent="blue"
+                          inputBackgroundClassName="bg-slate-50 focus:bg-white"
+                        />
+                      </Field>
+                      <Field label="PO #">
+                        <TextInput
+                          value={item.poNumber}
+                          onChange={(event) =>
+                            updateItem(item.id, {
+                              poNumber: formatOrderNumberInput(event.target.value),
+                            })
+                          }
+                          placeholder="444-185"
+                          inputMode="numeric"
+                          maxLength={7}
+                        />
+                      </Field>
+                      <Field label={getItemDateLabel(item.path)}>
+                        <div className="relative">
+                          <CalendarDays
+                            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                            aria-hidden="true"
+                          />
+                          <TextInput
+                            type="date"
+                            value={getItemDateValue(item)}
+                            onChange={(event) =>
+                              updateItem(
+                                item.id,
+                                item.path === "wePickup"
+                                  ? { routeDate: event.target.value }
+                                  : { supplierDate: event.target.value },
+                              )
+                            }
+                            className="pl-10"
+                          />
+                        </div>
+                      </Field>
+                      <button
+                        type="button"
+                        onClick={() => setEditingItemId(item.id)}
+                        className="inline-flex min-h-[52px] items-center justify-center rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-700 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-800"
+                      >
+                        More details
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     onClick={() => deleteItem(item.id)}
-                    className="inline-flex h-11 items-center justify-center rounded-xl border border-red-200 bg-white px-4 text-sm font-black text-[#FC2C38] transition hover:bg-red-50"
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-500 transition hover:border-red-200 hover:bg-red-50 hover:text-[#FC2C38]"
                   >
                     Delete
                   </button>
                   <button
                     type="button"
                     onClick={() => saveItem(item.id)}
-                    className="inline-flex h-11 items-center justify-center rounded-xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-700"
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-5 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
                   >
-                    Save Item
+                    Save &amp; Finish
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => saveItemAndAddAnother(item.id)}
+                    className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-black text-white shadow-sm transition ${
+                      isReturnOrder
+                        ? "bg-violet-600 hover:bg-violet-700"
+                        : "bg-[#FC2C38] hover:bg-red-700"
+                    }`}
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Save &amp; Add Another
                   </button>
                 </div>
               </article>
@@ -3223,41 +3372,41 @@ export default function OrderFlowPage({
       </section>
 
       {isReturnOrder ? (
-        <section className="mt-5 rounded-[2rem] border border-violet-200 bg-white p-4 shadow-sm sm:p-5">
+        <section className="mt-3 rounded-2xl border border-violet-200 bg-white p-3 shadow-sm sm:p-3.5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-violet-700">
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-700">
                 Step 4
               </p>
-              <h2 className="mt-1 text-2xl font-black text-slate-950">
+              <h2 className="text-xl font-black text-slate-950">
                 Type of return
               </h2>
-              <p className="mt-1 text-sm font-bold text-slate-500">
+              <p className="mt-0.5 text-xs font-bold text-slate-500 sm:text-sm">
                 Tell dispatch how the returned material needs to be loaded.
               </p>
             </div>
-            <span className="rounded-2xl bg-violet-50 px-4 py-2 text-sm font-black text-violet-700">
+            <span className="rounded-xl bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-700">
               Return pickup
             </span>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
             {returnLoadTypes.map((option) => (
               <button
                 key={option.id}
                 type="button"
                 onClick={() => setReturnLoadType(option.id)}
-                className={`flex min-h-[86px] items-center gap-4 rounded-3xl border p-4 text-left transition ${
+                className={`flex min-h-[72px] items-center gap-3 rounded-2xl border p-3 text-left transition ${
                   returnLoadType === option.id
                     ? "border-violet-500 bg-violet-50 text-violet-900 ring-4 ring-violet-100"
                     : "border-slate-200 bg-slate-50 text-slate-700 hover:border-violet-200 hover:bg-white"
                 }`}
               >
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-violet-700 shadow-sm">
-                  <option.icon className="h-6 w-6" aria-hidden="true" />
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-violet-700 shadow-sm">
+                  <option.icon className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <span>
-                  <span className="block text-lg font-black">{option.label}</span>
+                  <span className="block font-black">{option.label}</span>
                   <span className="mt-0.5 block text-sm font-bold text-slate-500">
                     {option.description}
                   </span>
@@ -3267,27 +3416,27 @@ export default function OrderFlowPage({
           </div>
         </section>
       ) : orderMethod === "delivery" ? (
-      <section className="mt-5 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-3.5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
               Step 4
             </p>
-            <h2 className="mt-1 text-2xl font-black text-slate-950">
+            <h2 className="text-xl font-black text-slate-950">
               Delivery requirements
             </h2>
-            <p className="mt-1 text-sm font-bold text-slate-500">
+            <p className="mt-0.5 text-xs font-bold text-slate-500 sm:text-sm">
               Capture hardware, tarp, unload type, and delivery notes before
               dispatch.
             </p>
           </div>
-          <span className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-black text-slate-700">
+          <span className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700">
             Driver details
           </span>
         </div>
 
-        <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_1fr_1.4fr]">
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
+        <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_1fr_1.4fr]">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
               Does this order have hardware?
             </p>
@@ -3309,7 +3458,7 @@ export default function OrderFlowPage({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
               Do we need a tarp to cover it?
             </p>
@@ -3331,7 +3480,7 @@ export default function OrderFlowPage({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-slate-50 p-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
             <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">
               Type of delivery
             </p>
@@ -3350,14 +3499,14 @@ export default function OrderFlowPage({
           </div>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-3">
           <Field label="Delivery Notes">
             <textarea
               value={deliveryNotes}
               onChange={(event) => setDeliveryNotes(event.target.value)}
               placeholder="Gate code, placement notes, call before leaving, tarp instructions..."
-              rows={3}
-              className="w-full resize-none rounded-2xl border border-slate-300 bg-slate-100 px-4 py-3 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
+              rows={2}
+              className="w-full resize-none rounded-xl border border-slate-300 bg-slate-100 px-3.5 py-2.5 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
             />
           </Field>
         </div>
