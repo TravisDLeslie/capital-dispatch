@@ -812,6 +812,8 @@ function CompactDeliveryCard({
   delivery,
   deliveries,
   deliveryDates,
+  driverOptions = [],
+  vehicleOptions = [],
   expanded,
   canEditDeliveries,
   onEditDelivery,
@@ -836,6 +838,95 @@ function CompactDeliveryCard({
     delivery.phone ||
     delivery.customerPhone ||
     "";
+  const primaryDispatchAssignment = Array.isArray(delivery.dispatchAssignments)
+    ? delivery.dispatchAssignments[0]
+    : null;
+  const savedDriver = String(
+    primaryDispatchAssignment?.driver || delivery.driver || drivers[0] || "",
+  ).trim();
+  const savedVehicleId = String(
+    primaryDispatchAssignment?.vehicleId || delivery.vehicleId || "",
+  ).trim();
+  const savedVehicleTitle = String(
+    primaryDispatchAssignment?.vehicleTitle || delivery.vehicleTitle || trucks[0] || "",
+  ).trim();
+  const savedVehicleBadge = String(
+    primaryDispatchAssignment?.vehicleBadge || delivery.vehicleBadge || "",
+  ).trim();
+  const currentVehicleKey =
+    savedVehicleId || (savedVehicleTitle ? `current:${savedVehicleTitle}` : "");
+  const availableDrivers = [
+    ...new Set(
+      [...driverOptions, savedDriver]
+        .map((driver) => String(driver || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const availableVehicles = vehicleOptions
+    .map((vehicle) => ({
+      id: String(vehicle?.id || "").trim(),
+      title: String(vehicle?.title || "Vehicle").trim(),
+      badge: String(vehicle?.badge || "").trim(),
+    }))
+    .filter((vehicle) => vehicle.id);
+
+  if (
+    currentVehicleKey &&
+    !availableVehicles.some((vehicle) => vehicle.id === currentVehicleKey)
+  ) {
+    availableVehicles.push({
+      id: currentVehicleKey,
+      title: savedVehicleTitle || "Assigned truck",
+      badge: savedVehicleBadge,
+      savedVehicleId,
+    });
+  }
+
+  const [assignmentDraft, setAssignmentDraft] = useState({
+    driver: savedDriver,
+    vehicleKey: currentVehicleKey,
+  });
+
+  useEffect(() => {
+    setAssignmentDraft({
+      driver: savedDriver,
+      vehicleKey: currentVehicleKey,
+    });
+  }, [delivery.id, savedDriver, currentVehicleKey]);
+
+  const assignmentChanged =
+    assignmentDraft.driver !== savedDriver ||
+    assignmentDraft.vehicleKey !== currentVehicleKey;
+  const assignmentReady = Boolean(
+    assignmentDraft.driver && assignmentDraft.vehicleKey,
+  );
+
+  async function saveAssignment() {
+    if (!assignmentChanged || !assignmentReady || !onUpdateDelivery) {
+      return;
+    }
+
+    const selectedVehicle = availableVehicles.find(
+      (vehicle) => vehicle.id === assignmentDraft.vehicleKey,
+    );
+    const assignment = {
+      id: primaryDispatchAssignment?.id || "truck-1",
+      driver: assignmentDraft.driver,
+      vehicleId: selectedVehicle?.savedVehicleId || selectedVehicle?.id || "",
+      vehicleTitle: selectedVehicle?.title || "",
+      vehicleBadge: selectedVehicle?.badge || "",
+    };
+
+    await onUpdateDelivery(delivery, {
+      driver: assignment.driver,
+      drivers: [assignment.driver],
+      vehicleId: assignment.vehicleId,
+      vehicleTitle: assignment.vehicleTitle,
+      vehicleBadge: assignment.vehicleBadge,
+      dispatchAssignments: [assignment],
+      dispatchStatus: "assigned",
+    });
+  }
 
   if (dispatchStyle) {
     return (
@@ -960,22 +1051,69 @@ function CompactDeliveryCard({
             <p className="text-[10px] font-black uppercase tracking-[0.13em] text-slate-400 xl:hidden">
               Driver / Truck
             </p>
-            <p className={`mt-1 text-sm font-black ${drivers.length ? "text-emerald-800" : "text-amber-800"}`}>
-              {drivers.join(", ") || "Needs driver"}
-            </p>
-            <p className={`mt-2 text-sm font-black ${trucks.length ? "text-blue-700" : "text-amber-800"}`}>
-              {trucks.join(", ") || "Needs truck"}
-            </p>
             {canEditDeliveries ? (
-              <button
-                type="button"
-                onClick={() => onEditDelivery(delivery.id)}
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:border-slate-400 hover:bg-slate-100"
-              >
-                <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-                Edit assignment
-              </button>
-            ) : null}
+              <div className="mt-1 space-y-2">
+                <select
+                  value={assignmentDraft.driver}
+                  onChange={(event) =>
+                    setAssignmentDraft((currentDraft) => ({
+                      ...currentDraft,
+                      driver: event.target.value,
+                    }))
+                  }
+                  disabled={isUpdating}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+                  aria-label="Assign delivery driver"
+                >
+                  <option value="">Assign driver...</option>
+                  {availableDrivers.map((driver) => (
+                    <option key={driver} value={driver}>
+                      {driver}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={assignmentDraft.vehicleKey}
+                  onChange={(event) =>
+                    setAssignmentDraft((currentDraft) => ({
+                      ...currentDraft,
+                      vehicleKey: event.target.value,
+                    }))
+                  }
+                  disabled={isUpdating}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  aria-label="Assign delivery truck"
+                >
+                  <option value="">Assign truck...</option>
+                  {availableVehicles.map((vehicle) => (
+                    <option key={vehicle.id} value={vehicle.id}>
+                      {vehicle.badge
+                        ? `${vehicle.badge} - ${vehicle.title}`
+                        : vehicle.title}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={saveAssignment}
+                  disabled={!assignmentChanged || !assignmentReady || isUpdating}
+                  className="inline-flex w-full items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                >
+                  {isUpdating ? "Saving..." : "Save assignment"}
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className={`mt-1 text-sm font-black ${drivers.length ? "text-emerald-800" : "text-amber-800"}`}>
+                  {drivers.join(", ") || "Needs driver"}
+                </p>
+                <p className={`mt-2 text-sm font-black ${trucks.length ? "text-blue-700" : "text-amber-800"}`}>
+                  {trucks.join(", ") || "Needs truck"}
+                </p>
+              </>
+            )}
           </section>
 
           <section className="rounded-xl bg-slate-50 p-3">
@@ -1258,6 +1396,8 @@ function CompactDeliveryCard({
 
 export default function DeliveryCalendarPage({
   deliveries,
+  vehicleOptions = /** @type {Array<{ id: string, title: string, badge: string }>} */ ([]),
+  employeeOptions = /** @type {string[]} */ ([]),
   canEditDeliveries = false,
   onEditDelivery,
   onViewOrder,
@@ -1922,6 +2062,8 @@ export default function DeliveryCalendarPage({
               delivery={selectedTimelineDelivery}
               deliveries={safeDeliveries}
               deliveryDates={deliveryDates}
+              driverOptions={employeeOptions}
+              vehicleOptions={vehicleOptions}
               expanded
               canEditDeliveries={canEditDeliveries}
               onEditDelivery={onEditDelivery}

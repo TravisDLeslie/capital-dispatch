@@ -8850,6 +8850,8 @@ export default function App() {
           <>
             <DeliveryCalendarPage
               deliveries={visibleDeliveries}
+              vehicleOptions={southVehicleOptions}
+              employeeOptions={deliveryDriverOptions}
               canEditDeliveries={canEditDeliveryDetails}
               onEditDelivery={handleEditDelivery}
               onViewOrder={(delivery: Delivery) =>
