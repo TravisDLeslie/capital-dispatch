@@ -2048,14 +2048,27 @@ export default function DeliveryCalendarPage({
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setSelectedTimelineDeliveryId("")}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
-              >
-                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                Back to day board
-              </button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {onViewOrder ? (
+                  <button
+                    type="button"
+                    onClick={() => onViewOrder(selectedTimelineDelivery)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+                  >
+                    <Eye className="h-4 w-4" aria-hidden="true" />
+                    View order
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedTimelineDeliveryId("")}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
+                >
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                  Back to day board
+                </button>
+              </div>
             </div>
 
             <CompactDeliveryCard
