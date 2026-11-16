@@ -361,6 +361,9 @@ export default function OrderDetailsModal({
       : orderDetails.handoffType === "willCall"
         ? "Will Call"
         : orderDetails.handoffType || "Order");
+  const canDeleteOrder =
+    typeof onDeleteOrder === "function" &&
+    Boolean(orderDetails.orderNumber || orderNumber);
 
   async function handleDeleteOrder() {
     if (typeof onDeleteOrder !== "function" || isDeletingOrder) {
@@ -427,17 +430,35 @@ export default function OrderDetailsModal({
               {customerTitle}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-950"
-            aria-label="Close complete order"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {canDeleteOrder ? (
+              <button
+                type="button"
+                onClick={handleDeleteOrder}
+                disabled={isDeletingOrder}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-3 text-xs font-black text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 sm:text-sm"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                {isDeletingOrder ? "Deleting..." : "Delete order"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-950"
+              aria-label="Close complete order"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         <div className="overflow-y-auto px-5 py-5 sm:px-7">
+          {deleteOrderError ? (
+            <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">
+              {deleteOrderError}
+            </p>
+          ) : null}
           {!orderDetails.found ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
               The linked order number was found on the PO, but the full saved
@@ -848,34 +869,6 @@ export default function OrderDetailsModal({
             </div>
           ) : null}
 
-          {typeof onDeleteOrder === "function" && orderDetails.found ? (
-            <div className="mt-6 border-t border-slate-200 pt-5">
-              <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-black text-red-800">
-                    Permanently delete this order
-                  </p>
-                  <p className="mt-1 text-xs font-bold text-red-700">
-                    This requires the delete password and a final confirmation.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDeleteOrder}
-                  disabled={isDeletingOrder}
-                  className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  {isDeletingOrder ? "Deleting..." : "Delete order"}
-                </button>
-              </div>
-              {deleteOrderError ? (
-                <p className="mt-3 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-bold text-red-700">
-                  {deleteOrderError}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       </div>
 

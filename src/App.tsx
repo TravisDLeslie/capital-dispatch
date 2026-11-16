@@ -8974,7 +8974,23 @@ export default function App() {
         ) : null;
 
       case "sales-converter":
-        return <SalesConverterPage onPageChange={setCurrentPage} />;
+        return (
+          <SalesConverterPage
+            onPageChange={setCurrentPage}
+            removedInventoryItemNumbers={inventorySettings.removedItemNumbers}
+            onDeleteOrder={handlePermanentlyDeleteOrder}
+            searchSources={{
+              supplierRuns: southLookupSupplierRuns,
+              theirTruckPOs,
+              checkIns,
+              deliveries:
+                canReadDeliveries || canReadOrderLifecycle ? deliveries : [],
+              orderBuilds,
+              customers,
+              vendors: activeVendors,
+            }}
+          />
+        );
 
       case "documents":
         return canReadDocuments ? (
