@@ -1244,13 +1244,6 @@ export default function DeliveryCalendarPage({
     }
   }
 
-  function toggleDelivery(deliveryId) {
-    setExpandedDeliveryIds((currentExpandedDeliveryIds) => ({
-      ...currentExpandedDeliveryIds,
-      [deliveryId]: !currentExpandedDeliveryIds[deliveryId],
-    }));
-  }
-
   function selectTimelineDelivery(deliveryId) {
     if (!deliveryId) {
       return;
@@ -1626,7 +1619,10 @@ export default function DeliveryCalendarPage({
                 <button
                   key={option.id}
                   type="button"
-                  onClick={() => setStatusFilter(option.id)}
+                  onClick={() => {
+                    setStatusFilter(option.id);
+                    setSelectedTimelineDeliveryId("");
+                  }}
                   className={`rounded-lg px-3 py-2 text-xs font-black transition ${
                     statusFilter === option.id
                       ? option.id === "needsDispatch"
@@ -1689,168 +1685,191 @@ export default function DeliveryCalendarPage({
           description="Deliveries that need dispatch and scheduled deliveries will both appear here."
         />
       ) : (
-        <>
-          <DeliveryStatusOverview
-            needsDispatchDeliveries={needsDispatchDeliveries}
-            scheduledDeliveries={scheduledDeliveries}
-            statusFilter={statusFilter}
-            onOpenDispatch={() => onPageChange?.("deliveries-dispatch")}
-            onSelectScheduledDelivery={selectTimelineDelivery}
-          />
+        selectedTimelineDelivery ? (
+          <section
+            ref={selectedDeliveryDetailRef}
+            className="scroll-mt-5 rounded-3xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm sm:p-5"
+          >
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                  Selected Delivery
+                </p>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+                  Schedule Order {selectedTimelineDelivery.orderNumber || "—"}
+                </h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">
+                  Only this delivery is shown while you review or reschedule it.
+                </p>
+              </div>
 
-          {statusFilter !== "needsDispatch" &&
-          scheduledDeliveries.length > 0 ? (
-            <div id="delivery-calendar-day-board" className="scroll-mt-5">
-          <DeliveryTimelineBoard
-            driverNames={driverNames}
-            deliveriesByDriver={deliveriesByDriver}
-            selectedDeliveryId={selectedTimelineDelivery?.id || ""}
-            onSelectDelivery={selectTimelineDelivery}
-          />
-
-          {selectedTimelineDelivery ? (
-            <div
-              ref={selectedDeliveryDetailRef}
-              className="mt-5 hidden scroll-mt-5 xl:block"
-            >
-              <CompactDeliveryCard
-                delivery={selectedTimelineDelivery}
-                deliveries={safeDeliveries}
-                deliveryDates={deliveryDates}
-                expanded
-                canEditDeliveries={canEditDeliveries}
-                onEditDelivery={onEditDelivery}
-                onViewOrder={onViewOrder}
-                onEditOrder={onEditOrder}
-                onRequestUnassign={(delivery) => {
-                  setUnassignError("");
-                  setDeliveryToUnassign(delivery);
-                }}
-                onUpdateDelivery={handleMoveDelivery}
-                isUpdating={updatingDeliveryId === selectedTimelineDelivery.id}
-                onToggle={toggleDelivery}
-                hideToggle
-              />
-            </div>
-          ) : null}
-
-          <div className="hidden gap-4 lg:grid lg:grid-cols-3 2xl:grid-cols-4 xl:hidden">
-            {driverNames.map((driverName) => (
-              <section
-                key={driverName}
-                className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+              <button
+                type="button"
+                onClick={() => setSelectedTimelineDeliveryId("")}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
               >
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                      Driver
-                    </p>
-                    <h2 className="truncate text-2xl font-black text-slate-900">
-                      {driverName}
-                    </h2>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-black text-slate-600">
-                    {deliveriesByDriver[driverName].length}
-                  </span>
-                </div>
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                Back to day board
+              </button>
+            </div>
 
-                <div className="space-y-3">
-                  {deliveriesByDriver[driverName].map((delivery) => (
-                    <CompactDeliveryCard
-                      key={delivery.id}
-                      delivery={delivery}
-                      deliveries={safeDeliveries}
-                      deliveryDates={deliveryDates}
-                      expanded={Boolean(expandedDeliveryIds[delivery.id])}
-                      canEditDeliveries={canEditDeliveries}
-                      onEditDelivery={onEditDelivery}
-                      onViewOrder={onViewOrder}
-                      onEditOrder={onEditOrder}
-                      onRequestUnassign={(delivery) => {
-                        setUnassignError("");
-                        setDeliveryToUnassign(delivery);
-                      }}
-                      onUpdateDelivery={handleMoveDelivery}
-                      isUpdating={updatingDeliveryId === delivery.id}
-                      onToggle={toggleDelivery}
-                    />
+            <CompactDeliveryCard
+              delivery={selectedTimelineDelivery}
+              deliveries={safeDeliveries}
+              deliveryDates={deliveryDates}
+              expanded
+              canEditDeliveries={canEditDeliveries}
+              onEditDelivery={onEditDelivery}
+              onViewOrder={onViewOrder}
+              onEditOrder={onEditOrder}
+              onRequestUnassign={(delivery) => {
+                setUnassignError("");
+                setDeliveryToUnassign(delivery);
+              }}
+              onUpdateDelivery={handleMoveDelivery}
+              isUpdating={updatingDeliveryId === selectedTimelineDelivery.id}
+              onToggle={selectTimelineDelivery}
+              hideToggle
+            />
+          </section>
+        ) : (
+          <>
+            <DeliveryStatusOverview
+              needsDispatchDeliveries={needsDispatchDeliveries}
+              scheduledDeliveries={scheduledDeliveries}
+              statusFilter={statusFilter}
+              onOpenDispatch={() => onPageChange?.("deliveries-dispatch")}
+              onSelectScheduledDelivery={selectTimelineDelivery}
+            />
+
+            {statusFilter !== "needsDispatch" &&
+            scheduledDeliveries.length > 0 ? (
+              <div id="delivery-calendar-day-board" className="scroll-mt-5">
+                <DeliveryTimelineBoard
+                  driverNames={driverNames}
+                  deliveriesByDriver={deliveriesByDriver}
+                  selectedDeliveryId=""
+                  onSelectDelivery={selectTimelineDelivery}
+                />
+
+                <div className="hidden gap-4 lg:grid lg:grid-cols-3 2xl:grid-cols-4 xl:hidden">
+                  {driverNames.map((driverName) => (
+                    <section
+                      key={driverName}
+                      className="min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                            Driver
+                          </p>
+                          <h2 className="truncate text-2xl font-black text-slate-900">
+                            {driverName}
+                          </h2>
+                        </div>
+                        <span className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-black text-slate-600">
+                          {deliveriesByDriver[driverName].length}
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {deliveriesByDriver[driverName].map((delivery) => (
+                          <CompactDeliveryCard
+                            key={delivery.id}
+                            delivery={delivery}
+                            deliveries={safeDeliveries}
+                            deliveryDates={deliveryDates}
+                            expanded={false}
+                            canEditDeliveries={canEditDeliveries}
+                            onEditDelivery={onEditDelivery}
+                            onViewOrder={onViewOrder}
+                            onEditOrder={onEditOrder}
+                            onRequestUnassign={(delivery) => {
+                              setUnassignError("");
+                              setDeliveryToUnassign(delivery);
+                            }}
+                            onUpdateDelivery={handleMoveDelivery}
+                            isUpdating={updatingDeliveryId === delivery.id}
+                            onToggle={selectTimelineDelivery}
+                          />
+                        ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
-              </section>
-            ))}
-          </div>
 
-          <div className="space-y-4 lg:hidden">
-            {driverNames.map((driverName) => (
-              <section
-                key={driverName}
-                className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleDriverSection(`driver-${driverName}`)}
-                  className="flex w-full items-center justify-between gap-3 text-left"
-                  aria-expanded={
-                    expandedDeliveryIds[`driver-${driverName}`] !== false
-                  }
-                >
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                      Driver
-                    </p>
-                    <h2 className="text-2xl font-black text-slate-900">
-                      {driverName}
-                    </h2>
-                    <p className="text-sm font-bold text-slate-500">
-                      {deliveriesByDriver[driverName].length}{" "}
-                      {deliveriesByDriver[driverName].length === 1
-                        ? "delivery"
-                        : "deliveries"}
-                    </p>
-                  </div>
+                <div className="space-y-4 lg:hidden">
+                  {driverNames.map((driverName) => (
+                    <section
+                      key={driverName}
+                      className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleDriverSection(`driver-${driverName}`)}
+                        className="flex w-full items-center justify-between gap-3 text-left"
+                        aria-expanded={
+                          expandedDeliveryIds[`driver-${driverName}`] !== false
+                        }
+                      >
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                            Driver
+                          </p>
+                          <h2 className="text-2xl font-black text-slate-900">
+                            {driverName}
+                          </h2>
+                          <p className="text-sm font-bold text-slate-500">
+                            {deliveriesByDriver[driverName].length}{" "}
+                            {deliveriesByDriver[driverName].length === 1
+                              ? "delivery"
+                              : "deliveries"}
+                          </p>
+                        </div>
 
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
-                    <ChevronDown
-                      className={`h-5 w-5 transition-transform ${
-                        expandedDeliveryIds[`driver-${driverName}`] !== false
-                          ? "rotate-180"
-                          : ""
-                      }`}
-                      aria-hidden="true"
-                    />
-                  </span>
-                </button>
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm">
+                          <ChevronDown
+                            className={`h-5 w-5 transition-transform ${
+                              expandedDeliveryIds[`driver-${driverName}`] !== false
+                                ? "rotate-180"
+                                : ""
+                            }`}
+                            aria-hidden="true"
+                          />
+                        </span>
+                      </button>
 
-                {expandedDeliveryIds[`driver-${driverName}`] !== false ? (
-                  <div className="mt-4 space-y-3">
-                    {deliveriesByDriver[driverName].map((delivery) => (
-                      <CompactDeliveryCard
-                        key={delivery.id}
-                        delivery={delivery}
-                        deliveries={safeDeliveries}
-                        deliveryDates={deliveryDates}
-                        expanded={Boolean(expandedDeliveryIds[delivery.id])}
-                        canEditDeliveries={canEditDeliveries}
-                        onEditDelivery={onEditDelivery}
-                        onViewOrder={onViewOrder}
-                        onEditOrder={onEditOrder}
-                        onRequestUnassign={(delivery) => {
-                          setUnassignError("");
-                          setDeliveryToUnassign(delivery);
-                        }}
-                        onUpdateDelivery={handleMoveDelivery}
-                        isUpdating={updatingDeliveryId === delivery.id}
-                        onToggle={toggleDelivery}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-              </section>
-            ))}
-          </div>
-            </div>
-          ) : null}
-        </>
+                      {expandedDeliveryIds[`driver-${driverName}`] !== false ? (
+                        <div className="mt-4 space-y-3">
+                          {deliveriesByDriver[driverName].map((delivery) => (
+                            <CompactDeliveryCard
+                              key={delivery.id}
+                              delivery={delivery}
+                              deliveries={safeDeliveries}
+                              deliveryDates={deliveryDates}
+                              expanded={false}
+                              canEditDeliveries={canEditDeliveries}
+                              onEditDelivery={onEditDelivery}
+                              onViewOrder={onViewOrder}
+                              onEditOrder={onEditOrder}
+                              onRequestUnassign={(delivery) => {
+                                setUnassignError("");
+                                setDeliveryToUnassign(delivery);
+                              }}
+                              onUpdateDelivery={handleMoveDelivery}
+                              isUpdating={updatingDeliveryId === delivery.id}
+                              onToggle={selectTimelineDelivery}
+                            />
+                          ))}
+                        </div>
+                      ) : null}
+                    </section>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )
       )}
 
       {deliveryToUnassign ? (
