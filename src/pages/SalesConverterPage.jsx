@@ -1211,6 +1211,7 @@ function SellPriceCheck({
  *   searchSources?: Record<string, Array<Record<string, any>>>;
  *   removedInventoryItemNumbers?: string[];
  *   dashboardMode?: boolean;
+ *   onDeleteOrder?: (orderNumber: string) => Promise<boolean>;
  * }} props
  */
 export default function SalesConverterPage({
@@ -1219,6 +1220,7 @@ export default function SalesConverterPage({
   searchSources = {},
   removedInventoryItemNumbers = [],
   dashboardMode = false,
+  onDeleteOrder,
 }) {
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [dashboardSearchFilter, setDashboardSearchFilter] = useState("all");
@@ -2732,6 +2734,7 @@ export default function SalesConverterPage({
           <OrderDetailsModal
             orderNumber={viewingOrderNumber}
             sources={searchSources}
+            onDeleteOrder={onDeleteOrder}
             onClose={() => setViewingOrderNumber("")}
           />
         ) : null}

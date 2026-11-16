@@ -5,6 +5,7 @@ import {
   Maximize2,
   Package,
   Phone,
+  Trash2,
   Truck,
   X,
 } from "lucide-react";
@@ -129,9 +130,12 @@ function isYardStockItem(item) {
 export default function OrderDetailsModal({
   orderNumber,
   sources = {},
+  onDeleteOrder,
   onClose,
 }) {
   const [viewingReceivingPhotos, setViewingReceivingPhotos] = useState(null);
+  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
+  const [deleteOrderError, setDeleteOrderError] = useState("");
   const orderDetails = useMemo(() => {
     const orderKey = normalizeOrderNumber(orderNumber);
     const orderBuilds = Array.isArray(sources.orderBuilds)
@@ -357,6 +361,33 @@ export default function OrderDetailsModal({
       : orderDetails.handoffType === "willCall"
         ? "Will Call"
         : orderDetails.handoffType || "Order");
+
+  async function handleDeleteOrder() {
+    if (typeof onDeleteOrder !== "function" || isDeletingOrder) {
+      return;
+    }
+
+    setIsDeletingOrder(true);
+    setDeleteOrderError("");
+
+    try {
+      const wasDeleted = await onDeleteOrder(
+        orderDetails.orderNumber || orderNumber,
+      );
+
+      if (wasDeleted) {
+        onClose?.();
+      }
+    } catch (error) {
+      setDeleteOrderError(
+        error instanceof Error
+          ? error.message
+          : "Unable to delete this order. Please try again.",
+      );
+    } finally {
+      setIsDeletingOrder(false);
+    }
+  }
 
   return (
     <div
@@ -814,6 +845,35 @@ export default function OrderDetailsModal({
               <p className="mt-1 whitespace-pre-wrap text-sm font-bold text-amber-950">
                 {orderDetails.deliveryNotes || orderDetails.notes}
               </p>
+            </div>
+          ) : null}
+
+          {typeof onDeleteOrder === "function" && orderDetails.found ? (
+            <div className="mt-6 border-t border-slate-200 pt-5">
+              <div className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-black text-red-800">
+                    Permanently delete this order
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-red-700">
+                    This requires the delete password and a final confirmation.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDeleteOrder}
+                  disabled={isDeletingOrder}
+                  className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-red-600 px-5 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  {isDeletingOrder ? "Deleting..." : "Delete order"}
+                </button>
+              </div>
+              {deleteOrderError ? (
+                <p className="mt-3 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-bold text-red-700">
+                  {deleteOrderError}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>

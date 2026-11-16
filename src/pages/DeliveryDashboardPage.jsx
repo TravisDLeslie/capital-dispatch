@@ -391,6 +391,7 @@ function DriverScheduleColumn({
  *   canEditDeliveries?: boolean;
  *   onUpdateDelivery?: (deliveryId: string, updates: any) => Promise<void>;
  *   orderSources?: Record<string, any[]>;
+ *   onDeleteOrder?: (orderNumber: string) => Promise<boolean>;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
@@ -401,6 +402,7 @@ export default function DeliveryDashboardPage({
   canEditDeliveries = false,
   onUpdateDelivery,
   orderSources = {},
+  onDeleteOrder,
   onPageChange,
 }) {
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
@@ -828,6 +830,7 @@ export default function DeliveryDashboardPage({
             ...orderSources,
             deliveries: [viewingDelivery],
           }}
+          onDeleteOrder={onDeleteOrder}
           onClose={() => setViewingDelivery(null)}
         />
       ) : null}

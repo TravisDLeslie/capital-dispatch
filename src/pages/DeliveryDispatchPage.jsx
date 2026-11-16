@@ -2651,6 +2651,7 @@ function DeliveryRouteMapPlanner({
  *   canEditDeliveries?: boolean;
  *   onUpdateDelivery: (deliveryId: string, updates: Record<string, any>) => Promise<void>;
  *   onEditDelivery: (deliveryId: string) => void;
+ *   onDeleteOrder?: (orderNumber: string) => Promise<boolean>;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
@@ -2666,6 +2667,7 @@ export default function DeliveryDispatchPage({
   canEditDeliveries = false,
   onUpdateDelivery,
   onEditDelivery,
+  onDeleteOrder,
   onPageChange,
 }) {
   const safeDeliveryOriginOptions =
@@ -4850,6 +4852,7 @@ export default function DeliveryDispatchPage({
             deliveries,
             checkIns,
           }}
+          onDeleteOrder={onDeleteOrder}
           onClose={() => setViewingOrderNumber("")}
         />
       ) : null}

@@ -612,6 +612,7 @@ function DeliveryDateGroup({
  *   isDriverView?: boolean;
  *   canEditDeliveries?: boolean;
  *   onUpdateDelivery?: (deliveryId: string, updates: Record<string, any>) => Promise<void>;
+ *   onDeleteOrder?: (orderNumber: string) => Promise<boolean>;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
@@ -626,6 +627,7 @@ export default function QueuedUpcomingDeliveriesPage({
   isDriverView = false,
   canEditDeliveries = false,
   onUpdateDelivery,
+  onDeleteOrder,
   onPageChange,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -1136,6 +1138,7 @@ export default function QueuedUpcomingDeliveriesPage({
             deliveries,
             checkIns,
           }}
+          onDeleteOrder={onDeleteOrder}
           onClose={() => setViewingDelivery(null)}
         />
       ) : null}

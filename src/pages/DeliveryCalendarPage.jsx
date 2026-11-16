@@ -10,6 +10,7 @@ import {
   MapPin,
   Package,
   Truck,
+  UserMinus,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
@@ -821,6 +822,7 @@ function CompactDeliveryCard({
   onEditDelivery,
   onViewOrder,
   onEditOrder,
+  onRequestUnassign,
   onUpdateDelivery,
   isUpdating,
   onToggle,
@@ -893,7 +895,7 @@ function CompactDeliveryCard({
       {expanded ? (
         <div className="mt-3 space-y-3">
           {canEditDeliveries || onViewOrder || onEditOrder ? (
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {canEditDeliveries ? (
                 <button
                   type="button"
@@ -924,6 +926,19 @@ function CompactDeliveryCard({
                 >
                   <ClipboardList className="h-4 w-4" aria-hidden="true" />
                   Edit Order
+                </button>
+              ) : null}
+
+              {canEditDeliveries &&
+              onRequestUnassign &&
+              !deliveryNeedsDispatch(delivery) ? (
+                <button
+                  type="button"
+                  onClick={() => onRequestUnassign(delivery)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-black text-amber-900 shadow-sm transition hover:border-amber-400 hover:bg-amber-100"
+                >
+                  <UserMinus className="h-4 w-4" aria-hidden="true" />
+                  Unassign
                 </button>
               ) : null}
             </div>
@@ -1069,6 +1084,9 @@ export default function DeliveryCalendarPage({
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
   const [error, setError] = useState("");
+  const [deliveryToUnassign, setDeliveryToUnassign] = useState(null);
+  const [unassigningDeliveryId, setUnassigningDeliveryId] = useState("");
+  const [unassignError, setUnassignError] = useState("");
   const fallbackDeliveryDate = useMemo(
     () => getFirstOpenDeliveryDate(safeDeliveries),
     [safeDeliveries],
@@ -1287,6 +1305,47 @@ export default function DeliveryCalendarPage({
       setError("Unable to move that delivery. Try again.");
     } finally {
       setUpdatingDeliveryId("");
+    }
+  }
+
+  async function handleConfirmUnassign() {
+    const deliveryId = String(deliveryToUnassign?.id || "");
+
+    if (!deliveryId || !onUpdateDelivery) {
+      return;
+    }
+
+    setUnassigningDeliveryId(deliveryId);
+    setUnassignError("");
+
+    try {
+      await onUpdateDelivery(deliveryId, {
+        driver: "",
+        drivers: [],
+        vehicleId: "",
+        vehicleTitle: "",
+        vehicleBadge: "",
+        dispatchAssignments: [],
+        dispatchStatus: "needsDispatch",
+        deliveryRouteOrder: null,
+        updatedAt: new Date().toISOString(),
+      });
+      setDeliveryToUnassign(null);
+      setSelectedTimelineDeliveryId("");
+      setExpandedDeliveryIds((currentExpandedDeliveryIds) => {
+        const nextExpandedDeliveryIds = { ...currentExpandedDeliveryIds };
+        delete nextExpandedDeliveryIds[deliveryId];
+        return nextExpandedDeliveryIds;
+      });
+    } catch (unassignDeliveryError) {
+      console.error("Unable to unassign delivery:", unassignDeliveryError);
+      setUnassignError(
+        unassignDeliveryError instanceof Error
+          ? unassignDeliveryError.message
+          : "Unable to return this delivery to Dispatch.",
+      );
+    } finally {
+      setUnassigningDeliveryId("");
     }
   }
 
@@ -1663,6 +1722,10 @@ export default function DeliveryCalendarPage({
                 onEditDelivery={onEditDelivery}
                 onViewOrder={onViewOrder}
                 onEditOrder={onEditOrder}
+                onRequestUnassign={(delivery) => {
+                  setUnassignError("");
+                  setDeliveryToUnassign(delivery);
+                }}
                 onUpdateDelivery={handleMoveDelivery}
                 isUpdating={updatingDeliveryId === selectedTimelineDelivery.id}
                 onToggle={toggleDelivery}
@@ -1703,6 +1766,10 @@ export default function DeliveryCalendarPage({
                       onEditDelivery={onEditDelivery}
                       onViewOrder={onViewOrder}
                       onEditOrder={onEditOrder}
+                      onRequestUnassign={(delivery) => {
+                        setUnassignError("");
+                        setDeliveryToUnassign(delivery);
+                      }}
                       onUpdateDelivery={handleMoveDelivery}
                       isUpdating={updatingDeliveryId === delivery.id}
                       onToggle={toggleDelivery}
@@ -1767,6 +1834,10 @@ export default function DeliveryCalendarPage({
                         onEditDelivery={onEditDelivery}
                         onViewOrder={onViewOrder}
                         onEditOrder={onEditOrder}
+                        onRequestUnassign={(delivery) => {
+                          setUnassignError("");
+                          setDeliveryToUnassign(delivery);
+                        }}
                         onUpdateDelivery={handleMoveDelivery}
                         isUpdating={updatingDeliveryId === delivery.id}
                         onToggle={toggleDelivery}
@@ -1781,6 +1852,69 @@ export default function DeliveryCalendarPage({
           ) : null}
         </>
       )}
+
+      {deliveryToUnassign ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="calendar-unassign-delivery-title"
+          onClick={() => {
+            if (!unassigningDeliveryId) {
+              setDeliveryToUnassign(null);
+              setUnassignError("");
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+              Return to Dispatch
+            </p>
+            <h2
+              id="calendar-unassign-delivery-title"
+              className="mt-2 text-2xl font-black tracking-tight text-slate-950"
+            >
+              Unassign order {deliveryToUnassign.orderNumber || "—"}?
+            </h2>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+              This removes the current driver and truck and sends the delivery
+              back to Dispatch. The delivery date, time, address, and order
+              details will stay the same.
+            </p>
+
+            {unassignError ? (
+              <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                {unassignError}
+              </p>
+            ) : null}
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeliveryToUnassign(null);
+                  setUnassignError("");
+                }}
+                disabled={Boolean(unassigningDeliveryId)}
+                className="min-h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
+              >
+                No, keep assigned
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUnassign}
+                disabled={Boolean(unassigningDeliveryId)}
+                className="min-h-12 rounded-xl bg-[#FC2C38] px-4 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+              >
+                {unassigningDeliveryId ? "Unassigning..." : "Yes, unassign"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageContainer>
   );
 }

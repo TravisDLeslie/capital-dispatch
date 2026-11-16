@@ -103,6 +103,7 @@ import {
   subscribeToCustomerStatements,
 } from "./utils/customerStatementStorage";
 import {
+  deleteSalesOrder,
   saveSalesOrder,
   subscribeToSalesOrders,
 } from "./utils/salesOrderStorage";
@@ -359,6 +360,19 @@ function normalizeSearchText(value: unknown) {
 
 function normalizeSearchNumber(value: unknown) {
   return String(value ?? "").replace(/\D/g, "");
+}
+
+function normalizeOrderRecordKey(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function getRecordOrderKey(record: Record<string, unknown> | undefined) {
+  return normalizeOrderRecordKey(
+    record?.orderNumber || record?.sourceOrderNumber,
+  );
 }
 
 function getLookupItemText(item: Record<string, unknown>) {
@@ -4148,10 +4162,166 @@ export default function App() {
     setSyncError("");
   }
 
+  async function handlePermanentlyDeleteOrder(orderNumber: string) {
+    const targetOrderKey = normalizeOrderRecordKey(orderNumber);
+
+    if (!targetOrderKey) {
+      return false;
+    }
+
+    const matchingOrderBuilds = orderBuilds.filter(
+      (orderBuild) => getRecordOrderKey(orderBuild) === targetOrderKey,
+    );
+    const matchingSalesOrders = salesOrders.filter(
+      (salesOrder) => getRecordOrderKey(salesOrder) === targetOrderKey,
+    );
+    const linkedSourceOrderIds = new Set(
+      [
+        ...matchingSalesOrders.map((salesOrder) => salesOrder.id),
+        ...matchingOrderBuilds.map((orderBuild) => orderBuild.orderId),
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    );
+    const getLinkedIds = (fieldName: string) =>
+      new Set(
+        matchingOrderBuilds
+          .flatMap((orderBuild) =>
+            Array.isArray(orderBuild[fieldName])
+              ? (orderBuild[fieldName] as unknown[])
+              : orderBuild[fieldName]
+                ? [orderBuild[fieldName]]
+                : [],
+          )
+          .map((value) => String(value || "").trim())
+          .filter(Boolean),
+      );
+    const linkedSouthRunIds = getLinkedIds("linkedSouthRunIds");
+    const linkedTheirTruckPOIds = getLinkedIds("linkedTheirTruckPOIds");
+    const linkedPodPickupIds = getLinkedIds("linkedPodPickupIds");
+    const linkedDeliveryIds = getLinkedIds("linkedDeliveryId");
+    const belongsToOrder = (record: Record<string, unknown>) =>
+      getRecordOrderKey(record) === targetOrderKey ||
+      linkedSourceOrderIds.has(String(record.sourceOrderId || "").trim());
+    const matchingDeliveries = deliveries.filter(
+      (delivery) =>
+        belongsToOrder(delivery) || linkedDeliveryIds.has(delivery.id),
+    );
+    const matchingSupplierRuns = supplierRuns.filter(
+      (supplierRun) =>
+        belongsToOrder(supplierRun) || linkedSouthRunIds.has(supplierRun.id),
+    );
+    const matchingTheirTruckPOs = theirTruckPOs.filter(
+      (theirTruckPO) =>
+        belongsToOrder(theirTruckPO) ||
+        linkedTheirTruckPOIds.has(theirTruckPO.id),
+    );
+    const matchingPodPickups = podPickups.filter(
+      (podPickup) =>
+        belongsToOrder(podPickup) || linkedPodPickupIds.has(String(podPickup.id)),
+    );
+    const matchingCheckIns = checkIns.filter((checkIn) => {
+      const orderAssignment = checkIn.orderAssignment as
+        | Record<string, unknown>
+        | undefined;
+
+      return (
+        normalizeOrderRecordKey(
+          orderAssignment?.internalReference ||
+            checkIn.sourceTheirTruckOrderNumber,
+        ) === targetOrderKey
+      );
+    });
+    const recordCount =
+      matchingOrderBuilds.length +
+      matchingSalesOrders.length +
+      matchingDeliveries.length +
+      matchingSupplierRuns.length +
+      matchingTheirTruckPOs.length +
+      matchingPodPickups.length +
+      matchingCheckIns.length;
+
+    if (recordCount === 0) {
+      window.alert(`Order ${orderNumber} could not be found.`);
+      return false;
+    }
+
+    if (!canDeleteRecord(`order ${orderNumber} and all linked records`)) {
+      return false;
+    }
+
+    if (
+      !window.confirm(
+        `Permanently delete order ${orderNumber} and its linked delivery and pickup records? This cannot be undone.`,
+      )
+    ) {
+      return false;
+    }
+
+    try {
+      for (const delivery of matchingDeliveries) {
+        await deleteDeliveryRecord(delivery.id);
+      }
+
+      let updatedSupplierRuns = supplierRuns;
+      for (const supplierRun of matchingSupplierRuns) {
+        updatedSupplierRuns = await deleteSupplierRun(
+          supplierRun.id,
+          updatedSupplierRuns,
+        );
+      }
+      setSupplierRuns(updatedSupplierRuns);
+
+      let updatedTheirTruckPOs = theirTruckPOs;
+      for (const theirTruckPO of matchingTheirTruckPOs) {
+        updatedTheirTruckPOs = await deleteTheirTruckPO(theirTruckPO.id);
+      }
+      setTheirTruckPOs(updatedTheirTruckPOs);
+
+      let updatedPodPickups = podPickups;
+      for (const podPickup of matchingPodPickups) {
+        updatedPodPickups = await deletePodPickup(String(podPickup.id));
+      }
+      setPodPickups(updatedPodPickups);
+
+      let updatedCheckIns = checkIns;
+      for (const checkIn of matchingCheckIns) {
+        updatedCheckIns = await deleteCheckIn(String(checkIn.id));
+      }
+      setCheckIns(updatedCheckIns);
+
+      let updatedSalesOrders = salesOrders;
+      for (const salesOrder of matchingSalesOrders) {
+        updatedSalesOrders = await deleteSalesOrder(salesOrder.id);
+      }
+      setSalesOrders(updatedSalesOrders);
+
+      let updatedOrderBuilds = orderBuilds;
+      for (const orderBuild of matchingOrderBuilds) {
+        updatedOrderBuilds = await deleteOrderBuild(String(orderBuild.id));
+      }
+      setOrderBuilds(updatedOrderBuilds);
+      setSyncError("");
+      return true;
+    } catch (error) {
+      const errorMessage = getFirebaseErrorMessage(error);
+
+      console.error(`Unable to permanently delete order ${orderNumber}:`, error);
+      setSyncError(errorMessage);
+      throw new Error(errorMessage);
+    }
+  }
+
   async function handleDeleteOrderBuild(orderBuildId: string) {
     const orderBuild = orderBuilds.find(
       (currentOrderBuild) => currentOrderBuild.id === orderBuildId,
     );
+
+    if (orderBuild?.orderNumber) {
+      await handlePermanentlyDeleteOrder(String(orderBuild.orderNumber));
+      return;
+    }
+
     const orderLabel = orderBuild?.orderNumber
       ? `order ${String(orderBuild.orderNumber)}`
       : "this order";
@@ -5953,6 +6123,7 @@ export default function App() {
                       deliveries,
                       checkIns,
                     }}
+                    onDeleteOrder={handlePermanentlyDeleteOrder}
                     onClose={() => setViewingDashboardOrderNumber("")}
                   />
                 ) : null}
@@ -5987,6 +6158,7 @@ export default function App() {
             onPageChange={setCurrentPage}
             onTraceSearch={handleTraceSearch}
             removedInventoryItemNumbers={inventorySettings.removedItemNumbers}
+            onDeleteOrder={handlePermanentlyDeleteOrder}
             searchSources={{
               supplierRuns: southLookupSupplierRuns,
               theirTruckPOs,
@@ -7150,6 +7322,7 @@ export default function App() {
                     deliveries,
                     checkIns,
                   }}
+                  onDeleteOrder={handlePermanentlyDeleteOrder}
                   onClose={() => setViewingDashboardOrderNumber("")}
                 />
               ) : null}
@@ -7275,6 +7448,11 @@ export default function App() {
             deliveries,
             checkIns,
           }}
+          onDeleteOrder={
+            isDeliveryDriverScopedView
+              ? undefined
+              : handlePermanentlyDeleteOrder
+          }
           onPageChange={navigateToPage}
         />
       );
@@ -7491,6 +7669,11 @@ export default function App() {
             deliveries,
             checkIns,
           }}
+          onDeleteOrder={
+            isDeliveryDriverScopedView
+              ? undefined
+              : handlePermanentlyDeleteOrder
+          }
           onPageChange={navigateToPage}
         />
       );
@@ -8245,6 +8428,7 @@ export default function App() {
             }}
             onProcessOrder={handleProcessOrderFlow}
             onProcessStockPO={handleProcessStockPO}
+            onDeleteExistingOrder={handlePermanentlyDeleteOrder}
             onPageChange={navigateToPage}
           />
         ) : null;
@@ -8621,6 +8805,11 @@ export default function App() {
             isDriverView={isDeliveryDriverScopedView}
             canEditDeliveries={canEditDeliveryDetails}
             onUpdateDelivery={handleUpdateDelivery}
+            onDeleteOrder={
+              isDeliveryDriverScopedView
+                ? undefined
+                : handlePermanentlyDeleteOrder
+            }
             onPageChange={navigateToPage}
           />
         );
@@ -8651,6 +8840,7 @@ export default function App() {
             canEditDeliveries={canEditDeliveryDetails}
             onUpdateDelivery={handleUpdateDelivery}
             onEditDelivery={handleEditDelivery}
+            onDeleteOrder={handlePermanentlyDeleteOrder}
             onPageChange={navigateToPage}
           />
         );
@@ -8686,6 +8876,7 @@ export default function App() {
                   deliveries,
                   checkIns,
                 }}
+                onDeleteOrder={handlePermanentlyDeleteOrder}
                 onClose={() => setViewingDeliveryCalendarOrderNumber("")}
               />
             ) : null}
