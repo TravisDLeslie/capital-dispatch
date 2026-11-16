@@ -509,8 +509,7 @@ function DeliveryStatusOverview({
   needsDispatchDeliveries,
   scheduledDeliveries,
   statusFilter,
-  onOpenDispatch,
-  onSelectScheduledDelivery,
+  onSelectDelivery,
 }) {
   const sections = [
     {
@@ -572,11 +571,7 @@ function DeliveryStatusOverview({
                   <button
                     key={delivery.id}
                     type="button"
-                    onClick={() =>
-                      section.id === "needsDispatch"
-                        ? onOpenDispatch?.()
-                        : onSelectScheduledDelivery?.(delivery.id)
-                    }
+                    onClick={() => onSelectDelivery?.(delivery.id)}
                     className="grid w-full gap-2 rounded-2xl border border-white/90 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                   >
                     <span className="min-w-0">
@@ -1152,7 +1147,7 @@ export default function DeliveryCalendarPage({
     first.localeCompare(second),
   );
   const selectedTimelineDelivery =
-    scheduledDeliveries.find(
+    dayDeliveries.find(
       (delivery) => delivery.id === selectedTimelineDeliveryId,
     ) || null;
 
@@ -1738,8 +1733,7 @@ export default function DeliveryCalendarPage({
               needsDispatchDeliveries={needsDispatchDeliveries}
               scheduledDeliveries={scheduledDeliveries}
               statusFilter={statusFilter}
-              onOpenDispatch={() => onPageChange?.("deliveries-dispatch")}
-              onSelectScheduledDelivery={selectTimelineDelivery}
+              onSelectDelivery={selectTimelineDelivery}
             />
 
             {statusFilter !== "needsDispatch" &&
