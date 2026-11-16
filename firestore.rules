@@ -101,7 +101,8 @@ service cloud.firestore {
           "today",
           "search",
           "trace",
-          "yard-tasks"
+          "yard-tasks",
+          "yard-documents"
         ])
       );
     }
@@ -522,7 +523,9 @@ service cloud.firestore {
     }
 
     match /appSettings/{settingId} {
-      allow read: if isApproved();
+      allow read: if
+        (settingId == "twilioMessaging" && isAdmin()) ||
+        (settingId != "twilioMessaging" && isApproved());
       allow create, update, delete: if isAdmin();
     }
 
@@ -540,6 +543,11 @@ service cloud.firestore {
           isYardTaskCompletionOnlyUpdate()
         );
       allow create, delete: if isAdmin();
+    }
+
+    match /yardTrainingRecords/{recordId} {
+      allow read, create, update: if isReceiving();
+      allow delete: if isAdmin();
     }
 
     match /dispatchOpsDailyDeliveries/{deliveryId} {

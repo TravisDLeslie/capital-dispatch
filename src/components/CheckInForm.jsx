@@ -535,6 +535,7 @@ function getMatchingTheirTruckPOsForPo(poNumber, theirTruckPOs) {
 }
 
 export default function CheckInForm({
+  initialPoNumber = "",
   onSubmit,
   vendorOptions,
   supplierRuns = [],
@@ -554,7 +555,9 @@ export default function CheckInForm({
       ]),
     [checkedInByDefault, teamMemberOptions],
   );
-  const [poNumber, setPoNumber] = useState("");
+  const [poNumber, setPoNumber] = useState(() =>
+    formatPoNumber(String(initialPoNumber || "")),
+  );
   const [vendor, setVendor] = useState("");
   const [receivingTruckType, setReceivingTruckType] =
     useState("theirTruck");

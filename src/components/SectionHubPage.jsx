@@ -11,6 +11,7 @@ function StatTile({
   note,
   tone = "default",
   solidIcon = false,
+  compact = false,
 }) {
   const toneClasses = {
     default: {
@@ -47,11 +48,19 @@ function StatTile({
   const selectedTone = toneClasses[tone] || toneClasses.default;
 
   return (
-    <div className={`rounded-2xl border p-3 shadow-sm sm:p-4 ${selectedTone.tile}`}>
+    <div
+      className={`${compact ? "rounded-xl border p-2.5 shadow-sm" : "rounded-2xl border p-3 shadow-sm sm:p-4"} ${selectedTone.tile}`}
+    >
       <div className="flex items-center gap-2">
         <span
-          className={`flex h-8 shrink-0 items-center justify-center overflow-hidden rounded-xl ${
-            logoSrc ? "w-14 border border-slate-200 bg-white px-1 sm:w-20" : "w-8"
+          className={`flex shrink-0 items-center justify-center overflow-hidden ${compact ? "h-7 rounded-lg" : "h-8 rounded-xl"} ${
+            logoSrc
+              ? compact
+                ? "w-12 border border-slate-200 bg-white px-1"
+                : "w-14 border border-slate-200 bg-white px-1 sm:w-20"
+              : compact
+                ? "w-7"
+                : "w-8"
           } ${logoSrc ? "" : solidIcon ? selectedTone.solidIcon : selectedTone.icon}`}
         >
           {logoSrc ? (
@@ -61,19 +70,38 @@ function StatTile({
               className="h-full w-full object-contain"
             />
           ) : (
-            <Icon aria-hidden="true" className="h-4 w-4" strokeWidth={2.4} />
+            <Icon
+              aria-hidden="true"
+              className={compact ? "h-3.5 w-3.5" : "h-4 w-4"}
+              strokeWidth={2.4}
+            />
           )}
         </span>
-        <p className={`text-[10px] font-black uppercase tracking-[0.1em] sm:text-xs sm:tracking-[0.14em] ${selectedTone.label}`}>
+        <p
+          className={`${compact ? "text-[10px] tracking-[0.1em]" : "text-[10px] tracking-[0.1em] sm:text-xs sm:tracking-[0.14em]"} font-black uppercase ${selectedTone.label}`}
+        >
           {label}
         </p>
       </div>
-      <p className="mt-2 text-2xl font-black text-slate-950 sm:mt-3 sm:text-3xl">
-        {value}
-      </p>
-      <p className="mt-1 text-xs font-bold leading-tight text-slate-500 sm:text-sm">
-        {note}
-      </p>
+      {compact ? (
+        <div className="mt-1 flex items-baseline gap-2">
+          <p className="text-xl font-black leading-none text-slate-950">
+            {value}
+          </p>
+          <p className="truncate text-[11px] font-bold leading-tight text-slate-500">
+            {note}
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="mt-2 text-2xl font-black text-slate-950 sm:mt-3 sm:text-3xl">
+            {value}
+          </p>
+          <p className="mt-1 text-xs font-bold leading-tight text-slate-500 sm:text-sm">
+            {note}
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -369,6 +397,7 @@ function ActionRow({
  *   actions: Array<Record<string, unknown> | null>;
  *   headerAccessory?: import("react").ReactNode;
  *   statsClassName?: string;
+ *   statsVariant?: "default" | "compact";
  *   actionsClassName?: string;
  *   topContent?: import("react").ReactNode;
  *   children?: import("react").ReactNode;
@@ -386,6 +415,7 @@ export default function SectionHubPage({
   actions,
   headerAccessory = null,
   statsClassName = "",
+  statsVariant = "default",
   actionsClassName = "grid gap-3",
   topContent = null,
   children = null,
@@ -459,10 +489,14 @@ export default function SectionHubPage({
 
       {stats?.length ? (
         <section
-          className={`mb-5 grid grid-cols-3 gap-2 sm:gap-4 ${statsClassName}`}
+          className={`${statsVariant === "compact" ? "mb-3 grid grid-cols-3 gap-3" : "mb-5 grid grid-cols-3 gap-2 sm:gap-4"} ${statsClassName}`}
         >
           {stats.map((stat) => (
-            <StatTile key={stat.label} {...stat} />
+            <StatTile
+              key={stat.label}
+              {...stat}
+              compact={statsVariant === "compact"}
+            />
           ))}
         </section>
       ) : null}

@@ -26,6 +26,7 @@ import {
   Mail,
   MailCheck,
   MapPin,
+  MessageSquareText,
   Package,
   PackageCheck,
   Percent,
@@ -35,10 +36,12 @@ import {
   ShieldCheck,
   Trees,
   Truck,
+  UserRound,
   UsersRound,
   Warehouse,
 } from "lucide-react";
 import AppHeader from "./components/AppHeader";
+import AdminAccessGate from "./components/AdminAccessGate";
 import DispatchOpsDeliveryOverview from "./components/DispatchOpsDeliveryOverview";
 import DeliveryDetailsModal from "./components/DeliveryDetailsModal";
 import FeatureErrorBoundary from "./components/FeatureErrorBoundary";
@@ -253,6 +256,7 @@ const QueuedUpcomingDeliveriesPage = lazy(
   () => import("./pages/QueuedUpcomingDeliveriesPage"),
 );
 const DeliverySettingsPage = lazy(() => import("./pages/DeliverySettingsPage"));
+const TwilioSettingsPage = lazy(() => import("./pages/TwilioSettingsPage"));
 const DeliveriesPage = lazy(() => import("./pages/DeliveriesPage"));
 const EmailListPage = lazy(() => import("./pages/EmailListPage"));
 const InventoryPage = lazy(() => import("./pages/InventoryPage"));
@@ -288,10 +292,23 @@ const TheirTruckPOPage = lazy(() => import("./pages/TheirTruckPOPage"));
 const TracePage = lazy(() => import("./pages/TracePage"));
 const UserAdminPage = lazy(() => import("./pages/UserAdminPage"));
 const VendorSettingsPage = lazy(() => import("./pages/VendorSettingsPage"));
+const YardDocumentsPage = lazy(() => import("./pages/YardDocumentsPage"));
 const YardTasksPage = lazy(() => import("./pages/YardTasksPage"));
 
 const DELETE_PO_CODE = "3105";
 const PAST_DELIVERY_DELETE_CODE = "1905";
+const PROTECTED_OFFICE_PAGE_IDS = new Set([
+  "admin",
+  "user-admin",
+  "email-list",
+  "delivery-settings",
+  "twilio-settings",
+  "vendor-settings",
+  "sales-report",
+  "accounting",
+  "accounting-customers",
+  "customer-payment-links",
+]);
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
 const LOGIN_RESTORE_TIMEOUT_MS = 12_000;
 const PROFILE_RESTORE_TIMEOUT_MS = 12_000;
@@ -777,6 +794,7 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
   receiving: [
     "dashboard",
     "receiving",
+    "yard-documents",
     "check-in",
     "today",
     "search",
@@ -1308,6 +1326,7 @@ function getAllowedPageIdsForRole(role: string) {
       "today",
       "search",
       "trace",
+      "yard-documents",
       "yard-tasks",
       "documents",
       "dispatch",
@@ -1354,6 +1373,7 @@ function getAllowedPageIdsForRole(role: string) {
       "user-admin",
       "email-list",
       "delivery-settings",
+      "twilio-settings",
       "vendor-settings",
       "pod-pickups",
       "sales-report",
@@ -1371,6 +1391,7 @@ function getAllowedPageIdsForRole(role: string) {
       "today",
       "search",
       "trace",
+      "yard-documents",
       "yard-tasks",
       "documents",
       "dispatch",
@@ -1416,6 +1437,7 @@ function getAllowedPageIdsForRole(role: string) {
       "admin",
       "email-list",
       "delivery-settings",
+      "twilio-settings",
       "vendor-settings",
       "sales-report",
       "supplier-chat",
@@ -1468,7 +1490,14 @@ function getAllowedPageIds(
 
     if (
       pageIds.some((pageId) =>
-        ["receiving", "check-in", "today", "search", "trace"].includes(pageId),
+        [
+          "receiving",
+          "yard-documents",
+          "check-in",
+          "today",
+          "search",
+          "trace",
+        ].includes(pageId),
       )
     ) {
       nextPageIds.push("receiving");
@@ -1523,6 +1552,10 @@ function getAllowedPageIds(
     if (["driver", "receiving"].includes(String(workView || ""))) {
       nextPageIds.push("south");
       nextPageIds.push("supplier-runs-check");
+
+      if (workView === "receiving") {
+        nextPageIds.push("yard-documents");
+      }
 
       if (workView === "driver") {
         nextPageIds.push(
@@ -1930,6 +1963,8 @@ export default function App() {
         return "dashboard";
       }
     });
+  const [isProtectedOfficeUnlocked, setIsProtectedOfficeUnlocked] =
+    useState(false);
   const [navigationGroupOverride, setNavigationGroupOverride] =
     useState("");
   const [isNewAppShellActive, setIsNewAppShellActive] = useState(false);
@@ -1948,6 +1983,8 @@ export default function App() {
     useState<Record<string, unknown> | null>(null);
   const [receivingDashboardSearch, setReceivingDashboardSearch] =
     useState("");
+  const [receivingCheckInInitialPoNumber, setReceivingCheckInInitialPoNumber] =
+    useState("");
   const [copiedReceivingQuickPO, setCopiedReceivingQuickPO] =
     useState("");
   const [viewingReceivingQuickPhotos, setViewingReceivingQuickPhotos] =
@@ -1961,6 +1998,13 @@ export default function App() {
         subtitle: string;
       }>;
     } | null>(null);
+
+  useEffect(() => {
+    if (currentPage !== "check-in" && receivingCheckInInitialPoNumber) {
+      setReceivingCheckInInitialPoNumber("");
+    }
+  }, [currentPage, receivingCheckInInitialPoNumber]);
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] =
     useState<UserProfile | null>(null);
@@ -2223,9 +2267,12 @@ export default function App() {
       "search",
       "trace",
       "yard-tasks",
+      "yard-documents",
     ].includes(pageId),
   );
   const canReadYardTasks = effectiveAllowedPageIds.includes("yard-tasks");
+  const canReadYardDocuments =
+    effectiveAllowedPageIds.includes("yard-documents");
   const canManageYardTasks = ["superAdmin", "admin"].includes(
     effectiveUserRole,
   );
@@ -2303,6 +2350,7 @@ export default function App() {
       "user-admin",
       "email-list",
       "delivery-settings",
+      "twilio-settings",
       "vendor-settings",
       "sales-report",
     ].includes(pageId),
@@ -3010,6 +3058,16 @@ export default function App() {
       // Ignore storage cleanup failures.
     }
   }, [currentPage, effectiveAllowedPageIds, isApproved]);
+
+  useEffect(() => {
+    if (!PROTECTED_OFFICE_PAGE_IDS.has(currentPage)) {
+      setIsProtectedOfficeUnlocked(false);
+    }
+  }, [currentPage]);
+
+  useEffect(() => {
+    setIsProtectedOfficeUnlocked(false);
+  }, [currentUser?.uid]);
 
   useEffect(() => {
     if (isAuthLoading || isProfileLoading) {
@@ -5161,16 +5219,9 @@ export default function App() {
     }
   }
 
-  function handleReceivingDashboardSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const nextSearch = receivingDashboardSearch.trim();
-
-    if (!nextSearch) {
-      return;
-    }
-
-    setTraceInitialSearch(nextSearch);
-    setCurrentPage("trace");
+  function openReceivingCheckIn(poNumber = "") {
+    setReceivingCheckInInitialPoNumber(poNumber.trim());
+    setCurrentPage("check-in");
   }
 
   async function handleCopyReceivingQuickPO(poNumber: string) {
@@ -6029,6 +6080,106 @@ export default function App() {
         checkIns as unknown as Array<Record<string, unknown>>;
       const receivingQuickRawMatches = receivingQuickLookupQuery
         ? [
+            ...orderBuilds.map((orderBuild) => {
+              const waitingItems = Array.isArray(orderBuild.waitingItems)
+                ? orderBuild.waitingItems.map(
+                    (item) => item as Record<string, unknown>,
+                  )
+                : [];
+              const stockItems = Array.isArray(orderBuild.stockItems)
+                ? orderBuild.stockItems.map(
+                    (item) => item as Record<string, unknown>,
+                  )
+                : [];
+              const fallbackItems = Array.isArray(orderBuild.items)
+                ? orderBuild.items.map(
+                    (item) => item as Record<string, unknown>,
+                  )
+                : [];
+              const items =
+                waitingItems.length > 0 || stockItems.length > 0
+                  ? [...waitingItems, ...stockItems]
+                  : fallbackItems;
+              const orderNumber = String(
+                orderBuild.orderNumber || orderBuild.sourceOrderNumber || "",
+              ).trim();
+              const poNumbers = Array.from(
+                new Set(
+                  items
+                    .map((item) => String(item.poNumber || "").trim())
+                    .filter(Boolean),
+                ),
+              );
+              const vendorNames = Array.from(
+                new Set(
+                  items
+                    .map((item) => String(item.vendor || "").trim())
+                    .filter(Boolean),
+                ),
+              );
+              const customerName = String(
+                orderBuild.businessName || orderBuild.customerName || "",
+              ).trim();
+              const recordText = [
+                orderNumber,
+                orderBuild.businessName,
+                orderBuild.customerName,
+                orderBuild.phoneNumber,
+                ...poNumbers,
+                ...vendorNames,
+                ...items.map(getLookupItemText),
+              ]
+                .map((value) => normalizeSearchText(value))
+                .filter(Boolean)
+                .join(" ");
+              const recordNumberText = [
+                orderNumber,
+                ...poNumbers,
+                ...items.map(getLookupItemNumberText),
+              ]
+                .map((value) => normalizeSearchNumber(value))
+                .filter(Boolean)
+                .join(" ");
+              const matchingItems = items.filter((item) => {
+                const itemText = getLookupItemText(item);
+                const itemNumberText = getLookupItemNumberText(item);
+
+                return (
+                  (receivingQuickLookupText &&
+                    itemText.includes(receivingQuickLookupText)) ||
+                  (receivingQuickLookupNumber &&
+                    itemNumberText.includes(receivingQuickLookupNumber))
+                );
+              });
+
+              return {
+                id: `order-${String(orderBuild.id || orderNumber)}`,
+                recordKind: "order",
+                source: "Order",
+                tone: "violet",
+                orderNumber,
+                poNumber: "",
+                poNumbers,
+                vendor: vendorNames.join(" · ") || "Capital Lumber order",
+                date: formatQuickLookupDate(
+                  orderBuild.deliveryDate || orderBuild.createdAt,
+                ),
+                customerName,
+                orderNumbers: orderNumber ? [orderNumber] : [],
+                receivingStatus: null,
+                receivingSummary: {
+                  receivedDateLabel: "",
+                  locationLabel: "",
+                },
+                photos: poNumbers.flatMap((poNumber) =>
+                  getQuickPOPhotosForPO(quickReceivingCheckIns, poNumber),
+                ),
+                items,
+                matchingItems,
+                recordText,
+                recordNumberText,
+              };
+            }),
             ...receivingDashboardSouthRuns.map((supplierRun) => {
               const items = Array.isArray(supplierRun.items)
                 ? supplierRun.items.map((item) => item as Record<string, unknown>)
@@ -6078,9 +6229,12 @@ export default function App() {
 
               return {
                 id: `south-${supplierRun.id}`,
+                recordKind: "po",
                 source: "South",
                 tone: "red",
+                orderNumber: "",
                 poNumber: supplierRun.poNumber || "No PO",
+                poNumbers: supplierRun.poNumber ? [supplierRun.poNumber] : [],
                 vendor: supplierRun.vendor || "Vendor not entered",
                 date: formatQuickLookupDate(
                   supplierRun.scheduledDate ||
@@ -6150,9 +6304,12 @@ export default function App() {
 
               return {
                 id: `their-truck-${theirTruckPO.id}`,
+                recordKind: "po",
                 source: "Their Truck",
                 tone: "blue",
+                orderNumber: "",
                 poNumber: theirTruckPO.poNumber || "No PO",
+                poNumbers: theirTruckPO.poNumber ? [theirTruckPO.poNumber] : [],
                 vendor: theirTruckPO.vendor || "Vendor not entered",
                 date: formatQuickLookupDate(
                   theirTruckPO.deliveryDate || theirTruckPO.createdAt,
@@ -6232,9 +6389,15 @@ export default function App() {
 
               return {
                 id: `receiving-${checkIn.id}`,
+                recordKind: "po",
                 source: "Receiving",
                 tone: "slate",
+                orderNumber: "",
                 poNumber: checkInPONumber,
+                poNumbers:
+                  checkInPONumber && checkInPONumber !== "No PO"
+                    ? [checkInPONumber]
+                    : [],
                 vendor: String(checkIn.vendor || "Vendor not entered"),
                 date: formatQuickLookupDate(
                   checkIn.checkedInAt || checkIn.createdAt,
@@ -6271,16 +6434,30 @@ export default function App() {
               return textMatch || numberMatch;
             })
         : [];
-      const seenReceivingQuickPOs = new Set<string>();
-      const receivingQuickMatches = receivingQuickRawMatches
+      const exactReceivingOrderMatches = receivingQuickRawMatches.filter(
+        (match) =>
+          match.recordKind === "order" &&
+          receivingQuickLookupNumber.length >= 6 &&
+          normalizeSearchNumber(match.orderNumber) ===
+            receivingQuickLookupNumber,
+      );
+      const receivingQuickCandidates =
+        exactReceivingOrderMatches.length > 0
+          ? exactReceivingOrderMatches
+          : receivingQuickRawMatches;
+      const seenReceivingQuickRecords = new Set<string>();
+      const receivingQuickMatches = receivingQuickCandidates
         .filter((match) => {
-          const poKey = normalizeSearchNumber(match.poNumber) || match.id;
+          const recordKey =
+            match.recordKind === "order"
+              ? `order:${normalizeSearchNumber(match.orderNumber) || match.id}`
+              : `po:${normalizeSearchNumber(match.poNumber) || match.id}`;
 
-          if (seenReceivingQuickPOs.has(poKey)) {
+          if (seenReceivingQuickRecords.has(recordKey)) {
             return false;
           }
 
-          seenReceivingQuickPOs.add(poKey);
+          seenReceivingQuickRecords.add(recordKey);
           return true;
         })
         .slice(0, 6);
@@ -6296,7 +6473,7 @@ export default function App() {
               ? {
                   label: "Check In Items",
                   icon: Plus,
-                  onClick: () => setCurrentPage("check-in"),
+                  onClick: () => openReceivingCheckIn(),
                 }
               : null
           }
@@ -6321,6 +6498,7 @@ export default function App() {
             },
           ]}
           statsClassName="hidden sm:grid"
+          statsVariant="compact"
           actionsClassName="grid gap-4 xl:grid-cols-2"
           actions={[
             dashboardAllowedPageIds.includes("check-in")
@@ -6334,7 +6512,7 @@ export default function App() {
                   metricLabel: "PO",
                   tone: "success",
                   variant: "live",
-                  onClick: () => setCurrentPage("check-in"),
+                  onClick: () => openReceivingCheckIn(),
                 }
               : null,
             dashboardAllowedPageIds.includes("today")
@@ -6440,8 +6618,7 @@ export default function App() {
           ]}
         >
           {dashboardAllowedPageIds.includes("search") ? (
-            <form
-              onSubmit={handleReceivingDashboardSearch}
+            <section
               className="mb-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
             >
               <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -6458,7 +6635,7 @@ export default function App() {
                 </p>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <div>
                 <div className="relative flex-1">
                   <Search
                     aria-hidden="true"
@@ -6476,13 +6653,6 @@ export default function App() {
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={!receivingDashboardSearch.trim()}
-                  className="inline-flex min-h-[52px] items-center justify-center rounded-2xl bg-slate-950 px-6 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  Full Lookup
-                </button>
               </div>
 
               <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center">
@@ -6545,12 +6715,20 @@ export default function App() {
                         );
                         const isSouth = match.tone === "red";
                         const isTheirTruck = match.tone === "blue";
+                        const isOrder = match.recordKind === "order";
+                        const linkedOrderNumber = String(
+                          isOrder
+                            ? match.orderNumber
+                            : match.orderNumbers[0] || "",
+                        ).trim();
                         const isCopied =
                           copiedReceivingQuickPO === String(match.poNumber);
                         const matchPhotos = Array.isArray(match.photos)
                           ? match.photos
                           : [];
                         const receivingSummary = match.receivingSummary;
+                        const isFullyReceived =
+                          match.receivingStatus?.key === "received";
 
                         return (
                           <article
@@ -6560,6 +6738,8 @@ export default function App() {
                                 ? "border-red-100"
                                 : isTheirTruck
                                   ? "border-blue-100"
+                                  : isOrder
+                                    ? "border-violet-100"
                                   : "border-slate-200"
                             }`}
                           >
@@ -6572,6 +6752,8 @@ export default function App() {
                                         ? "bg-red-50 text-[#FC2C38]"
                                         : isTheirTruck
                                           ? "bg-blue-50 text-blue-700"
+                                          : isOrder
+                                            ? "bg-violet-50 text-violet-700"
                                           : "bg-slate-100 text-slate-600"
                                     }`}
                                   >
@@ -6584,7 +6766,9 @@ export default function App() {
                                       {match.receivingStatus.label}
                                     </span>
                                   ) : null}
-                                  {match.date && match.source !== "Receiving" ? (
+                                  {match.date &&
+                                  match.source !== "Receiving" &&
+                                  !isOrder ? (
                                     <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
                                       Expected {match.date}
                                     </span>
@@ -6592,48 +6776,64 @@ export default function App() {
                                 </div>
 
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                                  <h3 className="text-2xl font-black leading-none text-slate-950 sm:text-3xl">
-                                    PO {match.poNumber}
-                                  </h3>
-                                  <button
-                                    type="button"
-                                    disabled={!match.poNumber || match.poNumber === "No PO"}
-                                    onClick={() => {
-                                      void handleCopyReceivingQuickPO(
-                                        String(match.poNumber),
-                                      );
-                                    }}
-                                    className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border shadow-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${
-                                      isCopied
-                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                        : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                                    }`}
-                                    aria-label={
-                                      isCopied
-                                        ? `Copied PO number ${match.poNumber}`
-                                        : `Copy PO number ${match.poNumber}`
-                                    }
-                                    title={isCopied ? "Copied" : "Copy PO"}
-                                  >
-                                    {isCopied ? (
-                                      <Check
-                                        aria-hidden="true"
-                                        className="h-4 w-4"
-                                        strokeWidth={3}
-                                      />
-                                    ) : (
-                                      <Copy
-                                        aria-hidden="true"
-                                        className="h-4 w-4"
-                                        strokeWidth={2.5}
-                                      />
-                                    )}
-                                  </button>
-                                  {isCopied ? (
-                                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
-                                      Copied
-                                    </span>
-                                  ) : null}
+                                  {isOrder ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setViewingDashboardOrderNumber(
+                                          String(match.orderNumber),
+                                        )
+                                      }
+                                      className="text-left text-2xl font-black leading-none text-slate-950 transition hover:text-violet-700 sm:text-3xl"
+                                    >
+                                      Order {match.orderNumber}
+                                    </button>
+                                  ) : (
+                                    <>
+                                      <h3 className="text-2xl font-black leading-none text-slate-950 sm:text-3xl">
+                                        PO {match.poNumber}
+                                      </h3>
+                                      <button
+                                        type="button"
+                                        disabled={!match.poNumber || match.poNumber === "No PO"}
+                                        onClick={() => {
+                                          void handleCopyReceivingQuickPO(
+                                            String(match.poNumber),
+                                          );
+                                        }}
+                                        className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border shadow-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                                          isCopied
+                                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                            : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                        }`}
+                                        aria-label={
+                                          isCopied
+                                            ? `Copied PO number ${match.poNumber}`
+                                            : `Copy PO number ${match.poNumber}`
+                                        }
+                                        title={isCopied ? "Copied" : "Copy PO"}
+                                      >
+                                        {isCopied ? (
+                                          <Check
+                                            aria-hidden="true"
+                                            className="h-4 w-4"
+                                            strokeWidth={3}
+                                          />
+                                        ) : (
+                                          <Copy
+                                            aria-hidden="true"
+                                            className="h-4 w-4"
+                                            strokeWidth={2.5}
+                                          />
+                                        )}
+                                      </button>
+                                      {isCopied ? (
+                                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700">
+                                          Copied
+                                        </span>
+                                      ) : null}
+                                    </>
+                                  )}
                                   {matchPhotos.length > 0 ? (
                                     <button
                                       type="button"
@@ -6728,7 +6928,14 @@ export default function App() {
                                     )}
                                   </span>
                                 ) : null}
-                                {match.orderNumbers.map((orderNumber) => (
+                                {match.orderNumbers
+                                  .filter(
+                                    (orderNumber) =>
+                                      !isOrder ||
+                                      normalizeSearchNumber(orderNumber) !==
+                                        normalizeSearchNumber(match.orderNumber),
+                                  )
+                                  .map((orderNumber) => (
                                   <button
                                     key={`${match.id}-order-${orderNumber}`}
                                     type="button"
@@ -6741,7 +6948,17 @@ export default function App() {
                                   >
                                     Order {String(orderNumber)}
                                   </button>
-                                ))}
+                                  ))}
+                                {isOrder
+                                  ? match.poNumbers.map((poNumber) => (
+                                      <span
+                                        key={`${match.id}-po-${poNumber}`}
+                                        className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black uppercase tracking-[0.08em] text-blue-700"
+                                      >
+                                        PO {String(poNumber)}
+                                      </span>
+                                    ))
+                                  : null}
                               </div>
                             ) : null}
 
@@ -6768,6 +6985,11 @@ export default function App() {
                                               Item / SO #: {itemLabel.itemNumber}
                                             </p>
                                           ) : null}
+                                          {isOrder && item.poNumber ? (
+                                            <p className="mt-0.5 text-xs font-black uppercase tracking-[0.08em] text-slate-500">
+                                              PO {String(item.poNumber)}
+                                            </p>
+                                          ) : null}
                                         </div>
                                       </li>
                                     );
@@ -6786,14 +7008,124 @@ export default function App() {
                                 </p>
                               ) : null}
                             </div>
+
+                            <div className="mt-3 border-t border-slate-200 pt-3">
+                              {isOrder && match.poNumbers.length > 0 ? (
+                                <div>
+                                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+                                    Choose a PO to receive
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {match.poNumbers.map((poNumber) => {
+                                      const expectedPOItemCount = match.items.filter(
+                                        (item) =>
+                                          normalizeSearchNumber(item.poNumber) ===
+                                          normalizeSearchNumber(poNumber),
+                                      ).length;
+                                      const poReceivingStatus =
+                                        getQuickReceivingStatusForPO(
+                                          quickReceivingCheckIns,
+                                          poNumber,
+                                          expectedPOItemCount,
+                                        );
+                                      const isPOReceived =
+                                        poReceivingStatus.key === "received";
+
+                                      return (
+                                        <button
+                                          key={`${match.id}-receive-${poNumber}`}
+                                          type="button"
+                                          disabled={isPOReceived}
+                                          onClick={() =>
+                                            openReceivingCheckIn(String(poNumber))
+                                          }
+                                          className={`inline-flex min-h-[46px] flex-1 basis-[150px] items-center justify-center gap-2 rounded-2xl px-4 text-sm font-black shadow-sm transition focus:outline-none focus:ring-4 ${
+                                            isPOReceived
+                                              ? "cursor-default border border-slate-200 bg-slate-100 text-slate-500 focus:ring-slate-100"
+                                              : poReceivingStatus.key === "partial"
+                                                ? "border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:ring-amber-100"
+                                                : "bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-100"
+                                          }`}
+                                        >
+                                          <ClipboardCheck
+                                            aria-hidden="true"
+                                            className="h-4 w-4"
+                                            strokeWidth={2.5}
+                                          />
+                                          {isPOReceived
+                                            ? `Checked In · PO ${String(poNumber)}`
+                                            : poReceivingStatus.key === "partial"
+                                              ? `Continue PO ${String(poNumber)}`
+                                              : `Receive PO ${String(poNumber)}`}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : !isOrder && match.poNumber !== "No PO" ? (
+                                <button
+                                  type="button"
+                                  disabled={isFullyReceived}
+                                  onClick={() =>
+                                    openReceivingCheckIn(String(match.poNumber))
+                                  }
+                                  className={`inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl px-5 text-sm font-black shadow-sm transition focus:outline-none focus:ring-4 sm:w-auto ${
+                                    isFullyReceived
+                                      ? "cursor-default border border-slate-200 bg-slate-100 text-slate-500 focus:ring-slate-100"
+                                      : match.receivingStatus?.key === "partial"
+                                        ? "border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 focus:ring-amber-100"
+                                        : "bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-100"
+                                  }`}
+                                >
+                                  <ClipboardCheck
+                                    aria-hidden="true"
+                                    className="h-4 w-4"
+                                    strokeWidth={2.5}
+                                  />
+                                  {isFullyReceived
+                                    ? "Items Checked In"
+                                    : match.receivingStatus?.key === "partial"
+                                      ? "Continue Check-In"
+                                      : "Receive Items"}
+                                </button>
+                              ) : null}
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (linkedOrderNumber) {
+                                    setViewingDashboardOrderNumber(
+                                      linkedOrderNumber,
+                                    );
+                                    return;
+                                  }
+
+                                  handleTraceSearch(String(match.poNumber));
+                                }}
+                                className={`inline-flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 sm:w-auto ${
+                                  isOrder && match.poNumbers.length > 0
+                                    ? "mt-2"
+                                    : !isOrder && match.poNumber !== "No PO"
+                                      ? "mt-2 sm:ml-2 sm:mt-0"
+                                      : ""
+                                }`}
+                              >
+                                View Details
+                                <ArrowRight
+                                  aria-hidden="true"
+                                  className="h-4 w-4"
+                                  strokeWidth={2.5}
+                                />
+                              </button>
+                            </div>
                           </article>
                         );
                       })}
                     </div>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-bold text-slate-500">
-                      No quick PO or item matches yet. Use Full Lookup to search
-                      the full PO chain.
+                      No matching order, PO, or item yet. Keep typing to refine
+                      the receiving results.
                     </div>
                   )}
                 </div>
@@ -6821,7 +7153,7 @@ export default function App() {
                   onClose={() => setViewingDashboardOrderNumber("")}
                 />
               ) : null}
-            </form>
+            </section>
           ) : null}
         </SectionHubPage>
       );
@@ -7046,8 +7378,37 @@ export default function App() {
       );
     }
 
+    if (
+      PROTECTED_OFFICE_PAGE_IDS.has(currentPage) &&
+      (canReadAdmin || canReadAccounting) &&
+      !isProtectedOfficeUnlocked
+    ) {
+      const protectedAreaLabel = currentPage.startsWith("accounting") ||
+        currentPage === "customer-payment-links"
+        ? "Accounting"
+        : "Admin";
+
+      return (
+        <AdminAccessGate
+          areaLabel={protectedAreaLabel}
+          onUnlock={() => setIsProtectedOfficeUnlocked(true)}
+          onCancel={() => navigateToPage("dashboard")}
+        />
+      );
+    }
+
     if (currentPage === "receiving" && canReadReceiving) {
       return renderDashboardPage("receiving");
+    }
+
+    if (currentPage === "yard-documents" && canReadYardDocuments) {
+      return (
+        <YardDocumentsPage
+          onPageChange={navigateToPage}
+          currentUser={currentUserCreator}
+          users={users}
+        />
+      );
     }
 
     if (currentPage === "south" && canReadSouth) {
@@ -7429,12 +7790,57 @@ export default function App() {
 
     if (currentPage === "admin" && canReadAdmin) {
       const pendingUsers = users.filter((user) => user.status === "pending");
+      const selectedPreviewUserId =
+        selectedPreviewProfile?.uid ||
+        selectedPreviewProfile?.id ||
+        selectedPreviewProfile?.email ||
+        "";
 
       return (
         <SectionHubPage
           title="Admin"
           description="Control user access and email list tools."
           icon={ShieldCheck}
+          headerAccessory={
+            isSuperAdmin && dashboardPreviewUsers.length > 0 ? (
+              <label className="flex min-w-[250px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+                  <UserRound aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                    View App As
+                  </span>
+                  <select
+                    aria-label="View app as user"
+                    value={selectedPreviewUserId}
+                    onChange={(event) => {
+                      setPreviewUserId(event.target.value);
+                      setCurrentPage("dashboard");
+                    }}
+                    className="mt-0.5 w-full bg-transparent text-sm font-black text-slate-900 outline-none"
+                  >
+                    {dashboardPreviewUsers.map((previewUser) => {
+                      const nextPreviewUserId =
+                        previewUser.uid ||
+                        previewUser.id ||
+                        previewUser.email ||
+                        "";
+                      const previewUserName =
+                        previewUser.displayName || previewUser.email || "User";
+                      const previewRole = previewUser.role || "pending";
+
+                      return (
+                        <option key={nextPreviewUserId} value={nextPreviewUserId}>
+                          {previewUserName} ({previewRole})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </span>
+              </label>
+            ) : null
+          }
           stats={[
             {
               icon: UsersRound,
@@ -7509,6 +7915,19 @@ export default function App() {
                   metricLabel: "Defaults",
                   tone: "dispatch",
                   onClick: () => setCurrentPage("delivery-settings"),
+                }
+              : null,
+            effectiveAllowedPageIds.includes("twilio-settings")
+              ? {
+                  icon: MessageSquareText,
+                  label: "Messaging",
+                  title: "Twilio Messaging",
+                  description:
+                    "Manage customer text credentials, senders, and message templates.",
+                  metric: "SMS",
+                  metricLabel: "Setup",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("twilio-settings"),
                 }
               : null,
             effectiveAllowedPageIds.includes("vendor-settings")
@@ -7794,6 +8213,9 @@ export default function App() {
             onPageChange={navigateToPage}
           />
         );
+
+      case "twilio-settings":
+        return <TwilioSettingsPage onPageChange={navigateToPage} />;
 
       case "vendor-settings":
         return (
@@ -8537,6 +8959,8 @@ export default function App() {
       default:
         return (
           <CheckInPage
+            key={receivingCheckInInitialPoNumber || "manual-check-in"}
+            initialPoNumber={receivingCheckInInitialPoNumber}
             onAddCheckIn={handleAddCheckIn}
             onViewToday={() =>
               setCurrentPage("today")
@@ -8584,21 +9008,26 @@ export default function App() {
             currentUser={currentUser}
             currentUserProfile={userProfile}
             effectiveUserRole={effectiveUserRole}
+            effectiveWorkView={effectiveWorkView}
             allowedPageIds={effectiveAllowedPageIds}
             isDriverView={isSouthDriverScopedView || isDeliveryDriverScopedView}
             isSuperAdmin={isSuperAdmin}
             isNewAppShell={isNewAppShellActive}
             onExitNewAppShell={handleExitNewAppShell}
-            previewUsers={dashboardPreviewUsers}
-            selectedPreviewUserId={
-              selectedPreviewProfile?.uid ||
-              selectedPreviewProfile?.id ||
-              selectedPreviewProfile?.email ||
-              ""
-            }
-            onPreviewUserChange={(nextPreviewUserId: string) => {
-              setPreviewUserId(nextPreviewUserId);
-              setCurrentPage("dashboard");
+            isPreviewMode={Boolean(
+              isSuperAdmin &&
+                selectedPreviewProfile &&
+                !(
+                  selectedPreviewProfile.uid === currentUser?.uid ||
+                  selectedPreviewProfile.id === currentUser?.uid ||
+                  selectedPreviewProfile.email === currentUser?.email
+                ),
+            )}
+            onExitPreview={() => {
+              setPreviewUserId(
+                currentUser?.uid || currentUser?.email || userProfile?.id || "",
+              );
+              setCurrentPage("admin");
             }}
             onSignOut={handleSignOut}
           />

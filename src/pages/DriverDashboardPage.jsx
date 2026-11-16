@@ -482,6 +482,18 @@ export default function DriverDashboardPage({
         </div>
       </div>
 
+      <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-amber-950 shadow-sm sm:px-5">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-amber-700 shadow-sm">
+          <Truck aria-hidden="true" className="h-5 w-5" strokeWidth={2.4} />
+        </span>
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Before the next load</p>
+          <p className="mt-1 text-sm font-bold leading-6 sm:text-base">
+            Please make sure the trucks are cleaned, filled up, organized, and ready to go for the next load.
+          </p>
+        </div>
+      </div>
+
       <DriverRouteOverview
         openSupplierRuns={openSupplierRuns}
         openDeliveries={openDeliveries}

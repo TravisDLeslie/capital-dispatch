@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import CheckInForm from "../components/CheckInForm";
 import PageContainer from "../components/PageContainer";
@@ -11,6 +12,7 @@ import PageContainer from "../components/PageContainer";
  *   vendorOptions?: string[];
  *   supplierRuns?: any[];
  *   theirTruckPOs?: any[];
+ *   initialPoNumber?: string;
  *   checkedInByDefault?: string;
  *   teamMemberOptions?: string[];
  * }} props
@@ -22,6 +24,7 @@ export default function CheckInPage({
   vendorOptions = [],
   supplierRuns = [],
   theirTruckPOs = [],
+  initialPoNumber = "",
   checkedInByDefault = "",
   teamMemberOptions = [],
 }) {
@@ -51,6 +54,16 @@ export default function CheckInPage({
 
   return (
     <PageContainer>
+      <button
+        type="button"
+        onClick={() => onPageChange?.("receiving")}
+        className="mb-3 inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 md:hidden"
+        aria-label="Back to Receiving Dashboard"
+      >
+        <ArrowLeft aria-hidden="true" className="h-4 w-4" strokeWidth={2.7} />
+        Back to Receiving
+      </button>
+
       <Breadcrumbs
         items={[
           { label: "Receiving", onClick: () => onPageChange?.("receiving") },
@@ -75,6 +88,7 @@ export default function CheckInPage({
       ) : null}
 
       <CheckInForm
+        initialPoNumber={initialPoNumber}
         onSubmit={handleSubmit}
         vendorOptions={vendorOptions}
         supplierRuns={supplierRuns}

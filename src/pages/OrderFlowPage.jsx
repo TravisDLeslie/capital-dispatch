@@ -31,6 +31,9 @@ import cashAccounts from "../data/cashAccounts.json";
 import chargeAccounts from "../data/chargeAccounts.json";
 import { inventoryCatalogItems } from "../data/inventoryCatalog";
 
+// Keep the shortcut implementation available for a later rollout.
+const SHOW_SHIP_ORDER_COMPLETE_SHORTCUT = false;
+
 const normalizeInventorySearch = (value) =>
   String(value || "")
     .toLowerCase()
@@ -906,6 +909,11 @@ export default function OrderFlowPage({
       }),
     [items],
   );
+  const hasShipOrderCompleteItem = items.some(
+    (item) =>
+      item.saved &&
+      String(item.itemNumber || "").trim().toUpperCase() === "SHIP",
+  );
   const isReturnOrder = orderEntryMode === "return";
   const duplicateOrderMatch = useMemo(() => {
     if (isReturnOrder) {
@@ -1162,6 +1170,56 @@ export default function OrderFlowPage({
   function saveItem(itemId) {
     updateItem(itemId, { saved: true });
     setActiveItemId(null);
+  }
+
+  function shipOrderComplete() {
+    const placeholderDescription =
+      "Complete order — line items to be added later";
+
+    setItems((currentItems) => {
+      const existingShipItem = currentItems.find(
+        (item) =>
+          String(item.itemNumber || "").trim().toUpperCase() === "SHIP",
+      );
+      const blankItem = currentItems.find(
+        (item) =>
+          !item.saved &&
+          !String(item.quantity || "").trim() &&
+          !String(item.itemNumber || "").trim() &&
+          !String(item.description || "").trim() &&
+          !String(item.vendor || "").trim() &&
+          !String(item.poNumber || "").trim(),
+      );
+      const targetItemId = existingShipItem?.id || blankItem?.id;
+      const shipItemUpdates = {
+        quantity: existingShipItem?.quantity || "1",
+        itemNumber: "SHIP",
+        description:
+          String(existingShipItem?.description || "").trim() ||
+          placeholderDescription,
+        path: "inStock",
+        vendor: "",
+        supplierAddress: "",
+        poNumber: "",
+        routeDate: "",
+        supplierDate: "",
+        saved: true,
+        lineItemsPending: true,
+      };
+
+      if (targetItemId) {
+        return currentItems.map((item) =>
+          item.id === targetItemId ? { ...item, ...shipItemUpdates } : item,
+        );
+      }
+
+      return [
+        ...currentItems,
+        createBlankItem(shipItemUpdates),
+      ];
+    });
+    setActiveItemId(null);
+    setEditingItemId(null);
   }
 
   function saveItemAndAddAnother(itemId) {
@@ -2941,7 +2999,7 @@ export default function OrderFlowPage({
       </section>
 
       <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-3.5">
-        <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
               Step 3
@@ -2955,6 +3013,24 @@ export default function OrderFlowPage({
                 : "Add material from Capital Lumber's yard or from a supplier."}
             </p>
           </div>
+          {SHOW_SHIP_ORDER_COMPLETE_SHORTCUT &&
+          !isReturnOrder &&
+          orderMethod === "delivery" ? (
+            <button
+              type="button"
+              onClick={shipOrderComplete}
+              disabled={hasShipOrderCompleteItem}
+              aria-pressed={hasShipOrderCompleteItem}
+              title="Save the order now and add its individual line items later."
+              className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border px-4 text-sm font-black transition ${
+                hasShipOrderCompleteItem
+                  ? "cursor-default border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-slate-300 bg-white text-slate-800 shadow-sm hover:border-slate-950 hover:bg-slate-950 hover:text-white"
+              }`}
+            >
+              Ship Order Complete
+            </button>
+          ) : null}
         </div>
 
         <div className="mt-3 grid gap-2">

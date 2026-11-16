@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   Truck,
   Wrench,
-  UserRound,
   UsersRound,
 } from "lucide-react";
 import capitalLumberLogo from "../assets/capital-lumber-new.svg";
@@ -39,6 +38,12 @@ const navigationItems = [
     group: "Yard Tasks",
     id: "yard-tasks",
     label: "Yard Tasks",
+  },
+  {
+    group: "Yard Documents",
+    id: "yard-documents",
+    label: "Yard Documents",
+    workView: "receiving",
   },
   {
     group: "Dispatch",
@@ -66,6 +71,12 @@ const navigationItems = [
     label: "Documents",
   },
   {
+    group: "Documents",
+    id: "yard-documents",
+    label: "Yard Documents",
+    workView: "outside-receiving",
+  },
+  {
     group: "Accounting",
     id: "accounting",
     label: "Accounting",
@@ -86,6 +97,38 @@ const navigationItems = [
     label: "Fleet",
   },
 ];
+
+const navigationGroupOrder = [
+  "Dashboard",
+  "Orders",
+  "Dispatch",
+  "South",
+  "Deliveries",
+  "Yard Tasks",
+  "Yard Documents",
+  "Sales",
+  "Suppliers",
+  "Documents",
+  "Accounting",
+  "Admin",
+  "Fleet",
+];
+
+const navigationGroupSections = {
+  Dashboard: "Main",
+  Orders: "Main",
+  Dispatch: "Operations",
+  South: "Operations",
+  Deliveries: "Operations",
+  "Yard Tasks": "Operations",
+  "Yard Documents": "Operations",
+  Sales: "Customers & Suppliers",
+  Suppliers: "Customers & Suppliers",
+  Documents: "Resources",
+  Accounting: "Resources",
+  Admin: "Management",
+  Fleet: "Management",
+};
 
 const newHomeNavigationItems = [
   {
@@ -130,7 +173,7 @@ function getNavButtonClass(isActive, isMobile = false) {
   const inactiveClass =
     "text-white/80 hover:bg-white/10 hover:text-white";
 
-  return `${isMobile ? "px-4 py-2.5" : "px-7 py-2.5"} flex w-full items-center gap-4 rounded-xl text-left text-sm font-semibold transition ${
+  return `${isMobile ? "gap-4 px-4 py-2.5 text-sm" : "gap-3 px-4 py-2 text-[13px]"} flex w-full items-center rounded-xl text-left font-semibold transition ${
     isActive ? activeClass : inactiveClass
   }`;
 }
@@ -141,8 +184,8 @@ function getActionNavButtonClass(isActive, isMobile = false) {
     : "bg-white/10 text-white hover:bg-[#FC2C38] hover:text-white hover:shadow-sm";
 
   return `${
-    isMobile ? "px-4 py-3" : "px-5 py-3"
-  } group flex w-full items-center gap-3 rounded-xl text-left text-sm font-black transition ${stateClass}`;
+    isMobile ? "px-4 py-3 text-sm" : "px-4 py-2 text-[13px]"
+  } group flex w-full items-center gap-3 rounded-xl text-left font-black transition ${stateClass}`;
 }
 
 function getCurrentPageLabel(currentPage) {
@@ -183,6 +226,10 @@ function getCurrentPageLabel(currentPage) {
 
   if (currentPage === "yard-tasks") {
     return "Yard Tasks";
+  }
+
+  if (currentPage === "yard-documents") {
+    return "Yard Documents";
   }
 
   if (currentPage === "dispatch") {
@@ -232,6 +279,7 @@ function getCurrentPageLabel(currentPage) {
       "user-admin",
       "email-list",
       "delivery-settings",
+      "twilio-settings",
       "vendor-settings",
       "sales-report",
     ].includes(currentPage)
@@ -294,6 +342,10 @@ function getCurrentPageGroup(currentPage) {
     return "Yard Tasks";
   }
 
+  if (currentPage === "yard-documents") {
+    return "Yard Documents";
+  }
+
   if (currentPage === "dispatch") {
     return "Dispatch";
   }
@@ -346,6 +398,7 @@ function getCurrentPageGroup(currentPage) {
       "user-admin",
       "email-list",
       "delivery-settings",
+      "twilio-settings",
       "vendor-settings",
       "sales-report",
     ].includes(currentPage)
@@ -397,6 +450,10 @@ function getNavGroupIcon(group) {
     return ClipboardList;
   }
 
+  if (group === "Yard Documents") {
+    return BookOpen;
+  }
+
   if (group === "Dispatch") {
     return ClipboardCheck;
   }
@@ -428,14 +485,14 @@ function getNavGroupIcon(group) {
  *   currentUser: Record<string, any> | null;
  *   currentUserProfile: Record<string, any> | null;
  *   effectiveUserRole?: string;
+ *   effectiveWorkView?: string;
  *   allowedPageIds?: string[];
  *   isDriverView?: boolean;
  *   isSuperAdmin?: boolean;
  *   isNewAppShell?: boolean;
  *   onExitNewAppShell?: () => void;
- *   previewUsers?: Array<Record<string, any>>;
- *   selectedPreviewUserId?: string;
- *   onPreviewUserChange?: (userId: string) => void;
+ *   isPreviewMode?: boolean;
+ *   onExitPreview?: () => void;
  *   onSignOut: () => void;
  * }} props
  */
@@ -443,17 +500,15 @@ export default function AppHeader({
   currentPage,
   navigationGroupOverride = "",
   onPageChange,
-  currentUser,
-  currentUserProfile,
   effectiveUserRole = "",
+  effectiveWorkView = "",
   allowedPageIds,
   isDriverView = false,
   isSuperAdmin = false,
   isNewAppShell = false,
   onExitNewAppShell,
-  previewUsers = [],
-  selectedPreviewUserId = "",
-  onPreviewUserChange,
+  isPreviewMode = false,
+  onExitPreview,
   onSignOut,
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -462,6 +517,7 @@ export default function AppHeader({
     Dashboard: true,
     Orders: false,
     "Yard Tasks": false,
+    "Yard Documents": false,
     Dispatch: false,
     South: false,
     Deliveries: false,
@@ -472,19 +528,8 @@ export default function AppHeader({
     Admin: false,
     Fleet: false,
   });
-  const userInitial = (
-    currentUser?.displayName ||
-    currentUser?.email ||
-    "U"
-  )
-    .trim()
-    .charAt(0)
-    .toUpperCase();
   const southGroupLabel = "Fulfillment";
-  const supplierVendorName =
-    effectiveUserRole === "supplier"
-      ? String(currentUserProfile?.vendorName || "").trim()
-      : "";
+  const isReceivingWorkView = effectiveWorkView === "receiving";
   const isNewHomeHeader = isSuperAdmin && isNewAppShell;
   const logoHomePageId = isNewHomeHeader
     ? "new-home"
@@ -494,7 +539,10 @@ export default function AppHeader({
 
   useEffect(() => {
     const currentGroup =
-      navigationGroupOverride || getCurrentPageGroup(currentPage);
+      navigationGroupOverride ||
+      (currentPage === "yard-documents" && !isReceivingWorkView
+        ? "Documents"
+        : getCurrentPageGroup(currentPage));
 
     if (!currentGroup) {
       return;
@@ -505,6 +553,7 @@ export default function AppHeader({
       Dashboard: false,
       Orders: false,
       "Yard Tasks": false,
+      "Yard Documents": false,
       Dispatch: false,
       South: false,
       Deliveries: false,
@@ -516,7 +565,12 @@ export default function AppHeader({
       Fleet: false,
       [currentGroup]: true,
     });
-  }, [allowedPageIds, currentPage, navigationGroupOverride]);
+  }, [
+    allowedPageIds,
+    currentPage,
+    isReceivingWorkView,
+    navigationGroupOverride,
+  ]);
 
   function handlePageChange(pageId) {
     onPageChange(pageId);
@@ -549,6 +603,7 @@ export default function AppHeader({
         Dashboard: false,
         Orders: false,
         "Yard Tasks": false,
+        "Yard Documents": false,
         Dispatch: false,
         South: false,
         Deliveries: false,
@@ -735,11 +790,15 @@ export default function AppHeader({
   function renderNavigation(isMobile = false) {
     if (effectiveUserRole === "supplier") {
       return (
-        <div className="py-2">
+        <div className={isMobile ? "py-2" : "py-1"}>
           <button
             type="button"
             onClick={() => handlePageChange("supplier-chat")}
-            className={`flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-lg font-black transition ${
+            className={`flex w-full items-center rounded-2xl text-left font-black transition ${
+              isMobile
+                ? "gap-4 px-4 py-4 text-lg"
+                : "gap-3 px-3 py-2.5 text-[15px]"
+            } ${
               currentPage === "supplier-chat"
                 ? "bg-[#FC2C38] text-white shadow-sm"
                 : "text-white/90 hover:bg-white/10 hover:text-white"
@@ -747,7 +806,7 @@ export default function AppHeader({
           >
             <MessagesSquare
               aria-hidden="true"
-              className="h-6 w-6 shrink-0"
+              className={isMobile ? "h-6 w-6 shrink-0" : "h-5 w-5 shrink-0"}
               strokeWidth={2.5}
             />
             <span className="min-w-0 flex-1 truncate">Supplier Portal</span>
@@ -758,12 +817,16 @@ export default function AppHeader({
 
     if (isNewHomeHeader) {
       return (
-        <div className="space-y-3 py-2">
-          <div className="px-4 pb-2">
+        <div className={isMobile ? "space-y-3 py-2" : "space-y-1.5 py-1"}>
+          <div className={isMobile ? "px-4 pb-2" : "px-3 pb-1"}>
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/45">
               New App Flow
             </p>
-            <p className="mt-1 text-sm font-semibold leading-5 text-white/70">
+            <p
+              className={`mt-1 font-semibold text-white/70 ${
+                isMobile ? "text-sm leading-5" : "text-xs leading-4"
+              }`}
+            >
               A clean pass at the future menu.
             </p>
           </div>
@@ -776,16 +839,26 @@ export default function AppHeader({
                 key={item.id}
                 type="button"
                 onClick={() => handlePageChange(item.id)}
-                className={`flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-lg font-black transition ${
+                className={`flex w-full items-center rounded-2xl text-left font-black transition ${
+                  isMobile
+                    ? "gap-4 px-4 py-4 text-lg"
+                    : "gap-3 px-3 py-2 text-[15px]"
+                } ${
                   isMobile
                     ? "text-white hover:bg-white/10"
                     : "text-white/90 hover:bg-white/10 hover:text-white"
                 }`}
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-white">
+                <span
+                  className={`flex shrink-0 items-center justify-center bg-white/10 text-white ${
+                    isMobile
+                      ? "h-11 w-11 rounded-2xl"
+                      : "h-8 w-8 rounded-xl"
+                  }`}
+                >
                   <NewHomeIcon
                     aria-hidden="true"
-                    className="h-5 w-5"
+                    className={isMobile ? "h-5 w-5" : "h-4 w-4"}
                     strokeWidth={2.6}
                   />
                 </span>
@@ -811,8 +884,18 @@ export default function AppHeader({
       );
     }
 
-    return ["Dashboard", "Orders", "Dispatch", "South", "Deliveries", "Yard Tasks", "Sales", "Suppliers", "Documents", "Accounting", "Admin", "Fleet"].map((group) => {
+    let lastRenderedSection = "";
+
+    return navigationGroupOrder.map((group) => {
       const groupItems = navigationItems.filter((item) => {
+        if (item.workView === "receiving" && !isReceivingWorkView) {
+          return false;
+        }
+
+        if (item.workView === "outside-receiving" && isReceivingWorkView) {
+          return false;
+        }
+
         const pageIsAllowed =
           !allowedPageIds ||
           allowedPageIds.includes(item.id) ||
@@ -870,6 +953,7 @@ export default function AppHeader({
                 "user-admin",
                 "email-list",
                 "delivery-settings",
+                "twilio-settings",
                 "vendor-settings",
                 "sales-report",
               ].includes(pageId),
@@ -887,7 +971,10 @@ export default function AppHeader({
       const NavGroupIcon = getNavGroupIcon(group);
       const hasGroupItems = groupItems.length > 0;
       const currentPageGroup =
-        navigationGroupOverride || getCurrentPageGroup(currentPage);
+        navigationGroupOverride ||
+        (currentPage === "yard-documents" && !isReceivingWorkView
+          ? "Documents"
+          : getCurrentPageGroup(currentPage));
       const groupIsActive = currentPageGroup === group;
       const southDropdownLinks =
         group === "South" ? getSouthDropdownLinks() : [];
@@ -913,28 +1000,61 @@ export default function AppHeader({
         "Dashboard",
         "New Home",
         "Yard Tasks",
+        "Yard Documents",
         "Dispatch",
         "South",
         "Deliveries",
         "Sales",
-        "Documents",
         "Accounting",
         "Admin",
         "Fleet",
       ].includes(group);
+      const hasExpandedChildren =
+        shouldShowSouthDropdown ||
+        shouldShowDeliveriesDropdown ||
+        shouldShowSalesDropdown ||
+        shouldShowAccountingDropdown ||
+        (isGroupOpen && hasGroupItems && !isSinglePageGroup);
+      const shouldUseSubtleActiveGroupStyle =
+        groupIsActive && hasExpandedChildren;
+      const sectionLabel = navigationGroupSections[group] || "Other";
+      const isFirstRenderedGroup = !lastRenderedSection;
+      const shouldShowSectionLabel =
+        hasGroupItems && sectionLabel !== lastRenderedSection;
+
+      if (hasGroupItems) {
+        lastRenderedSection = sectionLabel;
+      }
 
       return hasGroupItems ? (
         <div
           key={group}
-          className="border-b border-white/10 py-4 first:pt-0 last:border-b-0"
+          className={`${
+            isMobile
+              ? "border-b border-white/10 py-4 last:border-b-0"
+              : `${shouldShowSectionLabel && !isFirstRenderedGroup ? "mt-4" : ""} py-1`
+          }`}
         >
+          {shouldShowSectionLabel && !isMobile ? (
+            <p className="px-3 pb-2 pt-1 text-[10px] font-black uppercase tracking-[0.18em] text-white/40">
+              {sectionLabel}
+            </p>
+          ) : null}
           <div
-            className={`flex w-full items-center rounded-xl transition ${
-              groupIsActive
-                ? "bg-[#FC2C38] text-white"
-                : "text-white hover:bg-white/10"
+            className={`relative flex w-full items-center overflow-hidden rounded-xl transition ${
+              shouldUseSubtleActiveGroupStyle
+                ? "bg-white/10 text-white ring-1 ring-inset ring-white/10"
+                : groupIsActive
+                  ? "bg-[#FC2C38] text-white"
+                  : "text-white hover:bg-white/10"
             }`}
           >
+            {shouldUseSubtleActiveGroupStyle ? (
+              <span
+                aria-hidden="true"
+                className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-[#FC2C38]"
+              />
+            ) : null}
             <button
               type="button"
               onClick={() => {
@@ -944,7 +1064,11 @@ export default function AppHeader({
                   toggleNavGroup(group);
                 }
               }}
-              className="flex min-w-0 flex-1 items-center gap-4 rounded-l-xl px-4 py-4 text-left text-lg font-black"
+              className={`flex min-w-0 flex-1 items-center rounded-l-xl text-left font-black ${
+                isMobile
+                  ? "gap-4 px-4 py-4 text-lg"
+                  : "gap-3 px-3 py-2.5 text-[15px]"
+              }`}
               aria-expanded={
                 shouldShowSouthDropdown ||
                 shouldShowDeliveriesDropdown ||
@@ -957,7 +1081,9 @@ export default function AppHeader({
             >
               <NavGroupIcon
                 aria-hidden="true"
-                className="h-6 w-6 shrink-0"
+                className={
+                  isMobile ? "h-6 w-6 shrink-0" : "h-5 w-5 shrink-0"
+                }
                 strokeWidth={2.5}
               />
               <span className="min-w-0 truncate">
@@ -973,7 +1099,9 @@ export default function AppHeader({
               <button
                 type="button"
                 onClick={() => toggleNavGroup(group)}
-                className="flex h-full min-h-[56px] w-12 shrink-0 items-center justify-center rounded-r-xl text-white/70 transition hover:text-white"
+                className={`flex h-full shrink-0 items-center justify-center rounded-r-xl text-white/70 transition hover:text-white ${
+                  isMobile ? "min-h-[56px] w-12" : "min-h-[40px] w-10"
+                }`}
                 aria-label={`${isGroupOpen ? "Collapse" : "Open"} ${
                   group === "South" ? southGroupLabel : group
                 } menu`}
@@ -981,7 +1109,7 @@ export default function AppHeader({
               >
                 <ChevronDown
                   aria-hidden="true"
-                  className={`h-5 w-5 transition-transform ${
+                  className={`${isMobile ? "h-5 w-5" : "h-4 w-4"} transition-transform ${
                     isGroupOpen ? "rotate-180" : ""
                   }`}
                   strokeWidth={2.6}
@@ -991,13 +1119,15 @@ export default function AppHeader({
               <button
                 type="button"
                 onClick={() => toggleNavGroup(group)}
-                className="flex h-full min-h-[56px] w-12 shrink-0 items-center justify-center rounded-r-xl text-white/70 transition hover:text-white"
+                className={`flex h-full shrink-0 items-center justify-center rounded-r-xl text-white/70 transition hover:text-white ${
+                  isMobile ? "min-h-[56px] w-12" : "min-h-[40px] w-10"
+                }`}
                 aria-label={`${isGroupOpen ? "Collapse" : "Open"} ${group} menu`}
                 aria-expanded={isGroupOpen}
               >
                 <ChevronDown
                   aria-hidden="true"
-                  className={`h-5 w-5 transition-transform ${
+                  className={`${isMobile ? "h-5 w-5" : "h-4 w-4"} transition-transform ${
                     isGroupOpen ? "rotate-180" : ""
                   }`}
                   strokeWidth={2.6}
@@ -1007,18 +1137,34 @@ export default function AppHeader({
           </div>
 
           {shouldShowSouthDropdown ? (
-            <div className="mt-3 space-y-2 pl-5">
+            <div
+              className={
+                isMobile
+                  ? "mt-3 space-y-2 pl-5"
+                  : "ml-5 mt-2 space-y-1 border-l border-white/20"
+              }
+            >
               {southDropdownLinks.map((link) => (
                 <button
                   key={link.id}
                   type="button"
                   onClick={() => handlePageChange(link.pageId)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
+                  className={`flex w-full items-center gap-3 rounded-xl text-left font-black transition ${
+                    isMobile
+                      ? "px-4 py-2.5 text-sm"
+                      : "gap-2 rounded-l-none py-2 pl-3 pr-3 text-[13px]"
+                  } ${
                     link.isActive
                       ? "bg-[#FC2C38] text-white shadow-sm"
                       : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
+                  {!isMobile ? (
+                    <span
+                      aria-hidden="true"
+                      className="relative -ml-3 h-px w-4 shrink-0 bg-white/25 after:absolute after:-left-[2px] after:-top-[2px] after:h-1 after:w-1 after:rounded-full after:bg-white/45"
+                    />
+                  ) : null}
                   <span className="min-w-0 flex-1 truncate">
                     {link.label}
                   </span>
@@ -1028,18 +1174,34 @@ export default function AppHeader({
           ) : null}
 
           {shouldShowDeliveriesDropdown ? (
-            <div className="mt-3 space-y-2 pl-5">
+            <div
+              className={
+                isMobile
+                  ? "mt-3 space-y-2 pl-5"
+                  : "ml-5 mt-2 space-y-1 border-l border-white/20"
+              }
+            >
               {deliveriesDropdownLinks.map((link) => (
                 <button
                   key={link.id}
                   type="button"
                   onClick={() => handlePageChange(link.pageId)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
+                  className={`flex w-full items-center gap-3 rounded-xl text-left font-black transition ${
+                    isMobile
+                      ? "px-4 py-2.5 text-sm"
+                      : "gap-2 rounded-l-none py-2 pl-3 pr-3 text-[13px]"
+                  } ${
                     link.isActive
                       ? "bg-[#FC2C38] text-white shadow-sm"
                       : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
+                  {!isMobile ? (
+                    <span
+                      aria-hidden="true"
+                      className="relative -ml-3 h-px w-4 shrink-0 bg-white/25 after:absolute after:-left-[2px] after:-top-[2px] after:h-1 after:w-1 after:rounded-full after:bg-white/45"
+                    />
+                  ) : null}
                   <span className="min-w-0 flex-1 truncate">
                     {link.label}
                   </span>
@@ -1049,18 +1211,34 @@ export default function AppHeader({
           ) : null}
 
           {shouldShowSalesDropdown ? (
-            <div className="mt-3 space-y-2 pl-5">
+            <div
+              className={
+                isMobile
+                  ? "mt-3 space-y-2 pl-5"
+                  : "ml-5 mt-2 space-y-1 border-l border-white/20"
+              }
+            >
               {salesDropdownLinks.map((link) => (
                 <button
                   key={link.id}
                   type="button"
                   onClick={() => handlePageChange(link.pageId)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
+                  className={`flex w-full items-center gap-3 rounded-xl text-left font-black transition ${
+                    isMobile
+                      ? "px-4 py-2.5 text-sm"
+                      : "gap-2 rounded-l-none py-2 pl-3 pr-3 text-[13px]"
+                  } ${
                     link.isActive
                       ? "bg-[#FC2C38] text-white shadow-sm"
                       : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
+                  {!isMobile ? (
+                    <span
+                      aria-hidden="true"
+                      className="relative -ml-3 h-px w-4 shrink-0 bg-white/25 after:absolute after:-left-[2px] after:-top-[2px] after:h-1 after:w-1 after:rounded-full after:bg-white/45"
+                    />
+                  ) : null}
                   <span className="min-w-0 flex-1 truncate">
                     {link.label}
                   </span>
@@ -1070,18 +1248,34 @@ export default function AppHeader({
           ) : null}
 
           {shouldShowAccountingDropdown ? (
-            <div className="mt-3 space-y-2 pl-5">
+            <div
+              className={
+                isMobile
+                  ? "mt-3 space-y-2 pl-5"
+                  : "ml-5 mt-2 space-y-1 border-l border-white/20"
+              }
+            >
               {accountingDropdownLinks.map((link) => (
                 <button
                   key={link.id}
                   type="button"
                   onClick={() => handlePageChange(link.pageId)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-sm font-black transition ${
+                  className={`flex w-full items-center gap-3 rounded-xl text-left font-black transition ${
+                    isMobile
+                      ? "px-4 py-2.5 text-sm"
+                      : "gap-2 rounded-l-none py-2 pl-3 pr-3 text-[13px]"
+                  } ${
                     link.isActive
                       ? "bg-[#FC2C38] text-white shadow-sm"
                       : "text-white/80 hover:bg-white/10 hover:text-white"
                   }`}
                 >
+                  {!isMobile ? (
+                    <span
+                      aria-hidden="true"
+                      className="relative -ml-3 h-px w-4 shrink-0 bg-white/25 after:absolute after:-left-[2px] after:-top-[2px] after:h-1 after:w-1 after:rounded-full after:bg-white/45"
+                    />
+                  ) : null}
                   <span className="min-w-0 flex-1 truncate">
                     {link.label}
                   </span>
@@ -1091,22 +1285,35 @@ export default function AppHeader({
           ) : null}
 
           {hasGroupItems && isGroupOpen && !isSinglePageGroup ? (
-            <div className="mt-3 space-y-2">
+            <div
+              className={
+                isMobile
+                  ? "mt-3 space-y-2"
+                  : "ml-5 mt-2 space-y-1 border-l border-white/20"
+              }
+            >
               {groupItems.map((item) => {
                 const isActive = currentPage === item.id;
                 const isPrimaryAction = item.id === "supplier-runs-add";
+                const itemClassName = isPrimaryAction
+                  ? getActionNavButtonClass(isActive, isMobile)
+                  : getNavButtonClass(isActive, isMobile);
 
                 return (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => handlePageChange(item.id)}
-                    className={
-                      isPrimaryAction
-                        ? getActionNavButtonClass(isActive, isMobile)
-                        : getNavButtonClass(isActive, isMobile)
-                    }
+                    className={`${itemClassName} ${
+                      isMobile ? "" : "rounded-l-none pl-3 pr-3"
+                    }`}
                   >
+                    {!isMobile ? (
+                      <span
+                        aria-hidden="true"
+                        className="relative -ml-3 h-px w-4 shrink-0 bg-white/25 after:absolute after:-left-[2px] after:-top-[2px] after:h-1 after:w-1 after:rounded-full after:bg-white/45"
+                      />
+                    ) : null}
                     {isPrimaryAction ? (
                       <span
                         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition ${
@@ -1132,48 +1339,6 @@ export default function AppHeader({
     });
   }
 
-  function getPreviewUserId(user) {
-    return user?.uid || user?.id || user?.email || "";
-  }
-
-  function renderPreviewSelect() {
-    if (!isSuperAdmin || !Array.isArray(previewUsers) || previewUsers.length === 0) {
-      return null;
-    }
-
-    return (
-      <label className="block border-b border-white/10 px-4 py-3">
-        <span className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-white/60">
-          <UserRound
-            aria-hidden="true"
-            className="h-3.5 w-3.5"
-            strokeWidth={2.5}
-          />
-          View App As
-        </span>
-
-        <select
-          value={selectedPreviewUserId}
-          onChange={(event) => onPreviewUserChange?.(event.target.value)}
-          className="w-full rounded-xl border border-white/20 bg-white px-3 py-2 text-xs font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-500/20"
-        >
-          {previewUsers.map((previewUser) => {
-            const previewUserId = getPreviewUserId(previewUser);
-            const previewUserName =
-              previewUser.displayName || previewUser.email || "User";
-            const previewRole = previewUser.role || "pending";
-
-            return (
-              <option key={previewUserId} value={previewUserId}>
-                {previewUserName} ({previewRole})
-              </option>
-            );
-          })}
-        </select>
-      </label>
-    );
-  }
-
   return (
     <>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col border-r border-white/10 bg-[#1e1e1e] md:flex">
@@ -1194,50 +1359,29 @@ export default function AppHeader({
         </nav>
 
         <div className="border-t border-white/10 p-5">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 shadow-sm">
-            {renderPreviewSelect()}
-
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FC2C38] text-sm font-black text-white">
-                {userInitial}
-              </span>
-
-              <span className="min-w-0">
-                <span className="block truncate text-xs font-black text-white">
-                  {currentUser?.displayName ||
-                    currentUser?.email ||
-                    "Signed in"}
-                </span>
-
-                {supplierVendorName ? (
-                  <span className="mt-1 block truncate text-[11px] font-black text-emerald-300">
-                    {supplierVendorName}
-                  </span>
-                ) : null}
-
-                {isSuperAdmin ? (
-                  <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
-                    Super Admin
-                  </span>
-                ) : currentUserProfile?.role ? (
-                  <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.16em] text-white/60">
-                    {currentUserProfile.role}
-                  </span>
-                ) : null}
-              </span>
-            </div>
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2 shadow-sm">
+            {isSuperAdmin && isPreviewMode ? (
+              <button
+                type="button"
+                onClick={onExitPreview}
+                className="mb-1 flex w-full items-center justify-center rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-black text-amber-100 transition hover:bg-amber-300/20"
+              >
+                Exit preview
+              </button>
+            ) : null}
 
             <button
               type="button"
               onClick={onSignOut}
-              className="flex w-full items-center gap-3 border-t border-white/10 px-4 py-3 text-left text-sm font-semibold text-white/75 transition hover:bg-white/10 hover:text-white"
+              className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl text-white/75 transition hover:bg-white/10 hover:text-white"
+              aria-label="Sign out"
+              title="Sign out"
             >
               <LogOut
                 aria-hidden="true"
-                className="h-4 w-4"
+                className="h-5 w-5"
                 strokeWidth={2.3}
               />
-              Sign out
             </button>
           </div>
         </div>
@@ -1294,11 +1438,12 @@ export default function AppHeader({
 
             <button
               type="button"
-              onClick={() => setIsMenuOpen(true)}
+              onClick={onSignOut}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-black text-white ring-1 ring-white/15 transition hover:bg-white/15"
-              aria-label="Open account menu"
+              aria-label="Sign out"
+              title="Sign out"
             >
-              {userInitial}
+              <LogOut aria-hidden="true" className="h-5 w-5" strokeWidth={2.3} />
             </button>
           </div>
         </div>
@@ -1342,47 +1487,33 @@ export default function AppHeader({
             </nav>
 
             <div className="border-t border-white/10 px-5 py-3">
-              <div className="rounded-2xl border border-white/10 bg-white/5 shadow-sm">
-                {renderPreviewSelect()}
-
-                <div className="flex items-center gap-3 px-3 py-3">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-bold text-white">
-                    {currentUser?.displayName ||
-                      currentUser?.email ||
-                      "Signed in"}
-                  </span>
-
-                  {supplierVendorName ? (
-                    <span className="mt-0.5 block truncate text-[11px] font-black text-emerald-300">
-                      {supplierVendorName}
-                    </span>
-                  ) : null}
-
-                  {isSuperAdmin ? (
-                    <span className="mt-0.5 block text-[10px] font-black uppercase tracking-[0.14em] text-white/60">
-                      Super Admin
-                    </span>
-                  ) : currentUserProfile?.role ? (
-                    <span className="mt-0.5 block text-[10px] font-black uppercase tracking-[0.14em] text-white/60">
-                      {currentUserProfile.role}
-                    </span>
-                  ) : null}
-                </span>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-2 shadow-sm">
+                {isSuperAdmin && isPreviewMode ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onExitPreview?.();
+                      setIsMenuOpen(false);
+                    }}
+                    className="mb-2 w-full rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs font-black text-amber-100 transition hover:bg-amber-300/20"
+                  >
+                    Exit preview
+                  </button>
+                ) : null}
 
                 <button
                   type="button"
                   onClick={onSignOut}
-                  className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 text-xs font-bold text-white shadow-sm transition hover:bg-white/10"
+                  className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/5 text-white shadow-sm transition hover:bg-white/10"
+                  aria-label="Sign out"
+                  title="Sign out"
                 >
                   <LogOut
                     aria-hidden="true"
-                    className="h-4 w-4"
+                    className="h-5 w-5"
                     strokeWidth={2.3}
                   />
-                  Sign out
                 </button>
-                </div>
               </div>
             </div>
           </aside>

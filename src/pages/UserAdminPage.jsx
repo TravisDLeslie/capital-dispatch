@@ -69,6 +69,7 @@ const permissionGroups = [
     title: "Receiving",
     permissions: [
       { id: "receiving", label: "Receiving" },
+      { id: "yard-documents", label: "Yard Documents" },
       { id: "check-in", label: "Check In" },
       { id: "today", label: "Today's Check-Ins" },
       { id: "search", label: "Search PO" },
@@ -172,6 +173,7 @@ const permissionGroups = [
       { id: "user-admin", label: "User Access" },
       { id: "email-list", label: "Email List" },
       { id: "delivery-settings", label: "Delivery Settings" },
+      { id: "twilio-settings", label: "Twilio Messaging" },
       { id: "vendor-settings", label: "Vendor Settings" },
       { id: "sales-report", label: "Sales Pulse" },
     ],
@@ -237,6 +239,7 @@ const legacyRolePermissionPresets = {
   receiving: [
     "dashboard",
     "receiving",
+    "yard-documents",
     "check-in",
     "today",
     "search",
