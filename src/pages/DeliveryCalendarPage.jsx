@@ -822,10 +822,220 @@ function CompactDeliveryCard({
   isUpdating,
   onToggle,
   hideToggle = false,
+  dispatchStyle = false,
 }) {
   const scopeSummary = getDeliveryScopeSummary(delivery);
   const driveMinutes = getDeliveryDriveMinutes(delivery);
   const leaveAroundLabel = getTimeSlotLabel(delivery.deliveryTimeSlot || "");
+  const drivers = getDeliveryDrivers(delivery);
+  const trucks = getDeliveryTrucks(delivery);
+  const needsDispatch = deliveryNeedsDispatch(delivery);
+  const contactPhone =
+    delivery.contactPhone ||
+    delivery.phoneNumber ||
+    delivery.phone ||
+    delivery.customerPhone ||
+    "";
+
+  if (dispatchStyle) {
+    return (
+      <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="hidden grid-cols-[minmax(150px,0.85fr)_minmax(220px,1.2fr)_minmax(280px,1.35fr)_minmax(200px,0.95fr)_minmax(170px,0.75fr)] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
+          <span>Delivery</span>
+          <span>Destination</span>
+          <span>Schedule</span>
+          <span>Driver / Truck</span>
+          <span>Load</span>
+        </div>
+
+        <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[minmax(150px,0.85fr)_minmax(220px,1.2fr)_minmax(280px,1.35fr)_minmax(200px,0.95fr)_minmax(170px,0.75fr)]">
+          <section className="rounded-xl bg-slate-50 p-3">
+            <p className="text-xs font-black uppercase tracking-[0.13em] text-[#FC2C38]">
+              Order {delivery.orderNumber || "—"}
+            </p>
+            <span
+              className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${
+                needsDispatch
+                  ? "bg-amber-100 text-amber-900"
+                  : "bg-emerald-100 text-emerald-800"
+              }`}
+            >
+              {needsDispatch ? "Needs dispatch" : "Assigned"}
+            </span>
+            <h3 className="mt-2 text-base font-black leading-tight text-slate-950">
+              {formatCustomerName(delivery.customerName)}
+            </h3>
+          </section>
+
+          <section className="rounded-xl bg-slate-50 p-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.13em] text-slate-400 xl:hidden">
+              Destination
+            </p>
+            <p className="mt-1 flex items-start gap-2 text-sm font-black leading-snug text-slate-900">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+              {delivery.address || "No delivery address"}
+            </p>
+            {contactPhone ? (
+              <p className="mt-2 text-xs font-bold text-slate-500">
+                {contactPhone}
+              </p>
+            ) : null}
+            <p className="mt-2 text-xs font-black text-blue-700">
+              {driveMinutes || 0} min from {delivery.deliveryOriginName || "Capital Lumber"}
+            </p>
+          </section>
+
+          <section className="rounded-xl border border-blue-100 bg-blue-50/70 p-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.13em] text-blue-700 xl:hidden">
+              Schedule
+            </p>
+            {canEditDeliveries ? (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[1fr_0.9fr]">
+                <DeliveryMoveDatePicker
+                  value={getDeliveryDateKey(delivery.deliveryDate)}
+                  deliveryDates={deliveryDates}
+                  onChange={(dateKey) =>
+                    onUpdateDelivery(delivery, { deliveryDate: dateKey })
+                  }
+                  disabled={isUpdating}
+                />
+                <select
+                  value={delivery.deliveryTimeSlot || ""}
+                  onChange={(event) =>
+                    onUpdateDelivery(delivery, {
+                      deliveryTimeSlot: event.target.value,
+                    })
+                  }
+                  disabled={isUpdating}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
+                >
+                  <option value="">Choose time...</option>
+                  {deliveryTimeSlotOptions.map((timeSlot) => {
+                    const candidateDelivery = {
+                      ...delivery,
+                      deliveryTimeSlot: timeSlot.value,
+                    };
+                    const conflict = findScheduleConflict(
+                      candidateDelivery,
+                      deliveries,
+                    );
+
+                    return (
+                      <option
+                        key={timeSlot.value}
+                        value={timeSlot.value}
+                        disabled={Boolean(conflict)}
+                      >
+                        {conflict
+                          ? `${timeSlot.label} - busy until ${getDeliveryBackAroundLabel(
+                              conflict,
+                            )}`
+                          : timeSlot.label}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            ) : (
+              <p className="text-sm font-black text-slate-900">
+                {formatDateLabel(getDeliveryDateKey(delivery.deliveryDate))} · {getDeliveryTimeRange(delivery)}
+              </p>
+            )}
+            <div className="mt-2 rounded-lg bg-white/80 px-3 py-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] font-black uppercase tracking-[0.11em] text-blue-700">
+                  Rough round trip
+                </span>
+                <span className="text-xs font-black text-slate-900">
+                  {getDeliveryTotalBlockMinutes(delivery)} min
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] font-bold leading-snug text-slate-500">
+                Leave {leaveAroundLabel} · There {driveMinutes || 0} min · Site {getDeliverySiteArrivalLabel(delivery)} · Back {getDeliveryBackAroundLabel(delivery)}
+              </p>
+            </div>
+          </section>
+
+          <section className="rounded-xl bg-slate-50 p-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.13em] text-slate-400 xl:hidden">
+              Driver / Truck
+            </p>
+            <p className={`mt-1 text-sm font-black ${drivers.length ? "text-emerald-800" : "text-amber-800"}`}>
+              {drivers.join(", ") || "Needs driver"}
+            </p>
+            <p className={`mt-2 text-sm font-black ${trucks.length ? "text-blue-700" : "text-amber-800"}`}>
+              {trucks.join(", ") || "Needs truck"}
+            </p>
+            {canEditDeliveries ? (
+              <button
+                type="button"
+                onClick={() => onEditDelivery(delivery.id)}
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:border-slate-400 hover:bg-slate-100"
+              >
+                <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
+                Edit assignment
+              </button>
+            ) : null}
+          </section>
+
+          <section className="rounded-xl bg-slate-50 p-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.13em] text-slate-400 xl:hidden">
+              Load
+            </p>
+            <p className="mt-1 text-sm font-black text-slate-950">
+              {scopeSummary.shortLabel}
+            </p>
+            <p className="mt-2 text-xs font-bold leading-snug text-slate-500">
+              {scopeSummary.label}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-slate-700">
+                {delivery.unloadType || "Standard"}
+              </span>
+              {delivery.unloadType === "Forklift" && delivery.forkliftType ? (
+                <span className="rounded-full bg-orange-50 px-2.5 py-1 text-[10px] font-black text-orange-800">
+                  {formatForkliftLabel(delivery.forkliftType)}
+                </span>
+              ) : null}
+            </div>
+          </section>
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3">
+          {onViewOrder ? (
+            <button
+              type="button"
+              onClick={() => onViewOrder(delivery)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition hover:border-slate-400 hover:bg-slate-100"
+            >
+              <Eye className="h-4 w-4" aria-hidden="true" />
+              View Order
+            </button>
+          ) : null}
+          {onEditOrder ? (
+            <button
+              type="button"
+              onClick={() => onEditOrder(delivery)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white transition hover:bg-slate-800"
+            >
+              <ClipboardList className="h-4 w-4" aria-hidden="true" />
+              Edit Order
+            </button>
+          ) : null}
+          {canEditDeliveries && onRequestUnassign && !needsDispatch ? (
+            <button
+              type="button"
+              onClick={() => onRequestUnassign(delivery)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-black text-amber-900 transition hover:bg-amber-100"
+            >
+              <UserMinus className="h-4 w-4" aria-hidden="true" />
+              Unassign
+            </button>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
@@ -1725,6 +1935,7 @@ export default function DeliveryCalendarPage({
               isUpdating={updatingDeliveryId === selectedTimelineDelivery.id}
               onToggle={selectTimelineDelivery}
               hideToggle
+              dispatchStyle
             />
           </section>
         ) : (
