@@ -54,6 +54,22 @@ service firebase.storage {
       );
     }
 
+    function isAssignedDeliveryDriver(deliveryId) {
+      return isApproved() &&
+        userProfile().driverName is string &&
+        userProfile().driverName.size() > 0 &&
+        firestore.get(
+          /databases/(default)/documents/deliveries/$(deliveryId)
+        ).data.driver == userProfile().driverName &&
+        (
+          userProfile().workView == "driver" ||
+          hasAnyPermission([
+            "deliveries-queue",
+            "deliveries-route-planner"
+          ])
+        );
+    }
+
     function canManageDispatchOrderCopies() {
       return isAdmin() || (
         isApproved() && (
@@ -116,7 +132,10 @@ service firebase.storage {
 
     match /deliveries/{deliveryId}/proof-photos/{category}/{fileName} {
       allow read: if isApproved();
-      allow create, update: if canManageDeliveryOrders() &&
+      allow create, update: if (
+          canManageDeliveryOrders() ||
+          isAssignedDeliveryDriver(deliveryId)
+        ) &&
         request.resource.size <= 12 * 1024 * 1024 &&
         request.resource.contentType.matches("image/.*");
       allow delete: if canManageDeliveryOrders();

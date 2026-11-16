@@ -308,6 +308,28 @@ function deliveryHasDriver(delivery, driverName) {
     .includes(driverName);
 }
 
+function getDeliveryPhotoUploadError(error) {
+  const code = String(error?.code || "").toLowerCase();
+
+  if (code.includes("storage/unauthorized")) {
+    return "Your driver account is not authorized to upload photos for this delivery. Confirm the delivery is assigned to you and try again.";
+  }
+
+  if (code.includes("storage/unauthenticated")) {
+    return "Your login expired. Refresh the app, sign in, and try the photo again.";
+  }
+
+  if (code.includes("storage/quota-exceeded")) {
+    return "Delivery-photo storage is full. Ask an administrator to check Firebase Storage billing.";
+  }
+
+  if (code.includes("storage/retry-limit-exceeded")) {
+    return "The photo upload timed out. Check the connection and try again.";
+  }
+
+  return "Unable to save that delivery photo. Check the connection and try again.";
+}
+
 function findDriverScheduleConflict(candidateDelivery, deliveries, nextDriver) {
   const candidateWindow = getDeliveryTimeWindow(candidateDelivery);
 
@@ -1786,7 +1808,7 @@ export default function DeliveryQueuePage({
       }
     } catch (photoError) {
       console.error("Unable to save delivery photo:", photoError);
-      setError("Unable to save that delivery photo. Try again.");
+      setError(getDeliveryPhotoUploadError(photoError));
     } finally {
       setUpdatingDeliveryId("");
     }
