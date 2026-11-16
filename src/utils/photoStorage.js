@@ -5,6 +5,36 @@ import {
 } from "firebase/storage";
 import { firebaseStorageBucket, storage } from "./firebase";
 
+export function getDeliveryPhotoUploadError(error) {
+  const code = String(error?.code || "").toLowerCase();
+
+  if (code.includes("storage/unauthorized")) {
+    return "Firebase Storage denied this photo. Confirm the delivery is assigned to the driver, or ask an administrator to deploy the latest delivery-photo Storage rules.";
+  }
+
+  if (code.includes("storage/unauthenticated")) {
+    return "Your login expired. Refresh the app, sign in again, and retry the photo.";
+  }
+
+  if (code.includes("storage/quota-exceeded")) {
+    return "Delivery-photo storage is full. An administrator needs to check Firebase Storage billing or quota.";
+  }
+
+  if (code.includes("storage/retry-limit-exceeded")) {
+    return "The photo upload timed out. Check the connection and retry the photo.";
+  }
+
+  if (code === "permission-denied" || code.includes("firestore/permission-denied")) {
+    return "The photo uploaded, but Firebase would not attach it to this completed delivery. Ask an administrator to check the delivery record permissions.";
+  }
+
+  if (code.includes("storage/canceled")) {
+    return "The photo upload was canceled. Choose the photo again when you are ready.";
+  }
+
+  return `Unable to save that delivery photo${code ? ` (${code})` : ""}. Check the connection and try again.`;
+}
+
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

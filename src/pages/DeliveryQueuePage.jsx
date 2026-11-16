@@ -41,7 +41,10 @@ import {
   scheduleWindowsOverlap,
 } from "../utils/deliverySchedule";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
-import { uploadDeliveryProofPhoto } from "../utils/photoStorage";
+import {
+  getDeliveryPhotoUploadError,
+  uploadDeliveryProofPhoto,
+} from "../utils/photoStorage";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const MAX_DELIVERY_PROOF_PHOTOS = 10;
@@ -306,28 +309,6 @@ function deliveryHasDriver(delivery, driverName) {
   return [delivery.driver, ...drivers]
     .filter(Boolean)
     .includes(driverName);
-}
-
-function getDeliveryPhotoUploadError(error) {
-  const code = String(error?.code || "").toLowerCase();
-
-  if (code.includes("storage/unauthorized")) {
-    return "Your driver account is not authorized to upload photos for this delivery. Confirm the delivery is assigned to you and try again.";
-  }
-
-  if (code.includes("storage/unauthenticated")) {
-    return "Your login expired. Refresh the app, sign in, and try the photo again.";
-  }
-
-  if (code.includes("storage/quota-exceeded")) {
-    return "Delivery-photo storage is full. Ask an administrator to check Firebase Storage billing.";
-  }
-
-  if (code.includes("storage/retry-limit-exceeded")) {
-    return "The photo upload timed out. Check the connection and try again.";
-  }
-
-  return "Unable to save that delivery photo. Check the connection and try again.";
 }
 
 function findDriverScheduleConflict(candidateDelivery, deliveries, nextDriver) {

@@ -25,7 +25,10 @@ import MarkDeliveredModal from "../components/MarkDeliveredModal";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
-import { uploadDeliveryProofPhoto } from "../utils/photoStorage";
+import {
+  getDeliveryPhotoUploadError,
+  uploadDeliveryProofPhoto,
+} from "../utils/photoStorage";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const MAX_DELIVERY_PROOF_PHOTOS = 10;
@@ -620,9 +623,7 @@ export default function DeliveryHistoryPage({
       }
     } catch (uploadError) {
       console.error("Unable to add completed delivery photos:", uploadError);
-      setPhotoError(
-        "Unable to save those photos. Check your connection and try again.",
-      );
+      setPhotoError(getDeliveryPhotoUploadError(uploadError));
     } finally {
       setUpdatingPhotoKey("");
     }
