@@ -1501,7 +1501,13 @@ export default function OrderFlowPage({
         : deliveryTitle,
       hasHardware: isReturnWorkflow ? false : isDeliveryOrder ? hasHardware : false,
       needsTarp: isReturnWorkflow ? false : isDeliveryOrder ? needsTarp : false,
-      unloadType: isReturnWorkflow ? returnLoadType : isDeliveryOrder ? unloadType : "",
+      unloadType: isVendorReturnOrder
+        ? "Vendor unload"
+        : isReturnOrder
+          ? returnLoadType
+          : isDeliveryOrder
+            ? unloadType
+            : "",
       deliveryNotes: isDeliveryOrder ? deliveryNotes : "",
       returnNotes: isReturnWorkflow ? deliveryNotes.trim() : "",
       routeEta: isDeliveryOrder ? routeEta : null,
@@ -3768,32 +3774,22 @@ export default function OrderFlowPage({
         </button>
       </section>
 
-      {isReturnWorkflow ? (
-        <section className={`mt-3 rounded-2xl border bg-white p-3 shadow-sm sm:p-3.5 ${
-          isVendorReturnOrder ? "border-amber-200" : "border-violet-200"
-        }`}>
+      {isReturnOrder ? (
+        <section className="mt-3 rounded-2xl border border-violet-200 bg-white p-3 shadow-sm sm:p-3.5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className={`text-[11px] font-black uppercase tracking-[0.16em] ${
-                isVendorReturnOrder ? "text-amber-800" : "text-violet-700"
-              }`}>
+              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-700">
                 Step 4
               </p>
               <h2 className="text-xl font-black text-slate-950">
-                {isVendorReturnOrder ? "Vendor return load type" : "Type of return"}
+                Type of return
               </h2>
               <p className="mt-0.5 text-xs font-bold text-slate-500 sm:text-sm">
-                {isVendorReturnOrder
-                  ? "Tell dispatch how the material going back to the vendor needs to be loaded."
-                  : "Tell dispatch how the returned material needs to be loaded."}
+                Tell dispatch how the returned material needs to be loaded.
               </p>
             </div>
-            <span className={`rounded-xl px-3 py-1.5 text-xs font-black ${
-              isVendorReturnOrder
-                ? "bg-amber-50 text-amber-800"
-                : "bg-violet-50 text-violet-700"
-            }`}>
-              {isVendorReturnOrder ? "Vendor return delivery" : "Return pickup"}
+            <span className="rounded-xl bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-700">
+              Return pickup
             </span>
           </div>
 
@@ -4001,7 +3997,9 @@ export default function OrderFlowPage({
                 <div className="mt-3 rounded-2xl border border-red-100 bg-white p-3 shadow-sm">
                   <div className="flex items-center gap-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
-                      {isReturnWorkflow ? (
+                      {isVendorReturnOrder ? (
+                        <Truck className="h-5 w-5" aria-hidden="true" />
+                      ) : isReturnOrder ? (
                         <SelectedReturnLoadIcon className="h-5 w-5" aria-hidden="true" />
                       ) : (
                         <SelectedUnloadIcon className="h-5 w-5" aria-hidden="true" />
@@ -4010,13 +4008,17 @@ export default function OrderFlowPage({
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#FC2C38]">
                         {isVendorReturnOrder
-                          ? "Vendor Return Type"
+                          ? "Unload"
                           : isReturnOrder
                             ? "Return Type"
                             : "Delivery Type"}
                       </p>
                       <p className="text-lg font-black text-slate-950">
-                        {isReturnWorkflow ? selectedReturnLoadType.label : unloadType}
+                        {isVendorReturnOrder
+                          ? "Handled by vendor"
+                          : isReturnOrder
+                            ? selectedReturnLoadType.label
+                            : unloadType}
                       </p>
                     </div>
                   </div>
@@ -4119,7 +4121,7 @@ export default function OrderFlowPage({
                         </p>
                         <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
                           {isVendorReturnOrder
-                            ? `Send back by ${selectedReturnLoadType.label}`
+                            ? "Vendor handles unloading"
                             : isReturnOrder
                             ? `Return by ${selectedReturnLoadType.label}`
                             : item.path === "inStock"
