@@ -1615,7 +1615,9 @@ export default function OrderFlowPage({
         buildOrderPayload({ allowDuplicateOrder }),
       );
       setProcessSummary(summary || {});
-      onPageChange?.("dashboard");
+      onPageChange?.(
+        summary?.vendorReturnCreated ? "deliveries-dispatch" : "dashboard",
+      );
     } catch (error) {
       console.error("Unable to process order flow:", error);
       setProcessError(
