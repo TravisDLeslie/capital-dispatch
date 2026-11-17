@@ -859,6 +859,9 @@ function MobileDeliveryFlowCard({
     hasRequiredMaterialPhoto && hasRequiredHardwarePhoto;
   const originAddress =
     delivery.deliveryOriginAddress || "3105 W State St, Boise, ID 83703";
+  const isUpcomingScheduledDelivery =
+    deliveryStep === 0 &&
+    String(delivery.deliveryDate || "").slice(0, 10) > getTodayDateKey();
   const stepStatus =
     deliveryStep === 1
       ? "EN ROUTE"
@@ -936,7 +939,13 @@ function MobileDeliveryFlowCard({
       <div className="space-y-4 p-4">
         {deliveryStep < 3 ? (
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+            <p
+              className={`text-xs font-black uppercase tracking-[0.18em] ${
+                isUpcomingScheduledDelivery
+                  ? "inline-flex rounded-full bg-[#FC2C38] px-3 py-1.5 text-white"
+                  : "text-[#FC2C38]"
+              }`}
+            >
               {stepStatus}
             </p>
 
