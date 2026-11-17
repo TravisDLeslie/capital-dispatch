@@ -942,7 +942,7 @@ function MobileDeliveryFlowCard({
             <p
               className={`text-xs font-black uppercase tracking-[0.18em] ${
                 isUpcomingScheduledDelivery
-                  ? "inline-flex rounded-full bg-[#FC2C38] px-3 py-1.5 text-white"
+                  ? "inline-flex rounded-full bg-[#FC2C38] px-3 py-1.5 text-white sm:rounded-none sm:bg-transparent sm:px-0 sm:py-0 sm:text-[#FC2C38]"
                   : "text-[#FC2C38]"
               }`}
             >
