@@ -2063,6 +2063,7 @@ export default function App() {
   const [inventorySettings, setInventorySettings] =
     useState<InventorySettings>(defaultInventorySettings);
   const isReconcilingSouthCheckInsRef = useRef(false);
+  const isMigratingVendorReturnsRef = useRef(false);
   const [editingDeliveryId, setEditingDeliveryId] =
     useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -3023,6 +3024,135 @@ export default function App() {
         console.error("Unable to roll unassigned South POs forward:", error);
       });
   }, [canMaintainSouthSchedule, checkIns, isApproved, supplierRuns]);
+
+  useEffect(() => {
+    if (
+      !isApproved ||
+      !canMaintainSouthSchedule ||
+      isMigratingVendorReturnsRef.current
+    ) {
+      return;
+    }
+
+    const migratedDeliveryIds = new Set(
+      supplierRuns
+        .map((supplierRun) => String(supplierRun.sourceDeliveryId || ""))
+        .filter(Boolean),
+    );
+    const vendorReturnsToMigrate = deliveries.filter((delivery) => {
+      const isVendorReturn =
+        delivery.deliveryType === "vendorReturn" ||
+        delivery.routeStopType === "vendorReturn" ||
+        delivery.deliveryScope === "vendorReturn" ||
+        delivery.vendorReturn === true;
+
+      return (
+        isVendorReturn &&
+        !isDeliveryComplete(delivery) &&
+        !migratedDeliveryIds.has(delivery.id) &&
+        !supplierRuns.some(
+          (supplierRun) => supplierRun.id === `vendor-return-${delivery.id}`,
+        )
+      );
+    });
+
+    if (vendorReturnsToMigrate.length === 0) {
+      return;
+    }
+
+    isMigratingVendorReturnsRef.current = true;
+    let isCancelled = false;
+
+    async function migrateVendorReturnsToSouth() {
+      let nextSupplierRuns = supplierRuns;
+
+      for (const delivery of vendorReturnsToMigrate) {
+        const migratedAt = new Date().toISOString();
+        const vendorName = String(
+          delivery.vendor || delivery.customerName || "Vendor return",
+        ).trim();
+        const sourceOrderNumber = String(
+          delivery.sourceOrderNumber || delivery.orderNumber || "",
+        ).trim();
+        const supplierRun: SupplierRun = {
+          id: `vendor-return-${delivery.id}`,
+          poNumber: String(delivery.poNumber || "").trim(),
+          vendor: vendorName,
+          scheduledDate: String(
+            delivery.returnDate || delivery.deliveryDate || "",
+          ).trim(),
+          pickupDate: String(
+            delivery.returnDate || delivery.deliveryDate || "",
+          ).trim(),
+          orderedBy: String(delivery.orderedBy || "").trim(),
+          customerName: vendorName,
+          orderNumber: sourceOrderNumber,
+          driver: "",
+          supplierAddress: String(delivery.address || "").trim(),
+          vehicleId: "",
+          vehicleTitle: "",
+          vehicleBadge: "",
+          dispatchStatus: "needsDispatch",
+          status: "open",
+          source: "vendor-return",
+          runType: "vendorReturn",
+          routeStopType: "vendorReturn",
+          isVendorReturn: true,
+          sourceDeliveryId: delivery.id,
+          sourceOrderId: String(delivery.sourceOrderId || "").trim(),
+          sourceOrderNumber,
+          notes: String(
+            delivery.returnNotes ||
+              delivery.deliveryNotes ||
+              delivery.generalNotes ||
+              "",
+          ).trim(),
+          stopWorkflowVersion: 2,
+          items: (Array.isArray(delivery.items) ? delivery.items : []).map(
+            (item) => ({
+              id: String(item.id || createId()),
+              quantity: item.quantity,
+              description: String(item.description || "Returned material"),
+              materialUse: "return",
+              returnNotes: String(delivery.returnNotes || "").trim(),
+              easilyDamaged: false,
+              orderNumber: sourceOrderNumber,
+              customerName: vendorName,
+              pickedUp: false,
+              pickedUpAt: null,
+              pickupPhoto: null,
+              pickupPhotos: [],
+            }),
+          ),
+          createdAt: String(delivery.createdAt || migratedAt),
+          updatedAt: migratedAt,
+        };
+
+        nextSupplierRuns = await addSupplierRun(
+          stripUndefinedFields(supplierRun),
+          nextSupplierRuns,
+        );
+      }
+
+      if (!isCancelled) {
+        setSupplierRuns(nextSupplierRuns);
+        setSyncError("");
+      }
+    }
+
+    migrateVendorReturnsToSouth()
+      .catch((error: Error) => {
+        console.error("Unable to move Vendor Returns into South dispatch:", error);
+        reportBackgroundSyncError(error);
+      })
+      .finally(() => {
+        isMigratingVendorReturnsRef.current = false;
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [canMaintainSouthSchedule, deliveries, isApproved, supplierRuns]);
 
   useEffect(() => {
     if (
@@ -4861,6 +4991,57 @@ export default function App() {
       createdSouthRuns.push(supplierRun);
     }
 
+    if (isVendorReturnOrder) {
+      const supplierRun: SupplierRun = {
+        id: createId(),
+        poNumber: vendorReturnPoNumber,
+        vendor: vendorReturnVendor,
+        scheduledDate: returnDate,
+        pickupDate: returnDate,
+        orderedBy,
+        customerName: vendorReturnVendor || "Vendor return",
+        orderNumber: sourceOrderNumber,
+        driver: "",
+        supplierAddress: String(orderPayload.deliveryAddress || "").trim(),
+        createdByName: creator.name,
+        createdByEmail: creator.email,
+        createdById: creator.id,
+        vehicleId: "",
+        vehicleTitle: "",
+        vehicleBadge: "",
+        dispatchStatus: "needsDispatch",
+        status: "open",
+        source: "vendor-return",
+        runType: "vendorReturn",
+        routeStopType: "vendorReturn",
+        isVendorReturn: true,
+        notes: returnNotes,
+        sourceOrderId: linkedSourceOrderId,
+        sourceOrderNumber,
+        stopWorkflowVersion: 2,
+        items: cleanItems.map((item) => ({
+          id: String(item.id || createId()),
+          quantity: item.quantity,
+          itemNumber: item.itemNumber,
+          description: item.description,
+          materialUse: "return",
+          returnNotes,
+          easilyDamaged: Boolean(item.easilyDamaged),
+          orderNumber: sourceOrderNumber,
+          customerName: vendorReturnVendor || "Vendor return",
+          pickedUp: false,
+          pickedUpAt: null,
+          pickupPhoto: null,
+          pickupPhotos: [],
+        })),
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await handleAddSupplierRun(supplierRun);
+      createdSouthRuns.push(supplierRun);
+    }
+
     const theirTruckGroups = groupOrderFlowItems(
       cleanItems.filter((item) => item.path === "supplierDelivery"),
       (item) => `${item.vendor || "Unknown vendor"}|${item.poNumber || createId()}`,
@@ -4943,7 +5124,7 @@ export default function App() {
       createdPodPickups.push(podPickup);
     }
 
-    if (orderPayload.orderMethod === "delivery" || isReturnWorkflow) {
+    if (orderPayload.orderMethod === "delivery" || isReturnOrder) {
       const routeEta = orderPayload.routeEta as
         | { durationValue?: number; durationText?: string; distanceText?: string }
         | null
@@ -4964,14 +5145,10 @@ export default function App() {
         driver: "",
         drivers: [],
         dispatchAssignments: [],
-        deliveryType: isVendorReturnOrder
-          ? "vendorReturn"
-          : isReturnOrder
+        deliveryType: isReturnOrder
             ? "return"
             : "Standard",
-        routeStopType: isVendorReturnOrder
-          ? "vendorReturn"
-          : isReturnOrder
+        routeStopType: isReturnOrder
             ? "returnPickup"
             : "delivery",
         returnNumber: isReturnWorkflow ? sourceOrderNumber : "",
@@ -5000,9 +5177,7 @@ export default function App() {
         hardwarePhotos: [],
         deliveredAt: "",
         dispatchStatus: "needsDispatch",
-        deliveryScope: isVendorReturnOrder
-          ? "vendorReturn"
-          : isReturnOrder
+        deliveryScope: isReturnOrder
             ? "return"
             : "full",
         deliveryScopeNotes: "",
@@ -5015,9 +5190,6 @@ export default function App() {
         status: "open",
         sourceOrderId: linkedSourceOrderId,
         sourceOrderNumber,
-        vendor: vendorReturnVendor,
-        poNumber: vendorReturnPoNumber,
-        vendorReturn: isVendorReturnOrder,
         orderedBy,
         createdAt: now,
         updatedAt: now,

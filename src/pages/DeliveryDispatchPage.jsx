@@ -2678,6 +2678,17 @@ export default function DeliveryDispatchPage({
     Array.isArray(deliveryOriginOptions) && deliveryOriginOptions.length > 0
       ? deliveryOriginOptions
       : fallbackDeliveryOriginOptions;
+  const dispatchDeliveries = useMemo(
+    () =>
+      deliveries.filter(
+        (delivery) =>
+          delivery.deliveryType !== "vendorReturn" &&
+          delivery.routeStopType !== "vendorReturn" &&
+          delivery.deliveryScope !== "vendorReturn" &&
+          delivery.vendorReturn !== true,
+      ),
+    [deliveries],
+  );
   const driverOptions = getUniqueOptions([
     ...employeeOptions,
   ]);
@@ -2758,7 +2769,7 @@ export default function DeliveryDispatchPage({
   const normalizedSearchQuery = normalizeSearch(searchQuery);
   const availableDeliveryDates = useMemo(
     () =>
-      deliveries
+      dispatchDeliveries
         .filter(
           (delivery) =>
             delivery.status !== "complete" &&
@@ -2772,20 +2783,20 @@ export default function DeliveryDispatchPage({
           return schedule.deliveryDate || "";
         })
         .filter(Boolean),
-    [deliveries, draftSchedules, safeDeliveryOriginOptions, vehicleOptions],
+    [dispatchDeliveries, draftSchedules, safeDeliveryOriginOptions, vehicleOptions],
   );
   const assignedDeliveriesCount = useMemo(
     () =>
-      deliveries.filter(
+      dispatchDeliveries.filter(
         (delivery) =>
           delivery.status !== "complete" &&
           isDeliveryAssigned(delivery, vehicleOptions),
       ).length,
-    [deliveries, vehicleOptions],
+    [dispatchDeliveries, vehicleOptions],
   );
   const routeMapDeliveries = useMemo(
     () =>
-      deliveries
+      dispatchDeliveries
         .filter(
           (delivery) =>
             delivery.status !== "complete" &&
@@ -2817,7 +2828,7 @@ export default function DeliveryDispatchPage({
         })
         .sort(compareDeliveriesByDateAndRoute),
     [
-      deliveries,
+      dispatchDeliveries,
       draftAssignments,
       draftRouteOrders,
       draftSchedules,

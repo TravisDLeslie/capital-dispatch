@@ -1616,7 +1616,7 @@ export default function OrderFlowPage({
       );
       setProcessSummary(summary || {});
       onPageChange?.(
-        summary?.vendorReturnCreated ? "deliveries-dispatch" : "dashboard",
+        summary?.vendorReturnCreated ? "supplier-runs-dispatch" : "dashboard",
       );
     } catch (error) {
       console.error("Unable to process order flow:", error);

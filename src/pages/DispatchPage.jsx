@@ -51,6 +51,15 @@ function needsDeliveryDispatch(delivery) {
     return false;
   }
 
+  if (
+    delivery.deliveryType === "vendorReturn" ||
+    delivery.routeStopType === "vendorReturn" ||
+    delivery.deliveryScope === "vendorReturn" ||
+    delivery.vendorReturn === true
+  ) {
+    return false;
+  }
+
   return (
     !String(delivery.driver || "").trim() ||
     !String(delivery.truck || delivery.vehicleId || "").trim()
