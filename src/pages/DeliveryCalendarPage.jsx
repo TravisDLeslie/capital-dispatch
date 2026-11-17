@@ -61,6 +61,35 @@ function getTimelinePercent(minutes) {
   );
 }
 
+function getCompactTimelineRange(delivery) {
+  const startTime = String(delivery?.deliveryTimeSlot || "").trim();
+  const startMinutes = timeToMinutes(startTime);
+
+  if (startMinutes === null) {
+    return "Unscheduled";
+  }
+
+  const endMinutes = startMinutes + getDeliveryTotalBlockMinutes(delivery);
+  const formatParts = (minutes) => {
+    const normalizedMinutes = ((minutes % 1440) + 1440) % 1440;
+    const hours = Math.floor(normalizedMinutes / 60);
+    const minuteValue = normalizedMinutes % 60;
+
+    return {
+      time: `${hours % 12 || 12}${
+        minuteValue ? `:${String(minuteValue).padStart(2, "0")}` : ""
+      }`,
+      period: hours >= 12 ? "PM" : "AM",
+    };
+  };
+  const start = formatParts(startMinutes);
+  const end = formatParts(endMinutes);
+
+  return start.period === end.period
+    ? `${start.time}–${end.time} ${end.period}`
+    : `${start.time} ${start.period}–${end.time} ${end.period}`;
+}
+
 function formatForkliftLabel(value) {
   if (value === "donkey") {
     return "Donkey 5000 lbs";
@@ -810,13 +839,19 @@ function DeliveryTimelineBoard({
                   {deliveriesByDriver[driverName].map((delivery) => {
                     const blockStyle = getTimelineBlockStyle(delivery);
                     const isSelected = selectedDeliveryId === delivery.id;
+                    const isShortBlock =
+                      getDeliveryTotalBlockMinutes(delivery) <= 45;
 
                     return (
                       <button
                         key={delivery.id}
                         type="button"
                         onClick={() => onSelectDelivery(delivery.id)}
-                        className={`absolute bottom-3 top-3 flex min-w-[132px] flex-col justify-center overflow-hidden rounded-2xl border px-3 py-2 text-left shadow-sm transition ${
+                        className={`absolute bottom-3 top-3 flex min-w-[88px] flex-col justify-center overflow-hidden border text-left shadow-sm transition md:min-w-[132px] ${
+                          isShortBlock
+                            ? "rounded-xl px-2 py-1.5 md:rounded-2xl md:px-3 md:py-2"
+                            : "rounded-2xl px-3 py-2"
+                        } ${
                           isSelected
                             ? "border-[#FC2C38] bg-red-50 ring-2 ring-red-100"
                             : "border-blue-200 bg-white hover:border-[#FC2C38] hover:bg-red-50/40"
@@ -828,16 +863,45 @@ function DeliveryTimelineBoard({
                           delivery,
                         )}`}
                       >
-                        <span className="truncate text-[11px] font-black uppercase tracking-[0.12em] text-[#FC2C38]">
-                          {getDeliveryTimeRange(delivery)}
+                        <span
+                          className={`truncate font-black text-[#FC2C38] ${
+                            isShortBlock
+                              ? "text-[10px] tracking-tight md:text-[11px] md:uppercase md:tracking-[0.12em]"
+                              : "text-[11px] uppercase tracking-[0.12em]"
+                          }`}
+                        >
+                          {isShortBlock ? (
+                            <>
+                              <span className="md:hidden">
+                                {getCompactTimelineRange(delivery)}
+                              </span>
+                              <span className="hidden md:inline">
+                                {getDeliveryTimeRange(delivery)}
+                              </span>
+                            </>
+                          ) : (
+                            getDeliveryTimeRange(delivery)
+                          )}
                         </span>
-                        <span className="mt-1 truncate text-sm font-black text-slate-950">
+                        <span
+                          className={`truncate font-black text-slate-950 ${
+                            isShortBlock
+                              ? "mt-0.5 text-xs md:mt-1 md:text-sm"
+                              : "mt-1 text-sm"
+                          }`}
+                        >
                           {formatCustomerName(delivery.customerName) ||
                             "Unnamed customer"}
                         </span>
-                        <span className="truncate text-xs font-bold text-slate-500">
-                          #{delivery.orderNumber}
-                        </span>
+                        {!isShortBlock ? (
+                          <span className="truncate text-xs font-bold text-slate-500">
+                            #{delivery.orderNumber}
+                          </span>
+                        ) : (
+                          <span className="hidden truncate text-xs font-bold text-slate-500 md:block">
+                            #{delivery.orderNumber}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
