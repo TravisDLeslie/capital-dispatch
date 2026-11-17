@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -814,6 +814,8 @@ export default function SupplierRunsPage({
     useState(null);
   const [southRouteOrders, setSouthRouteOrders] = useState([]);
   const [draggingStop, setDraggingStop] = useState(null);
+  const [dragOverStop, setDragOverStop] = useState(null);
+  const pointerDragStopRef = useRef(null);
   const [routeOrderError, setRouteOrderError] = useState("");
   const [dispatchDrafts, setDispatchDrafts] = useState({});
   const [savingDispatchRunId, setSavingDispatchRunId] = useState("");
@@ -1090,14 +1092,13 @@ export default function SupplierRunsPage({
     return nextVendors;
   }
 
-  async function handleStopDrop(driver, targetVendor, vendorGroups) {
-    if (!canReorderRoute) {
-      setDraggingStop(null);
-      return;
-    }
-
-    if (!draggingStop || draggingStop.driver !== driver) {
-      setDraggingStop(null);
+  async function reorderVendorStop(
+    driver,
+    sourceVendor,
+    targetVendor,
+    vendorGroups,
+  ) {
+    if (!canReorderRoute || !sourceVendor || !targetVendor) {
       return;
     }
 
@@ -1106,17 +1107,140 @@ export default function SupplierRunsPage({
     );
     const nextVendorOrder = moveVendor(
       currentVendorOrder,
-      draggingStop.vendor,
+      sourceVendor,
       targetVendor,
     );
-
-    setDraggingStop(null);
 
     if (nextVendorOrder.join("::") === currentVendorOrder.join("::")) {
       return;
     }
 
     await saveRouteOrder(driver, nextVendorOrder);
+  }
+
+  async function handleStopDrop(driver, targetVendor, vendorGroups) {
+    if (!canReorderRoute) {
+      setDraggingStop(null);
+      setDragOverStop(null);
+      return;
+    }
+
+    if (!draggingStop || draggingStop.driver !== driver) {
+      setDraggingStop(null);
+      setDragOverStop(null);
+      return;
+    }
+
+    const sourceVendor = draggingStop.vendor;
+
+    setDraggingStop(null);
+    setDragOverStop(null);
+
+    await reorderVendorStop(
+      driver,
+      sourceVendor,
+      targetVendor,
+      vendorGroups,
+    );
+  }
+
+  function handleStopPointerDown(event, driver, vendor) {
+    if (
+      !canReorderRoute ||
+      event.pointerType === "mouse" ||
+      event.target.closest?.("button") ||
+      pointerDragStopRef.current
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    pointerDragStopRef.current = {
+      pointerId: event.pointerId,
+      driver,
+      vendor,
+      targetVendor: vendor,
+    };
+    setDraggingStop({ driver, vendor });
+    setDragOverStop({ driver, vendor });
+  }
+
+  function handleStopPointerMove(event) {
+    const activePointerDrag = pointerDragStopRef.current;
+
+    if (
+      !activePointerDrag ||
+      activePointerDrag.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const stopElement = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest?.("[data-south-route-stop]");
+    const targetDriver = stopElement?.dataset?.southRouteDriver || "";
+    const targetVendor = stopElement?.dataset?.southRouteVendor || "";
+
+    if (
+      !targetVendor ||
+      targetDriver !== activePointerDrag.driver ||
+      targetVendor === activePointerDrag.targetVendor
+    ) {
+      return;
+    }
+
+    pointerDragStopRef.current = {
+      ...activePointerDrag,
+      targetVendor,
+    };
+    setDragOverStop({ driver: targetDriver, vendor: targetVendor });
+  }
+
+  async function handleStopPointerEnd(event, vendorGroups) {
+    const activePointerDrag = pointerDragStopRef.current;
+
+    if (
+      !activePointerDrag ||
+      activePointerDrag.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+
+    pointerDragStopRef.current = null;
+    setDraggingStop(null);
+    setDragOverStop(null);
+
+    await reorderVendorStop(
+      activePointerDrag.driver,
+      activePointerDrag.vendor,
+      activePointerDrag.targetVendor,
+      vendorGroups,
+    );
+  }
+
+  function handleStopPointerCancel(event) {
+    const activePointerDrag = pointerDragStopRef.current;
+
+    if (
+      !activePointerDrag ||
+      activePointerDrag.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    pointerDragStopRef.current = null;
+    setDraggingStop(null);
+    setDragOverStop(null);
   }
 
   async function handleMoveStop(driver, vendorGroups, vendor, offset) {
@@ -3199,6 +3323,9 @@ export default function SupplierRunsPage({
                         return (
                           <div
                             key={vendorGroup.vendor}
+                            data-south-route-stop="true"
+                            data-south-route-driver={driverGroup.driver}
+                            data-south-route-vendor={vendorGroup.vendor}
                             draggable={
                               canReorderRoute &&
                               driverGroup.vendorGroups.length > 1
@@ -3216,6 +3343,10 @@ export default function SupplierRunsPage({
                                 draggingStop?.driver === driverGroup.driver
                               ) {
                                 event.preventDefault();
+                                setDragOverStop({
+                                  driver: driverGroup.driver,
+                                  vendor: vendorGroup.vendor,
+                                });
                               }
                             }}
                             onDrop={() =>
@@ -3225,11 +3356,17 @@ export default function SupplierRunsPage({
                                 driverGroup.vendorGroups,
                               )
                             }
-                            onDragEnd={() => setDraggingStop(null)}
+                            onDragEnd={() => {
+                              setDraggingStop(null);
+                              setDragOverStop(null);
+                            }}
                             className={`overflow-hidden rounded-2xl border bg-white transition ${
                               draggingStop?.driver === driverGroup.driver &&
                               draggingStop?.vendor === vendorGroup.vendor
                                 ? "border-blue-300 opacity-60"
+                                : dragOverStop?.driver === driverGroup.driver &&
+                                    dragOverStop?.vendor === vendorGroup.vendor
+                                  ? "border-blue-400 ring-2 ring-blue-100"
                                 : isCurrentStop
                                   ? "border-red-100"
                                   : "border-slate-200"
@@ -3239,8 +3376,26 @@ export default function SupplierRunsPage({
                               {canReorderRoute &&
                               driverGroup.vendorGroups.length > 1 ? (
                                 <div
-                                  className="flex w-11 shrink-0 flex-col items-center justify-center gap-1 border-r border-slate-100 bg-slate-50 px-1 sm:w-10 sm:cursor-grab sm:px-0 sm:active:cursor-grabbing"
-                                  title="Drag to reorder this stop"
+                                  className="flex w-11 touch-none shrink-0 select-none flex-col items-center justify-center gap-1 border-r border-slate-100 bg-slate-50 px-1 sm:w-10 sm:cursor-grab sm:px-0 sm:active:cursor-grabbing"
+                                  title="Drag to reorder this vendor stop"
+                                  role="button"
+                                  tabIndex={0}
+                                  aria-label={`Drag ${vendorGroup.vendor} to change its route position`}
+                                  onPointerDown={(event) =>
+                                    handleStopPointerDown(
+                                      event,
+                                      driverGroup.driver,
+                                      vendorGroup.vendor,
+                                    )
+                                  }
+                                  onPointerMove={handleStopPointerMove}
+                                  onPointerUp={(event) =>
+                                    handleStopPointerEnd(
+                                      event,
+                                      driverGroup.vendorGroups,
+                                    )
+                                  }
+                                  onPointerCancel={handleStopPointerCancel}
                                 >
                                   <button
                                     type="button"
