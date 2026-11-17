@@ -2132,6 +2132,11 @@ export default function SupplierRunsPage({
                 const requestBadgeClass = isStockRequest
                   ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                   : "border-blue-200 bg-blue-50 text-blue-800";
+                const isVendorReturn =
+                  supplierRun.runType === "vendorReturn" ||
+                  supplierRun.routeStopType === "vendorReturn" ||
+                  supplierRun.deliveryScope === "vendorReturn" ||
+                  supplierRun.vendorReturn === true;
                 const isSelectedForDispatch =
                   selectedDispatchRunIds.includes(supplierRun.id);
                 const isEditingPickupDate =
@@ -2188,6 +2193,17 @@ export default function SupplierRunsPage({
                             )}
                             {requestBadgeLabel}
                           </span>
+
+                          {isVendorReturn ? (
+                            <span className="inline-flex items-center gap-2 rounded-full border border-amber-300 bg-amber-100 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-amber-950">
+                              <ArrowUpRight
+                                aria-hidden="true"
+                                className="h-4 w-4"
+                                strokeWidth={2.7}
+                              />
+                              Return to vendor
+                            </span>
+                          ) : null}
                         </div>
 
                         <div className="mt-4 grid overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
