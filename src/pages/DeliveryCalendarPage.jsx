@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
+import MarkDeliveredModal from "../components/MarkDeliveredModal";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 import {
@@ -1432,6 +1434,8 @@ export default function DeliveryCalendarPage({
   const [deliveryToUnassign, setDeliveryToUnassign] = useState(null);
   const [unassigningDeliveryId, setUnassigningDeliveryId] = useState("");
   const [unassignError, setUnassignError] = useState("");
+  const [deliveryToMarkDelivered, setDeliveryToMarkDelivered] = useState(null);
+  const [markingDeliveredId, setMarkingDeliveredId] = useState("");
   const fallbackDeliveryDate = useMemo(
     () => getFirstOpenDeliveryDate(safeDeliveries),
     [safeDeliveries],
@@ -1684,6 +1688,43 @@ export default function DeliveryCalendarPage({
       );
     } finally {
       setUnassigningDeliveryId("");
+    }
+  }
+
+  function handleMarkDelivered(delivery) {
+    if (!canEditDeliveries || !onUpdateDelivery) {
+      return;
+    }
+
+    setDeliveryToMarkDelivered(delivery);
+  }
+
+  async function confirmMarkDelivered(deliveredAt) {
+    const delivery = deliveryToMarkDelivered;
+
+    if (!delivery?.id || !deliveredAt || !onUpdateDelivery) {
+      return;
+    }
+
+    setMarkingDeliveredId(delivery.id);
+    setError("");
+
+    try {
+      await onUpdateDelivery(delivery.id, {
+        status: "complete",
+        deliveredAt,
+        deliveryCompletionSource: "calendarOverride",
+        deliveryOverrideAt: deliveredAt,
+      });
+      setDeliveryToMarkDelivered(null);
+      setSelectedTimelineDeliveryId("");
+    } catch (updateError) {
+      console.error("Unable to mark calendar delivery complete:", updateError);
+      setError(
+        "Unable to mark that delivery as delivered. Check your connection and try again.",
+      );
+    } finally {
+      setMarkingDeliveredId("");
     }
   }
 
@@ -2049,6 +2090,17 @@ export default function DeliveryCalendarPage({
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row">
+                {canEditDeliveries && onUpdateDelivery ? (
+                  <button
+                    type="button"
+                    onClick={() => handleMarkDelivered(selectedTimelineDelivery)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-100"
+                  >
+                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                    Mark delivered
+                  </button>
+                ) : null}
+
                 {onViewOrder ? (
                   <button
                     type="button"
@@ -2294,6 +2346,20 @@ export default function DeliveryCalendarPage({
           </div>
         </div>
       ) : null}
+
+      <MarkDeliveredModal
+        delivery={deliveryToMarkDelivered}
+        isSaving={
+          Boolean(deliveryToMarkDelivered) &&
+          markingDeliveredId === deliveryToMarkDelivered?.id
+        }
+        onClose={() => {
+          if (!markingDeliveredId) {
+            setDeliveryToMarkDelivered(null);
+          }
+        }}
+        onConfirm={confirmMarkDelivered}
+      />
     </PageContainer>
   );
 }
