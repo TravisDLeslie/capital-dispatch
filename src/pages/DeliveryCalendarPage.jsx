@@ -204,6 +204,8 @@ function DeliveryMoveDatePicker({
     return new Date(date.getFullYear(), date.getMonth(), 1);
   });
   const pickerRef = useRef(null);
+  const popoverRef = useRef(null);
+  const [opensAbove, setOpensAbove] = useState(false);
   const calendarDays = useMemo(
     () => getCalendarMonthDays(visibleMonth),
     [visibleMonth],
@@ -234,6 +236,44 @@ function DeliveryMoveDatePicker({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setOpensAbove(false);
+      return undefined;
+    }
+
+    function updatePopoverPosition() {
+      const pickerRect = pickerRef.current?.getBoundingClientRect();
+      const popoverHeight = popoverRef.current?.offsetHeight || 440;
+
+      if (!pickerRect) {
+        return;
+      }
+
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const roomBelow = viewportHeight - pickerRect.bottom;
+      const roomAbove = pickerRect.top;
+      const requiredRoom = popoverHeight + 26;
+
+      setOpensAbove(roomBelow < requiredRoom && roomAbove > roomBelow);
+    }
+
+    const animationFrame = window.requestAnimationFrame(updatePopoverPosition);
+    window.addEventListener("resize", updatePopoverPosition);
+    window.addEventListener("scroll", updatePopoverPosition, true);
+    window.visualViewport?.addEventListener("resize", updatePopoverPosition);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", updatePopoverPosition);
+      window.removeEventListener("scroll", updatePopoverPosition, true);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        updatePopoverPosition,
+      );
+    };
+  }, [isOpen, visibleMonth]);
 
   function togglePicker() {
     if (disabled) {
@@ -273,9 +313,14 @@ function DeliveryMoveDatePicker({
 
       {isOpen ? (
         <div
+          ref={popoverRef}
           role="dialog"
           aria-label="Choose new delivery date"
-          className="absolute left-0 top-[calc(100%+0.6rem)] z-50 w-[min(22rem,calc(100vw-3rem))] rounded-[26px] border border-slate-200 bg-white p-5 shadow-2xl"
+          className={`absolute left-0 z-50 max-h-[calc(100vh-2rem)] w-[min(22rem,calc(100vw-3rem))] overflow-y-auto rounded-[26px] border border-slate-200 bg-white p-5 shadow-2xl ${
+            opensAbove
+              ? "bottom-[calc(100%+0.6rem)]"
+              : "top-[calc(100%+0.6rem)]"
+          }`}
         >
           <div className="mb-4 flex items-center justify-between gap-3">
             <button
