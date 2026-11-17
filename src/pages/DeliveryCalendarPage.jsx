@@ -1537,6 +1537,8 @@ export default function DeliveryCalendarPage({
   const [expandedDeliveryIds, setExpandedDeliveryIds] = useState({});
   const [selectedTimelineDeliveryId, setSelectedTimelineDeliveryId] =
     useState("");
+  const [selectedTimelineDeliverySnapshot, setSelectedTimelineDeliverySnapshot] =
+    useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
   const [error, setError] = useState("");
@@ -1609,10 +1611,15 @@ export default function DeliveryCalendarPage({
   const driverNames = Object.keys(deliveriesByDriver).sort((first, second) =>
     first.localeCompare(second),
   );
-  const selectedTimelineDelivery =
-    dayDeliveries.find(
+  const selectedTimelineDeliveryFromData =
+    safeDeliveries.find(
       (delivery) => delivery.id === selectedTimelineDeliveryId,
     ) || null;
+  const selectedTimelineDelivery =
+    selectedTimelineDeliveryFromData ||
+    (selectedTimelineDeliverySnapshot?.id === selectedTimelineDeliveryId
+      ? selectedTimelineDeliverySnapshot
+      : null);
 
   useEffect(() => {
     if (
@@ -1658,7 +1665,14 @@ export default function DeliveryCalendarPage({
 
   useEffect(() => {
     setSelectedTimelineDeliveryId("");
+    setSelectedTimelineDeliverySnapshot(null);
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (selectedTimelineDeliveryFromData) {
+      setSelectedTimelineDeliverySnapshot(selectedTimelineDeliveryFromData);
+    }
+  }, [selectedTimelineDeliveryFromData]);
 
   function openDatePicker() {
     const selectedDateValue = new Date(`${selectedDate}T12:00:00`);
@@ -1692,6 +1706,7 @@ export default function DeliveryCalendarPage({
     setHasSelectedDay(true);
     setStatusFilter("all");
     setSelectedTimelineDeliveryId("");
+    setSelectedTimelineDeliverySnapshot(null);
 
     const selectedDay = date || new Date(`${dateKey}T12:00:00`);
 
@@ -1708,6 +1723,9 @@ export default function DeliveryCalendarPage({
     }
 
     setSelectedTimelineDeliveryId(deliveryId);
+    setSelectedTimelineDeliverySnapshot(
+      safeDeliveries.find((delivery) => delivery.id === deliveryId) || null,
+    );
     window.setTimeout(() => {
       selectedDeliveryDetailRef.current?.scrollIntoView({
         behavior: "smooth",
@@ -1745,6 +1763,17 @@ export default function DeliveryCalendarPage({
 
     setError("");
     setUpdatingDeliveryId(delivery.id);
+    const previousSelectedDelivery =
+      delivery.id === selectedTimelineDeliveryId
+        ? selectedTimelineDeliverySnapshot || delivery
+        : null;
+
+    if (delivery.id === selectedTimelineDeliveryId) {
+      setSelectedTimelineDeliverySnapshot({
+        ...delivery,
+        ...updates,
+      });
+    }
 
     try {
       await onUpdateDelivery(delivery.id, {
@@ -1753,6 +1782,9 @@ export default function DeliveryCalendarPage({
       });
     } catch (updateError) {
       console.error("Unable to move delivery:", updateError);
+      if (previousSelectedDelivery) {
+        setSelectedTimelineDeliverySnapshot(previousSelectedDelivery);
+      }
       setError("Unable to move that delivery. Try again.");
     } finally {
       setUpdatingDeliveryId("");
@@ -1783,6 +1815,7 @@ export default function DeliveryCalendarPage({
       });
       setDeliveryToUnassign(null);
       setSelectedTimelineDeliveryId("");
+      setSelectedTimelineDeliverySnapshot(null);
       setExpandedDeliveryIds((currentExpandedDeliveryIds) => {
         const nextExpandedDeliveryIds = { ...currentExpandedDeliveryIds };
         delete nextExpandedDeliveryIds[deliveryId];
@@ -1827,6 +1860,7 @@ export default function DeliveryCalendarPage({
       });
       setDeliveryToMarkDelivered(null);
       setSelectedTimelineDeliveryId("");
+      setSelectedTimelineDeliverySnapshot(null);
     } catch (updateError) {
       console.error("Unable to mark calendar delivery complete:", updateError);
       setError(
@@ -2117,6 +2151,7 @@ export default function DeliveryCalendarPage({
                   onClick={() => {
                     setStatusFilter(option.id);
                     setSelectedTimelineDeliveryId("");
+                    setSelectedTimelineDeliverySnapshot(null);
                   }}
                   className={`rounded-lg px-3 py-2 text-xs font-black transition ${
                     statusFilter === option.id
@@ -2223,7 +2258,10 @@ export default function DeliveryCalendarPage({
 
                 <button
                   type="button"
-                  onClick={() => setSelectedTimelineDeliveryId("")}
+                  onClick={() => {
+                    setSelectedTimelineDeliveryId("");
+                    setSelectedTimelineDeliverySnapshot(null);
+                  }}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-100"
                 >
                   <ChevronLeft className="h-4 w-4" aria-hidden="true" />

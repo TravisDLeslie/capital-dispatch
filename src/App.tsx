@@ -5401,8 +5401,34 @@ export default function App() {
       deliveryId,
       deliveryUpdates,
     );
+    const updatedDelivery = updatedDeliveries.find(
+      (delivery) => delivery.id === deliveryId,
+    );
 
-    setDeliveries(updatedDeliveries);
+    setDeliveries((currentDeliveries) => {
+      const deliveryExists = currentDeliveries.some(
+        (delivery) => delivery.id === deliveryId,
+      );
+
+      if (!deliveryExists) {
+        return updatedDelivery
+          ? [...currentDeliveries, updatedDelivery]
+          : currentDeliveries;
+      }
+
+      return currentDeliveries.map((delivery) =>
+        delivery.id === deliveryId
+          ? {
+              ...delivery,
+              ...deliveryUpdates,
+              updatedAt:
+                updatedDelivery?.updatedAt ||
+                deliveryUpdates.updatedAt ||
+                delivery.updatedAt,
+            }
+          : delivery,
+      );
+    });
     setSyncError("");
   }
 

@@ -387,7 +387,32 @@ function OrderEntryToolbar({
   ];
 
   return (
-    <div className="mb-3 grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:grid-cols-[minmax(0,1fr)_minmax(250px,330px)] lg:items-end">
+    <div className="mb-3 grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm lg:grid-cols-[minmax(250px,330px)_minmax(0,1fr)] lg:items-end">
+      <Field label="Ordered by">
+        <div className="group relative">
+          <UserRound
+            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition-colors group-hover:text-slate-700 group-focus-within:text-[#FC2C38]"
+            aria-hidden="true"
+          />
+          <select
+            value={orderedBy}
+            onChange={(event) => onOrderedByChange(event.target.value)}
+            className="w-full cursor-pointer appearance-none rounded-xl border border-slate-300 bg-slate-100 py-2.5 pl-12 pr-12 text-base font-black text-slate-900 outline-none transition-all duration-150 hover:-translate-y-0.5 hover:border-slate-500 hover:bg-white hover:shadow-md focus:translate-y-0 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
+          >
+            <option value="">Select who placed the order...</option>
+            {orderedByOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+          <ChevronDown
+            className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition-colors group-hover:text-slate-700 group-focus-within:text-[#FC2C38]"
+            aria-hidden="true"
+          />
+        </div>
+      </Field>
+
       <div>
         <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
           Order type
@@ -414,31 +439,6 @@ function OrderEntryToolbar({
           })}
         </div>
       </div>
-
-      <Field label="Ordered by">
-        <div className="group relative">
-          <UserRound
-            className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition-colors group-hover:text-slate-700 group-focus-within:text-[#FC2C38]"
-            aria-hidden="true"
-          />
-          <select
-            value={orderedBy}
-            onChange={(event) => onOrderedByChange(event.target.value)}
-            className="w-full cursor-pointer appearance-none rounded-xl border border-slate-300 bg-slate-100 py-2.5 pl-12 pr-12 text-base font-black text-slate-900 outline-none transition-all duration-150 hover:-translate-y-0.5 hover:border-slate-500 hover:bg-white hover:shadow-md focus:translate-y-0 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100"
-          >
-            <option value="">Select who placed the order...</option>
-            {orderedByOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <ChevronDown
-            className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition-colors group-hover:text-slate-700 group-focus-within:text-[#FC2C38]"
-            aria-hidden="true"
-          />
-        </div>
-      </Field>
     </div>
   );
 }
