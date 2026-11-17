@@ -932,8 +932,8 @@ function CompactDeliveryCard({
 
   if (dispatchStyle) {
     return (
-      <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="hidden grid-cols-[minmax(150px,0.85fr)_minmax(220px,1.2fr)_minmax(280px,1.35fr)_minmax(200px,0.95fr)_minmax(170px,0.75fr)] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
+      <article className="relative overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="hidden rounded-t-2xl grid-cols-[minmax(150px,0.85fr)_minmax(220px,1.2fr)_minmax(280px,1.35fr)_minmax(200px,0.95fr)_minmax(170px,0.75fr)] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
           <span>Delivery</span>
           <span>Destination</span>
           <span>Schedule</span>
@@ -1141,7 +1141,7 @@ function CompactDeliveryCard({
           </section>
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="flex flex-wrap justify-end gap-2 rounded-b-2xl border-t border-slate-200 bg-slate-50 px-4 py-3">
           {onViewOrder ? (
             <button
               type="button"
