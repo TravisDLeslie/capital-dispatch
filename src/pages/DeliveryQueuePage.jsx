@@ -95,6 +95,22 @@ function formatDeliveryDateLabel(value) {
   }).format(date);
 }
 
+function getScheduledDeliveryStatusLabel(delivery, isReturn) {
+  const deliveryDate = String(delivery?.deliveryDate || "").slice(0, 10);
+
+  if (!deliveryDate) {
+    return isReturn ? "SCHEDULED RETURN PICKUP" : "SCHEDULED DELIVERY";
+  }
+
+  const dateLabel = formatDeliveryDateLabel(deliveryDate).toUpperCase();
+
+  if (deliveryDate === getTodayDateKey()) {
+    return isReturn ? "TODAY'S RETURN PICKUP" : "TODAY'S DELIVERY";
+  }
+
+  return `${isReturn ? "UPCOMING RETURN PICKUP" : "UPCOMING DELIVERY"} · ${dateLabel}`;
+}
+
 function formatDeliveryTypeLabel(value) {
   if (value === "priority") {
     return "Priority";
@@ -230,7 +246,12 @@ function groupDeliveriesByDriver(deliveries) {
 }
 
 function getTodayDateKey() {
-  return new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function isTodayOrFutureDelivery(delivery) {
@@ -849,9 +870,7 @@ function MobileDeliveryFlowCard({
           ? isReturn
             ? "RETURN PICKUP COMPLETE"
             : "DELIVERY COMPLETE"
-          : isReturn
-            ? "TODAY'S RETURN PICKUP"
-            : "TODAY'S DELIVERY";
+          : getScheduledDeliveryStatusLabel(delivery, isReturn);
 
   function scrollDeliveryCardIntoView() {
     window.requestAnimationFrame(() => {
