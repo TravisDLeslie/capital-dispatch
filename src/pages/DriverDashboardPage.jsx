@@ -209,6 +209,13 @@ function isReturnDelivery(delivery) {
   return delivery?.deliveryType === "return" || delivery?.routeStopType === "returnPickup";
 }
 
+function isVendorReturnDelivery(delivery) {
+  return (
+    delivery?.deliveryType === "vendorReturn" ||
+    delivery?.routeStopType === "vendorReturn"
+  );
+}
+
 function getDriverOptions(employeeOptions) {
   return [
     ...new Set(
@@ -371,8 +378,10 @@ function DriverRouteOverview({
         title={nextDelivery?.customerName || "No Delivery Route"}
         primary={
           openDeliveries.length > 0
-            ? isReturnDelivery(nextDelivery)
-              ? `Next stop: return pickup`
+            ? isVendorReturnDelivery(nextDelivery)
+              ? `Next stop: vendor return`
+              : isReturnDelivery(nextDelivery)
+                ? `Next stop: return pickup`
               : `${openDeliveries.length} ${
                   openDeliveries.length === 1 ? "delivery" : "deliveries"
                 } assigned`

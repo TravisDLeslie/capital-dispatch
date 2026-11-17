@@ -258,6 +258,13 @@ const handoffOptions = [
     icon: ArrowLeft,
     tone: "bg-violet-50 text-violet-700",
   },
+  {
+    id: "vendorReturn",
+    label: "Vendor Return",
+    description: "Take returned material from Capital Lumber back to a supplier.",
+    icon: Truck,
+    tone: "bg-amber-50 text-amber-800",
+  },
 ];
 
 function getHandoffOption(orderMethod) {
@@ -376,6 +383,7 @@ function OrderEntryToolbar({
     { id: "customer", label: "Customer Order" },
     { id: "stock", label: "Stock Order" },
     { id: "return", label: "Return" },
+    { id: "vendorReturn", label: "Vendor Return" },
   ];
 
   return (
@@ -384,7 +392,7 @@ function OrderEntryToolbar({
         <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
           Order type
         </p>
-        <div className="grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1">
+        <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 sm:grid-cols-4">
           {orderTypes.map((orderType) => {
             const isSelected = mode === orderType.id;
 
@@ -797,6 +805,8 @@ export default function OrderFlowPage({
   const [needsTarp, setNeedsTarp] = useState(false);
   const [unloadType, setUnloadType] = useState("Forklift");
   const [returnLoadType, setReturnLoadType] = useState("Hand unload");
+  const [vendorReturnVendor, setVendorReturnVendor] = useState("");
+  const [vendorReturnPoNumber, setVendorReturnPoNumber] = useState("");
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
@@ -920,8 +930,10 @@ export default function OrderFlowPage({
       String(item.itemNumber || "").trim().toUpperCase() === "SHIP",
   );
   const isReturnOrder = orderEntryMode === "return";
+  const isVendorReturnOrder = orderEntryMode === "vendorReturn";
+  const isReturnWorkflow = isReturnOrder || isVendorReturnOrder;
   const duplicateOrderMatch = useMemo(() => {
-    if (isReturnOrder) {
+    if (isReturnWorkflow) {
       return null;
     }
 
@@ -952,7 +964,7 @@ export default function OrderFlowPage({
     }
 
     return null;
-  }, [existingOrderSources, isReturnOrder, orderNumber]);
+  }, [existingOrderSources, isReturnWorkflow, orderNumber]);
   const duplicateOrderNumber = duplicateOrderMatch
     ? getRecordOrderNumber(duplicateOrderMatch) || orderNumber
     : "";
@@ -975,10 +987,13 @@ export default function OrderFlowPage({
   const canProcessOrder = Boolean(
     (isReturnOrder ? /^R\d{6}$/.test(orderNumber) : orderNumber) &&
       orderedBy &&
-      customerName &&
+      (isVendorReturnOrder
+        ? vendorReturnVendor && vendorReturnPoNumber
+        : customerName) &&
       savedItems.length > 0 &&
-      (!isReturnOrder || deliveryDate) &&
-      (!["delivery", "return"].includes(orderMethod) || deliveryAddress),
+      (!isReturnWorkflow || deliveryDate) &&
+      (!["delivery", "return", "vendorReturn"].includes(orderMethod) ||
+        deliveryAddress),
   );
   const validStockItems = useMemo(
     () =>
@@ -1002,7 +1017,7 @@ export default function OrderFlowPage({
   }, [currentUser?.name, orderedBy]);
 
   useEffect(() => {
-    if (orderMethod !== "delivery") {
+    if (!["delivery", "vendorReturn"].includes(orderMethod)) {
       setRouteEta(null);
       setRouteEtaStatus("idle");
       setRouteEtaMessage("");
@@ -1161,16 +1176,43 @@ export default function OrderFlowPage({
     setEditingItemId(null);
   }
 
+  function getNewItemDefaults(sourceItem = {}) {
+    if (isVendorReturnOrder) {
+      return {
+        path: "vendorReturn",
+        poNumber: vendorReturnPoNumber || sourceItem.poNumber || "",
+        vendor: vendorReturnVendor || sourceItem.vendor || "",
+        supplierAddress:
+          deliveryAddress || sourceItem.supplierAddress || "",
+        routeDate: "",
+        supplierDate: deliveryDate || sourceItem.supplierDate || "",
+      };
+    }
+
+    if (isReturnOrder) {
+      return {
+        path: "inStock",
+        poNumber: "",
+        vendor: "",
+        supplierAddress: "",
+        routeDate: "",
+        supplierDate: "",
+      };
+    }
+
+    return {
+      path: sourceItem.path || "supplierDelivery",
+      poNumber: sourceItem.poNumber || "",
+      vendor: sourceItem.vendor || "",
+      supplierAddress: sourceItem.supplierAddress || "",
+      routeDate: sourceItem.routeDate || "",
+      supplierDate: sourceItem.supplierDate || "",
+    };
+  }
+
   function addItem() {
     const previousItem = items[items.length - 1];
-    const nextItem = createBlankItem({
-      path: isReturnOrder ? "inStock" : previousItem?.path || "supplierDelivery",
-      poNumber: isReturnOrder ? "" : previousItem?.poNumber || "",
-      vendor: isReturnOrder ? "" : previousItem?.vendor || "",
-      supplierAddress: isReturnOrder ? "" : previousItem?.supplierAddress || "",
-      routeDate: isReturnOrder ? "" : previousItem?.routeDate || "",
-      supplierDate: isReturnOrder ? "" : previousItem?.supplierDate || "",
-    });
+    const nextItem = createBlankItem(getNewItemDefaults(previousItem));
 
     setItems((currentItems) => [...currentItems, nextItem]);
     setActiveItemId(nextItem.id);
@@ -1238,16 +1280,7 @@ export default function OrderFlowPage({
       return;
     }
 
-    const nextItem = createBlankItem({
-      path: isReturnOrder ? "inStock" : sourceItem.path,
-      poNumber: isReturnOrder ? "" : sourceItem.poNumber || "",
-      vendor: isReturnOrder ? "" : sourceItem.vendor || "",
-      supplierAddress: isReturnOrder
-        ? ""
-        : sourceItem.supplierAddress || "",
-      routeDate: isReturnOrder ? "" : sourceItem.routeDate || "",
-      supplierDate: isReturnOrder ? "" : sourceItem.supplierDate || "",
-    });
+    const nextItem = createBlankItem(getNewItemDefaults(sourceItem));
 
     setItems((currentItems) => [
       ...currentItems.map((item) =>
@@ -1269,29 +1302,9 @@ export default function OrderFlowPage({
       return nextItems.length > 0
         ? nextItems
         : [
-            createBlankItem({
-              path: isReturnOrder
-                ? "inStock"
-                : currentItems[currentItems.length - 1]?.path || "supplierDelivery",
-              poNumber: isReturnOrder
-                ? ""
-                : currentItems[currentItems.length - 1]?.poNumber || "",
-              vendor: isReturnOrder
-                ? ""
-                : currentItems[currentItems.length - 1]?.vendor || "",
-              supplierAddress:
-                isReturnOrder
-                  ? ""
-                  : currentItems[currentItems.length - 1]?.supplierAddress || "",
-              routeDate:
-                isReturnOrder
-                  ? ""
-                  : currentItems[currentItems.length - 1]?.routeDate || "",
-              supplierDate:
-                isReturnOrder
-                  ? ""
-                  : currentItems[currentItems.length - 1]?.supplierDate || "",
-            }),
+            createBlankItem(
+              getNewItemDefaults(currentItems[currentItems.length - 1]),
+            ),
           ];
     });
 
@@ -1450,38 +1463,59 @@ export default function OrderFlowPage({
   }
 
   function buildOrderPayload({ allowDuplicateOrder = false } = {}) {
-    const isDeliveryOrder = ["delivery", "return"].includes(orderMethod);
+    const isDeliveryOrder = ["delivery", "return", "vendorReturn"].includes(
+      orderMethod,
+    );
+    const payloadItems = isVendorReturnOrder
+      ? savedItems.map((item) => ({
+          ...item,
+          path: "vendorReturn",
+          vendor: vendorReturnVendor,
+          poNumber: vendorReturnPoNumber,
+          supplierAddress: deliveryAddress,
+          routeDate: "",
+          supplierDate: deliveryDate,
+        }))
+      : savedItems;
 
     return {
       orderNumber,
-      customerName,
-      businessName,
+      customerName: isVendorReturnOrder ? vendorReturnVendor : customerName,
+      businessName: isVendorReturnOrder ? vendorReturnVendor : businessName,
       phoneNumber,
       accountNumber,
       customerId: linkedCustomerAccount?.customerId || "",
       customerAccountType: linkedCustomerAccount?.accountType || "",
-      orderKind: isReturnOrder ? "return" : "customer",
+      orderKind: isVendorReturnOrder
+        ? "vendorReturn"
+        : isReturnOrder
+          ? "return"
+          : "customer",
       orderedBy,
       orderMethod,
       deliveryAddress,
       deliveryDate,
-      returnDate: isReturnOrder ? deliveryDate : "",
-      deliveryTitle,
-      hasHardware: isReturnOrder ? false : isDeliveryOrder ? hasHardware : false,
-      needsTarp: isReturnOrder ? false : isDeliveryOrder ? needsTarp : false,
-      unloadType: isReturnOrder ? returnLoadType : isDeliveryOrder ? unloadType : "",
+      returnDate: isReturnWorkflow ? deliveryDate : "",
+      deliveryTitle: isVendorReturnOrder
+        ? `${vendorReturnVendor} Return · PO ${vendorReturnPoNumber}`
+        : deliveryTitle,
+      hasHardware: isReturnWorkflow ? false : isDeliveryOrder ? hasHardware : false,
+      needsTarp: isReturnWorkflow ? false : isDeliveryOrder ? needsTarp : false,
+      unloadType: isReturnWorkflow ? returnLoadType : isDeliveryOrder ? unloadType : "",
       deliveryNotes: isDeliveryOrder ? deliveryNotes : "",
-      returnNotes: isReturnOrder ? deliveryNotes.trim() : "",
+      returnNotes: isReturnWorkflow ? deliveryNotes.trim() : "",
       routeEta: isDeliveryOrder ? routeEta : null,
       routeEtaStatus: isDeliveryOrder ? routeEtaStatus : "idle",
-      items: savedItems,
+      vendorReturnVendor,
+      vendorReturnPoNumber,
+      items: payloadItems,
       createdBy: currentUser,
       allowDuplicateOrder,
     };
   }
 
   function showCustomerOrder() {
-    if (orderMethod === "return") {
+    if (["return", "vendorReturn"].includes(orderMethod)) {
       setOrderNumber("");
       setOrderMethod("delivery");
     }
@@ -1508,6 +1542,30 @@ export default function OrderFlowPage({
       setIsReviewing(false);
     }
     setOrderEntryMode("return");
+  }
+
+  function showVendorReturnOrder() {
+    if (orderMethod !== "vendorReturn") {
+      if (isReturnOrder) {
+        setOrderNumber("");
+      }
+      setOrderMethod("vendorReturn");
+      setItems((currentItems) =>
+        currentItems.map((item) => ({
+          ...item,
+          path: "vendorReturn",
+          vendor: vendorReturnVendor,
+          supplierAddress: deliveryAddress,
+          poNumber: vendorReturnPoNumber,
+          routeDate: "",
+          supplierDate: deliveryDate,
+        })),
+      );
+      setActiveItemId(null);
+      setEditingItemId(null);
+      setIsReviewing(false);
+    }
+    setOrderEntryMode("vendorReturn");
   }
 
   function handleBusinessNameChange(nextBusinessName) {
@@ -2027,6 +2085,8 @@ export default function OrderFlowPage({
               showCustomerOrder();
             } else if (nextMode === "return") {
               showReturnOrder();
+            } else if (nextMode === "vendorReturn") {
+              showVendorReturnOrder();
             }
           }}
         />
@@ -2342,7 +2402,13 @@ export default function OrderFlowPage({
       <Breadcrumbs
         items={[
           { label: "Orders" },
-          { label: isReturnOrder ? "New Return" : "New Customer Order" },
+          {
+            label: isVendorReturnOrder
+              ? "New Vendor Return"
+              : isReturnOrder
+                ? "New Return"
+                : "New Customer Order",
+          },
         ]}
       />
 
@@ -2350,9 +2416,13 @@ export default function OrderFlowPage({
         <div>
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
-              {isReturnOrder ? "Customer Return" : "Customer Order"}
+              {isVendorReturnOrder
+                ? "Vendor Return Delivery"
+                : isReturnOrder
+                  ? "Customer Return"
+                  : "Customer Order"}
             </p>
-            {!isReturnOrder ? (
+            {!isReturnWorkflow ? (
               <button
                 type="button"
                 onClick={() => setIsOrderImportOpen(true)}
@@ -2365,7 +2435,11 @@ export default function OrderFlowPage({
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-              {isReturnOrder ? "New Return" : "New Customer Order"}
+              {isVendorReturnOrder
+                ? "New Vendor Return"
+                : isReturnOrder
+                  ? "New Return"
+                  : "New Customer Order"}
             </h1>
           </div>
         </div>
@@ -2374,11 +2448,16 @@ export default function OrderFlowPage({
           <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                  {isReturnOrder ? "Current Return" : "Current Order"}
+                  {isVendorReturnOrder
+                    ? "Current Vendor Return"
+                    : isReturnOrder
+                      ? "Current Return"
+                      : "Current Order"}
                 </p>
                 <p className="truncate text-sm font-black text-slate-700">
-                  {businessName || "Business name"} ·{" "}
-                  {customerName || "Customer name"}
+                  {isVendorReturnOrder
+                    ? `${vendorReturnVendor || "Vendor"} · PO ${vendorReturnPoNumber || "not entered"}`
+                    : `${businessName || "Business name"} · ${customerName || "Customer name"}`}
                 </p>
                 {accountNumber ? (
                   <p className="mt-1 truncate text-[11px] font-black uppercase tracking-[0.12em] text-slate-400">
@@ -2391,7 +2470,9 @@ export default function OrderFlowPage({
                   {orderNumber || (isReturnOrder ? "R000000" : "000-000")}
                 </p>
                 <p className="text-xs font-bold text-slate-500">
-                  {phoneNumber || "No phone"}
+                  {isVendorReturnOrder
+                    ? deliveryAddress || "No vendor address"
+                    : phoneNumber || "No phone"}
                 </p>
                 <span
                   className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.12em] ${selectedHandoff.tone}`}
@@ -2422,6 +2503,8 @@ export default function OrderFlowPage({
             showCustomerOrder();
           } else if (nextMode === "stock") {
             setOrderEntryMode("stock");
+          } else if (nextMode === "vendorReturn") {
+            showVendorReturnOrder();
           } else {
             showReturnOrder();
           }
@@ -2715,14 +2798,106 @@ export default function OrderFlowPage({
               Step 1
             </p>
             <h2 className="text-xl font-black text-slate-950">
-              {isReturnOrder ? "Return information" : "Order information"}
+              {isVendorReturnOrder
+                ? "Vendor return information"
+                : isReturnOrder
+                  ? "Return information"
+                  : "Order information"}
             </h2>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
-            {isReturnOrder ? "Unique return ID" : "6 digit order"}
+            {isVendorReturnOrder
+              ? "Existing order + PO"
+              : isReturnOrder
+                ? "Unique return ID"
+                : "6 digit order"}
           </span>
         </div>
 
+        {isVendorReturnOrder ? (
+          <div className="grid gap-2.5 xl:grid-cols-[150px_minmax(220px,1fr)_170px_minmax(280px,1.5fr)] xl:items-end">
+            <Field label="Order #">
+              <TextInput
+                value={orderNumber}
+                onChange={(event) =>
+                  setOrderNumber(formatOrderNumberInput(event.target.value))
+                }
+                placeholder="029-499"
+                inputMode="numeric"
+                maxLength={7}
+                className="text-xl font-black"
+              />
+            </Field>
+
+            <Field label="Vendor">
+              <SearchableSelect
+                value={vendorReturnVendor}
+                options={vendorOptions}
+                onChange={(nextVendor) => {
+                  const nextAddress = getVendorAddress(
+                    nextVendor,
+                    supplierAddressMap,
+                  );
+                  setVendorReturnVendor(nextVendor);
+                  if (nextAddress) {
+                    setDeliveryAddress(nextAddress);
+                  }
+                  setItems((currentItems) =>
+                    currentItems.map((item) => ({
+                      ...item,
+                      path: "vendorReturn",
+                      vendor: nextVendor,
+                      supplierAddress: nextAddress || deliveryAddress,
+                    })),
+                  );
+                }}
+                allowCustomValue
+                placeholder="Choose vendor..."
+                accent="blue"
+                inputBackgroundClassName="bg-slate-100 focus:bg-white"
+              />
+            </Field>
+
+            <Field label="PO Number">
+              <TextInput
+                value={vendorReturnPoNumber}
+                onChange={(event) => {
+                  const nextPoNumber = formatOrderNumberInput(event.target.value);
+                  setVendorReturnPoNumber(nextPoNumber);
+                  setItems((currentItems) =>
+                    currentItems.map((item) => ({
+                      ...item,
+                      poNumber: nextPoNumber,
+                    })),
+                  );
+                }}
+                placeholder="444-185"
+                inputMode="numeric"
+                maxLength={7}
+              />
+            </Field>
+
+            <Field label="Vendor Address">
+              <AddressAutocompleteInput
+                value={deliveryAddress}
+                onChange={(nextAddress) => {
+                  setDeliveryAddress(nextAddress);
+                  setItems((currentItems) =>
+                    currentItems.map((item) => ({
+                      ...item,
+                      supplierAddress: nextAddress,
+                    })),
+                  );
+                }}
+                autoComplete="off"
+                enableLocalFallback
+                placeholder="Start typing the vendor address..."
+                showStatus={false}
+                className="w-full rounded-xl border border-slate-300 bg-slate-100 px-4 py-2.5 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-100"
+              />
+            </Field>
+          </div>
+        ) : (
         <div className="grid gap-2.5 xl:grid-cols-[150px_minmax(180px,1.1fr)_minmax(170px,1fr)_170px_135px] xl:items-end">
           <Field label={isReturnOrder ? "Return #" : "Order #"}>
             <TextInput
@@ -2853,6 +3028,7 @@ export default function OrderFlowPage({
             </div>
           </Field>
         </div>
+        )}
 
         {duplicateOrderMatch ? (
           <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3">
@@ -2908,7 +3084,7 @@ export default function OrderFlowPage({
       <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-3.5">
         <div
           className={`grid gap-3 ${
-            isReturnOrder
+            isReturnWorkflow
               ? "xl:grid-cols-[260px_1fr] xl:items-start"
               : "lg:grid-cols-[minmax(180px,1fr)_minmax(420px,560px)] lg:items-end"
           }`}
@@ -2918,19 +3094,25 @@ export default function OrderFlowPage({
               Step 2
             </p>
             <h2 className="text-xl font-black text-slate-950">
-              {isReturnOrder ? "Return pickup" : "Customer handoff"}
+              {isVendorReturnOrder
+                ? "Vendor return delivery"
+                : isReturnOrder
+                  ? "Return pickup"
+                  : "Customer handoff"}
             </h2>
 
-            {isReturnOrder ? (
+            {isReturnWorkflow ? (
               <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-                Enter the address where the material needs to be picked up.
+                {isVendorReturnOrder
+                  ? "Send the selected material from Capital Lumber back to the supplier."
+                  : "Enter the address where the material needs to be picked up."}
               </p>
             ) : null}
           </div>
 
-          {!isReturnOrder ? (
+          {!isReturnWorkflow ? (
             <div className="grid grid-cols-3 gap-1.5">
-              {handoffOptions.filter((option) => option.id !== "return").map((option) => {
+              {handoffOptions.filter((option) => !["return", "vendorReturn"].includes(option.id)).map((option) => {
                 const OptionIcon = option.icon;
                 const isSelected = orderMethod === option.id;
 
@@ -2953,10 +3135,14 @@ export default function OrderFlowPage({
             </div>
           ) : null}
 
-          {isReturnOrder ? (
-            <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-3">
+          {isReturnWorkflow ? (
+            <div className={`rounded-2xl border p-3 ${
+              isVendorReturnOrder
+                ? "border-amber-200 bg-amber-50/60"
+                : "border-violet-200 bg-violet-50/60"
+            }`}>
               <div className="grid gap-3 xl:grid-cols-[180px_1fr] xl:items-start">
-                <Field label="Return Date">
+                <Field label={isVendorReturnOrder ? "Vendor Return Date" : "Return Date"}>
                   <TextInput
                     type="date"
                     value={deliveryDate}
@@ -2964,10 +3150,12 @@ export default function OrderFlowPage({
                   />
                 </Field>
 
-                <Field label="Return Pickup Address">
+                <Field label={isVendorReturnOrder ? "Vendor Address" : "Return Pickup Address"}>
                   <div className="relative">
                     <MapPin
-                      className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-violet-500"
+                      className={`pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 ${
+                        isVendorReturnOrder ? "text-amber-600" : "text-violet-500"
+                      }`}
                       aria-hidden="true"
                     />
                     <AddressAutocompleteInput
@@ -2975,22 +3163,38 @@ export default function OrderFlowPage({
                       onChange={setDeliveryAddress}
                       autoComplete="off"
                       enableLocalFallback
-                      placeholder="Start typing the return pickup address..."
+                      placeholder={
+                        isVendorReturnOrder
+                          ? "Start typing the vendor return address..."
+                          : "Start typing the return pickup address..."
+                      }
                       showStatus={false}
-                      className="w-full rounded-2xl border border-violet-200 bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                      className={`w-full rounded-2xl border bg-white py-3 pl-12 pr-4 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
+                        isVendorReturnOrder
+                          ? "border-amber-200 focus:border-amber-500 focus:ring-amber-100"
+                          : "border-violet-200 focus:border-violet-500 focus:ring-violet-100"
+                      }`}
                     />
                   </div>
                 </Field>
               </div>
 
               <div className="mt-2">
-                <Field label="Return Notes">
+                <Field label={isVendorReturnOrder ? "Vendor Return Notes" : "Return Notes"}>
                   <textarea
                     value={deliveryNotes}
                     onChange={(event) => setDeliveryNotes(event.target.value)}
-                    placeholder="What is being returned, its condition, pickup location, who to ask for, or anything the driver should know..."
+                    placeholder={
+                      isVendorReturnOrder
+                        ? "Return authorization, contact, material condition, loading notes, or anything the driver should know..."
+                        : "What is being returned, its condition, pickup location, who to ask for, or anything the driver should know..."
+                    }
                     rows={2}
-                    className="w-full resize-none rounded-xl border border-violet-200 bg-white px-3.5 py-2.5 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                    className={`w-full resize-none rounded-xl border bg-white px-3.5 py-2.5 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
+                      isVendorReturnOrder
+                        ? "border-amber-200 focus:border-amber-500 focus:ring-amber-100"
+                        : "border-violet-200 focus:border-violet-500 focus:ring-violet-100"
+                    }`}
                   />
                 </Field>
               </div>
@@ -2998,7 +3202,7 @@ export default function OrderFlowPage({
           ) : null}
         </div>
 
-        {!isReturnOrder && orderMethod === "delivery" ? (
+        {!isReturnWorkflow && orderMethod === "delivery" ? (
           <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <div className="grid gap-2.5 xl:grid-cols-[155px_minmax(260px,1fr)_210px_160px] xl:items-end">
                 <Field label="Delivery Date">
@@ -3074,16 +3278,22 @@ export default function OrderFlowPage({
               Step 3
             </p>
             <h2 className="text-xl font-black text-slate-950">
-              {isReturnOrder ? "Return items" : "Items & fulfillment"}
+              {isVendorReturnOrder
+                ? "Items going back to vendor"
+                : isReturnOrder
+                  ? "Return items"
+                  : "Items & fulfillment"}
             </h2>
             <p className="mt-0.5 text-xs font-bold text-slate-500 sm:text-sm">
-              {isReturnOrder
-                ? "Add every item that needs to come back to Capital Lumber."
-                : "Add material from Capital Lumber's yard or from a supplier."}
+              {isVendorReturnOrder
+                ? `Add every item being returned to ${vendorReturnVendor || "the supplier"}.`
+                : isReturnOrder
+                  ? "Add every item that needs to come back to Capital Lumber."
+                  : "Add material from Capital Lumber's yard or from a supplier."}
             </p>
           </div>
           {SHOW_SHIP_ORDER_COMPLETE_SHORTCUT &&
-          !isReturnOrder &&
+          !isReturnWorkflow &&
           orderMethod === "delivery" ? (
             <button
               type="button"
@@ -3122,7 +3332,7 @@ export default function OrderFlowPage({
                 >
                   <div
                     className={`grid gap-2 sm:items-center ${
-                      isReturnOrder
+                      isReturnWorkflow
                         ? "sm:grid-cols-[42px_130px_minmax(220px,1fr)_140px_96px]"
                         : "sm:grid-cols-[42px_130px_minmax(180px,1fr)_190px_150px_96px]"
                     }`}
@@ -3144,14 +3354,16 @@ export default function OrderFlowPage({
                       </p>
                         <p className="truncate text-xs font-bold text-slate-500">
                           {item.itemNumber ? `Item # ${item.itemNumber} · ` : ""}
-                          {isReturnOrder
+                          {isVendorReturnOrder
+                            ? `${vendorReturnVendor || "Vendor"} · PO ${vendorReturnPoNumber || "not entered"}`
+                            : isReturnOrder
                             ? "Return item"
                             : isYardStock
                             ? "From Capital Lumber yard"
                             : `${item.vendor || "No vendor"} · PO ${item.poNumber || "not entered"}`}
                       </p>
                     </div>
-                    {!isReturnOrder ? (
+                    {!isReturnWorkflow ? (
                     <div className="min-w-0">
                       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
                         {itemDateLabel}
@@ -3163,10 +3375,14 @@ export default function OrderFlowPage({
                       </p>
                     </div>
                     ) : null}
-                    {isReturnOrder ? (
-                      <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-violet-700">
+                    {isReturnWorkflow ? (
+                      <span className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] ${
+                        isVendorReturnOrder
+                          ? "border-amber-200 bg-amber-50 text-amber-800"
+                          : "border-violet-200 bg-violet-50 text-violet-700"
+                      }`}>
                         <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                        Return
+                        {isVendorReturnOrder ? "Vendor Return" : "Return"}
                       </span>
                     ) : (
                       <WorkflowPill pathId={item.path} />
@@ -3212,10 +3428,14 @@ export default function OrderFlowPage({
                       </p>
                     </div>
                   </div>
-                  {isReturnOrder ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-violet-700">
+                  {isReturnWorkflow ? (
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] ${
+                      isVendorReturnOrder
+                        ? "border-amber-200 bg-amber-50 text-amber-800"
+                        : "border-violet-200 bg-violet-50 text-violet-700"
+                    }`}>
                       <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-                      Return
+                      {isVendorReturnOrder ? "Vendor Return" : "Return"}
                     </span>
                   ) : (
                     <WorkflowPill pathId={item.path} />
@@ -3224,7 +3444,7 @@ export default function OrderFlowPage({
 
                 <div
                   className={`mt-3 grid gap-3 ${
-                    isReturnOrder
+                    isReturnWorkflow
                       ? "lg:grid-cols-[110px_180px_minmax(220px,1fr)]"
                       : "lg:grid-cols-[110px_220px_minmax(280px,1fr)]"
                   }`}
@@ -3250,12 +3470,23 @@ export default function OrderFlowPage({
                           updateItem(item.id, {
                             itemNumber: inventoryItem.itemNumber,
                             description: "",
-                            path: "inStock",
-                            vendor: "",
-                            supplierAddress: "",
-                            poNumber: "",
-                            routeDate: "",
-                            supplierDate: "",
+                            ...(isVendorReturnOrder
+                              ? {
+                                  path: "vendorReturn",
+                                  vendor: vendorReturnVendor,
+                                  supplierAddress: deliveryAddress,
+                                  poNumber: vendorReturnPoNumber,
+                                  routeDate: "",
+                                  supplierDate: deliveryDate,
+                                }
+                              : {
+                                  path: "inStock",
+                                  vendor: "",
+                                  supplierAddress: "",
+                                  poNumber: "",
+                                  routeDate: "",
+                                  supplierDate: "",
+                                }),
                           });
                           return;
                         }
@@ -3264,12 +3495,23 @@ export default function OrderFlowPage({
                           updateItem(item.id, {
                             itemNumber: inventoryItem.itemNumber,
                             description: inventoryItem.description,
-                            path: "inStock",
-                            vendor: "",
-                            supplierAddress: "",
-                            poNumber: "",
-                            routeDate: "",
-                            supplierDate: "",
+                            ...(isVendorReturnOrder
+                              ? {
+                                  path: "vendorReturn",
+                                  vendor: vendorReturnVendor,
+                                  supplierAddress: deliveryAddress,
+                                  poNumber: vendorReturnPoNumber,
+                                  routeDate: "",
+                                  supplierDate: deliveryDate,
+                                }
+                              : {
+                                  path: "inStock",
+                                  vendor: "",
+                                  supplierAddress: "",
+                                  poNumber: "",
+                                  routeDate: "",
+                                  supplierDate: "",
+                                }),
                           });
                           return;
                         }
@@ -3277,12 +3519,12 @@ export default function OrderFlowPage({
                         updateItem(item.id, {
                           itemNumber: inventoryItem.itemNumber,
                           description: inventoryItem.description,
-                          ...(!isReturnOrder && item.path === "inStock"
+                          ...(!isReturnWorkflow && item.path === "inStock"
                             ? { path: "supplierDelivery" }
                             : {}),
                         });
 
-                        if (!isReturnOrder && inventoryItem.defaultVendor) {
+                        if (!isReturnWorkflow && inventoryItem.defaultVendor) {
                           updateItemVendor(
                             item.id,
                             inventoryItem.defaultVendor,
@@ -3314,7 +3556,7 @@ export default function OrderFlowPage({
                   </Field>
                 </div>
 
-                {!isReturnOrder ? (
+                {!isReturnWorkflow ? (
                   <div className="mt-3">
                     <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 sm:text-[11px]">
                       Where is this material coming from?
@@ -3361,17 +3603,27 @@ export default function OrderFlowPage({
                   </div>
                 ) : null}
 
-                {isReturnOrder ? (
-                  <div className="mt-4 flex items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-violet-700 shadow-sm">
+                {isReturnWorkflow ? (
+                  <div className={`mt-4 flex items-center gap-3 rounded-2xl border p-4 ${
+                    isVendorReturnOrder
+                      ? "border-amber-200 bg-amber-50"
+                      : "border-violet-200 bg-violet-50"
+                  }`}>
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm ${
+                      isVendorReturnOrder ? "text-amber-800" : "text-violet-700"
+                    }`}>
                       <ArrowLeft className="h-5 w-5" aria-hidden="true" />
                     </span>
                     <div>
-                      <p className="text-xs font-black uppercase tracking-[0.14em] text-violet-700">
-                        Return material
+                      <p className={`text-xs font-black uppercase tracking-[0.14em] ${
+                        isVendorReturnOrder ? "text-amber-800" : "text-violet-700"
+                      }`}>
+                        {isVendorReturnOrder ? "Vendor return item" : "Return material"}
                       </p>
                       <p className="mt-1 text-sm font-bold text-slate-700">
-                        This item will be picked up at the return address and brought back to Capital Lumber.
+                        {isVendorReturnOrder
+                          ? `This item will leave Capital Lumber and go back to ${vendorReturnVendor || "the vendor"} · PO ${vendorReturnPoNumber || "not entered"}.`
+                          : "This item will be picked up at the return address and brought back to Capital Lumber."}
                       </p>
                     </div>
                   </div>
@@ -3488,7 +3740,7 @@ export default function OrderFlowPage({
                     type="button"
                     onClick={() => saveItemAndAddAnother(item.id)}
                     className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-5 text-sm font-black text-white shadow-sm transition ${
-                      isReturnOrder
+                      isReturnWorkflow
                         ? "bg-violet-600 hover:bg-violet-700"
                         : "bg-[#FC2C38] hover:bg-red-700"
                     }`}
@@ -3506,7 +3758,7 @@ export default function OrderFlowPage({
           type="button"
           onClick={addItem}
           className={`mt-3 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-sm font-black transition ${
-            isReturnOrder
+            isReturnWorkflow
               ? "bg-violet-600 text-white shadow-sm hover:bg-violet-700"
               : "bg-slate-950 text-white shadow-sm hover:bg-slate-800"
           }`}
@@ -3516,22 +3768,32 @@ export default function OrderFlowPage({
         </button>
       </section>
 
-      {isReturnOrder ? (
-        <section className="mt-3 rounded-2xl border border-violet-200 bg-white p-3 shadow-sm sm:p-3.5">
+      {isReturnWorkflow ? (
+        <section className={`mt-3 rounded-2xl border bg-white p-3 shadow-sm sm:p-3.5 ${
+          isVendorReturnOrder ? "border-amber-200" : "border-violet-200"
+        }`}>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.16em] text-violet-700">
+              <p className={`text-[11px] font-black uppercase tracking-[0.16em] ${
+                isVendorReturnOrder ? "text-amber-800" : "text-violet-700"
+              }`}>
                 Step 4
               </p>
               <h2 className="text-xl font-black text-slate-950">
-                Type of return
+                {isVendorReturnOrder ? "Vendor return load type" : "Type of return"}
               </h2>
               <p className="mt-0.5 text-xs font-bold text-slate-500 sm:text-sm">
-                Tell dispatch how the returned material needs to be loaded.
+                {isVendorReturnOrder
+                  ? "Tell dispatch how the material going back to the vendor needs to be loaded."
+                  : "Tell dispatch how the returned material needs to be loaded."}
               </p>
             </div>
-            <span className="rounded-xl bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-700">
-              Return pickup
+            <span className={`rounded-xl px-3 py-1.5 text-xs font-black ${
+              isVendorReturnOrder
+                ? "bg-amber-50 text-amber-800"
+                : "bg-violet-50 text-violet-700"
+            }`}>
+              {isVendorReturnOrder ? "Vendor return delivery" : "Return pickup"}
             </span>
           </div>
 
@@ -3664,20 +3926,30 @@ export default function OrderFlowPage({
           onClick={() => setIsReviewing(true)}
           className="mt-5 inline-flex min-h-[68px] w-full items-center justify-center rounded-[1.5rem] bg-slate-950 px-6 text-xl font-black text-white shadow-sm transition hover:bg-slate-800"
         >
-          {isReturnOrder ? "Review Return" : "Review Order"}
+          {isVendorReturnOrder
+            ? "Review Vendor Return"
+            : isReturnOrder
+              ? "Review Return"
+              : "Review Order"}
         </button>
       ) : (
         <section className="mt-5 rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-                {isReturnOrder ? "Review Return" : "Review Order"}
+                {isVendorReturnOrder
+                  ? "Review Vendor Return"
+                  : isReturnOrder
+                    ? "Review Return"
+                    : "Review Order"}
               </p>
               <h2 className="mt-1 text-3xl font-black text-slate-950">
                 {orderNumber || (isReturnOrder ? "R000000" : "000-000")}
               </h2>
               <p className="mt-1 text-sm font-bold text-slate-500">
-                {businessName || customerName || "No customer"} ·{" "}
+                {isVendorReturnOrder
+                  ? vendorReturnVendor || "No vendor"
+                  : businessName || customerName || "No customer"} ·{" "}
                 {selectedHandoff.label}
               </p>
             </div>
@@ -3694,18 +3966,24 @@ export default function OrderFlowPage({
             <div className="grid gap-3">
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
-                  Customer
+                  {isVendorReturnOrder ? "Vendor" : "Customer"}
                 </p>
                 <p className="mt-1 text-lg font-black text-slate-950">
-                  {customerName || "No customer name"}
+                  {isVendorReturnOrder
+                    ? vendorReturnVendor || "No vendor selected"
+                    : customerName || "No customer name"}
                 </p>
                 <p className="text-sm font-bold text-slate-600">
-                  {businessName || "No business name"}
+                  {isVendorReturnOrder
+                    ? `PO ${vendorReturnPoNumber || "not entered"}`
+                    : businessName || "No business name"}
                 </p>
                 <p className="mt-1 text-sm font-bold text-slate-500">
-                  {phoneNumber || "No phone"}
+                  {isVendorReturnOrder
+                    ? deliveryAddress || "No vendor address"
+                    : phoneNumber || "No phone"}
                 </p>
-                {accountNumber ? (
+                {!isVendorReturnOrder && accountNumber ? (
                   <p className="mt-1 text-sm font-black text-slate-500">
                     Account # {accountNumber}
                   </p>
@@ -3714,12 +3992,16 @@ export default function OrderFlowPage({
 
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
-                  {isReturnOrder ? "Return setup" : "Delivery setup"}
+                  {isVendorReturnOrder
+                    ? "Vendor return setup"
+                    : isReturnOrder
+                      ? "Return setup"
+                      : "Delivery setup"}
                 </p>
                 <div className="mt-3 rounded-2xl border border-red-100 bg-white p-3 shadow-sm">
                   <div className="flex items-center gap-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38]">
-                      {isReturnOrder ? (
+                      {isReturnWorkflow ? (
                         <SelectedReturnLoadIcon className="h-5 w-5" aria-hidden="true" />
                       ) : (
                         <SelectedUnloadIcon className="h-5 w-5" aria-hidden="true" />
@@ -3727,15 +4009,19 @@ export default function OrderFlowPage({
                     </span>
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#FC2C38]">
-                        {isReturnOrder ? "Return Type" : "Delivery Type"}
+                        {isVendorReturnOrder
+                          ? "Vendor Return Type"
+                          : isReturnOrder
+                            ? "Return Type"
+                            : "Delivery Type"}
                       </p>
                       <p className="text-lg font-black text-slate-950">
-                        {isReturnOrder ? selectedReturnLoadType.label : unloadType}
+                        {isReturnWorkflow ? selectedReturnLoadType.label : unloadType}
                       </p>
                     </div>
                   </div>
                 </div>
-                {!isReturnOrder ? (
+                {!isReturnWorkflow ? (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <span
                     className={`rounded-full px-3 py-1.5 text-xs font-black ${
@@ -3757,24 +4043,28 @@ export default function OrderFlowPage({
                   </span>
                 </div>
                 ) : null}
-                {["delivery", "return"].includes(orderMethod) ? (
+                {["delivery", "return", "vendorReturn"].includes(orderMethod) ? (
                   <div className="mt-2">
                     <p className="text-sm font-bold text-slate-600">
                       {deliveryAddress ||
-                        (isReturnOrder
-                          ? "No return pickup address"
-                          : "No delivery address")}
+                        (isVendorReturnOrder
+                          ? "No vendor address"
+                          : isReturnOrder
+                            ? "No return pickup address"
+                            : "No delivery address")}
                     </p>
-                    {!isReturnOrder && deliveryTitle ? (
+                    {!isReturnWorkflow && deliveryTitle ? (
                       <p className="mt-1 text-sm font-black text-slate-900">
                         {deliveryTitle}
                       </p>
                     ) : null}
                   </div>
                 ) : null}
-                {isReturnOrder ? (
-                  <p className="mt-2 text-sm font-black text-violet-700">
-                    Return date: {deliveryDateText}
+                {isReturnWorkflow ? (
+                  <p className={`mt-2 text-sm font-black ${
+                    isVendorReturnOrder ? "text-amber-800" : "text-violet-700"
+                  }`}>
+                    {isVendorReturnOrder ? "Vendor return date" : "Return date"}: {deliveryDateText}
                   </p>
                 ) : null}
                 {routeEta?.durationText ? (
@@ -3819,14 +4109,18 @@ export default function OrderFlowPage({
                           </p>
                         ) : null}
                         <p className="mt-1 text-sm font-bold text-slate-600">
-                          {isReturnOrder
+                          {isVendorReturnOrder
+                            ? `${vendorReturnVendor || "Vendor"} · PO ${vendorReturnPoNumber || "not entered"}`
+                            : isReturnOrder
                             ? "Return pickup item"
                             : item.path === "inStock"
                             ? "From Capital Lumber yard · No PO required"
                             : `${item.vendor || "No vendor"} · PO ${item.poNumber || "not entered"}`}
                         </p>
                         <p className="mt-1 text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                          {isReturnOrder
+                          {isVendorReturnOrder
+                            ? `Send back by ${selectedReturnLoadType.label}`
+                            : isReturnOrder
                             ? `Return by ${selectedReturnLoadType.label}`
                             : item.path === "inStock"
                             ? "Ready from stock"
@@ -3839,9 +4133,13 @@ export default function OrderFlowPage({
                               }`}
                         </p>
                       </div>
-                      {isReturnOrder ? (
-                        <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] text-violet-700">
-                          Return
+                      {isReturnWorkflow ? (
+                        <span className={`rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] ${
+                          isVendorReturnOrder
+                            ? "border-amber-200 bg-amber-50 text-amber-800"
+                            : "border-violet-200 bg-violet-50 text-violet-700"
+                        }`}>
+                          {isVendorReturnOrder ? "Vendor Return" : "Return"}
                         </span>
                       ) : (
                         <WorkflowPill pathId={item.path} />
@@ -3861,9 +4159,11 @@ export default function OrderFlowPage({
           >
             {isProcessingOrder
               ? "Processing..."
-              : isReturnOrder
-                ? "Create Return"
-                : "Process Order"}
+              : isVendorReturnOrder
+                ? "Create Vendor Return"
+                : isReturnOrder
+                  ? "Create Return"
+                  : "Process Order"}
           </button>
           {processError ? (
             <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">

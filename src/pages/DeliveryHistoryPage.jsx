@@ -160,6 +160,10 @@ function formatDeliveryTypeLabel(value) {
     return "Return";
   }
 
+  if (value === "vendorReturn") {
+    return "Vendor Return";
+  }
+
   return "Standard";
 }
 
@@ -1046,6 +1050,8 @@ export default function DeliveryHistoryPage({
                       className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-black ${
                         delivery.deliveryType === "return"
                           ? "bg-blue-50 text-blue-700"
+                          : delivery.deliveryType === "vendorReturn"
+                            ? "bg-amber-50 text-amber-800"
                           : delivery.deliveryType === "hotShot"
                           ? "bg-red-50 text-[#FC2C38]"
                           : delivery.deliveryType === "priority"

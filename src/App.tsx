@@ -4657,22 +4657,32 @@ export default function App() {
     const deliveryTitle = String(orderPayload.deliveryTitle || "").trim();
     const customerName = String(orderPayload.customerName || "").trim();
     const businessName = String(orderPayload.businessName || "").trim();
-    const customerDisplayName = businessName || customerName || "New customer";
     const orderKind = String(orderPayload.orderKind || "customer");
     const isReturnOrder = orderKind === "return";
+    const isVendorReturnOrder = orderKind === "vendorReturn";
+    const isReturnWorkflow = isReturnOrder || isVendorReturnOrder;
+    const vendorReturnVendor = String(
+      orderPayload.vendorReturnVendor || customerName || businessName || "",
+    ).trim();
+    const vendorReturnPoNumber = String(
+      orderPayload.vendorReturnPoNumber || "",
+    ).trim();
+    const customerDisplayName = isVendorReturnOrder
+      ? vendorReturnVendor || "Vendor return"
+      : businessName || customerName || "New customer";
     let sourceOrderNumber = String(orderPayload.orderNumber || "").trim();
     const handoffType = String(orderPayload.orderMethod || "willCall");
-    const isDeliveryOrder = handoffType === "delivery" || isReturnOrder;
-    const returnDate = isReturnOrder
+    const isDeliveryOrder = handoffType === "delivery" || isReturnWorkflow;
+    const returnDate = isReturnWorkflow
       ? String(orderPayload.returnDate || orderPayload.deliveryDate || "").trim()
       : "";
-    const returnNotes = isReturnOrder
+    const returnNotes = isReturnWorkflow
       ? String(orderPayload.returnNotes || orderPayload.deliveryNotes || "").trim()
       : "";
-    const scheduledDeliveryDate = isReturnOrder
+    const scheduledDeliveryDate = isReturnWorkflow
       ? returnDate
       : String(orderPayload.deliveryDate || "").trim();
-    const savedDeliveryNotes = isReturnOrder
+    const savedDeliveryNotes = isReturnWorkflow
       ? returnNotes
       : String(orderPayload.deliveryNotes || "").trim();
 
@@ -4706,7 +4716,7 @@ export default function App() {
       } else {
         sourceOrderNumber = requestedReturnNumber;
       }
-    } else {
+    } else if (!isVendorReturnOrder) {
       const sourceOrderKey = normalizeSearchNumber(sourceOrderNumber);
       const duplicateOrder = [...orderBuilds, ...salesOrders].find(
         (record) =>
@@ -4725,8 +4735,22 @@ export default function App() {
         );
       }
     }
+    const sourceOrderKey = normalizeSearchNumber(sourceOrderNumber);
+    const linkedSourceOrder = [...orderBuilds, ...salesOrders].find(
+      (record) =>
+        normalizeSearchNumber(
+          record.orderNumber || record.sourceOrderNumber,
+        ) === sourceOrderKey,
+    );
+    const linkedSourceOrderId = String(
+      linkedSourceOrder?.orderId || linkedSourceOrder?.id || orderId,
+    );
     const poNumbers = Array.from(
-      new Set(cleanItems.map((item) => item.poNumber).filter(Boolean)),
+      new Set(
+        [...cleanItems.map((item) => item.poNumber), vendorReturnPoNumber].filter(
+          Boolean,
+        ),
+      ),
     );
     const creator = {
       id: currentUserCreator.id,
@@ -4750,8 +4774,8 @@ export default function App() {
       returnDate,
       returnNotes,
       deliveryTitle,
-      hasHardware: !isReturnOrder && isDeliveryOrder && Boolean(orderPayload.hasHardware),
-      needsTarp: !isReturnOrder && isDeliveryOrder && Boolean(orderPayload.needsTarp),
+      hasHardware: !isReturnWorkflow && isDeliveryOrder && Boolean(orderPayload.hasHardware),
+      needsTarp: !isReturnWorkflow && isDeliveryOrder && Boolean(orderPayload.needsTarp),
       unloadType: isDeliveryOrder
         ? String(orderPayload.unloadType || "Forklift")
         : "",
@@ -4771,7 +4795,9 @@ export default function App() {
       updatedAt: now,
     };
 
-    await handleSaveSalesOrder(salesOrder);
+    if (!isVendorReturnOrder) {
+      await handleSaveSalesOrder(salesOrder);
+    }
 
     const createdSouthRuns: SupplierRun[] = [];
     const createdTheirTruckPOs: TheirTruckPO[] = [];
@@ -4917,7 +4943,7 @@ export default function App() {
       createdPodPickups.push(podPickup);
     }
 
-    if (orderPayload.orderMethod === "delivery" || isReturnOrder) {
+    if (orderPayload.orderMethod === "delivery" || isReturnWorkflow) {
       const routeEta = orderPayload.routeEta as
         | { durationValue?: number; durationText?: string; distanceText?: string }
         | null
@@ -4938,14 +4964,22 @@ export default function App() {
         driver: "",
         drivers: [],
         dispatchAssignments: [],
-        deliveryType: isReturnOrder ? "return" : "Standard",
-        routeStopType: isReturnOrder ? "returnPickup" : "delivery",
-        returnNumber: isReturnOrder ? sourceOrderNumber : "",
+        deliveryType: isVendorReturnOrder
+          ? "vendorReturn"
+          : isReturnOrder
+            ? "return"
+            : "Standard",
+        routeStopType: isVendorReturnOrder
+          ? "vendorReturn"
+          : isReturnOrder
+            ? "returnPickup"
+            : "delivery",
+        returnNumber: isReturnWorkflow ? sourceOrderNumber : "",
         returnDate,
         returnNotes,
         unloadType: String(orderPayload.unloadType || "Forklift"),
-        hasHardware: isReturnOrder ? false : Boolean(orderPayload.hasHardware),
-        needsTarp: isReturnOrder ? false : Boolean(orderPayload.needsTarp),
+        hasHardware: isReturnWorkflow ? false : Boolean(orderPayload.hasHardware),
+        needsTarp: isReturnWorkflow ? false : Boolean(orderPayload.needsTarp),
         hardwareChecked: false,
         deliveryLocationNotes: "",
         generalNotes: savedDeliveryNotes,
@@ -4956,6 +4990,7 @@ export default function App() {
           itemNumber: item.itemNumber,
           description: item.description,
           vendor: item.vendor,
+          poNumber: item.poNumber,
           fulfillmentPath: item.path,
           delivered: false,
         })),
@@ -4965,7 +5000,11 @@ export default function App() {
         hardwarePhotos: [],
         deliveredAt: "",
         dispatchStatus: "needsDispatch",
-        deliveryScope: isReturnOrder ? "return" : "full",
+        deliveryScope: isVendorReturnOrder
+          ? "vendorReturn"
+          : isReturnOrder
+            ? "return"
+            : "full",
         deliveryScopeNotes: "",
         deliveryDate: scheduledDeliveryDate,
         deliveryTimeSlot: "",
@@ -4974,8 +5013,11 @@ export default function App() {
         oneWayDriveMinutes,
         routeEta: routeEta || undefined,
         status: "open",
-        sourceOrderId: orderId,
+        sourceOrderId: linkedSourceOrderId,
         sourceOrderNumber,
+        vendor: vendorReturnVendor,
+        poNumber: vendorReturnPoNumber,
+        vendorReturn: isVendorReturnOrder,
         orderedBy,
         createdAt: now,
         updatedAt: now,
@@ -4999,10 +5041,10 @@ export default function App() {
       returnNotes,
       deliveryTitle,
       status: "waiting",
-      waitingItems: isReturnOrder
+      waitingItems: isReturnWorkflow
         ? cleanItems
         : cleanItems.filter((item) => item.path !== "inStock"),
-      stockItems: isReturnOrder
+      stockItems: isReturnWorkflow
         ? []
         : cleanItems.filter((item) => item.path === "inStock"),
       linkedSouthRunIds: createdSouthRuns.map((run) => run.id),
@@ -5017,7 +5059,9 @@ export default function App() {
       updatedAt: now,
     };
 
-    await handleSaveOrderBuild(orderBuild);
+    if (!isVendorReturnOrder) {
+      await handleSaveOrderBuild(orderBuild);
+    }
     setSyncError("");
 
     return {
@@ -5028,7 +5072,8 @@ export default function App() {
       podCount: createdPodPickups.length,
       deliveryCreated: Boolean(createdDelivery),
       returnCreated: isReturnOrder,
-      buildCreated: true,
+      vendorReturnCreated: isVendorReturnOrder,
+      buildCreated: !isVendorReturnOrder,
     };
   }
 

@@ -71,7 +71,7 @@ export function getDeliveryDurationMinutes(
     return numericDuration;
   }
 
-  if (deliveryType === "return") {
+  if (deliveryType === "return" || deliveryType === "vendorReturn") {
     const returnDuration = Number(settings?.returnDurationMinutes);
 
     return Number.isFinite(returnDuration) && returnDuration > 0

@@ -95,20 +95,25 @@ function formatDeliveryDateLabel(value) {
   }).format(date);
 }
 
-function getScheduledDeliveryStatusLabel(delivery, isReturn) {
+function getScheduledDeliveryStatusLabel(delivery, isReturn, isVendorReturn) {
   const deliveryDate = String(delivery?.deliveryDate || "").slice(0, 10);
+  const stopLabel = isVendorReturn
+    ? "VENDOR RETURN"
+    : isReturn
+      ? "RETURN PICKUP"
+      : "DELIVERY";
 
   if (!deliveryDate) {
-    return isReturn ? "SCHEDULED RETURN PICKUP" : "SCHEDULED DELIVERY";
+    return `SCHEDULED ${stopLabel}`;
   }
 
   const dateLabel = formatDeliveryDateLabel(deliveryDate).toUpperCase();
 
   if (deliveryDate === getTodayDateKey()) {
-    return isReturn ? "TODAY'S RETURN PICKUP" : "TODAY'S DELIVERY";
+    return `TODAY'S ${stopLabel}`;
   }
 
-  return `${isReturn ? "UPCOMING RETURN PICKUP" : "UPCOMING DELIVERY"} · ${dateLabel}`;
+  return `UPCOMING ${stopLabel} · ${dateLabel}`;
 }
 
 function formatDeliveryTypeLabel(value) {
@@ -124,11 +129,22 @@ function formatDeliveryTypeLabel(value) {
     return "Return";
   }
 
+  if (value === "vendorReturn") {
+    return "Vendor Return";
+  }
+
   return "Standard";
 }
 
 function isReturnDelivery(delivery) {
   return delivery?.deliveryType === "return" || delivery?.routeStopType === "returnPickup";
+}
+
+function isVendorReturnDelivery(delivery) {
+  return (
+    delivery?.deliveryType === "vendorReturn" ||
+    delivery?.routeStopType === "vendorReturn"
+  );
 }
 
 function formatForkliftLabel(value) {
@@ -522,13 +538,19 @@ function DeliveryRouteOverview({
                 <span className="block truncate text-sm font-black text-slate-950">
                   {formatCustomerName(delivery.customerName)}
                 </span>
-                <span className="mt-0.5 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.06em] text-slate-500">
+                <span
+                  className={`mt-1 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.06em] ${
+                    isActive
+                      ? "inline-flex rounded-full bg-[#FC2C38] px-2.5 py-1 text-white shadow-sm"
+                      : "flex text-slate-500"
+                  }`}
+                >
                   <span>{getRouteOverviewTimeLabel(delivery)}</span>
                   <span aria-hidden="true">·</span>
                   <span
                     className={
                       isActive
-                        ? "text-[#FC2C38]"
+                        ? "text-white"
                         : isComplete
                           ? "text-emerald-700"
                           : "text-slate-500"
@@ -723,6 +745,7 @@ function DriverDeliveryInformation({
   generalNotes,
 }) {
   const isReturn = isReturnDelivery(delivery);
+  const isVendorReturn = isVendorReturnDelivery(delivery);
   const notes = [delivery.returnNotes, deliveryLocationNotes, generalNotes]
     .map((note) => String(note || "").trim())
     .filter((note, index, allNotes) => note && allNotes.indexOf(note) === index);
@@ -732,7 +755,11 @@ function DriverDeliveryInformation({
       <div className="flex items-center gap-2">
         <Package className="h-5 w-5 text-blue-700" aria-hidden="true" />
         <h3 className="text-sm font-black uppercase tracking-[0.12em] text-slate-950">
-          {isReturn ? "Return Pickup Information" : "Delivery Information"}
+          {isVendorReturn
+            ? "Vendor Return Information"
+            : isReturn
+              ? "Return Pickup Information"
+              : "Delivery Information"}
         </h3>
       </div>
 
@@ -740,7 +767,11 @@ function DriverDeliveryInformation({
         <div className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-blue-100">
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.1em] text-slate-500">
             <Phone className="h-4 w-4 text-blue-700" aria-hidden="true" />
-            {isReturn ? "Pickup Contact" : "Delivery Contact"}
+            {isVendorReturn
+              ? "Vendor Contact"
+              : isReturn
+                ? "Pickup Contact"
+                : "Delivery Contact"}
           </p>
           <p className="mt-1 text-base font-black text-slate-950">
             {delivery.contactName || "No contact name entered"}
@@ -762,7 +793,11 @@ function DriverDeliveryInformation({
         <div className="rounded-xl bg-white px-3 py-3 shadow-sm ring-1 ring-blue-100">
           <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.1em] text-slate-500">
             <MessageSquare className="h-4 w-4 text-blue-700" aria-hidden="true" />
-            {isReturn ? "Return Notes" : "Delivery Notes"}
+            {isVendorReturn
+              ? "Vendor Return Notes"
+              : isReturn
+                ? "Return Notes"
+                : "Delivery Notes"}
           </p>
           {notes.length > 0 ? (
             <div className="mt-1 space-y-1">
@@ -774,7 +809,11 @@ function DriverDeliveryInformation({
             </div>
           ) : (
             <p className="mt-1 text-sm font-bold text-slate-500">
-              {isReturn ? "No return notes added" : "No delivery notes added"}
+              {isVendorReturn
+                ? "No vendor return notes added"
+                : isReturn
+                  ? "No return notes added"
+                  : "No delivery notes added"}
             </p>
           )}
         </div>
@@ -783,7 +822,11 @@ function DriverDeliveryInformation({
       <div className="mt-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-blue-100">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">
-            {isReturn ? "Items To Pick Up" : "Items To Deliver"}
+            {isVendorReturn
+              ? "Items To Return To Vendor"
+              : isReturn
+                ? "Items To Pick Up"
+                : "Items To Deliver"}
           </p>
           <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700">
             {items.length} {items.length === 1 ? "item" : "items"}
@@ -844,7 +887,8 @@ function MobileDeliveryFlowCard({
 }) {
   const deliveryCardRef = useRef(null);
   const isReturn = isReturnDelivery(delivery);
-  const hasSpecialDeliveryType = ["priority", "hotShot", "return"].includes(
+  const isVendorReturn = isVendorReturnDelivery(delivery);
+  const hasSpecialDeliveryType = ["priority", "hotShot", "return", "vendorReturn"].includes(
     delivery.deliveryType,
   );
   const items = Array.isArray(delivery.items) ? delivery.items : [];
@@ -866,14 +910,18 @@ function MobileDeliveryFlowCard({
     deliveryStep === 1
       ? "EN ROUTE"
       : deliveryStep === 2
-        ? isReturn
-          ? "COMPLETE RETURN PICKUP"
-          : "COMPLETE DELIVERY"
+        ? isVendorReturn
+          ? "COMPLETE VENDOR RETURN"
+          : isReturn
+            ? "COMPLETE RETURN PICKUP"
+            : "COMPLETE DELIVERY"
         : deliveryStep === 3
-          ? isReturn
-            ? "RETURN PICKUP COMPLETE"
-            : "DELIVERY COMPLETE"
-          : getScheduledDeliveryStatusLabel(delivery, isReturn);
+          ? isVendorReturn
+            ? "VENDOR RETURN COMPLETE"
+            : isReturn
+              ? "RETURN PICKUP COMPLETE"
+              : "DELIVERY COMPLETE"
+          : getScheduledDeliveryStatusLabel(delivery, isReturn, isVendorReturn);
 
   function scrollDeliveryCardIntoView() {
     window.requestAnimationFrame(() => {
@@ -942,7 +990,7 @@ function MobileDeliveryFlowCard({
             <p
               className={`text-xs font-black uppercase tracking-[0.18em] ${
                 isUpcomingScheduledDelivery
-                  ? "inline-flex rounded-full bg-[#FC2C38] px-3 py-1.5 text-white sm:rounded-none sm:bg-transparent sm:px-0 sm:py-0 sm:text-[#FC2C38]"
+                  ? "inline-flex rounded-full bg-[#FC2C38] px-3 py-1.5 text-white shadow-sm"
                   : "text-[#FC2C38]"
               }`}
             >
@@ -1107,7 +1155,11 @@ function MobileDeliveryFlowCard({
 
             <section>
               <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-900">
-                {isReturn ? "Return Pickup Instructions" : "Delivery Instructions"}
+                {isVendorReturn
+                  ? "Vendor Return Instructions"
+                  : isReturn
+                    ? "Return Pickup Instructions"
+                    : "Delivery Instructions"}
               </p>
               <p className="mt-2 text-base font-semibold leading-6 text-slate-900">
                 {deliveryLocationNotes ||
@@ -1336,7 +1388,11 @@ function MobileDeliveryFlowCard({
                 <CheckCircle2 className="h-14 w-14" aria-hidden="true" />
               </div>
               <h2 className="mt-5 text-2xl font-black text-slate-950">
-                {isReturn ? "Return Pickup Complete!" : "Delivery Complete!"}
+                {isVendorReturn
+                  ? "Vendor Return Complete!"
+                  : isReturn
+                    ? "Return Pickup Complete!"
+                    : "Delivery Complete!"}
               </h2>
               <p className="mt-2 text-base font-semibold text-slate-700">
                 Thank you. Great job.
@@ -1345,7 +1401,11 @@ function MobileDeliveryFlowCard({
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-900">
-                {isReturn ? "Return Pickup Summary" : "Delivery Summary"}
+                {isVendorReturn
+                  ? "Vendor Return Summary"
+                  : isReturn
+                    ? "Return Pickup Summary"
+                    : "Delivery Summary"}
               </p>
               <div className="mt-4 space-y-3 text-sm">
                 <div className="flex justify-between gap-4">
@@ -1385,7 +1445,11 @@ function MobileDeliveryFlowCard({
               disabled={isUpdating || !canCompleteDelivery}
               className="flex w-full items-center justify-center gap-3 rounded-2xl bg-[#FC2C38] px-4 py-4 text-sm font-black uppercase tracking-[0.04em] text-white shadow-sm disabled:opacity-60"
             >
-              {isReturn ? "Complete Return Pickup" : "Complete Delivery"}
+              {isVendorReturn
+                ? "Complete Vendor Return"
+                : isReturn
+                  ? "Complete Return Pickup"
+                  : "Complete Delivery"}
               <ArrowRight className="h-5 w-5" aria-hidden="true" />
             </button>
             {!canCompleteDelivery ? (
@@ -2451,6 +2515,7 @@ export default function DeliveryQueuePage({
 
                             {[
                               "return",
+                              "vendorReturn",
                               "hotShot",
                               "priority",
                             ].includes(delivery.deliveryType) ? (
@@ -2458,6 +2523,8 @@ export default function DeliveryQueuePage({
                                 className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-black ${
                                   delivery.deliveryType === "return"
                                     ? "bg-blue-50 text-blue-700"
+                                    : delivery.deliveryType === "vendorReturn"
+                                      ? "bg-amber-50 text-amber-800"
                                     : delivery.deliveryType === "hotShot"
                                       ? "bg-red-50 text-[#FC2C38]"
                                       : "bg-amber-50 text-amber-800"

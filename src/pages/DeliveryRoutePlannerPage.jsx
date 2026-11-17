@@ -229,7 +229,7 @@ function isDeliveryComplete(delivery) {
 }
 
 function getDeliveryServiceType(delivery) {
-  if (delivery?.deliveryType === "return") {
+  if (["return", "vendorReturn"].includes(delivery?.deliveryType)) {
     return "return";
   }
 
