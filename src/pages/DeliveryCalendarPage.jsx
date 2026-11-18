@@ -864,10 +864,6 @@ function DeliveryDateTbdTray({
   canMoveDeliveries,
   compact = false,
 }) {
-  if (!deliveries.length) {
-    return null;
-  }
-
   return (
     <section
       className={`mb-6 overflow-hidden rounded-3xl border border-blue-200 bg-blue-50/60 shadow-sm ${
@@ -909,7 +905,16 @@ function DeliveryDateTbdTray({
           compact ? "grid-cols-1" : "sm:grid-cols-2 lg:grid-cols-3"
         }`}
       >
-        {deliveries.map((delivery) => {
+        {deliveries.length === 0 ? (
+          <div className="rounded-2xl border-2 border-dashed border-blue-200 bg-white/70 px-3 py-6 text-center">
+            <p className="text-xs font-black uppercase tracking-[0.1em] text-blue-700">
+              No TBD deliveries
+            </p>
+            <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+              Future-date orders will appear here.
+            </p>
+          </div>
+        ) : deliveries.map((delivery) => {
           const needsDispatch = deliveryNeedsDispatch(delivery);
           const customerLabel =
             delivery.deliveryTitle ||
@@ -3228,13 +3233,7 @@ export default function DeliveryCalendarPage({
       ) : null}
 
       {calendarView === "week" ? (
-        <div
-          className={`grid items-start gap-4 ${
-            dateTbdDeliveries.length
-              ? "xl:grid-cols-[14rem_minmax(0,1fr)]"
-              : ""
-          }`}
-        >
+        <div className="grid items-start gap-4 xl:grid-cols-[14rem_minmax(0,1fr)]">
           <DeliveryDateTbdTray
             deliveries={dateTbdDeliveries}
             onSelectDelivery={openDeliveryFromCalendar}
@@ -3252,13 +3251,7 @@ export default function DeliveryCalendarPage({
           />
         </div>
       ) : calendarView === "month" ? (
-        <div
-          className={`grid items-start gap-4 ${
-            dateTbdDeliveries.length
-              ? "xl:grid-cols-[14rem_minmax(0,1fr)]"
-              : ""
-          }`}
-        >
+        <div className="grid items-start gap-4 xl:grid-cols-[14rem_minmax(0,1fr)]">
           <DeliveryDateTbdTray
             deliveries={dateTbdDeliveries}
             onSelectDelivery={openDeliveryFromCalendar}
