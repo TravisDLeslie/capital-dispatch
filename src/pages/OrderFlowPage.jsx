@@ -1049,6 +1049,7 @@ function ChoiceButton({
  *   onProcessOrder?: (orderPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onProcessStockPO?: (stockPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onDeleteExistingOrder?: (orderNumber: string) => Promise<boolean>;
+ *   onSendPoToSouthDispatch?: (payload: { poNumber: string; orderNumber?: string; sourceOrderId?: string; customerName?: string; vendor?: string; supplierAddress?: string; notes?: string; items?: Array<Record<string, any>> }) => Promise<Record<string, any>>;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
@@ -1063,6 +1064,7 @@ export default function OrderFlowPage({
   onProcessOrder,
   onProcessStockPO,
   onDeleteExistingOrder,
+  onSendPoToSouthDispatch,
   onPageChange,
 }) {
   const [orderEntryMode, setOrderEntryMode] = useState("customer");
@@ -4567,6 +4569,7 @@ export default function OrderFlowPage({
           orderNumber={viewingDuplicateOrderNumber}
           sources={existingOrderSources}
           onDeleteOrder={onDeleteExistingOrder}
+          onSendPoToSouthDispatch={onSendPoToSouthDispatch}
           onClose={() => setViewingDuplicateOrderNumber("")}
         />
       ) : null}

@@ -930,6 +930,7 @@ type OrderAssignment = {
 type SupplierRunItem = {
   id: string;
   quantity?: string;
+  itemNumber?: string;
   description: string;
   internalReference?: string;
   materialUse?: string;
@@ -4695,6 +4696,169 @@ export default function App() {
     return updatedSupplierRuns;
   }
 
+  async function handleSendOrderPOToSouthDispatch(payload: {
+    poNumber: string;
+    orderNumber?: string;
+    sourceOrderId?: string;
+    customerName?: string;
+    vendor?: string;
+    supplierAddress?: string;
+    notes?: string;
+    items?: Array<Record<string, unknown>>;
+  }) {
+    const poNumber = String(payload.poNumber || "").trim();
+
+    if (!poNumber) {
+      throw new Error("Choose a PO before sending it to South dispatch.");
+    }
+
+    const poKey = normalizeOrderRecordKey(poNumber);
+    const orderNumber = String(payload.orderNumber || "").trim();
+    const orderKey = normalizeOrderRecordKey(orderNumber);
+    const matchingPOs = supplierRuns.filter(
+      (supplierRun) =>
+        normalizeOrderRecordKey(supplierRun.poNumber) === poKey,
+    );
+    const matchingSupplierRun =
+      matchingPOs.find((supplierRun) => {
+        const supplierRunOrderKey = normalizeOrderRecordKey(
+          supplierRun.sourceOrderNumber || supplierRun.orderNumber,
+        );
+
+        return orderKey && supplierRunOrderKey === orderKey;
+      }) ||
+      [...matchingPOs].sort((leftRun, rightRun) =>
+        String(rightRun.updatedAt || rightRun.createdAt || "").localeCompare(
+          String(leftRun.updatedAt || leftRun.createdAt || ""),
+        ),
+      )[0];
+    const now = new Date().toISOString();
+    const today = getDateInputValue();
+    const sourceItems = Array.isArray(payload.items) ? payload.items : [];
+    const resetItems = (
+      matchingSupplierRun?.items?.length
+        ? matchingSupplierRun.items
+        : sourceItems
+    ).map((item, index) => {
+      const sourceItem = item as Record<string, unknown>;
+
+      return {
+        id: String(sourceItem.id || `${poKey}-${index + 1}`),
+        quantity: String(sourceItem.quantity || sourceItem.qty || "").trim(),
+        itemNumber: String(
+          sourceItem.itemNumber || sourceItem.itemCode || "",
+        ).trim(),
+        description: String(
+          sourceItem.description ||
+            sourceItem.materialDescription ||
+            sourceItem.itemDescription ||
+            sourceItem.name ||
+            "PO pickup",
+        ).trim(),
+        materialUse: String(sourceItem.materialUse || "order"),
+        orderNumber: String(sourceItem.orderNumber || orderNumber).trim(),
+        customerName: String(
+          sourceItem.customerName || payload.customerName || "",
+        ).trim(),
+        easilyDamaged: Boolean(sourceItem.easilyDamaged),
+        pickedUp: false,
+        pickedUpAt: null,
+        pickupPhoto: null,
+        pickupPhotos: [],
+      };
+    });
+    const vendor = String(
+      payload.vendor || matchingSupplierRun?.vendor || "Vendor not entered",
+    ).trim();
+    const supplierAddress = String(
+      payload.supplierAddress ||
+        matchingSupplierRun?.supplierAddress ||
+        supplierAddressMap[vendor] ||
+        "",
+    ).trim();
+
+    if (matchingSupplierRun) {
+      const wasAlreadyWaiting =
+        matchingSupplierRun.status !== "complete" &&
+        matchingSupplierRun.dispatchStatus === "needsDispatch" &&
+        !matchingSupplierRun.driver;
+
+      await handleUpdateSupplierRun(matchingSupplierRun.id, {
+        scheduledDate: today,
+        pickupDate: today,
+        driver: "",
+        vehicleId: "",
+        vehicleTitle: "",
+        vehicleBadge: "",
+        dispatchStatus: "needsDispatch",
+        status: "open",
+        stopArrivedAt: null,
+        stopCompletedAt: null,
+        completedAt: null,
+        items: resetItems,
+        resentToSouthDispatchAt: now,
+        updatedAt: now,
+      });
+
+      return {
+        action: wasAlreadyWaiting ? "refreshed" : "reopened",
+        message: wasAlreadyWaiting
+          ? `PO ${poNumber} is already in South Needs Dispatch and was refreshed for today.`
+          : `PO ${poNumber} was reopened and sent to South Needs Dispatch for today.`,
+      };
+    }
+
+    const supplierRun: SupplierRun = {
+      id: createId(),
+      poNumber,
+      vendor,
+      scheduledDate: today,
+      pickupDate: today,
+      orderedBy: currentUserCreator.name,
+      customerName: String(payload.customerName || "").trim(),
+      orderNumber,
+      driver: "",
+      supplierAddress,
+      createdByName: currentUserCreator.name,
+      createdByEmail: currentUserCreator.email,
+      createdById: currentUserCreator.id,
+      vehicleId: "",
+      vehicleTitle: "",
+      vehicleBadge: "",
+      dispatchStatus: "needsDispatch",
+      status: "open",
+      source: "manual-delivery-po-resend",
+      sourceOrderId: String(payload.sourceOrderId || "").trim(),
+      sourceOrderNumber: orderNumber,
+      notes: String(payload.notes || "").trim(),
+      stopWorkflowVersion: 2,
+      items:
+        resetItems.length > 0
+          ? resetItems
+          : [
+              {
+                id: createId(),
+                description: "PO pickup",
+                orderNumber,
+                customerName: String(payload.customerName || "").trim(),
+                pickedUp: false,
+                pickedUpAt: null,
+                pickupPhoto: null,
+                pickupPhotos: [],
+              },
+            ],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await handleAddSupplierRun(stripUndefinedFields(supplierRun));
+
+    return {
+      action: "created",
+      message: `PO ${poNumber} was created in South Needs Dispatch for pickup today.`,
+    };
+  }
+
   async function handleAddDelivery(delivery: Delivery) {
     const updatedDeliveries = await addDelivery({
       ...delivery,
@@ -6367,6 +6531,11 @@ export default function App() {
                       checkIns,
                     }}
                     onDeleteOrder={handlePermanentlyDeleteOrder}
+                    onSendPoToSouthDispatch={
+                      canReadSouth
+                        ? handleSendOrderPOToSouthDispatch
+                        : undefined
+                    }
                     onClose={() => setViewingDashboardOrderNumber("")}
                   />
                 ) : null}
@@ -6412,6 +6581,9 @@ export default function App() {
               customers,
               vendors: activeVendors,
             }}
+            onSendPoToSouthDispatch={
+              canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
+            }
           />
         </FeatureErrorBoundary>
       );
@@ -7566,6 +7738,11 @@ export default function App() {
                     checkIns,
                   }}
                   onDeleteOrder={handlePermanentlyDeleteOrder}
+                  onSendPoToSouthDispatch={
+                    canReadSouth
+                      ? handleSendOrderPOToSouthDispatch
+                      : undefined
+                  }
                   onClose={() => setViewingDashboardOrderNumber("")}
                 />
               ) : null}
@@ -7691,6 +7868,9 @@ export default function App() {
             deliveries,
             checkIns,
           }}
+          onSendPoToSouthDispatch={
+            canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
+          }
           onDeleteOrder={
             isDeliveryDriverScopedView
               ? undefined
@@ -7912,6 +8092,9 @@ export default function App() {
             deliveries,
             checkIns,
           }}
+          onSendPoToSouthDispatch={
+            canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
+          }
           onDeleteOrder={
             isDeliveryDriverScopedView
               ? undefined
@@ -8669,6 +8852,9 @@ export default function App() {
               deliveries,
               checkIns,
             }}
+            onSendPoToSouthDispatch={
+              canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
+            }
             onProcessOrder={handleProcessOrderFlow}
             onProcessStockPO={handleProcessStockPO}
             onDeleteExistingOrder={handlePermanentlyDeleteOrder}
@@ -9053,6 +9239,9 @@ export default function App() {
                 ? undefined
                 : handlePermanentlyDeleteOrder
             }
+            onSendPoToSouthDispatch={
+              canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
+            }
             onPageChange={navigateToPage}
           />
         );
@@ -9084,6 +9273,9 @@ export default function App() {
             onUpdateDelivery={handleUpdateDelivery}
             onEditDelivery={handleEditDelivery}
             onDeleteOrder={handlePermanentlyDeleteOrder}
+            onSendPoToSouthDispatch={
+              canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
+            }
             onPageChange={navigateToPage}
           />
         );
@@ -9122,6 +9314,9 @@ export default function App() {
                   checkIns,
                 }}
                 onDeleteOrder={handlePermanentlyDeleteOrder}
+                onSendPoToSouthDispatch={
+                  canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
+                }
                 onClose={() => setViewingDeliveryCalendarOrderNumber("")}
               />
             ) : null}
@@ -9234,6 +9429,9 @@ export default function App() {
               customers,
               vendors: activeVendors,
             }}
+            onSendPoToSouthDispatch={
+              canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
+            }
           />
         );
 

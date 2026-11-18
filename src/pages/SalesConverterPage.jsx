@@ -1212,6 +1212,7 @@ function SellPriceCheck({
  *   removedInventoryItemNumbers?: string[];
  *   dashboardMode?: boolean;
  *   onDeleteOrder?: (orderNumber: string) => Promise<boolean>;
+ *   onSendPoToSouthDispatch?: (payload: { poNumber: string; orderNumber?: string; sourceOrderId?: string; customerName?: string; vendor?: string; supplierAddress?: string; notes?: string; items?: Array<Record<string, any>> }) => Promise<Record<string, any>>;
  * }} props
  */
 export default function SalesConverterPage({
@@ -1221,6 +1222,7 @@ export default function SalesConverterPage({
   removedInventoryItemNumbers = [],
   dashboardMode = false,
   onDeleteOrder,
+  onSendPoToSouthDispatch,
 }) {
   const [dashboardSearch, setDashboardSearch] = useState("");
   const [dashboardSearchFilter, setDashboardSearchFilter] = useState("all");
@@ -2735,6 +2737,7 @@ export default function SalesConverterPage({
             orderNumber={viewingOrderNumber}
             sources={searchSources}
             onDeleteOrder={onDeleteOrder}
+            onSendPoToSouthDispatch={onSendPoToSouthDispatch}
             onClose={() => setViewingOrderNumber("")}
           />
         ) : null}

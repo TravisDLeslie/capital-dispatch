@@ -2657,6 +2657,7 @@ function DeliveryRouteMapPlanner({
  *   onUpdateDelivery: (deliveryId: string, updates: Record<string, any>) => Promise<void>;
  *   onEditDelivery: (deliveryId: string) => void;
  *   onDeleteOrder?: (orderNumber: string) => Promise<boolean>;
+ *   onSendPoToSouthDispatch?: (payload: { poNumber: string; orderNumber?: string; sourceOrderId?: string; customerName?: string; vendor?: string; supplierAddress?: string; notes?: string; items?: Array<Record<string, any>> }) => Promise<Record<string, any>>;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
@@ -2673,6 +2674,7 @@ export default function DeliveryDispatchPage({
   onUpdateDelivery,
   onEditDelivery,
   onDeleteOrder,
+  onSendPoToSouthDispatch,
   onPageChange,
 }) {
   const safeDeliveryOriginOptions =
@@ -4870,6 +4872,7 @@ export default function DeliveryDispatchPage({
             checkIns,
           }}
           onDeleteOrder={onDeleteOrder}
+          onSendPoToSouthDispatch={onSendPoToSouthDispatch}
           onClose={() => setViewingOrderNumber("")}
         />
       ) : null}

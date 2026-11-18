@@ -392,6 +392,7 @@ function DriverScheduleColumn({
  *   onUpdateDelivery?: (deliveryId: string, updates: any) => Promise<void>;
  *   orderSources?: Record<string, any[]>;
  *   onDeleteOrder?: (orderNumber: string) => Promise<boolean>;
+ *   onSendPoToSouthDispatch?: (payload: { poNumber: string; orderNumber?: string; sourceOrderId?: string; customerName?: string; vendor?: string; supplierAddress?: string; notes?: string; items?: Array<Record<string, any>> }) => Promise<Record<string, any>>;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
@@ -403,6 +404,7 @@ export default function DeliveryDashboardPage({
   onUpdateDelivery,
   orderSources = {},
   onDeleteOrder,
+  onSendPoToSouthDispatch,
   onPageChange,
 }) {
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
@@ -831,6 +833,7 @@ export default function DeliveryDashboardPage({
             deliveries: [viewingDelivery],
           }}
           onDeleteOrder={onDeleteOrder}
+          onSendPoToSouthDispatch={onSendPoToSouthDispatch}
           onClose={() => setViewingDelivery(null)}
         />
       ) : null}

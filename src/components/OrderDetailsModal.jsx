@@ -5,6 +5,7 @@ import {
   Maximize2,
   Package,
   Phone,
+  RotateCcw,
   Trash2,
   Truck,
   X,
@@ -131,11 +132,16 @@ export default function OrderDetailsModal({
   orderNumber,
   sources = {},
   onDeleteOrder,
+  onSendPoToSouthDispatch,
   onClose,
 }) {
   const [viewingReceivingPhotos, setViewingReceivingPhotos] = useState(null);
   const [isDeletingOrder, setIsDeletingOrder] = useState(false);
   const [deleteOrderError, setDeleteOrderError] = useState("");
+  const [confirmingSouthPoNumber, setConfirmingSouthPoNumber] = useState("");
+  const [sendingSouthPoNumber, setSendingSouthPoNumber] = useState("");
+  const [southDispatchMessage, setSouthDispatchMessage] = useState("");
+  const [southDispatchError, setSouthDispatchError] = useState("");
   const orderDetails = useMemo(() => {
     const orderKey = normalizeOrderNumber(orderNumber);
     const orderBuilds = Array.isArray(sources.orderBuilds)
@@ -364,6 +370,9 @@ export default function OrderDetailsModal({
   const canDeleteOrder =
     typeof onDeleteOrder === "function" &&
     Boolean(orderDetails.orderNumber || orderNumber);
+  const canSendPoToSouthDispatch =
+    typeof onSendPoToSouthDispatch === "function" &&
+    orderDetails.poNumbers.length > 0;
 
   async function handleDeleteOrder() {
     if (typeof onDeleteOrder !== "function" || isDeletingOrder) {
@@ -389,6 +398,66 @@ export default function OrderDetailsModal({
       );
     } finally {
       setIsDeletingOrder(false);
+    }
+  }
+
+  async function handleSendPoToSouthDispatch(poNumber) {
+    if (
+      typeof onSendPoToSouthDispatch !== "function" ||
+      sendingSouthPoNumber
+    ) {
+      return;
+    }
+
+    const poItems = orderDetails.items.filter(
+      (item) =>
+        normalizeOrderNumber(item?.poNumber) ===
+        normalizeOrderNumber(poNumber),
+    );
+    const fallbackItems =
+      poItems.length > 0 || orderDetails.poNumbers.length > 1
+        ? poItems
+        : orderDetails.items.filter((item) => !isYardStockItem(item));
+    const vendor =
+      fallbackItems.find((item) => item?.vendor)?.vendor ||
+      orderDetails.vendor ||
+      orderDetails.vendorName ||
+      "";
+    const supplierAddress =
+      fallbackItems.find((item) => item?.supplierAddress)?.supplierAddress ||
+      orderDetails.supplierAddress ||
+      "";
+
+    setSendingSouthPoNumber(poNumber);
+    setSouthDispatchMessage("");
+    setSouthDispatchError("");
+
+    try {
+      const result = await onSendPoToSouthDispatch({
+        poNumber,
+        orderNumber: orderDetails.orderNumber || orderNumber,
+        sourceOrderId: orderDetails.id || orderDetails.sourceOrderId || "",
+        customerName: customerTitle,
+        vendor,
+        supplierAddress,
+        notes:
+          orderDetails.deliveryNotes || orderDetails.notes || "",
+        items: fallbackItems,
+      });
+
+      setSouthDispatchMessage(
+        result?.message ||
+          `PO ${poNumber} was sent to South Needs Dispatch.`,
+      );
+      setConfirmingSouthPoNumber("");
+    } catch (error) {
+      setSouthDispatchError(
+        error instanceof Error
+          ? error.message
+          : `Unable to send PO ${poNumber} to South dispatch.`,
+      );
+    } finally {
+      setSendingSouthPoNumber("");
     }
   }
 
@@ -530,6 +599,89 @@ export default function OrderDetailsModal({
                 </p>
               </div>
             </div>
+          ) : null}
+
+          {canSendPoToSouthDispatch ? (
+            <section className="mt-4 rounded-2xl border border-blue-200 bg-blue-50/70 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-700">
+                    South Pickup
+                  </p>
+                  <h3 className="mt-1 text-base font-black text-slate-950">
+                    Need Capital Lumber to pick up a PO?
+                  </h3>
+                  <p className="mt-1 text-xs font-bold text-slate-600">
+                    Send it back to South Needs Dispatch. The customer delivery
+                    stays unchanged.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {orderDetails.poNumbers.map((poNumber) => (
+                    <button
+                      type="button"
+                      key={`south-dispatch-${poNumber}`}
+                      onClick={() => {
+                        setConfirmingSouthPoNumber(poNumber);
+                        setSouthDispatchMessage("");
+                        setSouthDispatchError("");
+                      }}
+                      disabled={Boolean(sendingSouthPoNumber)}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 text-xs font-black text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+                    >
+                      <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                      Send PO {poNumber}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {confirmingSouthPoNumber ? (
+                <div className="mt-3 rounded-xl border border-blue-200 bg-white p-3">
+                  <p className="text-sm font-black text-slate-950">
+                    Send PO {confirmingSouthPoNumber} to South Needs Dispatch
+                    for pickup today?
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-slate-500">
+                    Any old driver and truck assignment for this PO will be
+                    cleared.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSendPoToSouthDispatch(confirmingSouthPoNumber)
+                      }
+                      disabled={Boolean(sendingSouthPoNumber)}
+                      className="min-h-10 rounded-xl bg-[#FC2C38] px-4 text-xs font-black text-white transition hover:bg-[#dc1f2b] disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {sendingSouthPoNumber
+                        ? "Sending..."
+                        : "Yes, send to South"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingSouthPoNumber("")}
+                      disabled={Boolean(sendingSouthPoNumber)}
+                      className="min-h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {southDispatchMessage ? (
+                <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
+                  {southDispatchMessage}
+                </p>
+              ) : null}
+              {southDispatchError ? (
+                <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">
+                  {southDispatchError}
+                </p>
+              ) : null}
+            </section>
           ) : null}
 
           {orderDetails.receivingSummaries.length > 0 ? (

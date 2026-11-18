@@ -613,6 +613,7 @@ function DeliveryDateGroup({
  *   canEditDeliveries?: boolean;
  *   onUpdateDelivery?: (deliveryId: string, updates: Record<string, any>) => Promise<void>;
  *   onDeleteOrder?: (orderNumber: string) => Promise<boolean>;
+ *   onSendPoToSouthDispatch?: (payload: { poNumber: string; orderNumber?: string; sourceOrderId?: string; customerName?: string; vendor?: string; supplierAddress?: string; notes?: string; items?: Array<Record<string, any>> }) => Promise<Record<string, any>>;
  *   onPageChange?: (pageId: string) => void;
  * }} props
  */
@@ -628,6 +629,7 @@ export default function QueuedUpcomingDeliveriesPage({
   canEditDeliveries = false,
   onUpdateDelivery,
   onDeleteOrder,
+  onSendPoToSouthDispatch,
   onPageChange,
 }) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -1139,6 +1141,7 @@ export default function QueuedUpcomingDeliveriesPage({
             checkIns,
           }}
           onDeleteOrder={onDeleteOrder}
+          onSendPoToSouthDispatch={onSendPoToSouthDispatch}
           onClose={() => setViewingDelivery(null)}
         />
       ) : null}
