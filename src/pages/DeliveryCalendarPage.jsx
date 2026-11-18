@@ -12,6 +12,7 @@ import {
   Package,
   Truck,
   UserMinus,
+  X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
@@ -204,6 +205,39 @@ function getNextFiveDays() {
       isToday: index === 0,
     };
   });
+}
+
+function getWeekDays(dateKey) {
+  const anchorDate = new Date(`${dateKey || getTodayDateValue()}T12:00:00`);
+  const weekStart = new Date(anchorDate);
+  weekStart.setDate(anchorDate.getDate() - anchorDate.getDay());
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + index);
+
+    return {
+      date,
+      dateKey: getLocalDateKey(date),
+    };
+  });
+}
+
+function getWeekRangeLabel(dateKey) {
+  const weekDays = getWeekDays(dateKey);
+  const firstDay = weekDays[0].date;
+  const lastDay = weekDays[weekDays.length - 1].date;
+  const firstLabel = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(firstDay);
+  const lastLabel = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(lastDay);
+
+  return `${firstLabel} – ${lastLabel}`;
 }
 
 function getCompactDateLabel(dateKey) {
@@ -602,9 +636,9 @@ function DeliveryStatusOverview({
       title: "Scheduled",
       description: "Driver and truck assigned",
       deliveries: scheduledDeliveries,
-      panelClass: "border-blue-200 bg-blue-50/60",
-      countClass: "bg-blue-100 text-blue-800",
-      labelClass: "text-blue-800",
+      panelClass: "border-emerald-200 bg-emerald-50/70",
+      countClass: "bg-emerald-100 text-emerald-800",
+      labelClass: "text-emerald-800",
     },
   ].filter((section) => statusFilter === "all" || section.id === statusFilter);
 
@@ -694,6 +728,538 @@ function DeliveryStatusOverview({
   );
 }
 
+function CalendarDeliveryButton({ delivery, onClick, compact = false }) {
+  const needsDispatch = deliveryNeedsDispatch(delivery);
+  const customerLabel =
+    delivery.deliveryTitle ||
+    formatCustomerName(delivery.customerName) ||
+    "Delivery";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full rounded-xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-red-100 ${
+        needsDispatch
+          ? "border-amber-200 bg-amber-50 text-amber-950"
+          : "border-emerald-200 bg-emerald-50 text-emerald-950"
+      } ${compact ? "px-2 py-1.5" : "p-3"}`}
+    >
+      <span
+        className={`mb-1 inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.1em] ${
+          needsDispatch ? "text-amber-700" : "text-emerald-700"
+        }`}
+      >
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${
+            needsDispatch ? "bg-amber-500" : "bg-emerald-500"
+          }`}
+          aria-hidden="true"
+        />
+        {needsDispatch ? "Needs dispatch" : "Scheduled"}
+      </span>
+      <span className="block truncate text-xs font-black">
+        {customerLabel}
+      </span>
+      <span className="mt-0.5 block truncate text-[10px] font-bold opacity-70">
+        Order {delivery.orderNumber || "—"}
+        {delivery.deliveryTimeSlot
+          ? ` · ${getTimeSlotLabel(delivery.deliveryTimeSlot)}`
+          : " · Time not set"}
+      </span>
+    </button>
+  );
+}
+
+function CalendarStatusLegend() {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.08em]">
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-1 text-amber-800 ring-1 ring-inset ring-amber-200">
+        <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
+        Needs dispatch
+      </span>
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-1 text-emerald-800 ring-1 ring-inset ring-emerald-200">
+        <span
+          className="h-2 w-2 rounded-full bg-emerald-500"
+          aria-hidden="true"
+        />
+        Scheduled
+      </span>
+    </div>
+  );
+}
+
+function useCalendarDeliveryDrag({
+  deliveries,
+  canMoveDeliveries,
+  onMoveDelivery,
+}) {
+  const [draggedDeliveryId, setDraggedDeliveryId] = useState("");
+  const [dropDateKey, setDropDateKey] = useState("");
+
+  function handleDeliveryDragStart(event, delivery) {
+    if (!canMoveDeliveries || !delivery?.id) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", delivery.id);
+    setDraggedDeliveryId(delivery.id);
+  }
+
+  function handleDeliveryDragEnd() {
+    setDraggedDeliveryId("");
+    setDropDateKey("");
+  }
+
+  function handleDayDragOver(event, dateKey) {
+    if (!canMoveDeliveries || !draggedDeliveryId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropDateKey(dateKey);
+  }
+
+  async function handleDayDrop(event, dateKey) {
+    if (!canMoveDeliveries || !onMoveDelivery) {
+      return;
+    }
+
+    event.preventDefault();
+    const deliveryId =
+      draggedDeliveryId || event.dataTransfer.getData("text/plain");
+    const delivery = deliveries.find((item) => item.id === deliveryId);
+
+    setDraggedDeliveryId("");
+    setDropDateKey("");
+
+    if (
+      !delivery ||
+      getDeliveryDateKey(delivery.deliveryDate) === dateKey
+    ) {
+      return;
+    }
+
+    await onMoveDelivery(delivery, { deliveryDate: dateKey });
+  }
+
+  return {
+    draggedDeliveryId,
+    dropDateKey,
+    handleDeliveryDragStart,
+    handleDeliveryDragEnd,
+    handleDayDragOver,
+    handleDayDrop,
+  };
+}
+
+function DeliveryWeekView({
+  deliveries,
+  selectedDate,
+  onNavigate,
+  onSelectDay,
+  onSelectDelivery,
+  canMoveDeliveries,
+  onMoveDelivery,
+}) {
+  const weekDays = getWeekDays(selectedDate);
+  const today = getTodayDateValue();
+  const [expandedDayKey, setExpandedDayKey] = useState("");
+  const {
+    draggedDeliveryId,
+    dropDateKey,
+    handleDeliveryDragStart,
+    handleDeliveryDragEnd,
+    handleDayDragOver,
+    handleDayDrop,
+  } = useCalendarDeliveryDrag({
+    deliveries,
+    canMoveDeliveries,
+    onMoveDelivery,
+  });
+
+  return (
+    <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+            Week view
+          </p>
+          <h2 className="mt-1 text-xl font-black text-slate-950">
+            {getWeekRangeLabel(selectedDate)}
+          </h2>
+          <CalendarStatusLegend />
+          {canMoveDeliveries ? (
+            <p className="mt-2 text-xs font-bold text-slate-500">
+              Drag a delivery onto another day to reschedule it.
+            </p>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onNavigate(-7)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-950"
+            aria-label="Previous week"
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectDay(today, new Date(`${today}T12:00:00`), false)}
+            className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+          >
+            This week
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate(7)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-950"
+            aria-label="Next week"
+          >
+            <ChevronRight className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-px bg-slate-200 md:grid-cols-7">
+        {weekDays.map((day) => {
+          const dayDeliveries = getDayDeliveries(deliveries, day.dateKey);
+          const orderedDayDeliveries = [...dayDeliveries].sort(
+            (firstDelivery, secondDelivery) =>
+              Number(deliveryNeedsDispatch(firstDelivery)) -
+              Number(deliveryNeedsDispatch(secondDelivery)),
+          );
+          const isSelected = day.dateKey === selectedDate;
+          const isToday = day.dateKey === today;
+          const isExpanded = expandedDayKey === day.dateKey;
+          const visibleDeliveries = isExpanded
+            ? orderedDayDeliveries
+            : orderedDayDeliveries.slice(0, 4);
+
+          return (
+            <div
+              key={day.dateKey}
+              onDragOver={(event) => handleDayDragOver(event, day.dateKey)}
+              onDrop={(event) => handleDayDrop(event, day.dateKey)}
+              className={`min-h-44 p-3 transition-colors ${
+                dropDateKey === day.dateKey
+                  ? "bg-red-50 ring-2 ring-inset ring-[#FC2C38]"
+                  : "bg-white"
+              } ${
+                isSelected ? "ring-2 ring-inset ring-[#FC2C38]" : ""
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onSelectDay(day.dateKey, day.date, true)}
+                className="flex w-full items-start justify-between gap-2 rounded-xl p-1 text-left transition hover:bg-slate-50"
+              >
+                <span>
+                  <span
+                    className={`block text-[10px] font-black uppercase tracking-[0.12em] ${
+                      isToday ? "text-[#FC2C38]" : "text-slate-400"
+                    }`}
+                  >
+                    {isToday
+                      ? "Today"
+                      : new Intl.DateTimeFormat("en-US", {
+                          weekday: "short",
+                        }).format(day.date)}
+                  </span>
+                  <span className="mt-0.5 block text-lg font-black text-slate-950">
+                    {new Intl.DateTimeFormat("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    }).format(day.date)}
+                  </span>
+                </span>
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
+                  {dayDeliveries.length}
+                </span>
+              </button>
+
+              <div className="mt-3 space-y-2">
+                {visibleDeliveries.map((delivery, deliveryIndex) => {
+                  const beginsNeedsDispatchGroup =
+                    deliveryNeedsDispatch(delivery) &&
+                    visibleDeliveries
+                      .slice(0, deliveryIndex)
+                      .some(
+                        (previousDelivery) =>
+                          !deliveryNeedsDispatch(previousDelivery),
+                      );
+
+                  return (
+                    <div
+                      key={delivery.id}
+                      draggable={canMoveDeliveries}
+                      onDragStart={(event) =>
+                        handleDeliveryDragStart(event, delivery)
+                      }
+                      onDragEnd={handleDeliveryDragEnd}
+                      title={
+                        canMoveDeliveries
+                          ? "Drag this delivery to another day"
+                          : undefined
+                      }
+                      className={`${
+                        beginsNeedsDispatchGroup
+                          ? "mt-3 border-t border-slate-200 pt-3"
+                          : ""
+                      } ${
+                        canMoveDeliveries
+                          ? "cursor-grab active:cursor-grabbing"
+                          : ""
+                      } ${
+                        draggedDeliveryId === delivery.id
+                          ? "opacity-40"
+                          : ""
+                      }`}
+                    >
+                      <CalendarDeliveryButton
+                        delivery={delivery}
+                        onClick={() => onSelectDelivery(delivery)}
+                        compact
+                      />
+                    </div>
+                  );
+                })}
+                {dayDeliveries.length > 4 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedDayKey((currentDayKey) =>
+                        currentDayKey === day.dateKey ? "" : day.dateKey,
+                      )
+                    }
+                    aria-expanded={isExpanded}
+                    className="w-full rounded-lg bg-slate-100 px-2 py-1.5 text-[10px] font-black text-slate-600 transition hover:bg-slate-200"
+                  >
+                    {isExpanded
+                      ? "Show fewer"
+                      : `+${dayDeliveries.length - 4} more`}
+                  </button>
+                ) : null}
+                {dayDeliveries.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-slate-200 px-2 py-4 text-center text-[10px] font-bold text-slate-400">
+                    No deliveries
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function DeliveryMonthView({
+  deliveries,
+  monthDate,
+  selectedDate,
+  onChangeMonth,
+  onSelectDay,
+  onSelectDelivery,
+  canMoveDeliveries,
+  onMoveDelivery,
+}) {
+  const monthDays = getCalendarMonthDays(monthDate);
+  const today = getTodayDateValue();
+  const [expandedDayKey, setExpandedDayKey] = useState("");
+  const {
+    draggedDeliveryId,
+    dropDateKey,
+    handleDeliveryDragStart,
+    handleDeliveryDragEnd,
+    handleDayDragOver,
+    handleDayDrop,
+  } = useCalendarDeliveryDrag({
+    deliveries,
+    canMoveDeliveries,
+    onMoveDelivery,
+  });
+
+  return (
+    <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+            Month view
+          </p>
+          <h2 className="mt-1 text-xl font-black text-slate-950">
+            {getCalendarMonthLabel(monthDate)}
+          </h2>
+          <CalendarStatusLegend />
+          {canMoveDeliveries ? (
+            <p className="mt-2 text-xs font-bold text-slate-500">
+              Drag a delivery onto another day to reschedule it.
+            </p>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onChangeMonth(-1)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-950"
+            aria-label="Previous month"
+          >
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectDay(today, new Date(`${today}T12:00:00`), false)}
+            className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+          >
+            This month
+          </button>
+          <button
+            type="button"
+            onClick={() => onChangeMonth(1)}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-950"
+            aria-label="Next month"
+          >
+            <ChevronRight className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <div className="min-w-[56rem]">
+          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+              (weekday) => (
+                <span
+                  key={weekday}
+                  className="px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.12em] text-slate-400"
+                >
+                  {weekday}
+                </span>
+              ),
+            )}
+          </div>
+      <div className="grid grid-cols-7 gap-px bg-slate-200">
+            {monthDays.map((day) => {
+              const dayDeliveries = getDayDeliveries(deliveries, day.dateKey);
+              const orderedDayDeliveries = [...dayDeliveries].sort(
+                (firstDelivery, secondDelivery) =>
+                  Number(deliveryNeedsDispatch(firstDelivery)) -
+                  Number(deliveryNeedsDispatch(secondDelivery)),
+              );
+              const isSelected = day.dateKey === selectedDate;
+              const isToday = day.dateKey === today;
+              const isExpanded = expandedDayKey === day.dateKey;
+              const visibleDeliveries = isExpanded
+                ? orderedDayDeliveries
+                : orderedDayDeliveries.slice(0, 3);
+
+              return (
+                <div
+                  key={day.dateKey}
+                  onDragOver={(event) =>
+                    handleDayDragOver(event, day.dateKey)
+                  }
+                  onDrop={(event) => handleDayDrop(event, day.dateKey)}
+                  className={`min-h-36 p-2 transition-colors ${
+                    dropDateKey === day.dateKey
+                      ? "bg-red-50 ring-2 ring-inset ring-[#FC2C38]"
+                      : day.isCurrentMonth
+                        ? "bg-white"
+                        : "bg-slate-50"
+                  } ${isSelected ? "ring-2 ring-inset ring-[#FC2C38]" : ""}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelectDay(day.dateKey, day.date, true)}
+                    className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-black transition ${
+                      isToday
+                        ? "bg-[#FC2C38] text-white"
+                        : day.isCurrentMonth
+                          ? "text-slate-800 hover:bg-slate-100"
+                          : "text-slate-300 hover:bg-white"
+                    }`}
+                    aria-label={`Open ${formatDateLabel(day.dateKey)}`}
+                  >
+                    {day.date.getDate()}
+                  </button>
+
+                  <div className="mt-1.5 space-y-1.5">
+                    {visibleDeliveries.map((delivery, deliveryIndex) => {
+                      const beginsNeedsDispatchGroup =
+                        deliveryNeedsDispatch(delivery) &&
+                        visibleDeliveries
+                          .slice(0, deliveryIndex)
+                          .some(
+                            (previousDelivery) =>
+                              !deliveryNeedsDispatch(previousDelivery),
+                          );
+
+                      return (
+                        <div
+                          key={delivery.id}
+                          draggable={canMoveDeliveries}
+                          onDragStart={(event) =>
+                            handleDeliveryDragStart(event, delivery)
+                          }
+                          onDragEnd={handleDeliveryDragEnd}
+                          title={
+                            canMoveDeliveries
+                              ? "Drag this delivery to another day"
+                              : undefined
+                          }
+                          className={`${
+                            beginsNeedsDispatchGroup
+                              ? "mt-2 border-t border-slate-200 pt-2"
+                              : ""
+                          } ${
+                            canMoveDeliveries
+                              ? "cursor-grab active:cursor-grabbing"
+                              : ""
+                          } ${
+                            draggedDeliveryId === delivery.id
+                              ? "opacity-40"
+                              : ""
+                          }`}
+                        >
+                          <CalendarDeliveryButton
+                            delivery={delivery}
+                            onClick={() => onSelectDelivery(delivery)}
+                            compact
+                          />
+                        </div>
+                      );
+                    })}
+                    {dayDeliveries.length > 3 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedDayKey((currentDayKey) =>
+                            currentDayKey === day.dateKey ? "" : day.dateKey,
+                          )
+                        }
+                        aria-expanded={isExpanded}
+                        className="w-full rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600 transition hover:bg-slate-200"
+                      >
+                        {isExpanded
+                          ? "Show fewer"
+                          : `+${dayDeliveries.length - 3} more`}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function deliveriesShareDriver(firstDelivery, secondDelivery) {
   const firstDrivers = getDeliveryDrivers(firstDelivery);
   const secondDrivers = getDeliveryDrivers(secondDelivery);
@@ -745,9 +1311,75 @@ function getTimelineBlockStyle(delivery) {
 function DeliveryTimelineBoard({
   driverNames,
   deliveriesByDriver,
+  selectedDate,
   selectedDeliveryId,
   onSelectDelivery,
 }) {
+  const timelineScrollRef = useRef(null);
+  const timelineHeaderRef = useRef(null);
+  const [currentMinutes, setCurrentMinutes] = useState(() => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  });
+  const isToday = selectedDate === getTodayDateValue();
+  const showCurrentTime =
+    isToday &&
+    currentMinutes >= timelineStartMinutes &&
+    currentMinutes <= timelineEndMinutes;
+
+  useEffect(() => {
+    if (!isToday) {
+      return undefined;
+    }
+
+    function updateCurrentMinutes() {
+      const now = new Date();
+      setCurrentMinutes(now.getHours() * 60 + now.getMinutes());
+    }
+
+    updateCurrentMinutes();
+    const timerId = window.setInterval(updateCurrentMinutes, 60 * 1000);
+
+    return () => window.clearInterval(timerId);
+  }, [isToday]);
+
+  useEffect(() => {
+    const scrollViewport = timelineScrollRef.current;
+    const timelineHeader = timelineHeaderRef.current;
+
+    if (!scrollViewport || !timelineHeader) {
+      return undefined;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      if (!isToday) {
+        scrollViewport.scrollTo({ left: 0, behavior: "smooth" });
+        return;
+      }
+
+      const clampedMinutes = Math.min(
+        timelineEndMinutes,
+        Math.max(timelineStartMinutes, currentMinutes),
+      );
+      const currentTimePosition =
+        timelineHeader.offsetLeft +
+        timelineHeader.offsetWidth * (getTimelinePercent(clampedMinutes) / 100);
+      const centeredPosition =
+        currentTimePosition - scrollViewport.clientWidth / 2;
+      const maximumScroll = Math.max(
+        0,
+        scrollViewport.scrollWidth - scrollViewport.clientWidth,
+      );
+
+      scrollViewport.scrollTo({
+        left: Math.min(maximumScroll, Math.max(0, centeredPosition)),
+        behavior: "smooth",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [currentMinutes, driverNames.length, isToday, selectedDate]);
+
   return (
     <section className="hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm xl:block">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -765,11 +1397,12 @@ function DeliveryTimelineBoard({
         </p>
       </div>
 
-      <div className="overflow-x-auto pb-1">
+      <div ref={timelineScrollRef} className="overflow-x-auto pb-1">
         <div className="min-w-[1240px]">
           <div className="grid grid-cols-[180px_minmax(1080px,1fr)] gap-3">
             <div />
             <div
+              ref={timelineHeaderRef}
               className="relative h-10 rounded-2xl bg-slate-50"
               style={{ minWidth: timelineWidth }}
             >
@@ -792,6 +1425,16 @@ function DeliveryTimelineBoard({
                   Open
                 </span>
               </div>
+              {showCurrentTime ? (
+                <div
+                  className="absolute inset-y-1 z-10 rounded-full border-l-2 border-blue-600"
+                  style={{ left: `${getTimelinePercent(currentMinutes)}%` }}
+                >
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-blue-600 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white shadow-sm">
+                    Now
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -836,6 +1479,14 @@ function DeliveryTimelineBoard({
                     style={{ left: `${getTimelinePercent(timelineOpenMinutes)}%` }}
                   />
 
+                  {showCurrentTime ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-y-0 z-10 border-l-2 border-blue-600/80"
+                      style={{ left: `${getTimelinePercent(currentMinutes)}%` }}
+                    />
+                  ) : null}
+
                   {deliveriesByDriver[driverName].map((delivery) => {
                     const blockStyle = getTimelineBlockStyle(delivery);
                     const isSelected = selectedDeliveryId === delivery.id;
@@ -854,7 +1505,7 @@ function DeliveryTimelineBoard({
                         } ${
                           isSelected
                             ? "border-[#FC2C38] bg-red-50 ring-2 ring-red-100"
-                            : "border-blue-200 bg-white hover:border-[#FC2C38] hover:bg-red-50/40"
+                            : "border-emerald-200 bg-emerald-50/70 hover:border-emerald-400 hover:bg-emerald-100/70"
                         }`}
                         style={blockStyle}
                         title={`${formatCustomerName(
@@ -1526,6 +2177,7 @@ export default function DeliveryCalendarPage({
     [deliveries],
   );
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
+  const [calendarView, setCalendarView] = useState("day");
   const [hasSelectedDay, setHasSelectedDay] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -1674,6 +2326,29 @@ export default function DeliveryCalendarPage({
     }
   }, [selectedTimelineDeliveryFromData]);
 
+  useEffect(() => {
+    if (calendarView === "day" || !selectedTimelineDeliveryId) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    function handleModalEscape(event) {
+      if (event.key === "Escape") {
+        setSelectedTimelineDeliveryId("");
+        setSelectedTimelineDeliverySnapshot(null);
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleModalEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleModalEscape);
+    };
+  }, [calendarView, selectedTimelineDeliveryId]);
+
   function openDatePicker() {
     const selectedDateValue = new Date(`${selectedDate}T12:00:00`);
 
@@ -1701,7 +2376,7 @@ export default function DeliveryCalendarPage({
     );
   }
 
-  function selectDay(dateKey, date = null) {
+  function selectDay(dateKey, date = null, openDayView = false) {
     setSelectedDate(dateKey);
     setHasSelectedDay(true);
     setStatusFilter("all");
@@ -1715,6 +2390,51 @@ export default function DeliveryCalendarPage({
         new Date(selectedDay.getFullYear(), selectedDay.getMonth(), 1),
       );
     }
+
+    if (openDayView) {
+      setCalendarView("day");
+    }
+  }
+
+  function navigateSelectedDate(dayOffset) {
+    const currentDate = new Date(`${selectedDate}T12:00:00`);
+
+    if (Number.isNaN(currentDate.getTime())) {
+      return;
+    }
+
+    currentDate.setDate(currentDate.getDate() + dayOffset);
+    selectDay(getLocalDateKey(currentDate), currentDate);
+  }
+
+  function openDeliveryFromCalendar(delivery) {
+    const deliveryDateKey = getDeliveryDateKey(delivery?.deliveryDate);
+
+    if (!delivery?.id || !deliveryDateKey) {
+      return;
+    }
+
+    if (calendarView !== "day") {
+      setSelectedTimelineDeliveryId(delivery.id);
+      setSelectedTimelineDeliverySnapshot(delivery);
+      return;
+    }
+
+    const deliveryDate = new Date(`${deliveryDateKey}T12:00:00`);
+    setCalendarView("day");
+    selectDay(deliveryDateKey, deliveryDate);
+
+    window.setTimeout(() => {
+      setSelectedTimelineDeliveryId(delivery.id);
+      setSelectedTimelineDeliverySnapshot(delivery);
+
+      window.setTimeout(() => {
+        selectedDeliveryDetailRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 0);
+    }, 0);
   }
 
   function selectTimelineDelivery(deliveryId) {
@@ -2027,6 +2747,47 @@ export default function DeliveryCalendarPage({
         </div>
       </div>
 
+      <section className="mb-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="px-2 py-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
+            Calendar view
+          </p>
+          <p className="mt-0.5 text-sm font-black text-slate-900">
+            {calendarView === "day"
+              ? formatDateLabel(selectedDate)
+              : calendarView === "week"
+                ? getWeekRangeLabel(selectedDate)
+                : getCalendarMonthLabel(calendarMonth)}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 rounded-xl bg-slate-100 p-1">
+          {[
+            { id: "day", label: "Day" },
+            { id: "week", label: "Week" },
+            { id: "month", label: "Month" },
+          ].map((viewOption) => (
+            <button
+              key={viewOption.id}
+              type="button"
+              onClick={() => {
+                setCalendarView(viewOption.id);
+                setSelectedTimelineDeliveryId("");
+                setSelectedTimelineDeliverySnapshot(null);
+              }}
+              className={`rounded-lg px-5 py-2.5 text-sm font-black transition focus:outline-none focus:ring-4 focus:ring-red-100 ${
+                calendarView === viewOption.id
+                  ? "bg-slate-950 text-white shadow-sm"
+                  : "text-slate-500 hover:bg-white hover:text-slate-950"
+              }`}
+            >
+              {viewOption.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {calendarView === "day" ? (
       <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
           <div>
@@ -2114,8 +2875,30 @@ export default function DeliveryCalendarPage({
           </div>
         </div>
       </section>
+      ) : null}
 
-      {hasSelectedDay ? (
+      {calendarView === "week" ? (
+        <DeliveryWeekView
+          deliveries={safeDeliveries}
+          selectedDate={selectedDate}
+          onNavigate={navigateSelectedDate}
+          onSelectDay={selectDay}
+          onSelectDelivery={openDeliveryFromCalendar}
+          canMoveDeliveries={canEditDeliveries && Boolean(onUpdateDelivery)}
+          onMoveDelivery={handleMoveDelivery}
+        />
+      ) : calendarView === "month" ? (
+        <DeliveryMonthView
+          deliveries={safeDeliveries}
+          monthDate={calendarMonth}
+          selectedDate={selectedDate}
+          onChangeMonth={changeCalendarMonth}
+          onSelectDay={selectDay}
+          onSelectDelivery={openDeliveryFromCalendar}
+          canMoveDeliveries={canEditDeliveries && Boolean(onUpdateDelivery)}
+          onMoveDelivery={handleMoveDelivery}
+        />
+      ) : hasSelectedDay ? (
         <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -2158,7 +2941,7 @@ export default function DeliveryCalendarPage({
                       ? option.id === "needsDispatch"
                         ? "bg-amber-100 text-amber-900 shadow-sm"
                         : option.id === "scheduled"
-                          ? "bg-blue-100 text-blue-900 shadow-sm"
+                          ? "bg-emerald-100 text-emerald-900 shadow-sm"
                           : "bg-white text-slate-950 shadow-sm"
                       : "text-slate-500 hover:text-slate-900"
                   }`}
@@ -2209,7 +2992,7 @@ export default function DeliveryCalendarPage({
         </div>
       ) : null}
 
-      {!hasSelectedDay ? null : dayDeliveries.length === 0 ? (
+      {calendarView !== "day" || !hasSelectedDay ? null : dayDeliveries.length === 0 ? (
         <EmptyState
           title="No deliveries on this date"
           description="Deliveries that need dispatch and scheduled deliveries will both appear here."
@@ -2307,6 +3090,7 @@ export default function DeliveryCalendarPage({
                 <DeliveryTimelineBoard
                   driverNames={driverNames}
                   deliveriesByDriver={deliveriesByDriver}
+                  selectedDate={selectedDate}
                   selectedDeliveryId=""
                   onSelectDelivery={selectTimelineDelivery}
                 />
@@ -2430,6 +3214,113 @@ export default function DeliveryCalendarPage({
           </>
         )
       )}
+
+      {calendarView !== "day" && selectedTimelineDelivery ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-3 backdrop-blur-sm sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="calendar-delivery-modal-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setSelectedTimelineDeliveryId("");
+              setSelectedTimelineDeliverySnapshot(null);
+            }
+          }}
+        >
+          <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
+            <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b border-slate-200 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:px-6 sm:py-5">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                    Delivery details
+                  </p>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${
+                      deliveryNeedsDispatch(selectedTimelineDelivery)
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {deliveryNeedsDispatch(selectedTimelineDelivery)
+                      ? "Needs dispatch"
+                      : "Scheduled"}
+                  </span>
+                </div>
+                <h2
+                  id="calendar-delivery-modal-title"
+                  className="mt-1 truncate text-2xl font-black tracking-tight text-slate-950 sm:text-3xl"
+                >
+                  Order {selectedTimelineDelivery.orderNumber || "—"}
+                </h2>
+                <p className="mt-1 truncate text-sm font-bold text-slate-500 sm:text-base">
+                  {formatCustomerName(selectedTimelineDelivery.customerName) ||
+                    "Customer not entered"}
+                  {selectedTimelineDelivery.deliveryDate
+                    ? ` · ${formatDateLabel(
+                        getDeliveryDateKey(
+                          selectedTimelineDelivery.deliveryDate,
+                        ),
+                      )}`
+                    : ""}
+                </p>
+              </div>
+
+              {onViewOrder ? (
+                <button
+                  type="button"
+                  onClick={() => onViewOrder(selectedTimelineDelivery)}
+                  className="order-3 col-span-2 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#e21f2b] focus:outline-none focus:ring-4 focus:ring-red-100 sm:order-none sm:col-span-1"
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                  View order
+                </button>
+              ) : (
+                <span className="hidden sm:block" aria-hidden="true" />
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTimelineDeliveryId("");
+                    setSelectedTimelineDeliverySnapshot(null);
+                  }}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-950"
+                  aria-label="Close delivery details"
+                >
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+            </header>
+
+            <div className="overflow-y-auto p-3 sm:p-5">
+              <CompactDeliveryCard
+                delivery={selectedTimelineDelivery}
+                deliveries={safeDeliveries}
+                deliveryDates={deliveryDates}
+                driverOptions={employeeOptions}
+                vehicleOptions={vehicleOptions}
+                expanded
+                canEditDeliveries={canEditDeliveries}
+                onEditDelivery={onEditDelivery}
+                onEditOrder={onEditOrder}
+                onRequestUnassign={(delivery) => {
+                  setUnassignError("");
+                  setDeliveryToUnassign(delivery);
+                }}
+                onUpdateDelivery={handleMoveDelivery}
+                isUpdating={
+                  updatingDeliveryId === selectedTimelineDelivery.id
+                }
+                onToggle={selectTimelineDelivery}
+                hideToggle
+                dispatchStyle
+              />
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {deliveryToUnassign ? (
         <div

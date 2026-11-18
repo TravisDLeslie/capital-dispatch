@@ -819,6 +819,10 @@ export default function SupplierRunsPage({
   const [routeOrderError, setRouteOrderError] = useState("");
   const [dispatchDrafts, setDispatchDrafts] = useState({});
   const [savingDispatchRunId, setSavingDispatchRunId] = useState("");
+  const [supplierRunToUnassign, setSupplierRunToUnassign] = useState(null);
+  const [unassigningSupplierRunId, setUnassigningSupplierRunId] =
+    useState("");
+  const [unassignError, setUnassignError] = useState("");
   const [bulkDispatchDraft, setBulkDispatchDraft] = useState({
     driver: "",
     vehicleId: "",
@@ -1492,6 +1496,50 @@ export default function SupplierRunsPage({
       setRouteOrderError("Unable to assign that PO. Check Firebase rules.");
     } finally {
       setSavingDispatchRunId("");
+    }
+  }
+
+  async function handleConfirmUnassignSupplierRun() {
+    const supplierRunId = String(supplierRunToUnassign?.id || "");
+
+    if (!supplierRunId || !onUpdateSupplierRun) {
+      return;
+    }
+
+    setUnassigningSupplierRunId(supplierRunId);
+    setUnassignError("");
+
+    try {
+      await onUpdateSupplierRun(supplierRunId, {
+        driver: "",
+        vehicleId: "",
+        vehicleTitle: "",
+        vehicleBadge: "",
+        dispatchStatus: "needsDispatch",
+        updatedAt: new Date().toISOString(),
+      });
+
+      setDispatchDrafts((currentDrafts) => {
+        const nextDrafts = { ...currentDrafts };
+        delete nextDrafts[supplierRunId];
+        return nextDrafts;
+      });
+      setSuccessMessage(
+        `PO ${supplierRunToUnassign.poNumber || ""} was returned to South Needs Dispatch.`,
+      );
+      setSupplierRunToUnassign(null);
+      setViewingSupplierRun(null);
+      setEditingSupplierRun(null);
+    } catch (unassignSupplierRunError) {
+      console.error(
+        "Unable to return South PO to dispatch:",
+        unassignSupplierRunError,
+      );
+      setUnassignError(
+        "Unable to unassign this PO. Check your connection and try again.",
+      );
+    } finally {
+      setUnassigningSupplierRunId("");
     }
   }
 
@@ -3661,6 +3709,16 @@ export default function SupplierRunsPage({
                                     onUpdateItemDescription={
                                       onUpdateSupplierRunItemDescription
                                     }
+                                    onUnassign={
+                                      canManageSupplierRun(supplierRun) &&
+                                      supplierRun.status !== "complete" &&
+                                      String(supplierRun.driver || "").trim()
+                                        ? (run) => {
+                                            setUnassignError("");
+                                            setSupplierRunToUnassign(run);
+                                          }
+                                        : undefined
+                                    }
                                     onEdit={
                                       canManageSupplierRun(supplierRun)
                                         ? setEditingSupplierRun
@@ -3723,8 +3781,8 @@ export default function SupplierRunsPage({
               editingSupplierRun.poNumber || ""
             }`.trim()}
           >
-            <div className="sticky top-0 z-20 flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
-              <div className="min-w-0">
+            <div className="sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+              <div className="min-w-0 justify-self-start">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
                   Edit South PO
                 </p>
@@ -3733,10 +3791,26 @@ export default function SupplierRunsPage({
                 </h3>
               </div>
 
+              {editingSupplierRun.status !== "complete" &&
+              String(editingSupplierRun.driver || "").trim() ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUnassignError("");
+                    setSupplierRunToUnassign(editingSupplierRun);
+                  }}
+                  className="min-h-[40px] justify-self-center whitespace-nowrap rounded-xl border border-amber-300 bg-amber-50 px-3 text-xs font-black text-amber-900 transition hover:border-amber-400 hover:bg-amber-100 sm:px-4 sm:text-sm"
+                >
+                  Unassign driver
+                </button>
+              ) : (
+                <span aria-hidden="true" />
+              )}
+
               <button
                 type="button"
                 onClick={() => setEditingSupplierRun(null)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center justify-self-end rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
                 aria-label="Close PO editor"
               >
                 <X
@@ -4045,6 +4119,103 @@ export default function SupplierRunsPage({
                   )}
                 </div>
               </div>
+
+              {canManageSupplierRun(selectedSupplierRunDetails) &&
+              selectedSupplierRunDetails.status !== "complete" &&
+              String(selectedSupplierRunDetails.driver || "").trim() ? (
+                <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-amber-950">
+                      Supplier could not complete this pickup?
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-amber-800">
+                      Remove the driver and truck, then return this PO to South
+                      Needs Dispatch.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUnassignError("");
+                      setSupplierRunToUnassign(
+                        selectedSupplierRunDetails,
+                      );
+                    }}
+                    className="inline-flex min-h-[44px] shrink-0 items-center justify-center rounded-xl border border-amber-300 bg-white px-4 text-sm font-black text-amber-900 shadow-sm transition hover:bg-amber-100"
+                  >
+                    Unassign from driver
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {supplierRunToUnassign ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/55 p-0 sm:items-center sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="unassign-south-po-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0"
+            aria-label="Cancel unassigning South PO"
+            onClick={() => {
+              if (!unassigningSupplierRunId) {
+                setSupplierRunToUnassign(null);
+                setUnassignError("");
+              }
+            }}
+          />
+
+          <section className="relative w-full rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">
+              Return to Dispatch
+            </p>
+            <h3
+              id="unassign-south-po-title"
+              className="mt-2 text-2xl font-black tracking-tight text-slate-950"
+            >
+              Unassign PO {supplierRunToUnassign.poNumber || ""}?
+            </h3>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+              This removes {supplierRunToUnassign.driver || "the driver"} and
+              the assigned truck. The PO and its items will stay open and move
+              back to South Needs Dispatch.
+            </p>
+
+            {unassignError ? (
+              <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700">
+                {unassignError}
+              </p>
+            ) : null}
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setSupplierRunToUnassign(null);
+                  setUnassignError("");
+                }}
+                disabled={Boolean(unassigningSupplierRunId)}
+                className="min-h-[48px] rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                No, keep assigned
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUnassignSupplierRun}
+                disabled={Boolean(unassigningSupplierRunId)}
+                className="min-h-[48px] rounded-xl bg-amber-500 px-4 text-sm font-black text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {unassigningSupplierRunId
+                  ? "Unassigning..."
+                  : "Yes, unassign"}
+              </button>
             </div>
           </section>
         </div>

@@ -573,6 +573,7 @@ export default function SupplierRunCard({
   supplierRun,
   onSavePickupPhoto,
   onUpdateItemDescription,
+  onUnassign,
   onEdit,
   onDelete,
   isCompletedSection = false,
@@ -1870,7 +1871,7 @@ export default function SupplierRunCard({
         </div>
       ) : null}
 
-      {onEdit || onDelete ? (
+      {onUnassign || onEdit || onDelete ? (
         <div
           className={`flex flex-wrap justify-end gap-3 ${
             !isItemsOpen
@@ -1878,6 +1879,16 @@ export default function SupplierRunCard({
               : "mt-4 border-t border-slate-100 pt-3"
           }`}
         >
+          {onUnassign ? (
+            <button
+              type="button"
+              onClick={() => onUnassign(supplierRun)}
+              className="text-xs font-bold text-amber-700 transition hover:text-amber-900"
+            >
+              Unassign driver
+            </button>
+          ) : null}
+
           {onEdit ? (
             <button
               type="button"
