@@ -387,7 +387,7 @@ function DeliveryCard({
             onClick={() => onAssign?.(delivery)}
             disabled={isAssigning}
             className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-amber-800 shadow-sm transition hover:bg-amber-200 focus:outline-none focus:ring-4 focus:ring-amber-100 disabled:cursor-wait disabled:opacity-60"
-            title="Assign a leave time, driver, and truck"
+            title="Assign a driver and truck; leave time is optional"
           >
             {isAssigning ? "Saving..." : "Needs dispatch"}
           </button>
@@ -885,8 +885,8 @@ export default function QueuedUpcomingDeliveriesPage({
       return;
     }
 
-    if (!deliveryTimeSlot || !driver || !vehicle) {
-      setAssignmentError("Choose a leave time, driver, and truck to continue.");
+    if (!driver || !vehicle) {
+      setAssignmentError("Choose a driver and truck to continue.");
       return;
     }
 
@@ -1180,7 +1180,7 @@ export default function QueuedUpcomingDeliveriesPage({
             <div className="mt-5 grid gap-4 sm:grid-cols-3">
               <label className="block">
                 <span className="mb-1.5 block text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">
-                  Leave time
+                  Leave time (optional)
                 </span>
                 <select
                   value={assignmentDraft.deliveryTimeSlot}
@@ -1193,7 +1193,7 @@ export default function QueuedUpcomingDeliveriesPage({
                   disabled={Boolean(assigningDeliveryId)}
                   className="block min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100 disabled:bg-slate-100"
                 >
-                  <option value="">Choose time...</option>
+                  <option value="">Time TBD</option>
                   {deliveryTimeSlotOptions.map((timeSlot) => (
                     <option key={timeSlot.value} value={timeSlot.value}>
                       {timeSlot.label}

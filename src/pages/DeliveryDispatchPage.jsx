@@ -1127,8 +1127,9 @@ function ScheduleAvailabilityPreview({
 
       {!hasPreviewInputs ? (
         <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-bold text-slate-500">
-          Select a driver, delivery date, and leave time to preview schedule
-          conflicts. Add the truck to check truck overlap too.
+          Add an optional leave time to preview schedule conflicts. The
+          delivery can still be dispatched with a driver and truck while the
+          time is TBD.
         </div>
       ) : (
         <div className="mt-4 grid gap-3">
@@ -2200,7 +2201,7 @@ function DeliveryRouteMapPlanner({
   function renderDeliveryInfo(delivery, index, isLarge = false) {
     const scheduleLabel = delivery.deliveryTimeSlot
       ? getDeliveryTimeRange(delivery)
-      : "Needs time";
+      : "Time TBD";
     const driverLabel =
       delivery.driver ||
       (Array.isArray(delivery.drivers)
@@ -3490,7 +3491,7 @@ export default function DeliveryDispatchPage({
           </h1>
 
           <p className="mt-2 text-base font-semibold text-slate-500 sm:text-lg">
-            Set the date, leave time, driver, and truck from the compact lineup.
+            Set the date, driver, and truck. Add a leave time when it is known.
           </p>
         </div>
 
@@ -4107,7 +4108,7 @@ export default function DeliveryDispatchPage({
                           Assign Driver & Truck
                         </p>
                         <p className="mt-1 text-sm font-semibold text-slate-500">
-                          Choose who is taking it first, then test the time slot below.
+                          Choose the driver and truck. Add a leave time when it is confirmed.
                         </p>
                       </div>
 
@@ -4244,7 +4245,6 @@ export default function DeliveryDispatchPage({
                       isSaving ||
                       !canScheduleDelivery ||
                       !schedule.deliveryDate ||
-                      !schedule.deliveryTimeSlot ||
                       Boolean(selectedScheduleConflictDetails)
                     }
                     className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
@@ -4267,8 +4267,8 @@ export default function DeliveryDispatchPage({
                         </p>
                         <p className="mt-1 text-sm font-semibold text-slate-500">
                           {canPreviewSchedule
-                            ? "Pick a time slot after choosing the driver so conflicts are easier to catch. Add the truck to check truck overlap too."
-                            : "Assign a driver first, then schedule the delivery."}
+                            ? "Leave time is optional. Add it when confirmed to check driver and truck conflicts."
+                            : "Assign a driver and truck first, then dispatch the delivery."}
                         </p>
                       </div>
 
@@ -4375,7 +4375,7 @@ export default function DeliveryDispatchPage({
                             >
                               <option value="">
                                 {canPreviewSchedule
-                                  ? "Choose leave time..."
+                                  ? "Time TBD"
                                   : "Assign driver first..."}
                               </option>
 

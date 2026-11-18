@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   Building2,
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   FileText,
   FileUp,
@@ -369,6 +372,283 @@ function TextInput({ className = "", ...props }) {
       {...props}
       className={`w-full rounded-xl border border-slate-300 bg-slate-100 px-3.5 py-2.5 text-base font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#FC2C38] focus:bg-white focus:ring-4 focus:ring-red-100 ${className}`}
     />
+  );
+}
+
+function getLocalDateValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getDateFromValue(value) {
+  const [year, month, day] = String(value || "").split("-").map(Number);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  const date = new Date(year, month - 1, day, 12);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function FutureDeliveryDatePicker({ value, onChange }) {
+  const triggerRef = useRef(null);
+  const popoverRef = useRef(null);
+  const selectedDate = getDateFromValue(value);
+  const today = useMemo(() => {
+    const currentDate = new Date();
+    currentDate.setHours(12, 0, 0, 0);
+    return currentDate;
+  }, []);
+  const todayValue = getLocalDateValue(today);
+  const [isOpen, setIsOpen] = useState(false);
+  const [visibleMonth, setVisibleMonth] = useState(
+    () => selectedDate || today,
+  );
+  const [popoverPosition, setPopoverPosition] = useState({
+    left: 12,
+    top: 12,
+    width: 352,
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function handleOutsidePointer(event) {
+      if (
+        !triggerRef.current?.contains(event.target) &&
+        !popoverRef.current?.contains(event.target)
+      ) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handleOutsidePointer);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", handleOutsidePointer);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function updatePosition() {
+      const triggerRect = triggerRef.current?.getBoundingClientRect();
+
+      if (!triggerRect) {
+        return;
+      }
+
+      const viewportWidth = window.visualViewport?.width || window.innerWidth;
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const popoverHeight = popoverRef.current?.offsetHeight || 410;
+      const width = Math.min(352, Math.max(288, viewportWidth - 24));
+      const left = Math.min(
+        Math.max(12, triggerRect.left),
+        Math.max(12, viewportWidth - width - 12),
+      );
+      const openAbove =
+        viewportHeight - triggerRect.bottom < popoverHeight + 16 &&
+        triggerRect.top > viewportHeight - triggerRect.bottom;
+      const preferredTop = openAbove
+        ? triggerRect.top - popoverHeight - 10
+        : triggerRect.bottom + 10;
+      const top = Math.min(
+        Math.max(12, preferredTop),
+        Math.max(12, viewportHeight - popoverHeight - 12),
+      );
+
+      setPopoverPosition({ left, top, width });
+    }
+
+    const animationFrame = window.requestAnimationFrame(updatePosition);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    window.visualViewport?.addEventListener("resize", updatePosition);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.visualViewport?.removeEventListener("resize", updatePosition);
+    };
+  }, [isOpen, visibleMonth]);
+
+  const monthStart = new Date(
+    visibleMonth.getFullYear(),
+    visibleMonth.getMonth(),
+    1,
+    12,
+  );
+  const calendarStart = new Date(monthStart);
+  calendarStart.setDate(1 - monthStart.getDay());
+  const calendarDays = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(calendarStart);
+    date.setDate(calendarStart.getDate() + index);
+    return date;
+  });
+  const monthLabel = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  }).format(monthStart);
+
+  function openPicker() {
+    setVisibleMonth(selectedDate || today);
+    setIsOpen((currentValue) => !currentValue);
+  }
+
+  return (
+    <div className="relative" ref={triggerRef}>
+      <button
+        type="button"
+        onClick={openPicker}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        className={`flex w-full items-center justify-between gap-3 rounded-xl border bg-slate-100 px-3.5 py-2.5 text-left text-base font-bold outline-none transition focus:ring-4 focus:ring-red-100 ${
+          isOpen
+            ? "border-[#FC2C38] bg-white"
+            : "border-slate-300 text-slate-900 hover:border-slate-400 hover:bg-white"
+        }`}
+      >
+        <span className={value ? "text-slate-900" : "text-slate-500"}>
+          {selectedDate
+            ? new Intl.DateTimeFormat("en-US", {
+                month: "2-digit",
+                day: "2-digit",
+                year: "numeric",
+              }).format(selectedDate)
+            : "Choose date"}
+        </span>
+        <CalendarDays className="h-5 w-5 shrink-0" aria-hidden="true" />
+      </button>
+
+      {isOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              role="dialog"
+              aria-label="Choose future delivery date"
+              className="fixed z-[300] max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-[24px] border border-slate-200 bg-white p-4 shadow-2xl"
+              style={popoverPosition}
+            >
+              <div className="mb-3 border-b border-slate-200 pb-3">
+                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                  Delivery Date
+                </p>
+                <p className="mt-1 text-sm font-bold text-slate-500">
+                  Choose a requested date, or close this and use Future Date to schedule it later.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleMonth(
+                      new Date(
+                        visibleMonth.getFullYear(),
+                        visibleMonth.getMonth() - 1,
+                        1,
+                        12,
+                      ),
+                    )
+                  }
+                  className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <p className="text-base font-black text-slate-950">{monthLabel}</p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleMonth(
+                      new Date(
+                        visibleMonth.getFullYear(),
+                        visibleMonth.getMonth() + 1,
+                        1,
+                        12,
+                      ),
+                    )
+                  }
+                  className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                  aria-label="Next month"
+                >
+                  <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+
+              <div className="mt-4 grid grid-cols-7 gap-1 text-center text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                  <span key={day} className="py-1">{day}</span>
+                ))}
+              </div>
+
+              <div className="mt-1 grid grid-cols-7 gap-1">
+                {calendarDays.map((date) => {
+                  const dateValue = getLocalDateValue(date);
+                  const isPast = dateValue < todayValue;
+                  const isSelected = dateValue === value;
+                  const isCurrentMonth = date.getMonth() === monthStart.getMonth();
+
+                  return (
+                    <button
+                      key={dateValue}
+                      type="button"
+                      disabled={isPast}
+                      onClick={() => {
+                        onChange(dateValue);
+                        setIsOpen(false);
+                      }}
+                      className={`grid aspect-square min-h-9 place-items-center rounded-xl text-sm font-black transition ${
+                        isSelected
+                          ? "bg-[#FC2C38] text-white shadow-sm"
+                          : isPast
+                            ? "cursor-not-allowed text-slate-300"
+                            : isCurrentMonth
+                              ? "text-slate-900 hover:bg-red-50 hover:text-[#FC2C38]"
+                              : "text-slate-400 hover:bg-slate-50"
+                      }`}
+                    >
+                      {date.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 border-t border-slate-200 pt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange("");
+                    setIsOpen(false);
+                  }}
+                  className="w-full rounded-xl px-3 py-2 text-sm font-black text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
   );
 }
 
@@ -900,7 +1180,8 @@ export default function OrderFlowPage({
   const routeMapUrl = createGoogleMapsRouteUrl(deliveryAddress);
   const selectedHandoff = getHandoffOption(orderMethod);
   const SelectedHandoffIcon = selectedHandoff.icon;
-  const deliveryDateText = formatShortDate(deliveryDate) || "No date";
+  const deliveryDateText =
+    formatShortDate(deliveryDate) || "Future date · schedule later";
   const pathCounts = useMemo(
     () =>
       activeFulfillmentPaths.map((path) => ({
@@ -3212,13 +3493,31 @@ export default function OrderFlowPage({
 
         {!isReturnWorkflow && orderMethod === "delivery" ? (
           <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              <div className="grid gap-2.5 xl:grid-cols-[155px_minmax(260px,1fr)_210px_160px] xl:items-end">
-                <Field label="Delivery Date">
-                  <TextInput
-                    type="date"
-                    value={deliveryDate}
-                    onChange={(event) => setDeliveryDate(event.target.value)}
-                  />
+              <div className="grid gap-2.5 xl:grid-cols-[310px_minmax(260px,1fr)_210px_160px] xl:items-end">
+                <Field label="Delivery Timing">
+                  <div className="grid grid-cols-[132px_minmax(0,1fr)] gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeliveryDate("")}
+                      aria-pressed={!deliveryDate}
+                      className={`inline-flex min-h-11 items-center justify-center rounded-xl border px-3 text-sm font-black transition focus:outline-none focus:ring-4 focus:ring-red-100 ${
+                        !deliveryDate
+                          ? "border-[#FC2C38] bg-[#FC2C38] text-white shadow-sm"
+                          : "border-slate-300 bg-white text-slate-600 hover:border-[#FC2C38] hover:text-[#FC2C38]"
+                      }`}
+                    >
+                      Future Date
+                    </button>
+                    <FutureDeliveryDatePicker
+                      value={deliveryDate}
+                      onChange={setDeliveryDate}
+                    />
+                  </div>
+                  {!deliveryDate ? (
+                    <span className="mt-1.5 block text-[11px] font-bold text-[#FC2C38]">
+                      Delivery is set up now and can be scheduled later.
+                    </span>
+                  ) : null}
                 </Field>
 
                 <Field label="Delivery Address">

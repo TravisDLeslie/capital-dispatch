@@ -82,8 +82,13 @@ function getCompletedDateKey(delivery) {
 
 function getCalendarMonthDays(monthDate) {
   const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-  const gridStart = new Date(monthStart);
-  gridStart.setDate(monthStart.getDate() - monthStart.getDay());
+  const today = new Date();
+  const isCurrentMonth =
+    today.getFullYear() === monthDate.getFullYear() &&
+    today.getMonth() === monthDate.getMonth();
+  const anchorDate = isCurrentMonth ? today : monthStart;
+  const gridStart = new Date(anchorDate);
+  gridStart.setDate(anchorDate.getDate() - anchorDate.getDay());
 
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(gridStart);

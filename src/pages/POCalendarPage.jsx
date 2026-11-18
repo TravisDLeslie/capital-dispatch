@@ -29,9 +29,13 @@ function getCalendarDays(monthDate) {
   const year = monthDate.getFullYear();
   const month = monthDate.getMonth();
   const firstDay = new Date(year, month, 1);
-  const startDate = new Date(firstDay);
+  const today = new Date(`${getDateInputValue()}T12:00:00`);
+  const isCurrentMonth =
+    today.getFullYear() === year && today.getMonth() === month;
+  const anchorDate = isCurrentMonth ? today : firstDay;
+  const startDate = new Date(anchorDate);
 
-  startDate.setDate(firstDay.getDate() - firstDay.getDay());
+  startDate.setDate(anchorDate.getDate() - anchorDate.getDay());
 
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(startDate);
