@@ -525,6 +525,391 @@ function getMonthLabel(monthDate) {
   });
 }
 
+function getWeekDays(dateKey) {
+  const anchorDate = new Date(`${dateKey || getDateInputValue()}T12:00:00`);
+  const weekStart = new Date(anchorDate);
+
+  weekStart.setDate(anchorDate.getDate() - anchorDate.getDay());
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + index);
+
+    return {
+      date,
+      key: getDateKeyFromDate(date),
+    };
+  });
+}
+
+function getWeekRangeLabel(dateKey) {
+  const weekDays = getWeekDays(dateKey);
+  const firstDay = weekDays[0].date;
+  const lastDay = weekDays[weekDays.length - 1].date;
+  const firstLabel = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(firstDay);
+  const lastLabel = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(lastDay);
+
+  return `${firstLabel} – ${lastLabel}`;
+}
+
+function isVendorReturnRun(supplierRun) {
+  return (
+    supplierRun?.runType === "vendorReturn" ||
+    supplierRun?.routeStopType === "vendorReturn" ||
+    supplierRun?.deliveryScope === "vendorReturn" ||
+    supplierRun?.vendorReturn === true
+  );
+}
+
+function SouthDispatchCalendarCard({
+  supplierRun,
+  onSelect,
+  onDragStart,
+  onDragEnd,
+  isDragging = false,
+}) {
+  const itemCount = Array.isArray(supplierRun.items)
+    ? supplierRun.items.length
+    : 0;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(supplierRun)}
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", supplierRun.id);
+        onDragStart?.(supplierRun);
+      }}
+      onDragEnd={() => onDragEnd?.()}
+      className={`w-full cursor-grab rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-left shadow-sm transition active:cursor-grabbing hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-100 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-amber-100 ${
+        isDragging ? "scale-[0.98] opacity-50" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-slate-950">
+            {supplierRun.vendor || "Unknown Supplier"}
+          </p>
+          <p className="mt-0.5 truncate text-xs font-black text-amber-900">
+            PO {supplierRun.poNumber || "Not entered"}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-black text-slate-600 ring-1 ring-amber-100">
+          {itemCount} {itemCount === 1 ? "item" : "items"}
+        </span>
+      </div>
+
+      {isVendorReturnRun(supplierRun) ? (
+        <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-200 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-amber-950">
+          <ArrowUpRight aria-hidden="true" className="h-3 w-3" strokeWidth={3} />
+          Return to vendor
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function SouthDispatchCalendarView({
+  viewMode,
+  selectedDate,
+  supplierRuns,
+  onChangeView,
+  onChangeDate,
+  onSelectRun,
+  onMoveRun,
+}) {
+  const [expandedDayKey, setExpandedDayKey] = useState("");
+  const [draggedRunId, setDraggedRunId] = useState("");
+  const [dropTargetDate, setDropTargetDate] = useState("");
+  const [movingRunId, setMovingRunId] = useState("");
+  const todayKey = getDateInputValue();
+  const runsByDate = supplierRuns.reduce((groups, supplierRun) => {
+    const dateKey = getSupplierRunDateKey(supplierRun);
+
+    if (!dateKey) {
+      return groups;
+    }
+
+    groups[dateKey] = [...(groups[dateKey] || []), supplierRun];
+    return groups;
+  }, {});
+  const selectedDateValue = new Date(`${selectedDate || todayKey}T12:00:00`);
+  const selectedMonth = new Date(
+    selectedDateValue.getFullYear(),
+    selectedDateValue.getMonth(),
+    1,
+  );
+
+  function navigateDate(dayOffset) {
+    const nextDate = new Date(selectedDateValue);
+    nextDate.setDate(selectedDateValue.getDate() + dayOffset);
+    onChangeDate(getDateKeyFromDate(nextDate));
+  }
+
+  function navigateMonth(monthOffset) {
+    const nextDate = new Date(
+      selectedMonth.getFullYear(),
+      selectedMonth.getMonth() + monthOffset,
+      1,
+    );
+    onChangeDate(getDateKeyFromDate(nextDate));
+  }
+
+  const viewButtons = (
+    <div className="grid w-full grid-cols-3 rounded-2xl bg-slate-100 p-1 sm:w-auto sm:min-w-[330px]">
+      {["day", "week", "month"].map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onChangeView(option)}
+          className={`rounded-xl px-4 py-2.5 text-sm font-black capitalize transition ${
+            viewMode === option
+              ? "bg-slate-950 text-white shadow-sm"
+              : "text-slate-500 hover:bg-white hover:text-slate-950"
+          }`}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (viewMode === "day") {
+    return (
+      <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+            South dispatch view
+          </p>
+          <p className="mt-1 text-sm font-bold text-slate-500">
+            Full PO details, items, driver, and truck assignment.
+          </p>
+        </div>
+        {viewButtons}
+      </div>
+    );
+  }
+
+  const visibleDays =
+    viewMode === "week" ? getWeekDays(selectedDate) : getCalendarDays(selectedMonth);
+  const calendarLabel =
+    viewMode === "week"
+      ? getWeekRangeLabel(selectedDate)
+      : getMonthLabel(selectedMonth);
+  const navigationStep = viewMode === "week" ? 7 : null;
+
+  return (
+    <section className="mb-5 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-4 border-b border-slate-100 px-4 py-4 lg:flex-row lg:items-center lg:justify-between sm:px-5">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+            South dispatch · {viewMode} view
+          </p>
+          <h3 className="mt-1 text-xl font-black text-slate-950">
+            {calendarLabel}
+          </h3>
+          <p className="mt-1 text-xs font-bold text-slate-500">
+            Select a PO to open its complete dispatch assignment card.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                navigationStep ? navigateDate(-navigationStep) : navigateMonth(-1)
+              }
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-950"
+              aria-label={`Previous ${viewMode}`}
+            >
+              <ChevronLeft aria-hidden="true" className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeDate(todayKey)}
+              className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+            >
+              This {viewMode}
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                navigationStep ? navigateDate(navigationStep) : navigateMonth(1)
+              }
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-400 hover:text-slate-950"
+              aria-label={`Next ${viewMode}`}
+            >
+              <ChevronRight aria-hidden="true" className="h-5 w-5" />
+            </button>
+          </div>
+          {viewButtons}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <div className={viewMode === "month" ? "min-w-[62rem]" : "min-w-[54rem]"}>
+          {viewMode === "month" ? (
+            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                (weekday) => (
+                  <span
+                    key={weekday}
+                    className="px-3 py-2 text-center text-[10px] font-black uppercase tracking-[0.12em] text-slate-400"
+                  >
+                    {weekday}
+                  </span>
+                ),
+              )}
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-7 gap-px bg-slate-200">
+            {visibleDays.map((day) => {
+              const dayRuns = runsByDate[day.key] || [];
+              const isExpanded = expandedDayKey === day.key;
+              const visibleRuns = isExpanded ? dayRuns : dayRuns.slice(0, 4);
+              const isSelected = day.key === selectedDate;
+              const isToday = day.key === todayKey;
+              const isCurrentMonth = day.inCurrentMonth !== false;
+
+              return (
+                <div
+                  key={day.key}
+                  onDragOver={(event) => {
+                    if (!draggedRunId) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    setDropTargetDate(day.key);
+                  }}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget)) {
+                      setDropTargetDate("");
+                    }
+                  }}
+                  onDrop={async (event) => {
+                    event.preventDefault();
+                    const droppedRunId =
+                      event.dataTransfer.getData("text/plain") || draggedRunId;
+                    const droppedRun = supplierRuns.find(
+                      (supplierRun) => supplierRun.id === droppedRunId,
+                    );
+
+                    setDropTargetDate("");
+                    setDraggedRunId("");
+
+                    if (!droppedRun || getSupplierRunDateKey(droppedRun) === day.key) {
+                      return;
+                    }
+
+                    setMovingRunId(droppedRun.id);
+                    try {
+                      await onMoveRun?.(droppedRun, day.key);
+                    } finally {
+                      setMovingRunId("");
+                    }
+                  }}
+                  className={`min-h-48 p-3 transition ${
+                    isCurrentMonth ? "bg-white" : "bg-slate-50"
+                  } ${isSelected ? "ring-2 ring-inset ring-[#FC2C38]" : ""} ${
+                    dropTargetDate === day.key
+                      ? "bg-red-50 ring-2 ring-inset ring-[#FC2C38]"
+                      : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onChangeDate(day.key)}
+                    className="flex w-full items-start justify-between gap-2 rounded-lg p-1 text-left transition hover:bg-slate-50"
+                  >
+                    <span>
+                      <span
+                        className={`block text-[10px] font-black uppercase tracking-[0.12em] ${
+                          isToday ? "text-[#FC2C38]" : "text-slate-400"
+                        }`}
+                      >
+                        {isToday
+                          ? "Today"
+                          : new Intl.DateTimeFormat("en-US", {
+                              weekday: "short",
+                            }).format(new Date(`${day.key}T12:00:00`))}
+                      </span>
+                      <span className="mt-0.5 block text-lg font-black text-slate-950">
+                        {viewMode === "week"
+                          ? new Intl.DateTimeFormat("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            }).format(new Date(`${day.key}T12:00:00`))
+                          : day.day}
+                      </span>
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
+                      {dayRuns.length}
+                    </span>
+                  </button>
+
+                  <div className="mt-3 space-y-2">
+                    {visibleRuns.map((supplierRun) => (
+                      <SouthDispatchCalendarCard
+                        key={supplierRun.id}
+                        supplierRun={supplierRun}
+                        onSelect={onSelectRun}
+                        onDragStart={(draggedRun) =>
+                          setDraggedRunId(draggedRun.id)
+                        }
+                        onDragEnd={() => {
+                          setDraggedRunId("");
+                          setDropTargetDate("");
+                        }}
+                        isDragging={
+                          draggedRunId === supplierRun.id ||
+                          movingRunId === supplierRun.id
+                        }
+                      />
+                    ))}
+
+                    {dayRuns.length > 4 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedDayKey((currentDayKey) =>
+                            currentDayKey === day.key ? "" : day.key,
+                          )
+                        }
+                        className="w-full rounded-lg bg-slate-100 px-2 py-1.5 text-[10px] font-black text-slate-600 transition hover:bg-slate-200"
+                      >
+                        {isExpanded ? "Show fewer" : `+${dayRuns.length - 4} more`}
+                      </button>
+                    ) : null}
+
+                    {dayRuns.length === 0 ? (
+                      <p className="rounded-xl border border-dashed border-slate-200 px-2 py-4 text-center text-[10px] font-bold text-slate-400">
+                        No South POs
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function getSouthPageTitle(mode) {
   if (mode === "history") {
     return "History";
@@ -608,6 +993,20 @@ function supplierRunMatchesSearch(supplierRun, searchTerm) {
       searchableNumbers.some((searchableNumber) =>
         searchableNumber.includes(numericSearchTerm),
       ))
+  );
+}
+
+function getSupplierRunDispatchNotes(supplierRun) {
+  const itemNotes = Array.isArray(supplierRun?.items)
+    ? supplierRun.items.map((item) => item.returnNotes)
+    : [];
+
+  return Array.from(
+    new Set(
+      [supplierRun?.notes, ...itemNotes]
+        .map((note) => String(note || "").trim())
+        .filter(Boolean),
+    ),
   );
 }
 
@@ -829,7 +1228,12 @@ export default function SupplierRunsPage({
   });
   const [selectedDispatchRunIds, setSelectedDispatchRunIds] = useState([]);
   const [isBulkAssigning, setIsBulkAssigning] = useState(false);
+  const [bulkDateConfirmation, setBulkDateConfirmation] = useState(null);
   const [dispatchSearch, setDispatchSearch] = useState("");
+  const [dispatchViewMode, setDispatchViewMode] = useState("day");
+  const [dispatchCalendarDate, setDispatchCalendarDate] = useState(todayKey);
+  const [dispatchCalendarModalRunId, setDispatchCalendarModalRunId] =
+    useState("");
   const [historySearch, setHistorySearch] = useState("");
   const [pickupSearch, setPickupSearch] = useState("");
   const [dateMoveDraft, setDateMoveDraft] = useState(todayKey);
@@ -855,6 +1259,27 @@ export default function SupplierRunsPage({
       window.clearTimeout(timer);
     };
   }, [successMessage]);
+
+  useEffect(() => {
+    if (!dispatchCalendarModalRunId) {
+      return undefined;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function closeDispatchCalendarModal(event) {
+      if (event.key === "Escape") {
+        setDispatchCalendarModalRunId("");
+      }
+    }
+
+    window.addEventListener("keydown", closeDispatchCalendarModal);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", closeDispatchCalendarModal);
+    };
+  }, [dispatchCalendarModalRunId]);
 
   useEffect(() => {
     if (mode === "check") {
@@ -1388,7 +1813,10 @@ export default function SupplierRunsPage({
     setRouteOrderError("");
   }
 
-  async function assignSelectedSupplierRuns(selectedRuns) {
+  async function assignSelectedSupplierRuns(
+    selectedRuns,
+    { confirmFutureDateMove = false } = {},
+  ) {
     const selectedVehicle = safeVehicleOptions.find(
       (vehicleOption) => vehicleOption.id === bulkDispatchDraft.vehicleId,
     );
@@ -1408,20 +1836,51 @@ export default function SupplierRunsPage({
       return;
     }
 
+    const futureDatedRuns = selectedRuns.filter((supplierRun) => {
+      const scheduledDate = String(supplierRun.scheduledDate || "").trim();
+
+      return scheduledDate && scheduledDate > todayKey;
+    });
+
+    if (futureDatedRuns.length > 0 && !confirmFutureDateMove) {
+      setBulkDateConfirmation({
+        selectedRunIds: selectedRuns.map((supplierRun) => supplierRun.id),
+        futureRunIds: futureDatedRuns.map((supplierRun) => supplierRun.id),
+      });
+      setRouteOrderError("");
+      return;
+    }
+
+    const futureRunIds = new Set(
+      futureDatedRuns.map((supplierRun) => supplierRun.id),
+    );
+
     setIsBulkAssigning(true);
+    setBulkDateConfirmation(null);
     setRouteOrderError("");
 
     try {
       await Promise.all(
-        selectedRuns.map((supplierRun) =>
-          onUpdateSupplierRun(supplierRun.id, {
+        selectedRuns.map((supplierRun) => {
+          const shouldMoveToToday =
+            confirmFutureDateMove && futureRunIds.has(supplierRun.id);
+
+          return onUpdateSupplierRun(supplierRun.id, {
             driver: bulkDispatchDraft.driver,
             vehicleId: selectedVehicle?.id || "",
             vehicleTitle: selectedVehicle?.title || "",
             vehicleBadge: selectedVehicle?.badge || "",
             dispatchStatus: "assigned",
-          }),
-        ),
+            ...(shouldMoveToToday
+              ? {
+                  scheduledDate: todayKey,
+                  rolloverFromScheduledDate: "",
+                  rolledOverAt: null,
+                  updatedAt: new Date().toISOString(),
+                }
+              : {}),
+          });
+        }),
       );
 
       setDispatchDrafts((currentDrafts) => {
@@ -1435,7 +1894,13 @@ export default function SupplierRunsPage({
       setSuccessMessage(
         `${selectedRuns.length} ${
           selectedRuns.length === 1 ? "PO was" : "POs were"
-        } assigned to ${bulkDispatchDraft.driver}.`,
+        } assigned to ${bulkDispatchDraft.driver}.${
+          confirmFutureDateMove && futureDatedRuns.length > 0
+            ? ` ${futureDatedRuns.length} ${
+                futureDatedRuns.length === 1 ? "PO was" : "POs were"
+              } moved to today.`
+            : ""
+        }`,
       );
       onPageChange?.("supplier-runs-check");
     } catch (assignError) {
@@ -1554,6 +2019,50 @@ export default function SupplierRunsPage({
     );
   }
 
+  function openDispatchRunFromCalendar(supplierRun) {
+    setDispatchCalendarDate(
+      getSupplierRunDateKey(supplierRun) || dispatchCalendarDate,
+    );
+    setDispatchCalendarModalRunId(supplierRun.id);
+    setRouteOrderError("");
+  }
+
+  async function moveDispatchRunFromCalendar(supplierRun, nextDate) {
+    if (!supplierRun || getSupplierRunDateKey(supplierRun) === nextDate) {
+      return;
+    }
+
+    if (!canManageSupplierRun(supplierRun)) {
+      setRouteOrderError("You do not have access to change this pickup date.");
+      return;
+    }
+
+    if (supplierRun.status === "complete" || hasPickedUpItems(supplierRun)) {
+      setRouteOrderError("The pickup date is locked after pickup starts.");
+      return;
+    }
+
+    setRouteOrderError("");
+
+    try {
+      await onUpdateSupplierRun(supplierRun.id, {
+        scheduledDate: nextDate,
+        rolloverFromScheduledDate: "",
+        rolledOverAt: null,
+        updatedAt: new Date().toISOString(),
+      });
+      setDispatchCalendarDate(nextDate);
+      setSuccessMessage(
+        `PO ${supplierRun.poNumber || ""} moved to ${formatDateInput(nextDate)}.`,
+      );
+    } catch (moveError) {
+      console.error("Unable to move South PO from calendar:", moveError);
+      setRouteOrderError(
+        "Unable to move that PO. Check your connection and try again.",
+      );
+    }
+  }
+
   const calendarRuns = supplierRuns.filter(
     (supplierRun) =>
       supplierRun.status !== "complete" &&
@@ -1594,6 +2103,16 @@ export default function SupplierRunsPage({
         ) || viewingSupplierRun,
       )
     : null;
+  const bulkDateConfirmationSelectedRuns = bulkDateConfirmation
+    ? supplierRuns.filter((supplierRun) =>
+        bulkDateConfirmation.selectedRunIds.includes(supplierRun.id),
+      )
+    : [];
+  const bulkDateConfirmationFutureRuns = bulkDateConfirmation
+    ? bulkDateConfirmationSelectedRuns.filter((supplierRun) =>
+        bulkDateConfirmation.futureRunIds.includes(supplierRun.id),
+      )
+    : [];
 
   useEffect(() => {
     if (!selectedSupplierRunDetails) {
@@ -1831,6 +2350,17 @@ export default function SupplierRunsPage({
       supplierRunMatchesSearch(supplierRun, dispatchSearchTerm),
     ),
   );
+  const dispatchCalendarModalRun = dispatchCalendarModalRunId
+    ? supplierRuns.find(
+        (supplierRun) => supplierRun.id === dispatchCalendarModalRunId,
+      ) || null
+    : null;
+  const isDispatchCalendarModalOpen = Boolean(
+    dispatchViewMode !== "day" && dispatchCalendarModalRun,
+  );
+  const displayedDispatchRuns = isDispatchCalendarModalOpen
+    ? [dispatchCalendarModalRun]
+    : filteredDispatchRuns;
   const filteredDispatchRunIds = filteredDispatchRuns.map(
     (supplierRun) => supplierRun.id,
   );
@@ -1866,7 +2396,13 @@ export default function SupplierRunsPage({
       />
 
       <div className="mb-6">
-        <div className="flex items-start justify-between gap-3">
+        <div
+          className={
+            mode === "dispatch"
+              ? "grid items-start gap-3 xl:grid-cols-[minmax(230px,0.8fr)_minmax(180px,0.35fr)_minmax(360px,1.15fr)_auto]"
+              : "flex items-start justify-between gap-3"
+          }
+        >
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
               Driver / South
@@ -1876,6 +2412,64 @@ export default function SupplierRunsPage({
               {displayPageTitle}
             </h2>
           </div>
+
+          {mode === "dispatch" ? (
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <p className="text-[0.68rem] font-black uppercase tracking-[0.16em] text-slate-500">
+                Waiting For Assignment
+              </p>
+              <div className="mt-1 flex items-end justify-between gap-3">
+                <p className="text-3xl font-black leading-none text-slate-900">
+                  {filteredDispatchRuns.length}
+                </p>
+
+                {dispatchSearchTerm ? (
+                  <p className="text-right text-xs font-bold text-slate-500">
+                    of {dispatchRuns.length}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {mode === "dispatch" ? (
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+              <label
+                htmlFor="south-dispatch-search"
+                className="mb-1.5 block text-[0.68rem] font-black uppercase tracking-[0.16em] text-slate-500"
+              >
+                Search Dispatch
+              </label>
+
+              <div className="flex gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                    strokeWidth={2.4}
+                  />
+                  <input
+                    id="south-dispatch-search"
+                    type="search"
+                    value={dispatchSearch}
+                    onChange={(event) => setDispatchSearch(event.target.value)}
+                    placeholder="PO, vendor, date, item, or notes"
+                    className="min-h-[42px] w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  />
+                </div>
+
+                {dispatchSearch ? (
+                  <button
+                    type="button"
+                    onClick={() => setDispatchSearch("")}
+                    className="rounded-xl border border-slate-300 bg-white px-3 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
 
           <button
             type="button"
@@ -1954,53 +2548,18 @@ export default function SupplierRunsPage({
         />
       ) : mode === "dispatch" ? (
         <section>
-          <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-              Waiting For Assignment
-            </p>
-            <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-              <p className="text-3xl font-black text-slate-900">
-                {filteredDispatchRuns.length}
-              </p>
-
-              {dispatchSearchTerm ? (
-                <p className="text-sm font-bold text-slate-500">
-                  Showing {filteredDispatchRuns.length} of{" "}
-                  {dispatchRuns.length}
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="mb-5 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-            <label
-              htmlFor="south-dispatch-search"
-              className="mb-2 block text-xs font-black uppercase tracking-[0.16em] text-slate-500"
-            >
-              Search Needs Dispatch
-            </label>
-
-            <div className="flex gap-2">
-              <input
-                id="south-dispatch-search"
-                type="search"
-                value={dispatchSearch}
-                onChange={(event) => setDispatchSearch(event.target.value)}
-                placeholder="Search PO, vendor, date, ordered by, item, or notes"
-                className="min-h-[46px] flex-1 rounded-xl border border-slate-300 bg-white px-4 text-base font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
-              />
-
-              {dispatchSearch ? (
-                <button
-                  type="button"
-                  onClick={() => setDispatchSearch("")}
-                  className="rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50"
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
-          </div>
+          <SouthDispatchCalendarView
+            viewMode={dispatchViewMode}
+            selectedDate={dispatchCalendarDate}
+            supplierRuns={filteredDispatchRuns}
+            onChangeView={(nextViewMode) => {
+              setDispatchCalendarModalRunId("");
+              setDispatchViewMode(nextViewMode);
+            }}
+            onChangeDate={setDispatchCalendarDate}
+            onSelectRun={openDispatchRunFromCalendar}
+            onMoveRun={moveDispatchRunFromCalendar}
+          />
 
           {routeOrderError ? (
             <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
@@ -2008,7 +2567,9 @@ export default function SupplierRunsPage({
             </div>
           ) : null}
 
-          {filteredDispatchRuns.length === 0 ? (
+          {dispatchViewMode !== "day" &&
+          !isDispatchCalendarModalOpen ? null : displayedDispatchRuns.length ===
+            0 ? (
             <EmptyState
               title={
                 dispatchSearchTerm
@@ -2022,8 +2583,56 @@ export default function SupplierRunsPage({
               }
             />
           ) : (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div
+              role={isDispatchCalendarModalOpen ? "dialog" : undefined}
+              aria-modal={isDispatchCalendarModalOpen ? "true" : undefined}
+              aria-label={
+                isDispatchCalendarModalOpen
+                  ? `South dispatch PO ${dispatchCalendarModalRun?.poNumber || ""}`
+                  : undefined
+              }
+              className={
+                isDispatchCalendarModalOpen
+                  ? "fixed inset-0 z-[120] overflow-y-auto bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"
+                  : ""
+              }
+            >
+              <div
+                className={
+                  isDispatchCalendarModalOpen
+                    ? "mx-auto max-w-[1320px] space-y-4 rounded-[2rem] bg-slate-100 p-3 shadow-2xl sm:p-5"
+                    : "space-y-4"
+                }
+              >
+              {isDispatchCalendarModalOpen ? (
+                <div className="flex items-center justify-between gap-4 rounded-2xl bg-white px-4 py-3 shadow-sm sm:px-5">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                      South dispatch PO
+                    </p>
+                    <p className="mt-0.5 truncate text-sm font-bold text-slate-500">
+                      Assign, edit, upload, or review without leaving the calendar.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDispatchCalendarModalRunId("")}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950"
+                    aria-label="Close South dispatch PO"
+                  >
+                    <X aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
+                  </button>
+                </div>
+              ) : null}
+
+              {isDispatchCalendarModalOpen && routeOrderError ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                  {routeOrderError}
+                </div>
+              ) : null}
+
+              {!isDispatchCalendarModalOpen ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
                 <label className="inline-flex items-center gap-3">
                   <input
                     type="checkbox"
@@ -2041,9 +2650,11 @@ export default function SupplierRunsPage({
                 <p className="text-sm font-bold text-slate-500">
                   {selectedFilteredDispatchRuns.length} selected
                 </p>
-              </div>
+                </div>
+              ) : null}
 
-              {selectedFilteredDispatchRuns.length > 0 ? (
+              {!isDispatchCalendarModalOpen &&
+              selectedFilteredDispatchRuns.length > 0 ? (
                 <div className="sticky top-3 z-10 rounded-3xl border border-red-200 bg-red-50/95 p-4 shadow-lg backdrop-blur sm:p-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div className="min-w-0">
@@ -2147,7 +2758,7 @@ export default function SupplierRunsPage({
                 </div>
               ) : null}
 
-              {filteredDispatchRuns.map((supplierRun) => {
+              {displayedDispatchRuns.map((supplierRun) => {
                 const draft = getDispatchDraft(supplierRun);
                 const pickupItems = Array.isArray(supplierRun.items)
                   ? supplierRun.items
@@ -2206,7 +2817,8 @@ export default function SupplierRunsPage({
                             South Request
                           </p>
 
-                          <label className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                          {!isDispatchCalendarModalOpen ? (
+                            <label className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
                             <input
                               type="checkbox"
                               checked={isSelectedForDispatch}
@@ -2216,7 +2828,8 @@ export default function SupplierRunsPage({
                               className="h-4 w-4 rounded border-slate-300 text-[#FC2C38] focus:ring-[#FC2C38]"
                             />
                             Select
-                          </label>
+                            </label>
+                          ) : null}
                         </div>
                         <div className="mt-2 flex flex-wrap items-center gap-3">
                           <h3 className="text-3xl font-black leading-none tracking-tight text-slate-950">
@@ -2360,7 +2973,10 @@ export default function SupplierRunsPage({
 
                             <button
                               type="button"
-                              onClick={() => setViewingSupplierRun(supplierRun)}
+                              onClick={() => {
+                                setDispatchCalendarModalRunId("");
+                                setViewingSupplierRun(supplierRun);
+                              }}
                               className="inline-flex items-center gap-1.5 rounded-lg bg-slate-950 px-3 py-2 text-xs font-black text-white transition hover:bg-slate-800"
                             >
                               View all
@@ -2407,7 +3023,10 @@ export default function SupplierRunsPage({
                           {remainingPickupItemCount > 0 ? (
                             <button
                               type="button"
-                              onClick={() => setViewingSupplierRun(supplierRun)}
+                              onClick={() => {
+                                setDispatchCalendarModalRunId("");
+                                setViewingSupplierRun(supplierRun);
+                              }}
                               className="w-full border-t border-slate-100 bg-slate-50 px-4 py-2 text-left text-xs font-black text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
                             >
                               +{remainingPickupItemCount} more {remainingPickupItemCount === 1 ? "item" : "items"}
@@ -2606,7 +3225,10 @@ export default function SupplierRunsPage({
                           <div className="mt-3 grid gap-2 border-t border-slate-200 pt-3">
                             <button
                               type="button"
-                              onClick={() => setEditingSupplierRun(supplierRun)}
+                              onClick={() => {
+                                setDispatchCalendarModalRunId("");
+                                setEditingSupplierRun(supplierRun);
+                              }}
                               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
                             >
                               <Edit3
@@ -2620,9 +3242,10 @@ export default function SupplierRunsPage({
                             {typeof onDeleteSupplierRun === "function" ? (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  onDeleteSupplierRun(supplierRun.id)
-                                }
+                                onClick={() => {
+                                  setDispatchCalendarModalRunId("");
+                                  onDeleteSupplierRun(supplierRun.id);
+                                }}
                                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-black text-red-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-700"
                                 title="Remove this PO from Needs Dispatch"
                               >
@@ -2641,6 +3264,7 @@ export default function SupplierRunsPage({
                   </article>
                 );
               })}
+              </div>
             </div>
           )}
         </section>
@@ -4148,6 +4772,152 @@ export default function SupplierRunsPage({
                   </button>
                 </div>
               ) : null}
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {bulkDateConfirmation ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-south-date-confirmation-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0"
+            aria-label="Cancel moving future South POs to today"
+            onClick={() => {
+              if (!isBulkAssigning) {
+                setBulkDateConfirmation(null);
+              }
+            }}
+          />
+
+          <section className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:max-w-2xl sm:rounded-3xl">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-amber-200 bg-amber-50 px-5 py-4 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">
+                  Future pickup dates selected
+                </p>
+                <h3
+                  id="bulk-south-date-confirmation-title"
+                  className="mt-1 text-2xl font-black tracking-tight text-slate-950"
+                >
+                  Switch these POs to today?
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setBulkDateConfirmation(null)}
+                disabled={isBulkAssigning}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-slate-600 shadow-sm transition hover:border-amber-400 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Close date confirmation"
+              >
+                <X aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
+              </button>
+            </div>
+
+            <div className="space-y-5 p-5 sm:p-6">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm font-black text-amber-950">
+                  {bulkDateConfirmationFutureRuns.length}{" "}
+                  {bulkDateConfirmationFutureRuns.length === 1
+                    ? "selected PO is"
+                    : "selected POs are"}{" "}
+                  dated after today.
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-6 text-amber-900">
+                  Review the PO numbers, dates, and notes below. Confirming will
+                  move these POs to {formatDateInput(todayKey)} and then assign
+                  all {bulkDateConfirmationSelectedRuns.length} selected POs to{" "}
+                  {bulkDispatchDraft.driver}.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {bulkDateConfirmationFutureRuns.map((supplierRun) => {
+                  const dispatchNotes = getSupplierRunDispatchNotes(supplierRun);
+
+                  return (
+                    <article
+                      key={supplierRun.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black uppercase tracking-[0.15em] text-[#FC2C38]">
+                            PO {supplierRun.poNumber || "No PO #"}
+                          </p>
+                          <p className="mt-1 truncate text-lg font-black text-slate-950">
+                            {getDisplayVendorName(
+                              supplierRun.vendor,
+                              safeVendorDisplayNameMap,
+                            )}
+                          </p>
+                        </div>
+
+                        <span className="w-fit shrink-0 rounded-full bg-amber-100 px-3 py-1.5 text-xs font-black text-amber-800">
+                          Currently {formatDateInput(supplierRun.scheduledDate)}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                          Notes to read
+                        </p>
+                        {dispatchNotes.length > 0 ? (
+                          <div className="mt-2 space-y-2">
+                            {dispatchNotes.map((note) => (
+                              <p
+                                key={note}
+                                className="text-sm font-bold leading-5 text-slate-800"
+                              >
+                                {note}
+                              </p>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-sm font-semibold text-slate-500">
+                            No driver notes were added to this PO.
+                          </p>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setBulkDateConfirmation(null)}
+                  disabled={isBulkAssigning}
+                  className="min-h-[50px] rounded-xl border border-slate-300 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel and review dates
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    assignSelectedSupplierRuns(
+                      bulkDateConfirmationSelectedRuns,
+                      { confirmFutureDateMove: true },
+                    )
+                  }
+                  disabled={
+                    isBulkAssigning ||
+                    bulkDateConfirmationSelectedRuns.length === 0
+                  }
+                  className="min-h-[50px] rounded-xl bg-[#FC2C38] px-4 text-sm font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {isBulkAssigning
+                    ? "Moving and assigning..."
+                    : "Move to today and assign"}
+                </button>
+              </div>
             </div>
           </section>
         </div>
