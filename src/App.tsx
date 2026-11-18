@@ -8907,6 +8907,7 @@ export default function App() {
               supplierRuns={supplierRuns}
               deliveries={deliveries}
               allowedPageIds={effectiveAllowedPageIds}
+              currentUser={currentUserCreator}
               onPageChange={(pageId: string) =>
                 navigateToPage(pageId, {
                   navigationGroup:

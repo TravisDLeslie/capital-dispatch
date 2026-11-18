@@ -26,3 +26,4 @@ dist-ssr
 .resend-key.txt
 .vercel
 .env.local
+tmp/

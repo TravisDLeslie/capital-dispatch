@@ -117,6 +117,18 @@ service cloud.firestore {
       );
     }
 
+    function canAccessDispatchNotes() {
+      return isApproved() && (
+        isAdmin() ||
+        userProfile().workView == "dispatch-ops" ||
+        hasAnyPermission([
+          "dispatch",
+          "supplier-runs-dispatch",
+          "deliveries-dispatch"
+        ])
+      );
+    }
+
     function isAssignedYardTaskUser() {
       return isApproved() &&
         (
@@ -547,6 +559,63 @@ service cloud.firestore {
 
     match /yardTrainingRecords/{recordId} {
       allow read, create, update: if isReceiving();
+      allow delete: if isAdmin();
+    }
+
+    match /dispatchNotes/{noteId} {
+      allow read: if canAccessDispatchNotes();
+      allow create: if canAccessDispatchNotes() &&
+        request.resource.data.text is string &&
+        request.resource.data.text.size() > 0 &&
+        request.resource.data.text.size() <= 500 &&
+        request.resource.data.targetType in ["south", "delivery"] &&
+        request.resource.data.targetId is string &&
+        request.resource.data.targetId.size() > 0 &&
+        request.resource.data.targetNumber is string &&
+        request.resource.data.targetNumber.size() <= 100 &&
+        request.resource.data.targetName is string &&
+        request.resource.data.targetName.size() <= 200 &&
+        (
+          (
+            request.resource.data.targetType == "south" &&
+            exists(
+              /databases/$(database)/documents/supplierRuns/$(request.resource.data.targetId)
+            )
+          ) ||
+          (
+            request.resource.data.targetType == "delivery" &&
+            exists(
+              /databases/$(database)/documents/deliveries/$(request.resource.data.targetId)
+            )
+          )
+        ) &&
+        request.resource.data.status == "active" &&
+        request.resource.data.createdById == request.auth.uid;
+      allow update: if canAccessDispatchNotes() &&
+        (
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              "text",
+              "updatedAt"
+            ]) &&
+            resource.data.status == "active" &&
+            request.resource.data.status == "active" &&
+            request.resource.data.text is string &&
+            request.resource.data.text.size() > 0 &&
+            request.resource.data.text.size() <= 500
+          ) ||
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              "status",
+              "completedAt",
+              "completedById",
+              "completedByName",
+              "completedByEmail",
+              "updatedAt"
+            ]) &&
+            request.resource.data.status == "complete"
+          )
+        );
       allow delete: if isAdmin();
     }
 

@@ -12,6 +12,7 @@ import {
   Edit3,
   GripVertical,
   Home,
+  MessageSquareText,
   Navigation,
   Package,
   RefreshCw,
@@ -35,6 +36,12 @@ import {
   getDateInputValue,
   getTodayHeading,
 } from "../utils/dateHelpers";
+import {
+  saveDispatchNote,
+  subscribeToDispatchNotes,
+  updateDispatchNote,
+} from "../utils/dispatchNoteStorage";
+import { createId } from "../utils/idHelpers";
 import {
   getSouthRouteOrderId,
   saveSouthRouteOrder,
@@ -1249,6 +1256,31 @@ export default function SupplierRunsPage({
     error: "",
   });
   const [savingDispatchDateRunId, setSavingDispatchDateRunId] = useState("");
+  const [dispatchNotes, setDispatchNotes] = useState([]);
+  const [openDispatchNoteRunId, setOpenDispatchNoteRunId] = useState("");
+  const [editingDispatchNoteId, setEditingDispatchNoteId] = useState("");
+  const [dispatchNoteDrafts, setDispatchNoteDrafts] = useState({});
+  const [dispatchNoteError, setDispatchNoteError] = useState("");
+  const [savingDispatchNoteRunId, setSavingDispatchNoteRunId] = useState("");
+
+  useEffect(() => {
+    if (mode !== "dispatch") {
+      return undefined;
+    }
+
+    return subscribeToDispatchNotes(
+      (savedNotes) => {
+        setDispatchNotes(savedNotes);
+        setDispatchNoteError("");
+      },
+      (error) => {
+        console.error("Unable to sync South dispatch notes:", error);
+        setDispatchNoteError(
+          "Dispatch notes could not load. Check your connection and try again.",
+        );
+      },
+    );
+  }, [mode]);
 
   useEffect(() => {
     if (!successMessage) {
@@ -1780,6 +1812,95 @@ export default function SupplierRunsPage({
       },
     }));
     setRouteOrderError("");
+  }
+
+  function getActiveDispatchNotesForRun(supplierRunId) {
+    return dispatchNotes.filter(
+      (note) =>
+        note.status !== "complete" &&
+        note.targetType === "south" &&
+        note.targetId === supplierRunId,
+    );
+  }
+
+  function updateDispatchNoteDraft(supplierRunId, value) {
+    setDispatchNoteDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [supplierRunId]: value,
+    }));
+    setDispatchNoteError("");
+  }
+
+  async function handleAddDispatchNote(supplierRun) {
+    const text = String(dispatchNoteDrafts[supplierRun.id] || "").trim();
+
+    if (!text || savingDispatchNoteRunId) {
+      return;
+    }
+
+    setSavingDispatchNoteRunId(supplierRun.id);
+    setDispatchNoteError("");
+
+    try {
+      const updatedNotes = editingDispatchNoteId
+        ? await updateDispatchNote(editingDispatchNoteId, text)
+        : await saveDispatchNote({
+            id: createId(),
+            text,
+            targetType: "south",
+            targetId: supplierRun.id,
+            targetNumber: String(supplierRun.poNumber || "").trim(),
+            targetName: String(supplierRun.vendor || "No vendor").trim(),
+            createdById: createdBy.id || "",
+            createdByName: createdBy.name || "",
+            createdByEmail: createdBy.email || "",
+          });
+
+      setDispatchNotes(updatedNotes);
+      setEditingDispatchNoteId("");
+      setOpenDispatchNoteRunId("");
+      setDispatchNoteDrafts((currentDrafts) => ({
+        ...currentDrafts,
+        [supplierRun.id]: "",
+      }));
+    } catch (error) {
+      console.error("Unable to save South dispatch note:", error);
+      setDispatchNoteError(
+        "This dispatch note could not be saved. Check your connection and try again.",
+      );
+    } finally {
+      setSavingDispatchNoteRunId("");
+    }
+  }
+
+  function openNewDispatchNote(supplierRunId) {
+    setEditingDispatchNoteId("");
+    setOpenDispatchNoteRunId(supplierRunId);
+    setDispatchNoteDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [supplierRunId]: "",
+    }));
+    setDispatchNoteError("");
+  }
+
+  function openDispatchNoteEditor(supplierRunId, note) {
+    setEditingDispatchNoteId(note.id);
+    setOpenDispatchNoteRunId(supplierRunId);
+    setDispatchNoteDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [supplierRunId]: note.text || "",
+    }));
+    setDispatchNoteError("");
+  }
+
+  function closeDispatchNoteEditor(supplierRunId) {
+    setEditingDispatchNoteId("");
+    setOpenDispatchNoteRunId("");
+    setDispatchNoteDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [supplierRunId]: "",
+    }));
+    setDispatchNoteError("");
   }
 
   function toggleSelectedDispatchRun(supplierRunId) {
@@ -2804,6 +2925,10 @@ export default function SupplierRunsPage({
                   selectedDispatchRunIds.includes(supplierRun.id);
                 const isEditingPickupDate =
                   dispatchDateEdit.supplierRunId === supplierRun.id;
+                const supplierRunDispatchNotes =
+                  getActiveDispatchNotesForRun(supplierRun.id);
+                const isDispatchNoteOpen =
+                  openDispatchNoteRunId === supplierRun.id;
 
                 return (
                   <article
@@ -2815,8 +2940,8 @@ export default function SupplierRunsPage({
                     }`}
                   >
                     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-                      <div className="min-w-0">
-                        <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-col">
+                        <div className="order-[-2] flex items-center justify-between gap-3">
                           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
                             South Request
                           </p>
@@ -2835,7 +2960,7 @@ export default function SupplierRunsPage({
                             </label>
                           ) : null}
                         </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                        <div className="order-[-2] mt-2 flex flex-wrap items-center gap-3">
                           <h3 className="text-3xl font-black leading-none tracking-tight text-slate-950">
                             PO {supplierRun.poNumber}
                           </h3>
@@ -3115,6 +3240,170 @@ export default function SupplierRunsPage({
                                     supplierRun.createdByEmail}
                                 </p>
                               </div>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div
+                          className={`order-[-1] mt-3 rounded-2xl border px-4 py-3 shadow-sm ${
+                            supplierRunDispatchNotes.length > 0
+                              ? "border-amber-300 bg-amber-50"
+                              : "border-dashed border-slate-300 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${
+                                supplierRunDispatchNotes.length > 0
+                                  ? "bg-amber-400 text-amber-950"
+                                  : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              <MessageSquareText
+                                aria-hidden="true"
+                                className="h-4 w-4"
+                                strokeWidth={2.8}
+                              />
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className={`text-[10px] font-black uppercase tracking-[0.14em] ${
+                                  supplierRunDispatchNotes.length > 0
+                                    ? "text-amber-800"
+                                    : "text-slate-500"
+                                }`}
+                              >
+                                {supplierRunDispatchNotes.length > 0
+                                  ? "Dispatch alert"
+                                  : "Dispatch note"}
+                              </p>
+                              {supplierRunDispatchNotes.length === 0 ? (
+                                <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                                  Add a note for the dispatch team.
+                                </p>
+                              ) : null}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => openNewDispatchNote(supplierRun.id)}
+                              className={`inline-flex min-h-8 shrink-0 items-center justify-center rounded-lg border px-3 text-xs font-black transition ${
+                                supplierRunDispatchNotes.length > 0
+                                  ? "border-amber-400 bg-white text-amber-950 hover:bg-amber-100"
+                                  : "border-slate-300 bg-slate-950 text-white hover:bg-slate-800"
+                              }`}
+                            >
+                              {supplierRunDispatchNotes.length > 0
+                                ? "Add another"
+                                : "Add note"}
+                            </button>
+                          </div>
+
+                          {supplierRunDispatchNotes.length > 0 ? (
+                            <div className="mt-3 space-y-2 border-t border-amber-200 pt-3">
+                              {supplierRunDispatchNotes.map((note) => (
+                                <div
+                                  key={note.id}
+                                  className="flex items-start justify-between gap-3 rounded-xl bg-white/70 px-3 py-2"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="whitespace-pre-wrap text-sm font-black leading-5 text-amber-950">
+                                      {note.text}
+                                    </p>
+                                    {note.createdByName ? (
+                                      <p className="mt-1 text-[10px] font-bold text-amber-700">
+                                        {note.createdByName}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openDispatchNoteEditor(
+                                          supplierRun.id,
+                                          note,
+                                        )
+                                      }
+                                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-amber-300 bg-white px-2 text-[10px] font-black text-amber-900 transition hover:bg-amber-100"
+                                    >
+                                      <Edit3
+                                        aria-hidden="true"
+                                        className="h-3 w-3"
+                                        strokeWidth={2.8}
+                                      />
+                                      Edit
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          {isDispatchNoteOpen ? (
+                            <div className="mt-3 space-y-3 border-t border-amber-200 pt-3">
+                              <label className="block">
+                                <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                                  {editingDispatchNoteId
+                                    ? "Edit dispatch note"
+                                    : "New dispatch note"}
+                                </span>
+                                <textarea
+                                  value={
+                                    dispatchNoteDrafts[supplierRun.id] || ""
+                                  }
+                                  onChange={(event) =>
+                                    updateDispatchNoteDraft(
+                                      supplierRun.id,
+                                      event.target.value,
+                                    )
+                                  }
+                                  maxLength={500}
+                                  rows={2}
+                                  placeholder="Example: Take the business credit card."
+                                  autoFocus
+                                  className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#FC2C38] focus:ring-2 focus:ring-red-100"
+                                />
+                              </label>
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <p className="text-[10px] font-bold text-slate-400">
+                                  Dispatch team only
+                                </p>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      closeDispatchNoteEditor(supplierRun.id)
+                                    }
+                                    className="inline-flex min-h-8 items-center justify-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-100"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleAddDispatchNote(supplierRun)
+                                    }
+                                    disabled={
+                                      !String(
+                                        dispatchNoteDrafts[supplierRun.id] || "",
+                                      ).trim() ||
+                                      savingDispatchNoteRunId === supplierRun.id
+                                    }
+                                    className="inline-flex min-h-8 items-center justify-center rounded-lg bg-slate-950 px-3 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                  >
+                                    {savingDispatchNoteRunId === supplierRun.id
+                                      ? "Saving..."
+                                      : editingDispatchNoteId
+                                        ? "Save changes"
+                                        : "Add note"}
+                                  </button>
+                                </div>
+                              </div>
+                              {dispatchNoteError ? (
+                                <p className="text-xs font-bold text-red-700">
+                                  {dispatchNoteError}
+                                </p>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
