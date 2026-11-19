@@ -1867,7 +1867,7 @@ export default function SalesConverterPage({
   if (dashboardMode) {
     return (
       <PageContainer>
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
               Main Dashboard
@@ -1879,10 +1879,20 @@ export default function SalesConverterPage({
               Start an order, find activity across the app, or open a pricing tool.
             </p>
           </div>
+
+          <button
+            type="button"
+            onClick={() => onPageChange?.("deliveries-calendar")}
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-6 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-red-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200 sm:w-auto sm:justify-self-center"
+          >
+            <CalendarDays aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
+            View Calendar
+          </button>
+
           <button
             type="button"
             onClick={() => onPageChange?.("order-flow")}
-            className="inline-flex min-h-12 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:w-auto"
+            className="inline-flex min-h-12 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:w-auto sm:justify-self-end"
           >
             <ClipboardList aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
             New Order

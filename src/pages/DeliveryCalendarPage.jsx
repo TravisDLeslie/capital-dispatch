@@ -1207,31 +1207,35 @@ function DayFullDragTile({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerCancel}
-      className={`flex min-h-28 touch-none select-none flex-col justify-between rounded-3xl border-2 border-dashed p-4 shadow-sm transition ${
+      className={`flex h-full touch-none select-none items-center rounded-2xl border p-3 shadow-sm transition ${
         disabled
           ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
           : isDragging
             ? "cursor-grabbing border-slate-950 bg-slate-950 text-white ring-4 ring-slate-200"
-            : "cursor-grab border-slate-400 bg-white text-slate-950 hover:border-slate-950 hover:shadow-md active:cursor-grabbing"
+            : "cursor-grab border-slate-300 bg-slate-50 text-slate-950 hover:border-slate-500 hover:bg-white hover:shadow-md active:cursor-grabbing"
       }`}
       aria-label="Drag Day Full onto a calendar date"
       title="Drag onto a date to stop additional deliveries"
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex w-full items-center gap-3">
         <span
-          className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-            isDragging ? "bg-white/15" : "bg-slate-100"
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+            isDragging ? "bg-white/15" : "bg-white shadow-sm ring-1 ring-slate-200"
           }`}
         >
           <LockKeyhole className="h-5 w-5" aria-hidden="true" />
         </span>
-        <GripVertical className="h-5 w-5 shrink-0 opacity-60" aria-hidden="true" />
-      </div>
-      <div className="mt-3">
-        <p className="text-sm font-black">Day is full</p>
-        <p className={`mt-1 text-xs font-bold ${isDragging ? "text-white/75" : "text-slate-500"}`}>
-          Drag onto a date{requiresCode ? " · code required" : ""}
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-black">Day is full</p>
+          <p
+            className={`mt-0.5 text-[11px] font-bold leading-4 ${
+              isDragging ? "text-white/75" : "text-slate-500"
+            }`}
+          >
+            Drag to a date{requiresCode ? " · code required" : ""}
+          </p>
+        </div>
+        <GripVertical className="h-5 w-5 shrink-0 opacity-50" aria-hidden="true" />
       </div>
     </section>
   );
