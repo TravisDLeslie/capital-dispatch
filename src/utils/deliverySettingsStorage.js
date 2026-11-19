@@ -1,4 +1,5 @@
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { normalizeCalendarBlockOffs } from "./deliveryCalendarBlockOffs";
 import { defaultDeliveryScheduleSettings } from "./deliverySchedule";
 import { db } from "./firebase";
 
@@ -18,6 +19,9 @@ function normalizeSettings(settings) {
     returnDurationMinutes:
       Number(settings?.returnDurationMinutes) ||
       defaultDeliveryScheduleSettings.returnDurationMinutes,
+    calendarBlockOffs: normalizeCalendarBlockOffs(
+      settings?.calendarBlockOffs,
+    ),
   };
 }
 

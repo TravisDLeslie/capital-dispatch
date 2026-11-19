@@ -12,6 +12,8 @@ import {
   Eye,
   GripVertical,
   Layers,
+  LockKeyhole,
+  LockOpen,
   MapPin,
   Package,
   StickyNote,
@@ -24,6 +26,14 @@ import Breadcrumbs from "../components/Breadcrumbs";
 import EmptyState from "../components/EmptyState";
 import MarkDeliveredModal from "../components/MarkDeliveredModal";
 import PageContainer from "../components/PageContainer";
+import {
+  formatCalendarBlockOffTime,
+  getCalendarBlockOffMap,
+  getCalendarBlockOffScheduleLabel,
+  getCalendarBlockOffTextColor,
+  isAllDayCalendarBlockOff,
+  normalizeCalendarBlockOffBackgroundColor,
+} from "../utils/deliveryCalendarBlockOffs";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 import {
   deliveryTimeSlotOptions,
@@ -109,6 +119,62 @@ function getCompactTimelineRange(delivery) {
   return start.period === end.period
     ? `${start.time}–${end.time} ${end.period}`
     : `${start.time} ${start.period}–${end.time} ${end.period}`;
+}
+
+function getCalendarBlockOffSchedulingError(delivery, blockOff) {
+  if (!blockOff) {
+    return "";
+  }
+
+  if (isAllDayCalendarBlockOff(blockOff)) {
+    return `${blockOff.icon || "📅"} ${blockOff.reason} is closed all day.`;
+  }
+
+  const deliveryWindow = getDeliveryTimeWindow(delivery);
+
+  if (!deliveryWindow) {
+    return "";
+  }
+
+  const openStartMinutes = timeToMinutes(blockOff.openStart || "");
+  const openEndMinutes = timeToMinutes(blockOff.openEnd || "");
+
+  if (
+    openStartMinutes === null ||
+    openEndMinutes === null ||
+    deliveryWindow.start < openStartMinutes ||
+    deliveryWindow.end > openEndMinutes
+  ) {
+    return `${blockOff.icon || "📅"} ${blockOff.reason} is open ${formatCalendarBlockOffTime(
+      blockOff.openStart,
+    )}–${formatCalendarBlockOffTime(
+      blockOff.openEnd,
+    )}. The full delivery block must fit within those hours.`;
+  }
+
+  return "";
+}
+
+function getCalendarBlockOffPresentation(blockOff) {
+  const backgroundColor = normalizeCalendarBlockOffBackgroundColor(
+    blockOff?.backgroundColor,
+  );
+  const textColor = getCalendarBlockOffTextColor(backgroundColor);
+  const usesLightText = textColor === "#FFFFFF";
+
+  return {
+    backgroundColor,
+    textColor,
+    mutedTextColor: usesLightText
+      ? "rgba(255, 255, 255, 0.76)"
+      : "rgba(15, 23, 42, 0.72)",
+    dividerColor: usesLightText
+      ? "rgba(255, 255, 255, 0.25)"
+      : "rgba(15, 23, 42, 0.22)",
+    insetColor: usesLightText
+      ? "rgba(0, 0, 0, 0.10)"
+      : "rgba(255, 255, 255, 0.22)",
+  };
 }
 
 function formatForkliftLabel(value) {
@@ -402,6 +468,7 @@ function getCompactDateLabel(dateKey) {
 function DeliveryMoveDatePicker({
   value,
   deliveryDates,
+  blockedDatesByKey = new Map(),
   onChange,
   disabled = false,
 }) {
@@ -612,21 +679,47 @@ function DeliveryMoveDatePicker({
               const isSelected = day.dateKey === selectedDate;
               const isToday = day.dateKey === getTodayDateValue();
               const deliveryCount = deliveryDates?.get(day.dateKey) || 0;
+              const blockOff = blockedDatesByKey.get(day.dateKey);
+              const blockOffPresentation = blockOff
+                ? getCalendarBlockOffPresentation(blockOff)
+                : null;
+              const isClosedAllDay = isAllDayCalendarBlockOff(blockOff);
 
               return (
                 <button
                   key={day.dateKey}
                   type="button"
-                  onClick={() => selectDate(day.dateKey)}
+                  onClick={() => {
+                    if (!blockOff || !isClosedAllDay) {
+                      selectDate(day.dateKey);
+                    }
+                  }}
+                  disabled={Boolean(blockOff && isClosedAllDay)}
+                  style={
+                    blockOffPresentation && !isSelected
+                      ? {
+                          backgroundColor: blockOffPresentation.backgroundColor,
+                          color: blockOffPresentation.textColor,
+                        }
+                      : undefined
+                  }
                   title={
-                    deliveryCount > 0
+                    blockOff
+                      ? `${blockOff.icon || "📅"} ${blockOff.reason} · ${getCalendarBlockOffScheduleLabel(blockOff)}`
+                      : deliveryCount > 0
                       ? `${deliveryCount} ${
                           deliveryCount === 1 ? "delivery" : "deliveries"
                         }`
                       : undefined
                   }
                   className={`relative flex h-12 items-center justify-center rounded-xl text-sm font-black transition focus:outline-none focus:ring-2 focus:ring-red-300 ${
-                    isSelected
+                    blockOff
+                      ? `${
+                          isClosedAllDay
+                            ? "cursor-not-allowed"
+                            : "hover:bg-amber-200"
+                        } bg-amber-100 text-amber-900 ring-1 ring-inset ring-amber-300`
+                      : isSelected
                       ? "bg-[#FC2C38] text-white shadow-sm"
                       : day.isCurrentMonth
                         ? "text-slate-800 hover:bg-slate-100"
@@ -634,7 +727,14 @@ function DeliveryMoveDatePicker({
                   } ${isToday && !isSelected ? "ring-1 ring-red-300" : ""}`}
                 >
                   {day.date.getDate()}
-                  {deliveryCount > 0 ? (
+                  {blockOff ? (
+                    <span
+                      className="absolute bottom-0.5 text-[10px] leading-none"
+                      aria-hidden="true"
+                    >
+                      {blockOff.icon || "📅"}
+                    </span>
+                  ) : deliveryCount > 0 ? (
                     <span
                       className={`absolute bottom-1.5 h-1.5 w-1.5 rounded-full ${
                         isSelected ? "bg-white" : "bg-[#FC2C38]"
@@ -1865,6 +1965,7 @@ function useCalendarDeliveryDrag({
 
 function DeliveryWeekView({
   deliveries,
+  blockedDatesByKey = new Map(),
   selectedDate,
   onNavigate,
   onSelectDay,
@@ -1949,6 +2050,11 @@ function DeliveryWeekView({
           const isSelected = day.dateKey === selectedDate;
           const isToday = day.dateKey === today;
           const isExpanded = expandedDayKey === day.dateKey;
+          const blockOff = blockedDatesByKey.get(day.dateKey);
+          const blockOffPresentation = blockOff
+            ? getCalendarBlockOffPresentation(blockOff)
+            : null;
+          const isClosedAllDay = isAllDayCalendarBlockOff(blockOff);
           const visibleDeliveries = isExpanded
             ? orderedDayDeliveries
             : orderedDayDeliveries.slice(0, 4);
@@ -1956,11 +2062,23 @@ function DeliveryWeekView({
           return (
             <div
               key={day.dateKey}
-              data-delivery-calendar-day={day.dateKey}
-              onDragOver={(event) => handleDayDragOver(event, day.dateKey)}
-              onDrop={(event) => handleDayDrop(event, day.dateKey)}
+              data-delivery-calendar-day={
+                isClosedAllDay ? undefined : day.dateKey
+              }
+              onDragOver={(event) => {
+                if (!isClosedAllDay) {
+                  handleDayDragOver(event, day.dateKey);
+                }
+              }}
+              onDrop={(event) => {
+                if (!isClosedAllDay) {
+                  handleDayDrop(event, day.dateKey);
+                }
+              }}
               className={`min-h-44 p-3 transition-colors ${
-                dropDateKey === day.dateKey
+                blockOff
+                  ? "bg-white"
+                  : dropDateKey === day.dateKey
                   ? "bg-red-50 ring-2 ring-inset ring-[#FC2C38]"
                   : "bg-white"
               } ${
@@ -1995,6 +2113,34 @@ function DeliveryWeekView({
                   {dayDeliveries.length}
                 </span>
               </button>
+
+              {blockOff ? (
+                <div
+                  className="mt-2 flex min-h-32 flex-col items-center justify-center rounded-xl border px-3 py-4 text-center shadow-sm"
+                  style={{
+                    backgroundColor: blockOffPresentation.backgroundColor,
+                    borderColor: blockOffPresentation.backgroundColor,
+                    color: blockOffPresentation.textColor,
+                  }}
+                  title={`${blockOff.reason} · ${getCalendarBlockOffScheduleLabel(blockOff)}`}
+                >
+                  <span
+                    className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-4xl shadow-sm"
+                    aria-hidden="true"
+                  >
+                      {blockOff.icon || "📅"}
+                  </span>
+                  <p className="mt-3 text-base font-black uppercase tracking-[0.07em]">
+                    {getCalendarBlockOffScheduleLabel(blockOff)}
+                  </p>
+                  <p
+                    className="mt-2 w-full border-t pt-2 text-lg font-black leading-tight"
+                    style={{ borderColor: blockOffPresentation.dividerColor }}
+                  >
+                    {blockOff.reason}
+                  </p>
+                </div>
+              ) : null}
 
               <div className="mt-3">
                 {visibleDeliveries.map((delivery, deliveryIndex) => {
@@ -2130,7 +2276,7 @@ function DeliveryWeekView({
                       : `+${dayDeliveries.length - 4} more`}
                   </button>
                 ) : null}
-                {dayDeliveries.length === 0 ? (
+                {dayDeliveries.length === 0 && !blockOff ? (
                   <p className="rounded-xl border border-dashed border-slate-200 px-2 py-4 text-center text-[10px] font-bold text-slate-400">
                     No deliveries
                   </p>
@@ -2146,6 +2292,7 @@ function DeliveryWeekView({
 
 function DeliveryMonthView({
   deliveries,
+  blockedDatesByKey = new Map(),
   monthDate,
   selectedDate,
   onChangeMonth,
@@ -2245,6 +2392,11 @@ function DeliveryMonthView({
               const isSelected = day.dateKey === selectedDate;
               const isToday = day.dateKey === today;
               const isExpanded = expandedDayKey === day.dateKey;
+              const blockOff = blockedDatesByKey.get(day.dateKey);
+              const blockOffPresentation = blockOff
+                ? getCalendarBlockOffPresentation(blockOff)
+                : null;
+              const isClosedAllDay = isAllDayCalendarBlockOff(blockOff);
               const visibleDeliveries = isExpanded
                 ? orderedDayDeliveries
                 : orderedDayDeliveries.slice(0, 3);
@@ -2252,13 +2404,19 @@ function DeliveryMonthView({
               return (
                 <div
                   key={day.dateKey}
-                  data-delivery-calendar-day={day.dateKey}
-                  onDragOver={(event) =>
-                    handleDayDragOver(event, day.dateKey)
+                  data-delivery-calendar-day={
+                    isClosedAllDay ? undefined : day.dateKey
                   }
-                  onDrop={(event) => handleDayDrop(event, day.dateKey)}
+                  onDragOver={(event) =>
+                    !isClosedAllDay && handleDayDragOver(event, day.dateKey)
+                  }
+                  onDrop={(event) =>
+                    !isClosedAllDay && handleDayDrop(event, day.dateKey)
+                  }
                   className={`min-h-36 p-2 transition-colors ${
-                    dropDateKey === day.dateKey
+                    blockOff
+                      ? "bg-white"
+                      : dropDateKey === day.dateKey
                       ? "bg-red-50 ring-2 ring-inset ring-[#FC2C38]"
                       : day.isCurrentMonth
                         ? "bg-white"
@@ -2279,6 +2437,36 @@ function DeliveryMonthView({
                   >
                     {day.date.getDate()}
                   </button>
+
+                  {blockOff ? (
+                    <div
+                      className="mt-1 flex min-h-24 flex-col items-center justify-center rounded-lg border px-2 py-2.5 text-center shadow-sm"
+                      style={{
+                        backgroundColor: blockOffPresentation.backgroundColor,
+                        borderColor: blockOffPresentation.backgroundColor,
+                        color: blockOffPresentation.textColor,
+                      }}
+                      title={`${blockOff.reason} · ${getCalendarBlockOffScheduleLabel(blockOff)}`}
+                    >
+                      <span
+                        className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white text-2xl shadow-sm"
+                        aria-hidden="true"
+                      >
+                        {blockOff.icon || "📅"}
+                      </span>
+                      <span className="mt-1.5 block w-full text-xs font-black uppercase leading-tight tracking-[0.04em]">
+                        <span className="block line-clamp-2">
+                          {getCalendarBlockOffScheduleLabel(blockOff)}
+                        </span>
+                        <span
+                          className="mt-1.5 block line-clamp-2 border-t pt-1.5 text-sm normal-case tracking-normal"
+                          style={{ borderColor: blockOffPresentation.dividerColor }}
+                        >
+                          {blockOff.reason}
+                        </span>
+                      </span>
+                    </div>
+                  ) : null}
 
                   <div className="mt-1.5">
                     {visibleDeliveries.map((delivery, deliveryIndex) => {
@@ -2794,6 +2982,7 @@ function CompactDeliveryCard({
   delivery,
   deliveries,
   deliveryDates,
+  blockedDatesByKey,
   driverOptions = [],
   vehicleOptions = [],
   expanded,
@@ -2968,6 +3157,7 @@ function CompactDeliveryCard({
                 <DeliveryMoveDatePicker
                   value={getDeliveryDateKey(delivery.deliveryDate)}
                   deliveryDates={deliveryDates}
+                  blockedDatesByKey={blockedDatesByKey}
                   onChange={(dateKey) =>
                     onUpdateDelivery(delivery, { deliveryDate: dateKey })
                   }
@@ -2989,6 +3179,13 @@ function CompactDeliveryCard({
                       ...delivery,
                       deliveryTimeSlot: timeSlot.value,
                     };
+                    const calendarRestriction =
+                      getCalendarBlockOffSchedulingError(
+                        candidateDelivery,
+                        blockedDatesByKey.get(
+                          getDeliveryDateKey(candidateDelivery.deliveryDate),
+                        ),
+                      );
                     const conflict = findScheduleConflict(
                       candidateDelivery,
                       deliveries,
@@ -2998,9 +3195,11 @@ function CompactDeliveryCard({
                       <option
                         key={timeSlot.value}
                         value={timeSlot.value}
-                        disabled={Boolean(conflict)}
+                        disabled={Boolean(conflict || calendarRestriction)}
                       >
-                        {conflict
+                        {calendarRestriction
+                          ? `${timeSlot.label} - outside open hours`
+                          : conflict
                           ? `${timeSlot.label} - busy until ${getDeliveryBackAroundLabel(
                               conflict,
                             )}`
@@ -3308,6 +3507,7 @@ function CompactDeliveryCard({
                   <DeliveryMoveDatePicker
                     value={getDeliveryDateKey(delivery.deliveryDate)}
                     deliveryDates={deliveryDates}
+                    blockedDatesByKey={blockedDatesByKey}
                     onChange={(dateKey) =>
                       onUpdateDelivery(delivery, {
                         deliveryDate: dateKey,
@@ -3337,6 +3537,13 @@ function CompactDeliveryCard({
                         ...delivery,
                         deliveryTimeSlot: timeSlot.value,
                       };
+                      const calendarRestriction =
+                        getCalendarBlockOffSchedulingError(
+                          candidateDelivery,
+                          blockedDatesByKey.get(
+                            getDeliveryDateKey(candidateDelivery.deliveryDate),
+                          ),
+                        );
                       const conflict = findScheduleConflict(
                         candidateDelivery,
                         deliveries,
@@ -3346,9 +3553,11 @@ function CompactDeliveryCard({
                         <option
                           key={timeSlot.value}
                           value={timeSlot.value}
-                          disabled={Boolean(conflict)}
+                          disabled={Boolean(conflict || calendarRestriction)}
                         >
-                          {conflict
+                          {calendarRestriction
+                            ? `${timeSlot.label} - outside open hours`
+                            : conflict
                             ? `${timeSlot.label} - busy until ${getDeliveryBackAroundLabel(
                                 conflict,
                               )}`
@@ -3380,9 +3589,13 @@ function CompactDeliveryCard({
 
 export default function DeliveryCalendarPage({
   deliveries,
+  calendarBlockOffs = /** @type {Array<{ id: string, date: string, reason: string, icon?: string, backgroundColor?: string, mode?: "allDay" | "limitedHours", openStart?: string, openEnd?: string }>} */ ([]),
   vehicleOptions = /** @type {Array<{ id: string, title: string, badge: string }>} */ ([]),
   employeeOptions = /** @type {string[]} */ ([]),
   canEditDeliveries = false,
+  isEditAccessUnlocked = false,
+  onRequestEditAccess,
+  onLockEditAccess,
   canViewDispatchNotes = false,
   onEditDelivery,
   onViewOrder,
@@ -3450,6 +3663,10 @@ export default function DeliveryCalendarPage({
           : delivery;
       }),
     [baseDeliveries, dispatchNotesByDeliveryId],
+  );
+  const blockedDatesByKey = useMemo(
+    () => getCalendarBlockOffMap(calendarBlockOffs),
+    [calendarBlockOffs],
   );
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
   const [calendarView, setCalendarView] = useState("day");
@@ -3537,12 +3754,13 @@ export default function DeliveryCalendarPage({
 
         return {
           ...day,
+          blockOff: blockedDatesByKey.get(day.dateKey) || null,
           deliveryCount: dayDeliveries.length,
           needsDispatchCount,
           scheduledCount,
         };
       }),
-    [safeDeliveries],
+    [blockedDatesByKey, safeDeliveries],
   );
   const calendarDays = useMemo(
     () => getCalendarMonthDays(calendarMonth),
@@ -3628,6 +3846,10 @@ export default function DeliveryCalendarPage({
           selectedTimelineDelivery.deliveryCalendarGroupId,
       )
     : [];
+  const selectedDateBlockOff = blockedDatesByKey.get(selectedDate) || null;
+  const selectedDateBlockOffPresentation = selectedDateBlockOff
+    ? getCalendarBlockOffPresentation(selectedDateBlockOff)
+    : null;
 
   useEffect(() => {
     if (
@@ -3831,6 +4053,28 @@ export default function DeliveryCalendarPage({
       ...delivery,
       ...updates,
     };
+    const scheduleDateOrTimeChanged = [
+      "deliveryDate",
+      "deliveryTimeSlot",
+    ].some((fieldName) =>
+      Object.prototype.hasOwnProperty.call(updates, fieldName),
+    );
+    const candidateDate = getDeliveryDateKey(candidateDelivery.deliveryDate);
+    const candidateDateBlockOff = candidateDate
+      ? blockedDatesByKey.get(candidateDate)
+      : null;
+    const blockOffSchedulingError = scheduleDateOrTimeChanged
+      ? getCalendarBlockOffSchedulingError(
+          candidateDelivery,
+          candidateDateBlockOff,
+        )
+      : "";
+
+    if (blockOffSchedulingError) {
+      setError(`${formatDateLabel(candidateDate)} · ${blockOffSchedulingError}`);
+      return false;
+    }
+
     const scheduleChanged = [
       "deliveryDate",
       "deliveryTimeSlot",
@@ -4129,10 +4373,32 @@ export default function DeliveryCalendarPage({
           </p>
         </div>
 
-        <div
-          ref={calendarPickerRef}
-          className="relative block rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
-        >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          {onRequestEditAccess ? (
+            <button
+              type="button"
+              onClick={
+                isEditAccessUnlocked ? onLockEditAccess : onRequestEditAccess
+              }
+              className={`inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black shadow-sm transition focus:outline-none focus:ring-4 ${
+                isEditAccessUnlocked
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 focus:ring-emerald-100"
+                  : "border-red-200 bg-white text-[#FC2C38] hover:border-red-300 hover:bg-red-50 focus:ring-red-100"
+              }`}
+            >
+              {isEditAccessUnlocked ? (
+                <LockOpen className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+              )}
+              {isEditAccessUnlocked ? "Lock changes" : "Unlock changes"}
+            </button>
+          ) : null}
+
+          <div
+            ref={calendarPickerRef}
+            className="relative block rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
+          >
           <span className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
             <CalendarDays className="h-4 w-4" aria-hidden="true" />
             Schedule Date
@@ -4154,7 +4420,7 @@ export default function DeliveryCalendarPage({
             />
           </button>
 
-          {isDatePickerOpen ? (
+            {isDatePickerOpen ? (
             <div
               role="dialog"
               aria-label="Choose delivery schedule date"
@@ -4200,6 +4466,10 @@ export default function DeliveryCalendarPage({
                   const isSelected = day.dateKey === selectedDate;
                   const isToday = day.dateKey === getTodayDateValue();
                   const deliveryCount = deliveryDates.get(day.dateKey) || 0;
+                  const blockOff = blockedDatesByKey.get(day.dateKey);
+                  const blockOffPresentation = blockOff
+                    ? getCalendarBlockOffPresentation(blockOff)
+                    : null;
 
                   return (
                     <button
@@ -4209,25 +4479,51 @@ export default function DeliveryCalendarPage({
                         selectDay(day.dateKey, day.date);
                         setIsDatePickerOpen(false);
                       }}
-                      title={
-                        deliveryCount > 0
-                          ? `${deliveryCount} ${
-                              deliveryCount === 1 ? "delivery" : "deliveries"
-                            }`
+                      style={
+                        blockOffPresentation && !isSelected
+                          ? {
+                              backgroundColor:
+                                blockOffPresentation.backgroundColor,
+                              color: blockOffPresentation.textColor,
+                            }
                           : undefined
+                      }
+                      title={
+                        [
+                          blockOff
+                            ? `${blockOff.icon || "📅"} ${blockOff.reason} · ${getCalendarBlockOffScheduleLabel(blockOff)}`
+                            : "",
+                          deliveryCount > 0
+                            ? `${deliveryCount} ${
+                              deliveryCount === 1 ? "delivery" : "deliveries"
+                              }`
+                            : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || undefined
                       }
                       className={`relative flex h-12 items-center justify-center rounded-xl text-sm font-black transition focus:outline-none focus:ring-2 focus:ring-red-300 ${
                         isSelected
                           ? "bg-[#FC2C38] text-white shadow-sm"
+                          : blockOff
+                            ? "bg-amber-100 text-amber-900 ring-1 ring-inset ring-amber-300 hover:bg-amber-200"
                           : day.isCurrentMonth
                             ? "text-slate-800 hover:bg-slate-100"
                             : "text-slate-300 hover:bg-slate-50"
                       } ${isToday && !isSelected ? "ring-1 ring-red-300" : ""}`}
                     >
                       {day.date.getDate()}
+                      {blockOff ? (
+                        <span
+                          className="absolute bottom-0.5 text-[10px] leading-none"
+                          aria-hidden="true"
+                        >
+                          {blockOff.icon || "📅"}
+                        </span>
+                      ) : null}
                       {deliveryCount > 0 ? (
                         <span
-                          className={`absolute bottom-1.5 h-1.5 w-1.5 rounded-full ${
+                          className={`absolute bottom-1.5 right-1.5 h-1.5 w-1.5 rounded-full ${
                             isSelected ? "bg-white" : "bg-[#FC2C38]"
                           }`}
                           aria-label={`${deliveryCount} deliveries`}
@@ -4257,7 +4553,8 @@ export default function DeliveryCalendarPage({
                 </button>
               </div>
             </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -4302,6 +4599,46 @@ export default function DeliveryCalendarPage({
         </div>
       </section>
 
+      {selectedDateBlockOff ? (
+        <section
+          className="mb-6 rounded-2xl border px-4 py-6 text-center shadow-sm sm:px-5"
+          style={{
+            backgroundColor: selectedDateBlockOffPresentation.backgroundColor,
+            borderColor: selectedDateBlockOffPresentation.backgroundColor,
+            color: selectedDateBlockOffPresentation.textColor,
+          }}
+        >
+          <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-white shadow-sm">
+            <span className="text-5xl" aria-hidden="true">
+              {selectedDateBlockOff.icon || "📅"}
+            </span>
+          </span>
+          <div className="mx-auto mt-3 max-w-3xl">
+            <p className="text-lg font-black uppercase tracking-[0.08em]">
+              {getCalendarBlockOffScheduleLabel(selectedDateBlockOff)}
+            </p>
+            <p
+              className="mt-2 border-t pt-2 text-xl font-black sm:text-2xl"
+              style={{
+                borderColor: selectedDateBlockOffPresentation.dividerColor,
+              }}
+            >
+              {formatDateLabel(selectedDate)} · {selectedDateBlockOff.reason}
+            </p>
+            <p
+              className="mt-2 text-xs font-semibold"
+              style={{
+                color: selectedDateBlockOffPresentation.mutedTextColor,
+              }}
+            >
+              {isAllDayCalendarBlockOff(selectedDateBlockOff)
+                ? "Existing deliveries remain visible, but new deliveries cannot be moved or scheduled onto this date."
+                : "Deliveries may be scheduled only when their full time block fits inside these open hours."}
+            </p>
+          </div>
+        </section>
+      ) : null}
+
       {calendarView === "day" ? (
       <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
@@ -4331,14 +4668,28 @@ export default function DeliveryCalendarPage({
                 month: "short",
                 day: "numeric",
               }).format(day.date);
+              const blockOffPresentation = day.blockOff
+                ? getCalendarBlockOffPresentation(day.blockOff)
+                : null;
 
               return (
                 <button
                   key={day.dateKey}
                   type="button"
                   onClick={() => selectDay(day.dateKey, day.date)}
+                  style={
+                    blockOffPresentation
+                      ? {
+                          backgroundColor: blockOffPresentation.backgroundColor,
+                          borderColor: blockOffPresentation.backgroundColor,
+                          color: blockOffPresentation.textColor,
+                        }
+                      : undefined
+                  }
                   className={`rounded-2xl border p-3 text-left transition focus:outline-none focus:ring-4 focus:ring-red-100 ${
-                    isSelected
+                    day.blockOff
+                      ? "hover:brightness-95"
+                    : isSelected
                       ? "border-[#FC2C38] bg-red-50 shadow-sm"
                       : "border-slate-200 bg-slate-50 hover:border-red-200 hover:bg-white"
                   }`}
@@ -4347,27 +4698,86 @@ export default function DeliveryCalendarPage({
                     <div>
                       <p
                         className={`text-xs font-black uppercase tracking-[0.12em] ${
-                          isSelected ? "text-[#FC2C38]" : "text-slate-500"
+                          day.blockOff
+                            ? ""
+                            : isSelected
+                              ? "text-[#FC2C38]"
+                              : "text-slate-500"
                         }`}
+                        style={
+                          blockOffPresentation
+                            ? { color: blockOffPresentation.mutedTextColor }
+                            : undefined
+                        }
                       >
                         {day.isToday ? "Today" : weekdayLabel}
                       </p>
-                      <p className="mt-1 text-lg font-black text-slate-950">
+                      <p
+                        className={`mt-1 text-lg font-black ${day.blockOff ? "" : "text-slate-950"}`}
+                        style={
+                          blockOffPresentation
+                            ? { color: blockOffPresentation.textColor }
+                            : undefined
+                        }
+                      >
                         {dateLabel}
                       </p>
                     </div>
                     <span
+                      style={
+                        blockOffPresentation
+                          ? {
+                              color:
+                                day.deliveryCount > 0
+                                  ? blockOffPresentation.backgroundColor
+                                  : blockOffPresentation.textColor,
+                            }
+                          : undefined
+                      }
                       className={`inline-flex min-w-8 items-center justify-center rounded-full px-2 py-1 text-xs font-black ${
                         day.deliveryCount > 0
-                          ? "bg-slate-950 text-white"
-                          : "bg-white text-slate-400"
+                          ? day.blockOff
+                            ? "bg-white"
+                            : "bg-slate-950 text-white"
+                          : day.blockOff
+                            ? "bg-white/15 text-white"
+                            : "bg-white text-slate-400"
                       }`}
                     >
                       {day.deliveryCount}
                     </span>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] font-black uppercase tracking-[0.08em]">
+                  <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-black uppercase tracking-[0.07em]">
+                    {day.blockOff ? (
+                      <span
+                        className="flex min-h-32 w-full flex-col items-center justify-center rounded-xl border px-3 py-3 text-center"
+                        style={{
+                          backgroundColor: blockOffPresentation.insetColor,
+                          borderColor: blockOffPresentation.dividerColor,
+                          color: blockOffPresentation.textColor,
+                        }}
+                        title={`${day.blockOff.reason} · ${getCalendarBlockOffScheduleLabel(day.blockOff)}`}
+                      >
+                        <span
+                          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-3xl shadow-sm"
+                          aria-hidden="true"
+                        >
+                          {day.blockOff.icon || "📅"}
+                        </span>
+                        <span className="mt-2 text-base">
+                          {getCalendarBlockOffScheduleLabel(day.blockOff)}
+                        </span>
+                        <span
+                          className="mt-2 w-full border-t pt-2 text-lg normal-case tracking-normal"
+                          style={{
+                            borderColor: blockOffPresentation.dividerColor,
+                          }}
+                        >
+                          {day.blockOff.reason}
+                        </span>
+                      </span>
+                    ) : null}
                     {day.needsDispatchCount > 0 ? (
                       <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-800">
                         {day.needsDispatchCount} need dispatch
@@ -4404,6 +4814,7 @@ export default function DeliveryCalendarPage({
       {calendarView === "week" ? (
         <DeliveryWeekView
           deliveries={safeDeliveries}
+          blockedDatesByKey={blockedDatesByKey}
           selectedDate={selectedDate}
           onNavigate={navigateSelectedDate}
           onSelectDay={selectDay}
@@ -4414,6 +4825,7 @@ export default function DeliveryCalendarPage({
       ) : calendarView === "month" ? (
         <DeliveryMonthView
           deliveries={safeDeliveries}
+          blockedDatesByKey={blockedDatesByKey}
           monthDate={calendarMonth}
           selectedDate={selectedDate}
           onChangeMonth={changeCalendarMonth}
@@ -4581,6 +4993,7 @@ export default function DeliveryCalendarPage({
               delivery={selectedTimelineDelivery}
               deliveries={safeDeliveries}
               deliveryDates={deliveryDates}
+              blockedDatesByKey={blockedDatesByKey}
               driverOptions={employeeOptions}
               vehicleOptions={vehicleOptions}
               expanded
@@ -4649,6 +5062,7 @@ export default function DeliveryCalendarPage({
                             delivery={delivery}
                             deliveries={safeDeliveries}
                             deliveryDates={deliveryDates}
+                            blockedDatesByKey={blockedDatesByKey}
                             expanded={false}
                             canEditDeliveries={canEditDeliveries}
                             onEditDelivery={onEditDelivery}
@@ -4717,6 +5131,7 @@ export default function DeliveryCalendarPage({
                               delivery={delivery}
                               deliveries={safeDeliveries}
                               deliveryDates={deliveryDates}
+                              blockedDatesByKey={blockedDatesByKey}
                               expanded={false}
                               canEditDeliveries={canEditDeliveries}
                               onEditDelivery={onEditDelivery}
@@ -4938,6 +5353,7 @@ export default function DeliveryCalendarPage({
                 delivery={selectedTimelineDelivery}
                 deliveries={safeDeliveries}
                 deliveryDates={deliveryDates}
+                blockedDatesByKey={blockedDatesByKey}
                 driverOptions={employeeOptions}
                 vehicleOptions={vehicleOptions}
                 expanded

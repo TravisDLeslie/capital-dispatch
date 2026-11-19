@@ -53,6 +53,7 @@ export const defaultDeliveryScheduleSettings = {
   id: "deliverySchedule",
   unloadDurations: defaultUnloadDurationMinutes,
   returnDurationMinutes: defaultReturnDurationMinutes,
+  calendarBlockOffs: [],
 };
 
 export function getTodayDateValue() {

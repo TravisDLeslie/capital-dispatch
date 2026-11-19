@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   Clock3,
+  LockKeyhole,
+  LockOpen,
   MapPin,
   Package,
   Search,
@@ -707,6 +709,9 @@ function DeliveryDateGroup({
  *   vehicleOptions?: Array<{id: string; title: string; badge?: string}>;
  *   isDriverView?: boolean;
  *   canEditDeliveries?: boolean;
+ *   isEditAccessUnlocked?: boolean;
+ *   onRequestEditAccess?: () => void;
+ *   onLockEditAccess?: () => void;
  *   onUpdateDelivery?: (deliveryId: string, updates: Record<string, any>) => Promise<void>;
  *   onDeleteOrder?: (orderNumber: string) => Promise<boolean>;
  *   onSendPoToSouthDispatch?: (payload: { poNumber: string; orderNumber?: string; sourceOrderId?: string; customerName?: string; vendor?: string; supplierAddress?: string; notes?: string; items?: Array<Record<string, any>> }) => Promise<Record<string, any>>;
@@ -723,6 +728,9 @@ export default function QueuedUpcomingDeliveriesPage({
   vehicleOptions = [],
   isDriverView = false,
   canEditDeliveries = false,
+  isEditAccessUnlocked = false,
+  onRequestEditAccess,
+  onLockEditAccess,
   onUpdateDelivery,
   onDeleteOrder,
   onSendPoToSouthDispatch,
@@ -1106,7 +1114,7 @@ export default function QueuedUpcomingDeliveriesPage({
         ]}
       />
 
-      <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#FC2C38]">
             {isDriverView ? "Your Schedule" : "Before Dispatch"}
@@ -1121,6 +1129,26 @@ export default function QueuedUpcomingDeliveriesPage({
           </p>
         </div>
 
+        {onRequestEditAccess ? (
+          <button
+            type="button"
+            onClick={
+              isEditAccessUnlocked ? onLockEditAccess : onRequestEditAccess
+            }
+            className={`inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black shadow-sm transition focus:outline-none focus:ring-4 ${
+              isEditAccessUnlocked
+                ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 focus:ring-emerald-100"
+                : "border-red-200 bg-white text-[#FC2C38] hover:border-red-300 hover:bg-red-50 focus:ring-red-100"
+            }`}
+          >
+            {isEditAccessUnlocked ? (
+              <LockOpen className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+            )}
+            {isEditAccessUnlocked ? "Lock changes" : "Unlock changes"}
+          </button>
+        ) : null}
       </div>
 
       {isDriverView ? (

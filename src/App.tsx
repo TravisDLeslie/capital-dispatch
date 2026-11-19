@@ -44,6 +44,7 @@ import {
 import AppHeader from "./components/AppHeader";
 import AdminAccessGate from "./components/AdminAccessGate";
 import DispatchOpsDeliveryOverview from "./components/DispatchOpsDeliveryOverview";
+import DeliveryScheduleAccessModal from "./components/DeliveryScheduleAccessModal";
 import DeliveryDetailsModal from "./components/DeliveryDetailsModal";
 import FeatureErrorBoundary from "./components/FeatureErrorBoundary";
 import OrderDetailsModal from "./components/OrderDetailsModal";
@@ -312,6 +313,15 @@ const PROTECTED_OFFICE_PAGE_IDS = new Set([
   "accounting-expenses",
   "accounting-customers",
   "customer-payment-links",
+]);
+const DELIVERY_SCHEDULE_PASSWORD_PAGE_IDS = new Set([
+  "deliveries-calendar",
+  "deliveries-queued-upcoming",
+]);
+const DELIVERY_SCHEDULE_PASSWORD_EXEMPT_EMAILS = new Set([
+  "dane@capitlalumber.co",
+  "dane@capitallumber.co",
+  "justin@capitallumber.co",
 ]);
 const SUPER_ADMIN_EMAILS = ["travis@capitallumber.co"];
 const LOGIN_RESTORE_TIMEOUT_MS = 12_000;
@@ -1179,6 +1189,17 @@ type VehicleSetting = {
 type DeliverySettings = {
   id?: string;
   unloadDurations?: Record<string, number>;
+  returnDurationMinutes?: number;
+  calendarBlockOffs?: Array<{
+    id: string;
+    date: string;
+    reason: string;
+    icon?: string;
+    backgroundColor?: string;
+    mode?: "allDay" | "limitedHours";
+    openStart?: string;
+    openEnd?: string;
+  }>;
   updatedAt?: string;
   [key: string]: unknown;
 };
@@ -1275,6 +1296,12 @@ function isSuperAdminProfile(userProfile: UserProfile | null) {
 function isSuperAdminEmail(email?: string | null) {
   return Boolean(
     email && SUPER_ADMIN_EMAILS.includes(email.toLowerCase()),
+  );
+}
+
+function isDeliverySchedulePasswordExemptEmail(email?: string | null) {
+  return DELIVERY_SCHEDULE_PASSWORD_EXEMPT_EMAILS.has(
+    String(email || "").trim().toLowerCase(),
   );
 }
 
@@ -1563,7 +1590,9 @@ function getAllowedPageIds(
         "order-flow",
         "order-builds",
         "trace",
+        "deliveries",
         "deliveries-calendar",
+        "deliveries-queued-upcoming",
         "sales",
         "sales-tools",
         "sales-converter",
@@ -1993,6 +2022,10 @@ export default function App() {
     });
   const [isProtectedOfficeUnlocked, setIsProtectedOfficeUnlocked] =
     useState(false);
+  const [isDeliveryScheduleEditUnlocked, setIsDeliveryScheduleEditUnlocked] =
+    useState(false);
+  const [isDeliveryScheduleAccessOpen, setIsDeliveryScheduleAccessOpen] =
+    useState(false);
   const [navigationGroupOverride, setNavigationGroupOverride] =
     useState("");
   const [isNewAppShellActive, setIsNewAppShellActive] = useState(false);
@@ -2347,6 +2380,14 @@ export default function App() {
   const canEditDeliveryDetails = ["superAdmin", "admin"].includes(
     effectiveUserRole,
   );
+  const isDeliverySchedulePasswordExempt =
+    isDeliverySchedulePasswordExemptEmail(
+      currentUser?.email || userProfile?.email,
+    );
+  const isDeliveryScheduleAccessUnlocked =
+    isDeliverySchedulePasswordExempt || isDeliveryScheduleEditUnlocked;
+  const canEditDeliverySchedule =
+    canReadDeliveries && isDeliveryScheduleAccessUnlocked;
   const canReadSales = effectiveAllowedPageIds.some((pageId) =>
     [
       "sales",
@@ -3230,6 +3271,18 @@ export default function App() {
 
   useEffect(() => {
     setIsProtectedOfficeUnlocked(false);
+  }, [currentUser?.uid]);
+
+  useEffect(() => {
+    if (!DELIVERY_SCHEDULE_PASSWORD_PAGE_IDS.has(currentPage)) {
+      setIsDeliveryScheduleEditUnlocked(false);
+      setIsDeliveryScheduleAccessOpen(false);
+    }
+  }, [currentPage]);
+
+  useEffect(() => {
+    setIsDeliveryScheduleEditUnlocked(false);
+    setIsDeliveryScheduleAccessOpen(false);
   }, [currentUser?.uid]);
 
   useEffect(() => {
@@ -9525,15 +9578,30 @@ export default function App() {
             driverOptions={deliveryDriverOptions}
             vehicleOptions={southVehicleOptions}
             isDriverView={isDeliveryDriverScopedView}
-            canEditDeliveries={canEditDeliveryDetails}
-            onUpdateDelivery={handleUpdateDelivery}
+            canEditDeliveries={canEditDeliverySchedule}
+            isEditAccessUnlocked={isDeliveryScheduleAccessUnlocked}
+            onRequestEditAccess={
+              isDeliverySchedulePasswordExempt
+                ? undefined
+                : () => setIsDeliveryScheduleAccessOpen(true)
+            }
+            onLockEditAccess={
+              isDeliverySchedulePasswordExempt
+                ? undefined
+                : () => setIsDeliveryScheduleEditUnlocked(false)
+            }
+            onUpdateDelivery={
+              canEditDeliverySchedule ? handleUpdateDelivery : undefined
+            }
             onDeleteOrder={
-              isDeliveryDriverScopedView
+              isDeliveryDriverScopedView || !canEditDeliverySchedule
                 ? undefined
                 : handlePermanentlyDeleteOrder
             }
             onSendPoToSouthDispatch={
-              canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
+              canEditDeliverySchedule && canReadSouth
+                ? handleSendOrderPOToSouthDispatch
+                : undefined
             }
             onPageChange={navigateToPage}
           />
@@ -9578,11 +9646,25 @@ export default function App() {
           <>
             <DeliveryCalendarPage
               deliveries={visibleDeliveries}
+              calendarBlockOffs={deliverySettings.calendarBlockOffs || []}
               vehicleOptions={southVehicleOptions}
               employeeOptions={deliveryDriverOptions}
-              canEditDeliveries={canEditDeliveryDetails}
+              canEditDeliveries={canEditDeliverySchedule}
+              isEditAccessUnlocked={isDeliveryScheduleAccessUnlocked}
+              onRequestEditAccess={
+                isDeliverySchedulePasswordExempt
+                  ? undefined
+                  : () => setIsDeliveryScheduleAccessOpen(true)
+              }
+              onLockEditAccess={
+                isDeliverySchedulePasswordExempt
+                  ? undefined
+                  : () => setIsDeliveryScheduleEditUnlocked(false)
+              }
               canViewDispatchNotes={canReadDispatch}
-              onEditDelivery={handleEditDelivery}
+              onEditDelivery={
+                canEditDeliverySchedule ? handleEditDelivery : undefined
+              }
               onViewOrder={(delivery: Delivery) =>
                 setViewingDeliveryCalendarOrderNumber(
                   String(
@@ -9591,9 +9673,13 @@ export default function App() {
                 )
               }
               onEditOrder={
-                canReadOrderBuilds ? handleEditOrderFromDelivery : undefined
+                canEditDeliverySchedule && canReadOrderBuilds
+                  ? handleEditOrderFromDelivery
+                  : undefined
               }
-              onUpdateDelivery={handleUpdateDelivery}
+              onUpdateDelivery={
+                canEditDeliverySchedule ? handleUpdateDelivery : undefined
+              }
               onPageChange={navigateToPage}
             />
 
@@ -9607,9 +9693,15 @@ export default function App() {
                   deliveries,
                   checkIns,
                 }}
-                onDeleteOrder={handlePermanentlyDeleteOrder}
+                onDeleteOrder={
+                  canEditDeliverySchedule
+                    ? handlePermanentlyDeleteOrder
+                    : undefined
+                }
                 onSendPoToSouthDispatch={
-                  canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
+                  canEditDeliverySchedule && canReadSouth
+                    ? handleSendOrderPOToSouthDispatch
+                    : undefined
                 }
                 onClose={() => setViewingDeliveryCalendarOrderNumber("")}
               />
@@ -10010,6 +10102,15 @@ export default function App() {
               {renderCurrentPage()}
             </Suspense>
           </main>
+
+          <DeliveryScheduleAccessModal
+            isOpen={isDeliveryScheduleAccessOpen}
+            onClose={() => setIsDeliveryScheduleAccessOpen(false)}
+            onUnlock={() => {
+              setIsDeliveryScheduleEditUnlocked(true);
+              setIsDeliveryScheduleAccessOpen(false);
+            }}
+          />
         </>
       )}
     </div>
