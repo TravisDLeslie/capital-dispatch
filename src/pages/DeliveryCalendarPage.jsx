@@ -3727,7 +3727,7 @@ export default function DeliveryCalendarPage({
     [calendarBlockOffs],
   );
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
-  const [calendarView, setCalendarView] = useState("day");
+  const [calendarView, setCalendarView] = useState("month");
   const [hasSelectedDay, setHasSelectedDay] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => {
