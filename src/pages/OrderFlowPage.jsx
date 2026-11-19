@@ -33,6 +33,11 @@ import SearchableSelect from "../components/SearchableSelect";
 import cashAccounts from "../data/cashAccounts.json";
 import chargeAccounts from "../data/chargeAccounts.json";
 import { inventoryCatalogItems } from "../data/inventoryCatalog";
+import {
+  getCalendarBlockOffMap,
+  getCalendarBlockOffScheduleLabel,
+  isAllDayCalendarBlockOff,
+} from "../utils/deliveryCalendarBlockOffs";
 
 // Keep the shortcut implementation available for a later rollout.
 const SHOW_SHIP_ORDER_COMPLETE_SHORTCUT = false;
@@ -1045,6 +1050,7 @@ function ChoiceButton({
  *   vendorOptions?: string[];
  *   supplierAddressMap?: Record<string, string>;
  *   removedInventoryItemNumbers?: string[];
+ *   calendarBlockOffs?: Array<Record<string, any>>;
  *   existingOrderSources?: Record<string, Array<Record<string, any>>>;
  *   onProcessOrder?: (orderPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onProcessStockPO?: (stockPayload: Record<string, any>) => Promise<Record<string, any> | void>;
@@ -1060,6 +1066,7 @@ export default function OrderFlowPage({
   vendorOptions = [],
   supplierAddressMap = {},
   removedInventoryItemNumbers = [],
+  calendarBlockOffs = [],
   existingOrderSources = {},
   onProcessOrder,
   onProcessStockPO,
@@ -1103,6 +1110,21 @@ export default function OrderFlowPage({
   const [isDeletingDuplicateOrder, setIsDeletingDuplicateOrder] =
     useState(false);
   const [duplicateDeleteError, setDuplicateDeleteError] = useState("");
+  const calendarBlockOffsByDate = useMemo(
+    () => getCalendarBlockOffMap(calendarBlockOffs),
+    [calendarBlockOffs],
+  );
+  const selectedDeliveryDateBlockOff = deliveryDate
+    ? calendarBlockOffsByDate.get(deliveryDate) || null
+    : null;
+  const isSelectedDeliveryDateBlocked = Boolean(
+    selectedDeliveryDateBlockOff &&
+      isAllDayCalendarBlockOff(selectedDeliveryDateBlockOff) &&
+      orderMethod !== "vendorReturn",
+  );
+  const selectedDeliveryDateBlockMessage = isSelectedDeliveryDateBlocked
+    ? `${getCalendarBlockOffScheduleLabel(selectedDeliveryDateBlockOff)}. Choose another date or use Future Date.`
+    : "";
   const [orderImportStatus, setOrderImportStatus] = useState("idle");
   const [orderImportError, setOrderImportError] = useState("");
   const [orderImportFileName, setOrderImportFileName] = useState("");
@@ -1275,6 +1297,7 @@ export default function OrderFlowPage({
         : customerName) &&
       savedItems.length > 0 &&
       (!isReturnWorkflow || deliveryDate) &&
+      !isSelectedDeliveryDateBlocked &&
       (!["delivery", "return", "vendorReturn"].includes(orderMethod) ||
         deliveryAddress),
   );
@@ -1875,6 +1898,11 @@ export default function OrderFlowPage({
   }
 
   async function processOrder({ allowDuplicateOrder = false } = {}) {
+    if (isSelectedDeliveryDateBlocked) {
+      setProcessError(selectedDeliveryDateBlockMessage);
+      return;
+    }
+
     if (!canProcessOrder || isProcessingOrder) {
       return;
     }
@@ -3439,6 +3467,11 @@ export default function OrderFlowPage({
                     value={deliveryDate}
                     onChange={(event) => setDeliveryDate(event.target.value)}
                   />
+                  {selectedDeliveryDateBlockMessage ? (
+                    <span className="mt-1.5 block text-xs font-black text-red-600">
+                      {selectedDeliveryDateBlockMessage}
+                    </span>
+                  ) : null}
                 </Field>
 
                 <Field label={isVendorReturnOrder ? "Vendor Address" : "Return Pickup Address"}>
@@ -3518,6 +3551,10 @@ export default function OrderFlowPage({
                   {!deliveryDate ? (
                     <span className="mt-1.5 block text-[11px] font-bold text-[#FC2C38]">
                       Delivery is set up now and can be scheduled later.
+                    </span>
+                  ) : selectedDeliveryDateBlockMessage ? (
+                    <span className="mt-1.5 block text-[11px] font-black text-red-600">
+                      {selectedDeliveryDateBlockMessage}
                     </span>
                   ) : null}
                 </Field>

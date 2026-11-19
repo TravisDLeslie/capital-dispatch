@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   Check,
@@ -41,6 +41,11 @@ import {
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import { createId } from "../utils/idHelpers";
 import { formatCustomerName } from "../utils/textFormatters";
+import {
+  getCalendarBlockOffMap,
+  getCalendarBlockOffScheduleLabel,
+  isAllDayCalendarBlockOff,
+} from "../utils/deliveryCalendarBlockOffs";
 
 function createEmptyDeliveryItem() {
   return {
@@ -312,6 +317,20 @@ export default function DeliveryOrderForm({
   const [routeEtaStatus, setRouteEtaStatus] = useState("idle");
   const [routeEtaMessage, setRouteEtaMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const calendarBlockOffsByDate = useMemo(
+    () => getCalendarBlockOffMap(deliverySettings?.calendarBlockOffs),
+    [deliverySettings?.calendarBlockOffs],
+  );
+  const selectedDeliveryDateBlockOff = deliveryDate
+    ? calendarBlockOffsByDate.get(deliveryDate) || null
+    : null;
+  const isNewBlockedDeliveryDate = Boolean(
+    selectedDeliveryDateBlockOff &&
+      isAllDayCalendarBlockOff(selectedDeliveryDateBlockOff) &&
+      (!initialDelivery ||
+        String(initialDelivery.deliveryDate || "").slice(0, 10) !==
+          deliveryDate),
+  );
   const normalizedOrderSearch = normalizeLookup(orderNumber);
   const matchingOrders = (Array.isArray(orders) ? orders : [])
     .filter((order) => {
@@ -864,6 +883,9 @@ export default function DeliveryOrderForm({
         return "Select the delivery unload type.";
       }
 
+      if (isNewBlockedDeliveryDate) {
+        return `${getCalendarBlockOffScheduleLabel(selectedDeliveryDateBlockOff)}. Choose another delivery date.`;
+      }
     }
 
     if (step === 3) {
@@ -1340,6 +1362,14 @@ export default function DeliveryOrderForm({
                   disabled={isSubmitting}
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-lg font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"
                 />
+                {isNewBlockedDeliveryDate ? (
+                  <span className="mt-1.5 block text-xs font-black text-red-600">
+                    {getCalendarBlockOffScheduleLabel(
+                      selectedDeliveryDateBlockOff,
+                    )}
+                    . Choose another delivery date.
+                  </span>
+                ) : null}
               </label>
 
               <label className="block" htmlFor="driver-target-arrival-time">

@@ -34,6 +34,26 @@ function timeValueToMinutes(value) {
 }
 
 export const defaultCalendarBlockOffBackgroundColor = "#6B4423";
+export const deliveryDayFullBlockOffIdPrefix = "delivery-day-full-";
+
+export function isDeliveryDayFullBlockOff(blockOff) {
+  return String(blockOff?.id || "").startsWith(
+    deliveryDayFullBlockOffIdPrefix,
+  );
+}
+
+export function createDeliveryDayFullBlockOff(date) {
+  return {
+    id: `${deliveryDayFullBlockOffIdPrefix}${date}`,
+    date,
+    reason: "Existing deliveries remain scheduled",
+    icon: "🔒",
+    backgroundColor: "#0F172A",
+    mode: "allDay",
+    openStart: "",
+    openEnd: "",
+  };
+}
 
 export const calendarBlockOffColorOptions = [
   { value: "#6B4423", label: "Brown" },
@@ -98,6 +118,10 @@ export function formatCalendarBlockOffTime(timeValue) {
 export function getCalendarBlockOffScheduleLabel(blockOff) {
   if (!blockOff) {
     return "";
+  }
+
+  if (isDeliveryDayFullBlockOff(blockOff)) {
+    return "Day is full for deliveries";
   }
 
   if (isAllDayCalendarBlockOff(blockOff)) {

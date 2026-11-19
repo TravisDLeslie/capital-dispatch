@@ -9189,6 +9189,7 @@ export default function App() {
             vendorOptions={vendorOptions}
             supplierAddressMap={supplierAddressMap}
             removedInventoryItemNumbers={inventorySettings.removedItemNumbers}
+            calendarBlockOffs={deliverySettings.calendarBlockOffs || []}
             existingOrderSources={{
               salesOrders,
               orderBuilds,
@@ -9679,6 +9680,18 @@ export default function App() {
               }
               onUpdateDelivery={
                 canEditDeliverySchedule ? handleUpdateDelivery : undefined
+              }
+              canManageDayLocks={isDeliverySchedulePasswordExempt}
+              onUpdateCalendarBlockOffs={
+                isDeliverySchedulePasswordExempt
+                  ? (calendarBlockOffs: NonNullable<
+                      DeliverySettings["calendarBlockOffs"]
+                    >) =>
+                      handleSaveDeliverySettings({
+                        ...deliverySettings,
+                        calendarBlockOffs,
+                      })
+                  : undefined
               }
               onPageChange={navigateToPage}
             />

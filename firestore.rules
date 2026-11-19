@@ -49,6 +49,16 @@ service cloud.firestore {
       return isApproved() && role() == "superAdmin";
     }
 
+    function canManageDeliveryCalendarDayLocks() {
+      return isApproved() &&
+        request.auth.token.email is string &&
+        request.auth.token.email in [
+        "dane@capitlalumber.co",
+        "dane@capitallumber.co",
+        "justin@capitallumber.co"
+      ];
+    }
+
     function hasAnyPermission(permissionIds) {
       return isApproved() &&
         userProfile().permissions is list &&
@@ -549,7 +559,16 @@ service cloud.firestore {
       allow read: if
         (settingId == "twilioMessaging" && isAdmin()) ||
         (settingId != "twilioMessaging" && isApproved());
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() ||
+        (
+          settingId == "deliverySchedule" &&
+          canManageDeliveryCalendarDayLocks() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "calendarBlockOffs",
+            "updatedAt"
+          ])
+        );
     }
 
     match /checkIns/{checkInId} {

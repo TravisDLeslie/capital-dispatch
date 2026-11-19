@@ -27,11 +27,13 @@ import EmptyState from "../components/EmptyState";
 import MarkDeliveredModal from "../components/MarkDeliveredModal";
 import PageContainer from "../components/PageContainer";
 import {
+  createDeliveryDayFullBlockOff,
   formatCalendarBlockOffTime,
   getCalendarBlockOffMap,
   getCalendarBlockOffScheduleLabel,
   getCalendarBlockOffTextColor,
   isAllDayCalendarBlockOff,
+  isDeliveryDayFullBlockOff,
   normalizeCalendarBlockOffBackgroundColor,
 } from "../utils/deliveryCalendarBlockOffs";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
@@ -3659,6 +3661,8 @@ export default function DeliveryCalendarPage({
   onViewOrder,
   onEditOrder,
   onUpdateDelivery,
+  canManageDayLocks = false,
+  onUpdateCalendarBlockOffs,
   onPageChange,
 }) {
   const [dispatchNotes, setDispatchNotes] = useState([]);
@@ -3751,6 +3755,7 @@ export default function DeliveryCalendarPage({
   const [unassignError, setUnassignError] = useState("");
   const [deliveryToMarkDelivered, setDeliveryToMarkDelivered] = useState(null);
   const [markingDeliveredId, setMarkingDeliveredId] = useState("");
+  const [isUpdatingDayLock, setIsUpdatingDayLock] = useState(false);
   const canMoveCalendarDeliveries =
     canEditDeliveries && Boolean(onUpdateDelivery);
   const calendarDeliveryDrag = useCalendarDeliveryDrag({
@@ -3908,6 +3913,9 @@ export default function DeliveryCalendarPage({
   const selectedDateBlockOffPresentation = selectedDateBlockOff
     ? getCalendarBlockOffPresentation(selectedDateBlockOff)
     : null;
+  const isSelectedDateFull = isDeliveryDayFullBlockOff(
+    selectedDateBlockOff,
+  );
 
   useEffect(() => {
     if (
@@ -4407,6 +4415,48 @@ export default function DeliveryCalendarPage({
     }
   }
 
+  async function handleToggleSelectedDateFull() {
+    if (!canManageDayLocks || !onUpdateCalendarBlockOffs || !selectedDate) {
+      return;
+    }
+
+    if (selectedDateBlockOff && !isSelectedDateFull) {
+      setError(
+        `${formatDateLabel(selectedDate)} already has a closure managed in Admin.`,
+      );
+      return;
+    }
+
+    const nextBlockOffs = (Array.isArray(calendarBlockOffs)
+      ? calendarBlockOffs
+      : []
+    ).filter(
+      (blockOff) =>
+        !(
+          String(blockOff?.date || "") === selectedDate &&
+          isDeliveryDayFullBlockOff(blockOff)
+        ),
+    );
+
+    if (!isSelectedDateFull) {
+      nextBlockOffs.push(createDeliveryDayFullBlockOff(selectedDate));
+    }
+
+    setIsUpdatingDayLock(true);
+    setError("");
+
+    try {
+      await onUpdateCalendarBlockOffs(nextBlockOffs);
+    } catch (dayLockError) {
+      console.error("Unable to update the delivery day lock:", dayLockError);
+      setError(
+        "Unable to update that day. Check your connection and try again.",
+      );
+    } finally {
+      setIsUpdatingDayLock(false);
+    }
+  }
+
   return (
     <PageContainer>
       <Breadcrumbs
@@ -4450,6 +4500,38 @@ export default function DeliveryCalendarPage({
                 <LockKeyhole className="h-4 w-4" aria-hidden="true" />
               )}
               {isEditAccessUnlocked ? "Lock changes" : "Unlock changes"}
+            </button>
+          ) : null}
+
+          {canManageDayLocks && onUpdateCalendarBlockOffs ? (
+            <button
+              type="button"
+              onClick={handleToggleSelectedDateFull}
+              disabled={
+                isUpdatingDayLock ||
+                Boolean(selectedDateBlockOff && !isSelectedDateFull)
+              }
+              className={`inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black shadow-sm transition focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50 ${
+                isSelectedDateFull
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 focus:ring-emerald-100"
+                  : "border-slate-300 bg-slate-950 text-white hover:bg-slate-800 focus:ring-slate-200"
+              }`}
+              title={
+                selectedDateBlockOff && !isSelectedDateFull
+                  ? "This date already has a closure configured in Admin"
+                  : undefined
+              }
+            >
+              {isSelectedDateFull ? (
+                <LockOpen className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+              )}
+              {isUpdatingDayLock
+                ? "Saving..."
+                : isSelectedDateFull
+                  ? "Reopen day"
+                  : "Mark day full"}
             </button>
           ) : null}
 
