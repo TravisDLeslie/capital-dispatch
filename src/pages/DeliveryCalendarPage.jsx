@@ -1237,18 +1237,71 @@ function DayFullDragTile({
   );
 }
 
-function DeliveryClosedDayBadge() {
+function DeliveryClosedDayBadge({ blockOff }) {
+  const partialClosure = getDeliveryDayFullRestoreBlockOff(blockOff);
+  const title = partialClosure
+    ? `Day full · Partially closed · ${getCalendarBlockOffScheduleLabel(partialClosure)} · ${partialClosure.reason}`
+    : "Day full";
+
   return (
     <span
       className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-slate-950 px-2.5 text-white shadow-sm"
       aria-label="Day full"
-      title="Day full"
+      title={title}
     >
       <LockKeyhole className="h-4 w-4" aria-hidden="true" />
       <span className="text-[10px] font-black uppercase tracking-[0.08em]">
         Day Full
       </span>
     </span>
+  );
+}
+
+function DeliveryDayFullPartialClosureNotice({
+  blockOff,
+  compact = false,
+  className = "",
+}) {
+  const partialClosure = getDeliveryDayFullRestoreBlockOff(blockOff);
+
+  if (!partialClosure || isAllDayCalendarBlockOff(partialClosure)) {
+    return null;
+  }
+
+  const scheduleLabel = getCalendarBlockOffScheduleLabel(partialClosure);
+
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 text-left text-amber-950 shadow-sm ${
+        compact ? "px-2 py-1.5" : "px-3 py-2.5"
+      } ${className}`}
+      title={`${partialClosure.reason} · ${scheduleLabel}`}
+    >
+      <span
+        className={`flex shrink-0 items-center justify-center rounded-lg bg-white shadow-sm ${
+          compact ? "h-7 w-7 text-base" : "h-9 w-9 text-xl"
+        }`}
+        aria-hidden="true"
+      >
+        {partialClosure.icon || "📅"}
+      </span>
+      <span className="min-w-0">
+        <span
+          className={`block font-black uppercase tracking-[0.06em] ${
+            compact ? "text-[8px]" : "text-[10px]"
+          }`}
+        >
+          Partially closed
+        </span>
+        <span
+          className={`block truncate font-bold text-amber-800 ${
+            compact ? "text-[8px]" : "text-xs"
+          }`}
+        >
+          {scheduleLabel} · {partialClosure.reason}
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -2198,7 +2251,9 @@ function DeliveryWeekView({
                         day: "numeric",
                       }).format(day.date)}
                     </span>
-                    {isDayFull ? <DeliveryClosedDayBadge /> : null}
+                    {isDayFull ? (
+                      <DeliveryClosedDayBadge blockOff={blockOff} />
+                    ) : null}
                   </span>
                 </span>
                 <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
@@ -2214,6 +2269,14 @@ function DeliveryWeekView({
                 >
                   Reopen day
                 </button>
+              ) : null}
+
+              {isDayFull ? (
+                <DeliveryDayFullPartialClosureNotice
+                  blockOff={blockOff}
+                  compact
+                  className="mt-2"
+                />
               ) : null}
 
               {blockOff && isClosedAllDay && !isDayFull ? (
@@ -2592,7 +2655,9 @@ function DeliveryMonthView({
                     >
                       {day.date.getDate()}
                     </button>
-                    {isDayFull ? <DeliveryClosedDayBadge /> : null}
+                    {isDayFull ? (
+                      <DeliveryClosedDayBadge blockOff={blockOff} />
+                    ) : null}
                   </div>
 
                   {isDayFull && onRequestDayLockChange ? (
@@ -2603,6 +2668,14 @@ function DeliveryMonthView({
                     >
                       Reopen
                     </button>
+                  ) : null}
+
+                  {isDayFull ? (
+                    <DeliveryDayFullPartialClosureNotice
+                      blockOff={blockOff}
+                      compact
+                      className="mt-1.5"
+                    />
                   ) : null}
 
                   {blockOff && isClosedAllDay && !isDayFull ? (
@@ -4058,6 +4131,9 @@ export default function DeliveryCalendarPage({
   const isSelectedDateFull = isDeliveryDayFullBlockOff(
     selectedDateBlockOff,
   );
+  const selectedDatePartialClosure = isSelectedDateFull
+    ? getDeliveryDayFullRestoreBlockOff(selectedDateBlockOff)
+    : null;
 
   useEffect(() => {
     if (
@@ -5039,6 +5115,13 @@ export default function DeliveryCalendarPage({
         </section>
       ) : null}
 
+      {selectedDatePartialClosure ? (
+        <DeliveryDayFullPartialClosureNotice
+          blockOff={selectedDateBlockOff}
+          className="mb-6"
+        />
+      ) : null}
+
       {calendarView === "day" ? (
       <section className="mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5">
@@ -5126,7 +5209,9 @@ export default function DeliveryCalendarPage({
                         >
                           {dateLabel}
                         </p>
-                        {isDayFull ? <DeliveryClosedDayBadge /> : null}
+                        {isDayFull ? (
+                          <DeliveryClosedDayBadge blockOff={day.blockOff} />
+                        ) : null}
                       </div>
                     </div>
                     <span
@@ -5153,6 +5238,14 @@ export default function DeliveryCalendarPage({
                       {day.deliveryCount}
                     </span>
                   </div>
+
+                  {isDayFull ? (
+                    <DeliveryDayFullPartialClosureNotice
+                      blockOff={day.blockOff}
+                      compact
+                      className="mt-3"
+                    />
+                  ) : null}
 
                   <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-black uppercase tracking-[0.07em]">
                     {isDayFull ? null : day.blockOff ? (

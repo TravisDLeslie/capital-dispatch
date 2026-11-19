@@ -149,6 +149,14 @@ export function getCalendarBlockOffScheduleLabel(blockOff) {
   }
 
   if (isDeliveryDayFullBlockOff(blockOff)) {
+    const restoredBlockOff = getDeliveryDayFullRestoreBlockOff(blockOff);
+
+    if (restoredBlockOff && !isAllDayCalendarBlockOff(restoredBlockOff)) {
+      return `Day is full for deliveries · Partially closed (${formatCalendarBlockOffTime(
+        restoredBlockOff.openStart,
+      )}–${formatCalendarBlockOffTime(restoredBlockOff.openEnd)} open)`;
+    }
+
     return "Day is full for deliveries";
   }
 
