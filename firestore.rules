@@ -129,6 +129,17 @@ service cloud.firestore {
       );
     }
 
+    function canAccessAccounting() {
+      return isApproved() && (
+        isAdmin() ||
+        hasAnyPermission([
+          "accounting",
+          "accounting-customers",
+          "customer-payment-links"
+        ])
+      );
+    }
+
     function isAssignedYardTaskUser() {
       return isApproved() &&
         (
@@ -685,6 +696,40 @@ service cloud.firestore {
     match /salesMonthlyReports/{salesReportId} {
       allow read: if isSalesReportViewer();
       allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /accountingExpenses/{expenseId} {
+      allow read: if canAccessAccounting();
+      allow create, update: if canAccessAccounting() &&
+        request.resource.data.keys().hasOnly([
+          "id",
+          "expenseDate",
+          "description",
+          "vendor",
+          "category",
+          "amountCents",
+          "createdAt",
+          "createdById",
+          "createdByName",
+          "createdByEmail",
+          "updatedAt"
+        ]) &&
+        request.resource.data.id == expenseId &&
+        request.resource.data.expenseDate is string &&
+        request.resource.data.expenseDate.size() == 10 &&
+        request.resource.data.description is string &&
+        request.resource.data.description.size() > 0 &&
+        request.resource.data.description.size() <= 200 &&
+        request.resource.data.vendor is string &&
+        request.resource.data.vendor.size() <= 150 &&
+        request.resource.data.category is string &&
+        request.resource.data.category.size() > 0 &&
+        request.resource.data.category.size() <= 100 &&
+        request.resource.data.amountCents is int &&
+        request.resource.data.amountCents > 0 &&
+        request.resource.data.createdAt is string &&
+        request.resource.data.updatedAt is string;
+      allow delete: if canAccessAccounting();
     }
 
     match /stockingHandbookItems/{stockingHandbookItemId} {

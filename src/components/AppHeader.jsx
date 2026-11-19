@@ -268,6 +268,7 @@ function getCurrentPageLabel(currentPage) {
 
   if (
     currentPage === "accounting" ||
+    currentPage === "accounting-expenses" ||
     currentPage === "accounting-customers" ||
     currentPage === "customer-payment-links"
   ) {
@@ -386,6 +387,7 @@ function getCurrentPageGroup(currentPage) {
 
   if (
     currentPage === "accounting" ||
+    currentPage === "accounting-expenses" ||
     currentPage === "accounting-customers" ||
     currentPage === "customer-payment-links"
   ) {
@@ -720,6 +722,13 @@ export default function AppHeader({
       !allowedPageIds || allowedPageIds.includes(pageId);
 
     return [
+      pageAllowed("accounting-expenses")
+        ? {
+            id: "accounting-expenses",
+            label: "Expenses",
+            pageId: "accounting-expenses",
+          }
+        : null,
       pageAllowed("accounting-customers")
         ? {
             id: "accounting-customers",
@@ -943,6 +952,7 @@ export default function AppHeader({
             allowedPageIds.some((pageId) =>
               [
                 "accounting",
+                "accounting-expenses",
                 "accounting-customers",
                 "customer-payment-links",
               ].includes(pageId),

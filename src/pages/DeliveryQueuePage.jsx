@@ -358,6 +358,9 @@ function findDriverScheduleConflict(candidateDelivery, deliveries, nextDriver) {
   return deliveries.find(
     (delivery) =>
       delivery.id !== candidateDelivery.id &&
+      (!candidateDelivery.deliveryCalendarGroupId ||
+        delivery.deliveryCalendarGroupId !==
+          candidateDelivery.deliveryCalendarGroupId) &&
       delivery.status !== "complete" &&
       delivery.dispatchStatus !== "needsDispatch" &&
       delivery.deliveryDate === candidateDelivery.deliveryDate &&
@@ -435,6 +438,34 @@ function getDeliveryItemsLabel(items, scopeSummary) {
   return `${items.length} ${items.length === 1 ? "item" : "items"}`;
 }
 
+function getDeliveryStopKey(delivery) {
+  return delivery?.deliveryCalendarGroupId
+    ? `group:${delivery.deliveryCalendarGroupId}`
+    : `delivery:${delivery?.id || ""}`;
+}
+
+function groupDeliveriesIntoStops(deliveries) {
+  const stopMap = new Map();
+
+  deliveries.forEach((delivery) => {
+    const stopKey = getDeliveryStopKey(delivery);
+    const currentStop = stopMap.get(stopKey);
+
+    if (currentStop) {
+      currentStop.deliveries.push(delivery);
+      return;
+    }
+
+    stopMap.set(stopKey, {
+      key: stopKey,
+      representative: delivery,
+      deliveries: [delivery],
+    });
+  });
+
+  return [...stopMap.values()];
+}
+
 function getRouteOverviewTimeLabel(delivery) {
   if (delivery?.driverTargetArrivalTime) {
     return `Be there ${formatTimeLabel(delivery.driverTargetArrivalTime)}`;
@@ -474,8 +505,11 @@ function DeliveryRouteOverview({
     return null;
   }
 
+  const deliveryStops = groupDeliveriesIntoStops(deliveries);
   const activeIndex = Math.max(
-    deliveries.findIndex((delivery) => delivery.id === activeDeliveryId),
+    deliveryStops.findIndex((stop) =>
+      stop.deliveries.some((delivery) => delivery.id === activeDeliveryId),
+    ),
     0,
   );
 
@@ -487,13 +521,16 @@ function DeliveryRouteOverview({
         </p>
 
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
-          {deliveries.length} {deliveries.length === 1 ? "stop" : "stops"}
+          {deliveryStops.length} {deliveryStops.length === 1 ? "stop" : "stops"}
         </span>
       </div>
 
       <div className="-mx-3 mt-2 flex gap-2 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
-        {deliveries.map((delivery, deliveryIndex) => {
-          const isActive = delivery.id === activeDeliveryId;
+        {deliveryStops.map((stop, deliveryIndex) => {
+          const delivery = stop.representative;
+          const isActive = stop.deliveries.some(
+            (stopDelivery) => stopDelivery.id === activeDeliveryId,
+          );
           const status = getRouteOverviewStatus(
             delivery,
             deliveryIndex,
@@ -504,7 +541,7 @@ function DeliveryRouteOverview({
 
           return (
             <button
-              key={delivery.id}
+              key={stop.key}
               type="button"
               onClick={() => onSelectDelivery(delivery.id)}
               className={`flex min-w-[150px] items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition ${
@@ -538,6 +575,11 @@ function DeliveryRouteOverview({
                 <span className="block truncate text-sm font-black text-slate-950">
                   {formatCustomerName(delivery.customerName)}
                 </span>
+                {stop.deliveries.length > 1 ? (
+                  <span className="mt-0.5 block text-[10px] font-black uppercase tracking-[0.06em] text-blue-700">
+                    {stop.deliveries.length} orders · grouped stop
+                  </span>
+                ) : null}
                 <span
                   className={`mt-1 items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.06em] ${
                     isActive
@@ -1525,11 +1567,26 @@ export default function DeliveryQueuePage({
   const currentDriverDelivery = isDriverView
     ? activeDriverDelivery || openDeliveries[0] || null
     : null;
+  const driverDeliveryStops = groupDeliveriesIntoStops(openDeliveries);
+  const currentDriverStop = currentDriverDelivery
+    ? driverDeliveryStops.find((stop) =>
+        stop.deliveries.some(
+          (delivery) => delivery.id === currentDriverDelivery.id,
+        ),
+      )
+    : null;
+  const currentDriverStopDeliveries = currentDriverStop?.deliveries || [];
+  const currentDriverStopIndex = currentDriverStop
+    ? driverDeliveryStops.findIndex((stop) => stop.key === currentDriverStop.key)
+    : -1;
   const upNextDriverDeliveries =
-    isDriverView && currentDriverDelivery
-      ? openDeliveries.filter(
-          (delivery) => delivery.id !== currentDriverDelivery.id,
-        )
+    isDriverView && currentDriverStop
+      ? driverDeliveryStops
+          .filter((stop) => stop.key !== currentDriverStop.key)
+          .map((stop) => ({
+            ...stop.representative,
+            _groupedStopDeliveries: stop.deliveries,
+          }))
       : [];
 
   useEffect(() => {
@@ -1593,23 +1650,27 @@ export default function DeliveryQueuePage({
       driverDeliveries,
       delivery,
     );
-    const currentIndex = routeDeliveries.findIndex(
-      (routeDelivery) => routeDelivery.id === delivery.id,
+    const routeStops = groupDeliveriesIntoStops(routeDeliveries);
+    const currentIndex = routeStops.findIndex((stop) =>
+      stop.deliveries.some((routeDelivery) => routeDelivery.id === delivery.id),
     );
     const nextIndex = currentIndex + direction;
 
     if (
       currentIndex < 0 ||
       nextIndex < 0 ||
-      nextIndex >= routeDeliveries.length
+      nextIndex >= routeStops.length
     ) {
       return;
     }
 
-    const nextRouteDeliveries = [...routeDeliveries];
-    const [movedDelivery] = nextRouteDeliveries.splice(currentIndex, 1);
+    const nextRouteStops = [...routeStops];
+    const [movedStop] = nextRouteStops.splice(currentIndex, 1);
 
-    nextRouteDeliveries.splice(nextIndex, 0, movedDelivery);
+    nextRouteStops.splice(nextIndex, 0, movedStop);
+    const nextRouteDeliveries = nextRouteStops.flatMap(
+      (stop) => stop.deliveries,
+    );
     await saveRouteOrder(nextRouteDeliveries, delivery.id);
   }
 
@@ -1652,21 +1713,27 @@ export default function DeliveryQueuePage({
       driverDeliveries,
       draggedDelivery,
     );
-    const draggedIndex = routeDeliveries.findIndex(
-      (delivery) => delivery.id === draggedDelivery.id,
+    const routeStops = groupDeliveriesIntoStops(routeDeliveries);
+    const draggedIndex = routeStops.findIndex((stop) =>
+      stop.deliveries.some((delivery) => delivery.id === draggedDelivery.id),
     );
-    const targetIndex = routeDeliveries.findIndex(
-      (delivery) => delivery.id === targetDelivery.id,
+    const targetIndex = routeStops.findIndex((stop) =>
+      stop.deliveries.some((delivery) => delivery.id === targetDelivery.id),
     );
 
-    if (draggedIndex < 0 || targetIndex < 0) {
+    if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) {
+      setDraggingDeliveryId("");
+      setDragOverDeliveryId("");
       return;
     }
 
-    const nextRouteDeliveries = [...routeDeliveries];
-    const [movedDelivery] = nextRouteDeliveries.splice(draggedIndex, 1);
+    const nextRouteStops = [...routeStops];
+    const [movedStop] = nextRouteStops.splice(draggedIndex, 1);
 
-    nextRouteDeliveries.splice(targetIndex, 0, movedDelivery);
+    nextRouteStops.splice(targetIndex, 0, movedStop);
+    const nextRouteDeliveries = nextRouteStops.flatMap(
+      (stop) => stop.deliveries,
+    );
     await saveRouteOrder(nextRouteDeliveries, draggedDelivery.id);
   }
 
@@ -1683,8 +1750,9 @@ export default function DeliveryQueuePage({
       driverDeliveries,
       delivery,
     );
-    const routeIndex = routeDeliveries.findIndex(
-      (routeDelivery) => routeDelivery.id === delivery.id,
+    const routeStops = groupDeliveriesIntoStops(routeDeliveries);
+    const routeIndex = routeStops.findIndex((stop) =>
+      stop.deliveries.some((routeDelivery) => routeDelivery.id === delivery.id),
     );
     const isReordering = Boolean(reorderingRouteId);
     const controlClassName = compact
@@ -1698,7 +1766,7 @@ export default function DeliveryQueuePage({
       >
         {!compact ? (
           <span className="mr-1 whitespace-nowrap text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-            Stop {routeIndex + 1} of {routeDeliveries.length}
+            Stop {routeIndex + 1} of {routeStops.length}
           </span>
         ) : null}
 
@@ -1740,7 +1808,7 @@ export default function DeliveryQueuePage({
           onClick={() => handleMoveDelivery(driverDeliveries, delivery, 1)}
           disabled={
             routeIndex < 0 ||
-            routeIndex >= routeDeliveries.length - 1 ||
+            routeIndex >= routeStops.length - 1 ||
             isReordering
           }
           className={`flex ${controlClassName} items-center justify-center border border-slate-300 bg-white text-slate-600 shadow-sm transition hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-30`}
@@ -1931,20 +1999,25 @@ export default function DeliveryQueuePage({
     setError("");
 
     try {
-      await onUpdateDelivery(delivery.id, {
-        driver: nextDriver,
-        drivers: [
-          nextDriver,
-          ...(Array.isArray(delivery.drivers) ? delivery.drivers : []).filter(
-            (driverName) =>
-              driverName &&
-              driverName !== delivery.driver &&
-              driverName !== nextDriver,
-          ),
-        ],
-        dispatchAssignments: nextAssignments,
-        updatedAt: new Date().toISOString(),
-      });
+      const groupedDeliveries = delivery.deliveryCalendarGroupId
+        ? deliveries.filter(
+            (candidate) =>
+              !isDeliveryComplete(candidate) &&
+              candidate.deliveryCalendarGroupId ===
+                delivery.deliveryCalendarGroupId,
+          )
+        : [delivery];
+
+      for (const groupedDelivery of groupedDeliveries) {
+        await onUpdateDelivery(groupedDelivery.id, {
+          driver: nextDriver,
+          drivers: nextAssignments
+            .map((assignment) => assignment.driver)
+            .filter(Boolean),
+          dispatchAssignments: nextAssignments,
+          updatedAt: new Date().toISOString(),
+        });
+      }
       setPendingDriverSelections((currentSelections) => {
         const nextSelections = { ...currentSelections };
         delete nextSelections[delivery.id];
@@ -1967,16 +2040,27 @@ export default function DeliveryQueuePage({
     setUpdatingDeliveryId(delivery.id);
 
     try {
-      await onUpdateDelivery(delivery.id, {
-        dispatchStatus: "needsDispatch",
-        driver: "",
-        drivers: [],
-        vehicleId: "",
-        vehicleTitle: "",
-        vehicleBadge: "",
-        dispatchAssignments: [],
-        updatedAt: new Date().toISOString(),
-      });
+      const groupedDeliveries = delivery.deliveryCalendarGroupId
+        ? deliveries.filter(
+            (candidate) =>
+              !isDeliveryComplete(candidate) &&
+              candidate.deliveryCalendarGroupId ===
+                delivery.deliveryCalendarGroupId,
+          )
+        : [delivery];
+
+      for (const groupedDelivery of groupedDeliveries) {
+        await onUpdateDelivery(groupedDelivery.id, {
+          dispatchStatus: "needsDispatch",
+          driver: "",
+          drivers: [],
+          vehicleId: "",
+          vehicleTitle: "",
+          vehicleBadge: "",
+          dispatchAssignments: [],
+          updatedAt: new Date().toISOString(),
+        });
+      }
     } catch (updateError) {
       console.error("Unable to send delivery back to dispatch:", updateError);
       setError("Unable to send that delivery back to dispatch. Try again.");
@@ -2081,6 +2165,76 @@ export default function DeliveryQueuePage({
               onSelectDelivery={handleSelectDriverDelivery}
             />
 
+            {currentDriverStopDeliveries.length > 1 ? (
+              <section className="overflow-hidden rounded-3xl border-2 border-blue-300 bg-blue-50 shadow-sm">
+                <div className="flex items-center justify-between gap-3 border-b border-blue-200 px-4 py-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                      One stop · grouped delivery
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-blue-950">
+                      Same contractor, address, truck, and arrival time. Check every order and material list below.
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-blue-700 px-3 py-1.5 text-xs font-black text-white">
+                    {currentDriverStopDeliveries.length} orders
+                  </span>
+                </div>
+
+                <div className="grid gap-2 p-3 sm:grid-cols-2">
+                  {currentDriverStopDeliveries.map((stopDelivery) => {
+                    const stopItems = Array.isArray(stopDelivery.items)
+                      ? stopDelivery.items
+                      : [];
+                    const isCurrentOrder =
+                      stopDelivery.id === currentDriverDelivery.id;
+
+                    return (
+                      <button
+                        key={stopDelivery.id}
+                        type="button"
+                        onClick={() => handleSelectDriverDelivery(stopDelivery.id)}
+                        className={`rounded-2xl border p-3 text-left transition ${
+                          isCurrentOrder
+                            ? "border-blue-600 bg-white shadow-sm ring-2 ring-blue-100"
+                            : "border-blue-200 bg-white/80 hover:border-blue-400"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-black uppercase tracking-[0.1em] text-blue-700">
+                              Order {stopDelivery.orderNumber || "—"}
+                            </p>
+                            <p className="mt-1 truncate text-sm font-black text-slate-950">
+                              {formatCustomerName(stopDelivery.customerName)}
+                            </p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
+                            {stopItems.length} {stopItems.length === 1 ? "item" : "items"}
+                          </span>
+                        </div>
+                        <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                          {stopItems.slice(0, 4).map((item, itemIndex) => (
+                            <p
+                              key={`${stopDelivery.id}-driver-material-${itemIndex}`}
+                              className="truncate text-xs font-bold text-slate-600"
+                            >
+                              QTY {item.quantity || item.qty || "—"} · {item.description || item.name || item.itemNumber || "Material"}
+                            </p>
+                          ))}
+                          {stopItems.length > 4 ? (
+                            <p className="text-xs font-black text-blue-700">
+                              +{stopItems.length - 4} more material lines
+                            </p>
+                          ) : null}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
+
             <section>
               <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
                 Current Delivery
@@ -2090,13 +2244,10 @@ export default function DeliveryQueuePage({
                 <MobileDeliveryFlowCard
                   delivery={currentDriverDelivery}
                   deliveryIndex={Math.max(
-                    openDeliveries.findIndex(
-                      (delivery) =>
-                        delivery.id === currentDriverDelivery.id,
-                    ),
+                    currentDriverStopIndex,
                     0,
                   )}
-                  deliveryCount={openDeliveries.length}
+                  deliveryCount={driverDeliveryStops.length}
                   deliveryStep={currentDeliveryStep}
                   setDeliveryStep={setDeliveryStep}
                   isUpdating={updatingDeliveryId === currentDriverDelivery.id}
@@ -2141,9 +2292,16 @@ export default function DeliveryQueuePage({
 
                 <div className="space-y-3">
                   {upNextDriverDeliveries.map((delivery, index) => {
-                    const items = Array.isArray(delivery.items)
-                      ? delivery.items
-                      : [];
+                    const stopDeliveries = Array.isArray(
+                      delivery._groupedStopDeliveries,
+                    )
+                      ? delivery._groupedStopDeliveries
+                      : [delivery];
+                    const items = stopDeliveries.flatMap((stopDelivery) =>
+                      Array.isArray(stopDelivery.items)
+                        ? stopDelivery.items
+                        : [],
+                    );
                     const upNextScopeSummary = getDeliveryScopeSummary(delivery);
 
                     return (
@@ -2158,13 +2316,20 @@ export default function DeliveryQueuePage({
                         >
                           <div className="min-w-0">
                             <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                              Delivery {index + 2} of {openDeliveries.length}
+                              Stop {index + 2} of {driverDeliveryStops.length}
                             </p>
                             <h2 className="mt-1 truncate text-xl font-black text-slate-900">
                               {formatCustomerName(delivery.customerName)}
                             </h2>
                             <p className="mt-1 text-sm font-bold text-slate-500">
-                              Order #{delivery.orderNumber}
+                              {stopDeliveries.length > 1
+                                ? `${stopDeliveries.length} grouped orders: ${stopDeliveries
+                                    .map(
+                                      (stopDelivery) =>
+                                        stopDelivery.orderNumber || "—",
+                                    )
+                                    .join(", ")}`
+                                : `Order #${delivery.orderNumber}`}
                             </p>
                           </div>
 
@@ -2179,8 +2344,15 @@ export default function DeliveryQueuePage({
                             {getDeliveryTimeRange(delivery)}
                           </span>
                           <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">
-                            {getDeliveryItemsLabel(items, upNextScopeSummary)}
+                            {stopDeliveries.length > 1
+                              ? `${items.length} material ${items.length === 1 ? "line" : "lines"}`
+                              : getDeliveryItemsLabel(items, upNextScopeSummary)}
                           </span>
+                          {stopDeliveries.length > 1 ? (
+                            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-800">
+                              One shared stop
+                            </span>
+                          ) : null}
                         </div>
                       </article>
                     );

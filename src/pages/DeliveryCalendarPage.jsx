@@ -10,8 +10,10 @@ import {
   Edit3,
   Eye,
   GripVertical,
+  Layers,
   MapPin,
   Package,
+  StickyNote,
   Truck,
   UserMinus,
   X,
@@ -36,6 +38,7 @@ import {
   timeToMinutes,
 } from "../utils/deliverySchedule";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
+import { subscribeToDispatchNotes } from "../utils/dispatchNoteStorage";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const timelineStartMinutes = 6 * 60;
@@ -120,6 +123,108 @@ function formatForkliftLabel(value) {
   }
 
   return "";
+}
+
+function getDeliveryNoteEntries(delivery) {
+  const entries = [
+    {
+      id: "location",
+      label: "Delivery location note",
+      text: String(
+        delivery?.deliveryLocationNotes || delivery?.deliveryNotes || "",
+      ).trim(),
+    },
+    {
+      id: "general",
+      label: "General note",
+      text: String(delivery?.generalNotes || delivery?.notes || "").trim(),
+    },
+    {
+      id: "scope",
+      label: "Delivery scope note",
+      text: String(delivery?.deliveryScopeNotes || "").trim(),
+    },
+    ...(Array.isArray(delivery?.calendarDispatchNotes)
+      ? delivery.calendarDispatchNotes.map((note) => ({
+          id: `dispatch-${note.id || note.createdAt || note.text}`,
+          label: "Dispatch note",
+          text: String(note.text || "").trim(),
+        }))
+      : []),
+  ];
+  const seenText = new Set();
+
+  return entries.filter((entry) => {
+    if (!entry.text || seenText.has(entry.text)) {
+      return false;
+    }
+
+    seenText.add(entry.text);
+    return true;
+  });
+}
+
+function getDeliveryNotesTooltip(delivery) {
+  return getDeliveryNoteEntries(delivery)
+    .map((entry) => `${entry.label}: ${entry.text}`)
+    .join(" • ");
+}
+
+function DeliveryNotesBadge({ delivery, showLabel = false }) {
+  const notes = getDeliveryNoteEntries(delivery);
+
+  if (!notes.length) {
+    return null;
+  }
+
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-full bg-amber-300 font-black text-amber-950 shadow-sm ring-1 ring-inset ring-amber-400/70 ${
+        showLabel ? "px-2.5 py-1 text-[10px] uppercase tracking-[0.08em]" : "h-5 w-5"
+      }`}
+      title={getDeliveryNotesTooltip(delivery)}
+      aria-label={`${notes.length} delivery ${notes.length === 1 ? "note" : "notes"}`}
+    >
+      <StickyNote className="h-3.5 w-3.5" aria-hidden="true" />
+      {showLabel ? `${notes.length} ${notes.length === 1 ? "note" : "notes"}` : null}
+    </span>
+  );
+}
+
+function DeliveryNotesPanel({ delivery, className = "" }) {
+  const notes = getDeliveryNoteEntries(delivery);
+
+  if (!notes.length) {
+    return null;
+  }
+
+  return (
+    <section
+      className={`rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 shadow-sm ${className}`}
+      aria-label="Delivery notes"
+    >
+      <div className="flex items-center gap-2">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-300 text-amber-950">
+          <StickyNote className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <p className="text-xs font-black uppercase tracking-[0.14em]">
+          Delivery notes
+        </p>
+      </div>
+      <div className="mt-2 space-y-2">
+        {notes.map((note) => (
+          <div key={note.id}>
+            <p className="text-[10px] font-black uppercase tracking-[0.1em] text-amber-800">
+              {note.label}
+            </p>
+            <p className="mt-0.5 whitespace-pre-wrap text-sm font-bold leading-relaxed">
+              {note.text}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function getDeliveryDateKey(value) {
@@ -761,10 +866,13 @@ function DeliveryStatusOverview({
                     className="grid w-full gap-2 rounded-2xl border border-white/90 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-black text-slate-950">
-                        {delivery.deliveryTitle ||
-                          formatCustomerName(delivery.customerName) ||
-                          "Delivery"}
+                      <span className="flex items-center gap-2 text-sm font-black text-slate-950">
+                        <span className="min-w-0 truncate">
+                          {delivery.deliveryTitle ||
+                            formatCustomerName(delivery.customerName) ||
+                            "Delivery"}
+                        </span>
+                        <DeliveryNotesBadge delivery={delivery} />
                       </span>
                       <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
                         {delivery.deliveryTitle
@@ -810,10 +918,21 @@ function CalendarDeliveryButton({
   compact = false,
   showDragHandle = false,
   isGroupTarget = false,
+  groupMeta = null,
 }) {
   const needsDispatch = deliveryNeedsDispatch(delivery);
   const isGrouped = Boolean(delivery.deliveryCalendarGroupId);
   const usesGroupStyle = isGroupTarget || isGrouped;
+  const isConnectedGroup = Boolean(groupMeta);
+  const groupShapeClass = isConnectedGroup
+    ? groupMeta.isFirst && groupMeta.isLast
+      ? "rounded-xl"
+      : groupMeta.isFirst
+        ? "rounded-t-xl rounded-b-md"
+        : groupMeta.isLast
+          ? "rounded-t-md rounded-b-xl"
+          : "rounded-md"
+    : "rounded-xl";
   const customerLabel =
     delivery.deliveryTitle ||
     formatCustomerName(delivery.customerName) ||
@@ -823,42 +942,53 @@ function CalendarDeliveryButton({
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-xl border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-4 ${
-        usesGroupStyle
-          ? "border-blue-400 bg-blue-100 text-blue-950 ring-2 ring-blue-300 focus:ring-blue-200"
+      className={`w-full border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-4 ${groupShapeClass} ${
+        isGroupTarget
+          ? "border-blue-500 bg-blue-200 text-blue-950 ring-2 ring-blue-300 focus:ring-blue-200"
+          : isConnectedGroup
+            ? "border-blue-200 bg-white/90 text-blue-950 focus:ring-blue-200"
+            : usesGroupStyle
+              ? "border-blue-400 bg-blue-100 text-blue-950 ring-2 ring-blue-300 focus:ring-blue-200"
           : needsDispatch
-          ? "border-amber-200 bg-amber-50 text-amber-950"
-          : "border-emerald-200 bg-emerald-50 text-emerald-950 focus:ring-red-100"
+            ? "border-amber-200 bg-amber-50 text-amber-950"
+            : "border-emerald-200 bg-emerald-50 text-emerald-950 focus:ring-red-100"
       } ${compact ? "px-2 py-1.5" : "p-3"} ${
         showDragHandle ? "pr-9" : ""
       }`}
     >
-      <span
-        className={`mb-1 inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-[0.1em] ${
-          usesGroupStyle
-            ? "text-blue-700"
-            : needsDispatch
-              ? "text-amber-700"
-              : "text-emerald-700"
-        }`}
-      >
+      <span className="mb-1 flex items-center justify-between gap-2">
         <span
-          className={`h-1.5 w-1.5 rounded-full ${
+          className={`inline-flex min-w-0 items-center gap-1 text-[8px] font-black uppercase tracking-[0.1em] ${
             usesGroupStyle
-              ? "bg-blue-500"
+              ? "text-blue-700"
               : needsDispatch
-                ? "bg-amber-500"
-                : "bg-emerald-500"
+                ? "text-amber-700"
+                : "text-emerald-700"
           }`}
-          aria-hidden="true"
-        />
-        {usesGroupStyle
-          ? isGroupTarget
-            ? "Release to group"
-            : "Grouped delivery"
-          : needsDispatch
-            ? "Needs dispatch"
-            : "Scheduled"}
+        >
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              usesGroupStyle
+                ? "bg-blue-500"
+                : needsDispatch
+                  ? "bg-amber-500"
+                  : "bg-emerald-500"
+            }`}
+            aria-hidden="true"
+          />
+          <span className="truncate">
+            {usesGroupStyle
+              ? isGroupTarget
+                ? "Release to group"
+                : groupMeta
+                  ? `Stop ${groupMeta.position} of ${groupMeta.count}`
+                  : "Grouped delivery"
+              : needsDispatch
+                ? "Needs dispatch"
+                : "Scheduled"}
+          </span>
+        </span>
+        <DeliveryNotesBadge delivery={delivery} />
       </span>
       <span className="block truncate text-xs font-black">
         {customerLabel}
@@ -871,6 +1001,61 @@ function CalendarDeliveryButton({
       </span>
     </button>
   );
+}
+
+function getDeliveryGroupMeta(
+  visibleDeliveries,
+  deliveryIndex,
+  allDayDeliveries = visibleDeliveries,
+) {
+  const delivery = visibleDeliveries[deliveryIndex];
+  const groupId = delivery?.deliveryCalendarGroupId;
+
+  if (!groupId) {
+    return null;
+  }
+
+  const allGroupDeliveries = allDayDeliveries.filter(
+    (candidate) => candidate.deliveryCalendarGroupId === groupId,
+  );
+
+  if (allGroupDeliveries.length < 2) {
+    return null;
+  }
+
+  const previousDelivery = visibleDeliveries[deliveryIndex - 1];
+  const nextDelivery = visibleDeliveries[deliveryIndex + 1];
+
+  return {
+    count: allGroupDeliveries.length,
+    position:
+      allGroupDeliveries.findIndex((candidate) => candidate.id === delivery.id) +
+      1,
+    isFirst: previousDelivery?.deliveryCalendarGroupId !== groupId,
+    isLast: nextDelivery?.deliveryCalendarGroupId !== groupId,
+  };
+}
+
+function getConnectedGroupWrapperClass(groupMeta, compact = false) {
+  if (!groupMeta) {
+    return compact ? "mb-1.5" : "mb-2";
+  }
+
+  const paddingClass = compact ? "px-1 pt-1" : "px-1.5 pt-1.5";
+
+  if (groupMeta.isFirst && groupMeta.isLast) {
+    return `${compact ? "mb-1.5" : "mb-2"} rounded-2xl border-2 border-blue-300 bg-blue-50 ${paddingClass} pb-1`;
+  }
+
+  if (groupMeta.isFirst) {
+    return `rounded-t-2xl border-x-2 border-t-2 border-blue-300 bg-blue-50 ${paddingClass}`;
+  }
+
+  if (groupMeta.isLast) {
+    return `${compact ? "mb-1.5" : "mb-2"} rounded-b-2xl border-x-2 border-b-2 border-blue-300 bg-blue-50 px-1 pb-1 pt-1`;
+  }
+
+  return "border-x-2 border-blue-300 bg-blue-50 px-1 pt-1";
 }
 
 function CalendarStatusLegend() {
@@ -1036,14 +1221,17 @@ function DeliveryDateTbdTray({
                       Order {delivery.orderNumber || "—"}
                     </p>
                   </div>
-                  <span
-                    className={`mr-7 shrink-0 self-start rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] ${
-                      needsDispatch
-                        ? "bg-amber-100 text-amber-800"
-                        : "bg-emerald-100 text-emerald-800"
-                    }`}
-                  >
-                    {needsDispatch ? "Needs dispatch" : "Assigned"}
+                  <span className="mr-7 flex shrink-0 items-center gap-1.5 self-start">
+                    <DeliveryNotesBadge delivery={delivery} />
+                    <span
+                      className={`rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] ${
+                        needsDispatch
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-emerald-100 text-emerald-800"
+                      }`}
+                    >
+                      {needsDispatch ? "Needs dispatch" : "Assigned"}
+                    </span>
                   </span>
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-2">
@@ -1169,6 +1357,16 @@ function useCalendarDeliveryDrag({
       return false;
     }
 
+    const movingDeliveries = delivery.deliveryCalendarGroupId
+      ? deliveries.filter(
+          (item) =>
+            !isDeliveryComplete(item) &&
+            item.deliveryCalendarGroupId === delivery.deliveryCalendarGroupId,
+        )
+      : [delivery];
+    const movingDeliveryIds = new Set(
+      movingDeliveries.map((item) => item.id),
+    );
     const sourceDayDeliveries = getCalendarDayDeliveries(
       deliveries,
       sourceDateKey,
@@ -1178,12 +1376,12 @@ function useCalendarDeliveryDrag({
         ? sourceDayDeliveries
         : getCalendarDayDeliveries(deliveries, dateKey);
     const remainingTargetDeliveries = targetDayDeliveries.filter(
-      (dayDelivery) => dayDelivery.id !== delivery.id,
+      (dayDelivery) => !movingDeliveryIds.has(dayDelivery.id),
     );
     const draggedNeedsDispatch = deliveryNeedsDispatch(delivery);
     const validTarget =
       targetDelivery &&
-      targetDelivery.id !== delivery.id &&
+      !movingDeliveryIds.has(targetDelivery.id) &&
       deliveryNeedsDispatch(targetDelivery) === draggedNeedsDispatch
         ? targetDelivery
         : null;
@@ -1212,12 +1410,12 @@ function useCalendarDeliveryDrag({
     }
 
     const nextTargetDeliveries = [...remainingTargetDeliveries];
-    nextTargetDeliveries.splice(insertionIndex, 0, delivery);
+    nextTargetDeliveries.splice(insertionIndex, 0, ...movingDeliveries);
     const nextSourceDeliveries =
       sourceDateKey === dateKey
         ? []
         : sourceDayDeliveries.filter(
-            (dayDelivery) => dayDelivery.id !== delivery.id,
+            (dayDelivery) => !movingDeliveryIds.has(dayDelivery.id),
           );
     const routeUpdates = new Map();
 
@@ -1240,15 +1438,8 @@ function useCalendarDeliveryDrag({
         updates.deliveryRouteOrder = nextRouteOrder;
       }
 
-      if (dayDelivery.id === delivery.id && sourceDateKey !== dateKey) {
+      if (movingDeliveryIds.has(dayDelivery.id) && sourceDateKey !== dateKey) {
         updates.deliveryDate = dateKey;
-      }
-
-      if (
-        dayDelivery.id === delivery.id &&
-        delivery.deliveryCalendarGroupId
-      ) {
-        updates.deliveryCalendarGroupId = null;
       }
 
       if (Object.keys(updates).length > 0) {
@@ -1258,43 +1449,6 @@ function useCalendarDeliveryDrag({
         });
       }
     });
-
-    if (delivery.deliveryCalendarGroupId) {
-      const previousGroupPeers = deliveries.filter(
-        (dayDelivery) =>
-          dayDelivery.id !== delivery.id &&
-          dayDelivery.deliveryCalendarGroupId ===
-            delivery.deliveryCalendarGroupId,
-      );
-
-      if (previousGroupPeers.length === 1) {
-        const previousGroupPeer = previousGroupPeers[0];
-        const existingPeerUpdate = routeUpdates.get(previousGroupPeer.id);
-
-        routeUpdates.set(previousGroupPeer.id, {
-          delivery: previousGroupPeer,
-          updates: {
-            ...(existingPeerUpdate?.updates || {}),
-            deliveryCalendarGroupId: null,
-          },
-        });
-      }
-    }
-
-    const draggedDeliveryUpdate = routeUpdates.get(delivery.id);
-
-    if (draggedDeliveryUpdate) {
-      const moved = await onMoveDelivery(
-        draggedDeliveryUpdate.delivery,
-        draggedDeliveryUpdate.updates,
-      );
-
-      if (moved === false) {
-        return false;
-      }
-
-      routeUpdates.delete(delivery.id);
-    }
 
     for (const routeUpdate of routeUpdates.values()) {
       const moved = await onMoveDelivery(
@@ -1322,10 +1476,19 @@ function useCalendarDeliveryDrag({
     }
 
     const sourceDateKey = getDeliveryDateKey(delivery.deliveryDate);
+    const movingDeliveries = delivery.deliveryCalendarGroupId
+      ? deliveries.filter(
+          (item) =>
+            item.deliveryCalendarGroupId === delivery.deliveryCalendarGroupId,
+        )
+      : [delivery];
+    const movingDeliveryIds = new Set(
+      movingDeliveries.map((item) => item.id),
+    );
     const sourceDayDeliveries = getCalendarDayDeliveries(
       deliveries,
       sourceDateKey,
-    ).filter((dayDelivery) => dayDelivery.id !== delivery.id);
+    ).filter((dayDelivery) => !movingDeliveryIds.has(dayDelivery.id));
     const routeUpdates = sourceDayDeliveries
       .map((dayDelivery, index) => ({
         delivery: dayDelivery,
@@ -1336,15 +1499,16 @@ function useCalendarDeliveryDrag({
           Number(dayDelivery.deliveryRouteOrder) !==
           updates.deliveryRouteOrder,
       );
-    const moved = await onMoveDelivery(delivery, {
-      deliveryDate: "",
-      deliveryTimeSlot: "",
-      deliveryRouteOrder: null,
-      deliveryCalendarGroupId: null,
-    });
+    for (const movingDelivery of movingDeliveries) {
+      const moved = await onMoveDelivery(movingDelivery, {
+        deliveryDate: "",
+        deliveryTimeSlot: "",
+        deliveryRouteOrder: null,
+      });
 
-    if (moved === false) {
-      return false;
+      if (moved === false) {
+        return false;
+      }
     }
 
     for (const routeUpdate of routeUpdates) {
@@ -1355,21 +1519,6 @@ function useCalendarDeliveryDrag({
 
       if (routeMoved === false) {
         return false;
-      }
-    }
-
-    if (delivery.deliveryCalendarGroupId) {
-      const previousGroupPeers = deliveries.filter(
-        (dayDelivery) =>
-          dayDelivery.id !== delivery.id &&
-          dayDelivery.deliveryCalendarGroupId ===
-            delivery.deliveryCalendarGroupId,
-      );
-
-      if (previousGroupPeers.length === 1) {
-        await onMoveDelivery(previousGroupPeers[0], {
-          deliveryCalendarGroupId: null,
-        });
       }
     }
 
@@ -1396,19 +1545,31 @@ function useCalendarDeliveryDrag({
 
     const groupId =
       targetDelivery.deliveryCalendarGroupId ||
+      delivery.deliveryCalendarGroupId ||
       `delivery-group-${Date.now()}-${targetDelivery.id}`;
-    const targetGrouped = await onMoveDelivery(targetDelivery, {
-      deliveryCalendarGroupId: groupId,
-    });
+    const groupedDeliveries = deliveries.filter(
+      (item) =>
+        item.id === targetDelivery.id ||
+        item.id === delivery.id ||
+        (targetDelivery.deliveryCalendarGroupId &&
+          item.deliveryCalendarGroupId ===
+            targetDelivery.deliveryCalendarGroupId) ||
+        (delivery.deliveryCalendarGroupId &&
+          item.deliveryCalendarGroupId === delivery.deliveryCalendarGroupId),
+    );
 
-    if (targetGrouped === false) {
-      return false;
+    for (const groupedDelivery of groupedDeliveries) {
+      const grouped = await onMoveDelivery(groupedDelivery, {
+        deliveryDate: dateKey,
+        deliveryCalendarGroupId: groupId,
+      });
+
+      if (grouped === false) {
+        return false;
+      }
     }
 
-    return onMoveDelivery(delivery, {
-      deliveryDate: dateKey,
-      deliveryCalendarGroupId: groupId,
-    });
+    return true;
   }
 
   async function handleDayDrop(event, dateKey) {
@@ -1833,8 +1994,13 @@ function DeliveryWeekView({
                 </span>
               </button>
 
-              <div className="mt-3 space-y-2">
+              <div className="mt-3">
                 {visibleDeliveries.map((delivery, deliveryIndex) => {
+                  const groupMeta = getDeliveryGroupMeta(
+                    visibleDeliveries,
+                    deliveryIndex,
+                    orderedDayDeliveries,
+                  );
                   const beginsNeedsDispatchGroup =
                     deliveryNeedsDispatch(delivery) &&
                     visibleDeliveries
@@ -1867,7 +2033,9 @@ function DeliveryWeekView({
                           ? "Drag this delivery to reorder the day or move it to another date"
                           : undefined
                       }
-                      className={`relative ${
+                      className={`relative ${getConnectedGroupWrapperClass(
+                        groupMeta,
+                      )} ${
                         beginsNeedsDispatchGroup
                           ? "mt-3 border-t border-slate-200 pt-3"
                           : ""
@@ -1881,6 +2049,20 @@ function DeliveryWeekView({
                           : ""
                       }`}
                     >
+                      {groupMeta?.isFirst ? (
+                        <div className="mb-1 flex items-center justify-between gap-2 px-1 text-[8px] font-black uppercase tracking-[0.1em] text-blue-700">
+                          <span className="inline-flex min-w-0 items-center gap-1">
+                            <Layers
+                              className="h-3 w-3 shrink-0"
+                              aria-hidden="true"
+                            />
+                            <span className="truncate">Grouped route</span>
+                          </span>
+                          <span className="shrink-0">
+                            {groupMeta.count} deliveries
+                          </span>
+                        </div>
+                      ) : null}
                       {dropDeliveryId === delivery.id &&
                       draggedDeliveryId !== delivery.id ? (
                         <span
@@ -1904,7 +2086,9 @@ function DeliveryWeekView({
                           onPointerMove={handleDeliveryPointerMove}
                           onPointerUp={handleDeliveryPointerEnd}
                           onPointerCancel={handleDeliveryPointerCancel}
-                          className="absolute right-1 top-1 z-20 flex h-7 w-7 touch-none items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 shadow-sm transition hover:text-slate-950"
+                          className={`absolute right-1 z-20 flex h-7 w-7 touch-none items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 shadow-sm transition hover:text-slate-950 ${
+                            groupMeta?.isFirst ? "top-7" : "top-1"
+                          }`}
                           aria-label={`Drag order ${delivery.orderNumber || ""} to another calendar position`}
                           title="Drag to move"
                         >
@@ -1919,6 +2103,7 @@ function DeliveryWeekView({
                         onClick={() => onSelectDelivery(delivery)}
                         compact
                         showDragHandle={canMoveDeliveries}
+                        groupMeta={groupMeta}
                         isGroupTarget={
                           groupTargetDeliveryId === delivery.id &&
                           draggedDeliveryId !== delivery.id
@@ -2093,8 +2278,13 @@ function DeliveryMonthView({
                     {day.date.getDate()}
                   </button>
 
-                  <div className="mt-1.5 space-y-1.5">
+                  <div className="mt-1.5">
                     {visibleDeliveries.map((delivery, deliveryIndex) => {
+                      const groupMeta = getDeliveryGroupMeta(
+                        visibleDeliveries,
+                        deliveryIndex,
+                        orderedDayDeliveries,
+                      );
                       const beginsNeedsDispatchGroup =
                         deliveryNeedsDispatch(delivery) &&
                         visibleDeliveries
@@ -2135,7 +2325,10 @@ function DeliveryMonthView({
                               ? "Drag this delivery to reorder the day or move it to another date"
                               : undefined
                           }
-                          className={`relative ${
+                          className={`relative ${getConnectedGroupWrapperClass(
+                            groupMeta,
+                            true,
+                          )} ${
                             beginsNeedsDispatchGroup
                               ? "mt-2 border-t border-slate-200 pt-2"
                               : ""
@@ -2149,6 +2342,20 @@ function DeliveryMonthView({
                               : ""
                           }`}
                         >
+                          {groupMeta?.isFirst ? (
+                            <div className="mb-1 flex items-center justify-between gap-1 px-1 text-[7px] font-black uppercase tracking-[0.08em] text-blue-700">
+                              <span className="inline-flex min-w-0 items-center gap-1">
+                                <Layers
+                                  className="h-2.5 w-2.5 shrink-0"
+                                  aria-hidden="true"
+                                />
+                                <span className="truncate">Grouped</span>
+                              </span>
+                              <span className="shrink-0">
+                                {groupMeta.count}
+                              </span>
+                            </div>
+                          ) : null}
                           {dropDeliveryId === delivery.id &&
                           draggedDeliveryId !== delivery.id ? (
                             <span
@@ -2174,7 +2381,9 @@ function DeliveryMonthView({
                               onPointerMove={handleDeliveryPointerMove}
                               onPointerUp={handleDeliveryPointerEnd}
                               onPointerCancel={handleDeliveryPointerCancel}
-                              className="absolute right-1 top-1 z-20 flex h-7 w-7 touch-none items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 shadow-sm transition hover:text-slate-950"
+                              className={`absolute right-1 z-20 flex h-7 w-7 touch-none items-center justify-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 shadow-sm transition hover:text-slate-950 ${
+                                groupMeta?.isFirst ? "top-6" : "top-1"
+                              }`}
                               aria-label={`Drag order ${delivery.orderNumber || ""} to another calendar position`}
                               title="Drag to move"
                             >
@@ -2189,6 +2398,7 @@ function DeliveryMonthView({
                             onClick={() => onSelectDelivery(delivery)}
                             compact
                             showDragHandle={canMoveDeliveries}
+                            groupMeta={groupMeta}
                             isGroupTarget={
                               groupTargetDeliveryId === delivery.id &&
                               draggedDeliveryId !== delivery.id
@@ -2243,6 +2453,9 @@ function findScheduleConflict(candidateDelivery, deliveries) {
   return deliveries.find(
     (delivery) =>
       delivery.id !== candidateDelivery.id &&
+      (!candidateDelivery.deliveryCalendarGroupId ||
+        delivery.deliveryCalendarGroupId !==
+          candidateDelivery.deliveryCalendarGroupId) &&
       !isDeliveryComplete(delivery) &&
       delivery.dispatchStatus !== "needsDispatch" &&
       getDeliveryDateKey(delivery.deliveryDate) === candidateDate &&
@@ -2536,14 +2749,17 @@ function DeliveryTimelineBoard({
                           )}
                         </span>
                         <span
-                          className={`truncate font-black text-slate-950 ${
+                          className={`flex min-w-0 items-center gap-1 font-black text-slate-950 ${
                             isShortBlock
                               ? "mt-0.5 text-xs md:mt-1 md:text-sm"
                               : "mt-1 text-sm"
                           }`}
                         >
-                          {formatCustomerName(delivery.customerName) ||
-                            "Unnamed customer"}
+                          <span className="min-w-0 truncate">
+                            {formatCustomerName(delivery.customerName) ||
+                              "Unnamed customer"}
+                          </span>
+                          <DeliveryNotesBadge delivery={delivery} />
                         </span>
                         {!isShortBlock ? (
                           <span className="truncate text-xs font-bold text-slate-500">
@@ -2695,6 +2911,7 @@ function CompactDeliveryCard({
   if (dispatchStyle) {
     return (
       <article className="relative overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <DeliveryNotesPanel delivery={delivery} className="mx-4 mt-4" />
         <div className="hidden rounded-t-2xl grid-cols-[minmax(150px,0.85fr)_minmax(220px,1.2fr)_minmax(280px,1.35fr)_minmax(200px,0.95fr)_minmax(170px,0.75fr)] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 xl:grid">
           <span>Delivery</span>
           <span>Destination</span>
@@ -3001,6 +3218,7 @@ function CompactDeliveryCard({
 
       {expanded ? (
         <div className="mt-3 space-y-3">
+          <DeliveryNotesPanel delivery={delivery} />
           {canEditDeliveries || onViewOrder || onEditOrder ? (
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {canEditDeliveries ? (
@@ -3163,13 +3381,15 @@ export default function DeliveryCalendarPage({
   vehicleOptions = /** @type {Array<{ id: string, title: string, badge: string }>} */ ([]),
   employeeOptions = /** @type {string[]} */ ([]),
   canEditDeliveries = false,
+  canViewDispatchNotes = false,
   onEditDelivery,
   onViewOrder,
   onEditOrder,
   onUpdateDelivery,
   onPageChange,
 }) {
-  const safeDeliveries = useMemo(
+  const [dispatchNotes, setDispatchNotes] = useState([]);
+  const baseDeliveries = useMemo(
     () =>
       Array.isArray(deliveries)
         ? deliveries.filter(
@@ -3177,6 +3397,57 @@ export default function DeliveryCalendarPage({
           )
         : [],
     [deliveries],
+  );
+  useEffect(() => {
+    if (!canViewDispatchNotes) {
+      setDispatchNotes([]);
+      return undefined;
+    }
+
+    return subscribeToDispatchNotes(
+      (savedNotes) => setDispatchNotes(savedNotes),
+      (dispatchNotesError) => {
+        console.error(
+          "Unable to load delivery calendar dispatch notes:",
+          dispatchNotesError,
+        );
+        setDispatchNotes([]);
+      },
+    );
+  }, [canViewDispatchNotes]);
+  const dispatchNotesByDeliveryId = useMemo(
+    () =>
+      dispatchNotes.reduce((notesByDeliveryId, note) => {
+        if (
+          note?.targetType !== "delivery" ||
+          note?.status === "complete" ||
+          !note?.targetId
+        ) {
+          return notesByDeliveryId;
+        }
+
+        notesByDeliveryId[note.targetId] = [
+          ...(notesByDeliveryId[note.targetId] || []),
+          note,
+        ];
+        return notesByDeliveryId;
+      }, {}),
+    [dispatchNotes],
+  );
+  const safeDeliveries = useMemo(
+    () =>
+      baseDeliveries.map((delivery) => {
+        const matchingDispatchNotes =
+          dispatchNotesByDeliveryId[delivery.id] || [];
+
+        return matchingDispatchNotes.length
+          ? {
+              ...delivery,
+              calendarDispatchNotes: matchingDispatchNotes,
+            }
+          : delivery;
+      }),
+    [baseDeliveries, dispatchNotesByDeliveryId],
   );
   const [selectedDate, setSelectedDate] = useState(getTodayDateValue());
   const [calendarView, setCalendarView] = useState("day");
@@ -3347,6 +3618,13 @@ export default function DeliveryCalendarPage({
     (selectedTimelineDeliverySnapshot?.id === selectedTimelineDeliveryId
       ? selectedTimelineDeliverySnapshot
       : null);
+  const selectedDeliveryGroup = selectedTimelineDelivery?.deliveryCalendarGroupId
+    ? safeDeliveries.filter(
+        (delivery) =>
+          delivery.deliveryCalendarGroupId ===
+          selectedTimelineDelivery.deliveryCalendarGroupId,
+      )
+    : [];
 
   useEffect(() => {
     if (
@@ -3608,6 +3886,53 @@ export default function DeliveryCalendarPage({
     }
   }
 
+  async function handleMoveGroupedDelivery(delivery, updates) {
+    const sharedFieldNames = [
+      "deliveryDate",
+      "deliveryTimeSlot",
+      "driver",
+      "drivers",
+      "vehicleId",
+      "vehicleTitle",
+      "vehicleBadge",
+      "vehicles",
+      "dispatchAssignments",
+      "dispatchStatus",
+    ];
+    const hasSharedUpdate = sharedFieldNames.some((fieldName) =>
+      Object.prototype.hasOwnProperty.call(updates, fieldName),
+    );
+    const groupId = delivery?.deliveryCalendarGroupId;
+
+    if (!groupId || !hasSharedUpdate) {
+      return handleMoveDelivery(delivery, updates);
+    }
+
+    const groupDeliveries = safeDeliveries.filter(
+      (candidate) => candidate.deliveryCalendarGroupId === groupId,
+    );
+    const sharedUpdates = sharedFieldNames.reduce((nextUpdates, fieldName) => {
+      if (Object.prototype.hasOwnProperty.call(updates, fieldName)) {
+        nextUpdates[fieldName] = updates[fieldName];
+      }
+
+      return nextUpdates;
+    }, {});
+
+    for (const groupDelivery of groupDeliveries) {
+      const moved = await handleMoveDelivery(groupDelivery, {
+        ...(groupDelivery.id === delivery.id ? updates : {}),
+        ...sharedUpdates,
+      });
+
+      if (moved === false) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   async function handleScheduleDelivery(delivery, deliveryTimeSlot, driverName = "") {
     const normalizedDriver = String(driverName || "").trim();
     const updates = { deliveryTimeSlot };
@@ -3642,7 +3967,7 @@ export default function DeliveryCalendarPage({
       }
     }
 
-    await handleMoveDelivery(delivery, updates);
+    await handleMoveGroupedDelivery(delivery, updates);
   }
 
   async function handleConfirmUnassign() {
@@ -3656,17 +3981,27 @@ export default function DeliveryCalendarPage({
     setUnassignError("");
 
     try {
-      await onUpdateDelivery(deliveryId, {
-        driver: "",
-        drivers: [],
-        vehicleId: "",
-        vehicleTitle: "",
-        vehicleBadge: "",
-        dispatchAssignments: [],
-        dispatchStatus: "needsDispatch",
-        deliveryRouteOrder: null,
-        updatedAt: new Date().toISOString(),
-      });
+      const groupedDeliveries = deliveryToUnassign.deliveryCalendarGroupId
+        ? safeDeliveries.filter(
+            (delivery) =>
+              delivery.deliveryCalendarGroupId ===
+              deliveryToUnassign.deliveryCalendarGroupId,
+          )
+        : [deliveryToUnassign];
+
+      for (const groupedDelivery of groupedDeliveries) {
+        await onUpdateDelivery(groupedDelivery.id, {
+          driver: "",
+          drivers: [],
+          vehicleId: "",
+          vehicleTitle: "",
+          vehicleBadge: "",
+          dispatchAssignments: [],
+          dispatchStatus: "needsDispatch",
+          deliveryRouteOrder: null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
       setDeliveryToUnassign(null);
       setSelectedTimelineDeliveryId("");
       setSelectedTimelineDeliverySnapshot(null);
@@ -4212,7 +4547,7 @@ export default function DeliveryCalendarPage({
                 setUnassignError("");
                 setDeliveryToUnassign(delivery);
               }}
-              onUpdateDelivery={handleMoveDelivery}
+              onUpdateDelivery={handleMoveGroupedDelivery}
               isUpdating={updatingDeliveryId === selectedTimelineDelivery.id}
               onToggle={selectTimelineDelivery}
               hideToggle
@@ -4278,7 +4613,7 @@ export default function DeliveryCalendarPage({
                               setUnassignError("");
                               setDeliveryToUnassign(delivery);
                             }}
-                            onUpdateDelivery={handleMoveDelivery}
+                            onUpdateDelivery={handleMoveGroupedDelivery}
                             isUpdating={updatingDeliveryId === delivery.id}
                             onToggle={selectTimelineDelivery}
                           />
@@ -4346,7 +4681,7 @@ export default function DeliveryCalendarPage({
                                 setUnassignError("");
                                 setDeliveryToUnassign(delivery);
                               }}
-                              onUpdateDelivery={handleMoveDelivery}
+                              onUpdateDelivery={handleMoveGroupedDelivery}
                               isUpdating={updatingDeliveryId === delivery.id}
                               onToggle={selectTimelineDelivery}
                             />
@@ -4381,7 +4716,9 @@ export default function DeliveryCalendarPage({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-                    Delivery details
+                    {selectedDeliveryGroup.length > 1
+                      ? "Grouped delivery stop"
+                      : "Delivery details"}
                   </p>
                   <span
                     className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${
@@ -4394,12 +4731,18 @@ export default function DeliveryCalendarPage({
                       ? "Needs dispatch"
                       : "Scheduled"}
                   </span>
+                  <DeliveryNotesBadge
+                    delivery={selectedTimelineDelivery}
+                    showLabel
+                  />
                 </div>
                 <h2
                   id="calendar-delivery-modal-title"
                   className="mt-1 truncate text-2xl font-black tracking-tight text-slate-950 sm:text-3xl"
                 >
-                  Order {selectedTimelineDelivery.orderNumber || "—"}
+                  {selectedDeliveryGroup.length > 1
+                    ? `${selectedDeliveryGroup.length} orders · one stop`
+                    : `Order ${selectedTimelineDelivery.orderNumber || "—"}`}
                 </h2>
                 <p className="mt-1 truncate text-sm font-bold text-slate-500 sm:text-base">
                   {formatCustomerName(selectedTimelineDelivery.customerName) ||
@@ -4444,6 +4787,69 @@ export default function DeliveryCalendarPage({
             </header>
 
             <div className="overflow-y-auto p-3 sm:p-5">
+              {selectedDeliveryGroup.length > 1 ? (
+                <section className="mb-4 overflow-hidden rounded-2xl border-2 border-blue-300 bg-blue-50 shadow-sm">
+                  <div className="flex flex-col gap-2 border-b border-blue-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                        Shared route assignment
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-blue-950">
+                        Date, time, driver, and truck apply to every order in this stop.
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-blue-700 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-white">
+                      {selectedDeliveryGroup.length} orders
+                    </span>
+                  </div>
+                  <div className="grid gap-2 p-3 md:grid-cols-2">
+                    {selectedDeliveryGroup.map((groupDelivery) => {
+                      const groupItems = Array.isArray(groupDelivery.items)
+                        ? groupDelivery.items
+                        : [];
+
+                      return (
+                        <article
+                          key={groupDelivery.id}
+                          className="rounded-xl border border-blue-200 bg-white p-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-xs font-black uppercase tracking-[0.1em] text-blue-700">
+                                Order {groupDelivery.orderNumber || "—"}
+                              </p>
+                              <p className="mt-1 truncate text-sm font-black text-slate-950">
+                                {formatCustomerName(groupDelivery.customerName) ||
+                                  "Customer not entered"}
+                              </p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
+                              {groupItems.length} {groupItems.length === 1 ? "item" : "items"}
+                            </span>
+                          </div>
+                          {groupItems.length > 0 ? (
+                            <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                              {groupItems.slice(0, 3).map((item, itemIndex) => (
+                                <p
+                                  key={`${groupDelivery.id}-material-${itemIndex}`}
+                                  className="truncate text-xs font-bold text-slate-600"
+                                >
+                                  QTY {item.quantity || item.qty || "—"} · {item.description || item.name || item.itemNumber || "Material"}
+                                </p>
+                              ))}
+                              {groupItems.length > 3 ? (
+                                <p className="text-xs font-black text-blue-700">
+                                  +{groupItems.length - 3} more material lines
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
               <CompactDeliveryCard
                 delivery={selectedTimelineDelivery}
                 deliveries={safeDeliveries}
@@ -4458,7 +4864,7 @@ export default function DeliveryCalendarPage({
                   setUnassignError("");
                   setDeliveryToUnassign(delivery);
                 }}
-                onUpdateDelivery={handleMoveDelivery}
+                onUpdateDelivery={handleMoveGroupedDelivery}
                 isUpdating={
                   updatingDeliveryId === selectedTimelineDelivery.id
                 }

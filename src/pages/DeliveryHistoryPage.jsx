@@ -188,8 +188,60 @@ function formatForkliftLabel(value) {
   return "";
 }
 
+function getDeliveryDriverLabel(delivery) {
+  const assignmentDrivers = Array.isArray(delivery?.dispatchAssignments)
+    ? delivery.dispatchAssignments.map((assignment) => assignment?.driver)
+    : [];
+  const savedDrivers = Array.isArray(delivery?.drivers)
+    ? delivery.drivers
+    : [];
+  const driverNames = [
+    delivery?.driver,
+    delivery?.assignedDriverName,
+    delivery?.driverName,
+    ...savedDrivers,
+    ...assignmentDrivers,
+  ]
+    .map((driverName) => String(driverName || "").trim())
+    .filter(Boolean);
+
+  return [...new Set(driverNames)].join(", ") || "Driver not recorded";
+}
+
+function getAdjacentPhotoState(currentPhoto, offset) {
+  if (!currentPhoto) {
+    return currentPhoto;
+  }
+
+  const gallery = Array.isArray(currentPhoto.gallery)
+    ? currentPhoto.gallery.filter((photo) => photo?.dataUrl)
+    : [];
+
+  if (gallery.length < 2) {
+    return currentPhoto;
+  }
+
+  const currentIndex = Number.isInteger(currentPhoto.galleryIndex)
+    ? currentPhoto.galleryIndex
+    : 0;
+  const nextIndex = (currentIndex + offset + gallery.length) % gallery.length;
+  const nextPhoto = gallery[nextIndex];
+  const galleryLabel = currentPhoto.galleryLabel || "Delivery photo";
+
+  return {
+    ...currentPhoto,
+    ...nextPhoto,
+    gallery,
+    galleryIndex: nextIndex,
+    galleryLabel,
+    label: `${galleryLabel} ${nextIndex + 1}`,
+  };
+}
+
 function PhotoPreview({
   photo,
+  photos,
+  photoIndex = 0,
   label,
   isHardware = false,
   onView,
@@ -211,6 +263,9 @@ function PhotoPreview({
           deliveryId,
           photoField,
           photosField,
+          gallery: photos,
+          galleryIndex: photoIndex,
+          galleryLabel: label.replace(/\s+\d+$/, ""),
         })
       }
       className={`block w-full overflow-hidden rounded-2xl border bg-white text-left transition ${
@@ -339,6 +394,8 @@ function PhotoPreviewGrid({
     <PhotoPreview
       key={`${label}-${photo.dataUrl}-${photoIndex}`}
       photo={photo}
+      photos={photos}
+      photoIndex={photoIndex}
       label={`${label} ${photoIndex + 1}`}
       isHardware={isHardware}
       onView={onView}
@@ -448,6 +505,36 @@ export default function DeliveryHistoryPage({
     );
   }, [latestCompletedDateKey, selectedDate]);
 
+  useEffect(() => {
+    if (!viewingPhoto?.dataUrl) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+
+    function handlePhotoKeyDown(event) {
+      if (event.key === "Escape") {
+        setViewingPhoto(null);
+      } else if (event.key === "ArrowLeft") {
+        setViewingPhoto((currentPhoto) =>
+          getAdjacentPhotoState(currentPhoto, -1),
+        );
+      } else if (event.key === "ArrowRight") {
+        setViewingPhoto((currentPhoto) =>
+          getAdjacentPhotoState(currentPhoto, 1),
+        );
+      }
+    }
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handlePhotoKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handlePhotoKeyDown);
+    };
+  }, [viewingPhoto?.dataUrl]);
+
   const matchingDeliveries = useMemo(() => {
     const textSearch = normalizeText(searchValue);
     const numberSearch = normalizeNumber(searchValue);
@@ -487,6 +574,11 @@ export default function DeliveryHistoryPage({
 
   const hasHistory = completedDeliveries.length > 0;
   const hasSearch = searchValue.trim().length > 0;
+  const viewingGalleryCount = Array.isArray(viewingPhoto?.gallery)
+    ? viewingPhoto.gallery.filter((photo) => photo?.dataUrl).length
+    : viewingPhoto?.dataUrl
+      ? 1
+      : 0;
 
   function toggleDelivery(deliveryId) {
     setOpenDeliveryKeys((currentOpenDeliveryKeys) => ({
@@ -1007,6 +1099,7 @@ export default function DeliveryHistoryPage({
               deliveryPhotos.length + hardwarePhotos.length;
             const proofPhotoLimitReached =
               proofPhotoCount >= MAX_DELIVERY_PROOF_PHOTOS;
+            const deliveryDriverLabel = getDeliveryDriverLabel(delivery);
 
             return (
               <article
@@ -1036,7 +1129,7 @@ export default function DeliveryHistoryPage({
                   <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-2 lg:col-span-1">
                     <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
                       <UserRound className="h-4 w-4" aria-hidden="true" />
-                      {delivery.driver}
+                      {deliveryDriverLabel}
                     </span>
 
                     <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">
@@ -1101,6 +1194,49 @@ export default function DeliveryHistoryPage({
                       />
                     </span>
                 </button>
+
+                {deliveryPhotos.length > 0 ? (
+                  <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                      <Images className="h-4 w-4 text-[#FC2C38]" aria-hidden="true" />
+                      Delivery photos
+                    </div>
+
+                    <div className="flex min-w-0 items-center gap-2">
+                      {deliveryPhotos.slice(0, 2).map((photo, photoIndex) => (
+                        <button
+                          key={`${delivery.id}-preview-${photo.dataUrl}-${photoIndex}`}
+                          type="button"
+                          onClick={() =>
+                            setViewingPhoto({
+                              ...photo,
+                              label: `Delivery photo ${photoIndex + 1}`,
+                              deliveryId: delivery.id,
+                              photoField: "deliveryPhoto",
+                              photosField: "deliveryPhotos",
+                              gallery: deliveryPhotos,
+                              galleryIndex: photoIndex,
+                              galleryLabel: "Delivery photo",
+                            })
+                          }
+                          className="group relative h-20 w-28 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-sm transition hover:-translate-y-0.5 hover:border-[#FC2C38] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#FC2C38] focus:ring-offset-2"
+                          aria-label={`Open delivery photo ${photoIndex + 1} of ${deliveryPhotos.length}`}
+                        >
+                          <img
+                            src={photo.previewUrl || photo.dataUrl}
+                            alt={`Delivery proof ${photoIndex + 1}`}
+                            className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                          />
+                          {photoIndex === 1 && deliveryPhotos.length > 2 ? (
+                            <span className="absolute inset-0 flex items-center justify-center bg-slate-950/60 text-sm font-black text-white">
+                              +{deliveryPhotos.length - 2} more
+                            </span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
 
                 {deliveryIsOpen ? (
                 <>
@@ -1370,12 +1506,23 @@ export default function DeliveryHistoryPage({
           role="dialog"
           aria-modal="true"
           aria-label={viewingPhoto.label || "Delivery photo"}
+          onClick={() => setViewingPhoto(null)}
         >
-          <div className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div
+            className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-              <p className="truncate text-sm font-black uppercase tracking-[0.12em] text-slate-700">
-                {viewingPhoto.label || "Delivery Photo"}
-              </p>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black uppercase tracking-[0.12em] text-slate-700">
+                  {viewingPhoto.label || "Delivery Photo"}
+                </p>
+                {viewingGalleryCount > 1 ? (
+                  <p className="mt-0.5 text-xs font-bold text-slate-500">
+                    {(viewingPhoto.galleryIndex || 0) + 1} of {viewingGalleryCount}
+                  </p>
+                ) : null}
+              </div>
               <div className="flex shrink-0 items-center gap-2">
                 {isSuperAdmin ? (
                   <button
@@ -1399,12 +1546,42 @@ export default function DeliveryHistoryPage({
               </div>
             </div>
 
-            <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-950 p-3">
+            <div className="relative flex min-h-0 flex-1 items-center justify-center bg-slate-950 p-3 sm:p-6">
+              {viewingGalleryCount > 1 ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setViewingPhoto((currentPhoto) =>
+                      getAdjacentPhotoState(currentPhoto, -1),
+                    )
+                  }
+                  className="absolute left-3 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-slate-950 shadow-lg transition hover:scale-105 hover:bg-white sm:left-5"
+                  aria-label="Previous photo"
+                >
+                  <ChevronLeft className="h-7 w-7" aria-hidden="true" />
+                </button>
+              ) : null}
+
               <img
                 src={viewingPhoto.dataUrl}
                 alt={viewingPhoto.label || "Delivery photo"}
                 className="max-h-[78vh] w-auto max-w-full object-contain"
               />
+
+              {viewingGalleryCount > 1 ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setViewingPhoto((currentPhoto) =>
+                      getAdjacentPhotoState(currentPhoto, 1),
+                    )
+                  }
+                  className="absolute right-3 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-slate-950 shadow-lg transition hover:scale-105 hover:bg-white sm:right-5"
+                  aria-label="Next photo"
+                >
+                  <ChevronRight className="h-7 w-7" aria-hidden="true" />
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

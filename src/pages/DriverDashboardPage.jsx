@@ -339,7 +339,23 @@ function DriverRouteOverview({
 }) {
   const sortedSupplierRuns = sortSupplierRuns(openSupplierRuns);
   const nextSupplierRun = sortedSupplierRuns[0];
-  const nextDelivery = openDeliveries[0];
+  const deliveryStops = openDeliveries.reduce((stops, delivery) => {
+    const stopKey = delivery?.deliveryCalendarGroupId
+      ? `group:${delivery.deliveryCalendarGroupId}`
+      : `delivery:${delivery?.id || ""}`;
+    const existingStop = stops.find((stop) => stop.key === stopKey);
+
+    if (existingStop) {
+      existingStop.deliveries.push(delivery);
+      return stops;
+    }
+
+    stops.push({ key: stopKey, deliveries: [delivery] });
+    return stops;
+  }, []);
+  const nextDeliveryStop = deliveryStops[0];
+  const nextDelivery = nextDeliveryStop?.deliveries?.[0];
+  const nextDeliveryOrderCount = nextDeliveryStop?.deliveries?.length || 0;
   const supplierStopCount = getSupplierStopCount(sortedSupplierRuns);
   const supplierItemCount = getItemCountFromRuns(sortedSupplierRuns);
 
@@ -382,16 +398,22 @@ function DriverRouteOverview({
               ? `Next stop: vendor return`
               : isReturnDelivery(nextDelivery)
                 ? `Next stop: return pickup`
-              : `${openDeliveries.length} ${
-                  openDeliveries.length === 1 ? "delivery" : "deliveries"
-                } assigned`
+                : nextDeliveryOrderCount > 1
+                  ? `Next stop: ${nextDeliveryOrderCount} orders together`
+                  : `${deliveryStops.length} ${
+                      deliveryStops.length === 1 ? "stop" : "stops"
+                    } assigned`
             : "Nothing assigned"
         }
         secondary={
           openDeliveries.length > 0
-            ? `${getDeliveryTimeLabel(nextDelivery)} • ${getDeliveryLocationLabel(
-                nextDelivery,
-              )}`
+            ? `${deliveryStops.length} ${
+                deliveryStops.length === 1 ? "stop" : "stops"
+              } • ${openDeliveries.length} ${
+                openDeliveries.length === 1 ? "order" : "orders"
+              } • ${getDeliveryTimeLabel(nextDelivery)} • ${getDeliveryLocationLabel(
+                  nextDelivery,
+                )}`
             : "Deliveries will show here when dispatch assigns them."
         }
         meta={

@@ -925,6 +925,9 @@ function findScheduleConflictDetails(currentDelivery, assignments, deliveries) {
   for (const delivery of deliveries) {
     if (
       delivery.id === currentDelivery.id ||
+      (currentDelivery.deliveryCalendarGroupId &&
+        delivery.deliveryCalendarGroupId ===
+          currentDelivery.deliveryCalendarGroupId) ||
       delivery.status === "complete" ||
       delivery.dispatchStatus === "needsDispatch" ||
       delivery.deliveryDate !== currentDelivery.deliveryDate
@@ -1554,6 +1557,21 @@ function DeliveryDispatchOverview({
                   : null;
               const endsDateGroup =
                 deliveryDateKey !== nextDeliveryDateKey;
+              const deliveryGroupId = delivery.deliveryCalendarGroupId || "";
+              const previousDeliveryGroupId =
+                index > 0
+                  ? deliveries[index - 1].deliveryCalendarGroupId || ""
+                  : "";
+              const startsDeliveryGroup =
+                Boolean(deliveryGroupId) &&
+                deliveryGroupId !== previousDeliveryGroupId;
+              const groupedStopDeliveries = deliveryGroupId
+                ? totalDeliveries.filter(
+                    (groupDelivery) =>
+                      groupDelivery.deliveryCalendarGroupId ===
+                      deliveryGroupId,
+                  )
+                : [];
               const dateGroupDeliveries = startsDateGroup
                 ? deliveries.filter(
                     (groupDelivery) =>
@@ -1570,6 +1588,21 @@ function DeliveryDispatchOverview({
                       deliveries={dateGroupDeliveries}
                       connected
                     />
+                  ) : null}
+                  {startsDeliveryGroup && groupedStopDeliveries.length > 1 ? (
+                    <div className="flex flex-col gap-2 border-x border-t border-blue-300 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                          Grouped stop · {groupedStopDeliveries.length} orders
+                        </p>
+                        <p className="mt-0.5 text-xs font-bold text-blue-950">
+                          One date, time, driver, and truck. Each order keeps its own material list.
+                        </p>
+                      </div>
+                      <span className="w-fit shrink-0 rounded-full bg-blue-700 px-3 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">
+                        Dispatch together
+                      </span>
+                    </div>
                   ) : null}
                   <article
                     id={`delivery-lineup-${delivery.id}`}
@@ -1891,7 +1924,9 @@ function DeliveryDispatchOverview({
                         ? "Saving..."
                         : savedDeliveryId === delivery.id
                           ? "Saved"
-                        : "Save"}
+                        : groupedStopDeliveries.length > 1
+                          ? `Save group (${groupedStopDeliveries.length})`
+                          : "Save"}
                     </button>
                     {canMarkDelivered ? (
                       <button
@@ -3060,6 +3095,33 @@ export default function DeliveryDispatchPage({
     setError("");
   }
 
+  function getGroupedStopDeliveries(delivery) {
+    if (!delivery?.deliveryCalendarGroupId) {
+      return [delivery];
+    }
+
+    return dispatchDeliveries
+      .filter(
+        (candidate) =>
+          candidate.status !== "complete" &&
+          candidate.deliveryCalendarGroupId ===
+            delivery.deliveryCalendarGroupId,
+      )
+      .sort(compareDeliveriesByDateAndRoute);
+  }
+
+  function updateGroupedSchedule(delivery, field, value) {
+    getGroupedStopDeliveries(delivery).forEach((groupDelivery) => {
+      updateSchedule(groupDelivery, field, value);
+    });
+  }
+
+  function updateGroupedAssignment(delivery, assignmentIndex, field, value) {
+    getGroupedStopDeliveries(delivery).forEach((groupDelivery) => {
+      updateAssignment(groupDelivery, assignmentIndex, field, value);
+    });
+  }
+
   function updateTruckCount(delivery, truckCount) {
     const currentAssignments = getAssignments(delivery);
     const nextAssignments = Array.from({ length: truckCount }, (_, index) =>
@@ -3216,60 +3278,75 @@ export default function DeliveryDispatchPage({
     }
 
     const primaryAssignment = assignments[0];
+    const groupedStopDeliveries = getGroupedStopDeliveries(delivery);
+    const shouldShareAssignments =
+      assignmentsWereEdited || groupedStopDeliveries.length > 1;
 
     setSavingDeliveryId(delivery.id);
     setError("");
 
     try {
-      await onUpdateDelivery(delivery.id, {
-        ...(assignmentsWereEdited
-          ? {
-              driver: primaryAssignment.driver,
-              drivers: assignments
-                .map((assignment) => assignment.driver)
-                .filter(Boolean),
-              vehicleId: primaryAssignment.vehicleId,
-              vehicleTitle: primaryAssignment.vehicleTitle,
-              vehicleBadge: primaryAssignment.vehicleBadge,
-              dispatchAssignments: assignments,
-            }
-          : {}),
-        dispatchStatus: completeAssignment ? "assigned" : "needsDispatch",
-        deliveryDate: schedule.deliveryDate,
-        deliveryTimeSlot: schedule.deliveryTimeSlot,
-        deliveryOriginName: schedule.deliveryOriginName,
-        deliveryOriginAddress: schedule.deliveryOriginAddress,
-        oneWayDriveMinutes: deliveryWithSchedule.oneWayDriveMinutes,
-        deliveryRouteOrder:
-          getDeliveryRouteOrder(delivery) === Number.POSITIVE_INFINITY
-            ? Math.max(
-                1,
-                routeMapDeliveries.findIndex(
-                  (routeDelivery) => routeDelivery.id === delivery.id,
-                ) + 1,
-              )
-            : getDeliveryRouteOrder(delivery),
-        status: delivery.status || "open",
-        updatedAt: new Date().toISOString(),
-      });
+      const fallbackRouteOrder = Math.max(
+        1,
+        routeMapDeliveries.findIndex(
+          (routeDelivery) => routeDelivery.id === delivery.id,
+        ) + 1,
+      );
+
+      for (const [groupIndex, groupDelivery] of groupedStopDeliveries.entries()) {
+        const currentRouteOrder = getDeliveryRouteOrder(groupDelivery);
+
+        await onUpdateDelivery(groupDelivery.id, {
+          ...(shouldShareAssignments
+            ? {
+                driver: primaryAssignment.driver,
+                drivers: assignments
+                  .map((assignment) => assignment.driver)
+                  .filter(Boolean),
+                vehicleId: primaryAssignment.vehicleId,
+                vehicleTitle: primaryAssignment.vehicleTitle,
+                vehicleBadge: primaryAssignment.vehicleBadge,
+                dispatchAssignments: assignments,
+              }
+            : {}),
+          dispatchStatus: completeAssignment ? "assigned" : "needsDispatch",
+          deliveryDate: schedule.deliveryDate,
+          deliveryTimeSlot: schedule.deliveryTimeSlot,
+          deliveryOriginName: schedule.deliveryOriginName,
+          deliveryOriginAddress: schedule.deliveryOriginAddress,
+          oneWayDriveMinutes: deliveryWithSchedule.oneWayDriveMinutes,
+          deliveryRouteOrder:
+            currentRouteOrder === Number.POSITIVE_INFINITY
+              ? fallbackRouteOrder + groupIndex
+              : currentRouteOrder,
+          status: groupDelivery.status || "open",
+          updatedAt: new Date().toISOString(),
+        });
+      }
       if (routeMapDate && routeMapDate !== schedule.deliveryDate) {
         setRouteMapDate(schedule.deliveryDate);
       }
       setDraftSchedules((currentDraftSchedules) => {
         const nextDraftSchedules = { ...currentDraftSchedules };
-        delete nextDraftSchedules[delivery.id];
+        groupedStopDeliveries.forEach((groupDelivery) => {
+          delete nextDraftSchedules[groupDelivery.id];
+        });
         return nextDraftSchedules;
       });
-      if (assignmentsWereEdited) {
+      if (shouldShareAssignments) {
         setDraftAssignments((currentDraftAssignments) => {
           const nextDraftAssignments = { ...currentDraftAssignments };
-          delete nextDraftAssignments[delivery.id];
+          groupedStopDeliveries.forEach((groupDelivery) => {
+            delete nextDraftAssignments[groupDelivery.id];
+          });
           return nextDraftAssignments;
         });
       }
       setOpenDeliveryKeys((currentOpenDeliveryKeys) => {
         const nextOpenDeliveryKeys = { ...currentOpenDeliveryKeys };
-        delete nextOpenDeliveryKeys[delivery.id];
+        groupedStopDeliveries.forEach((groupDelivery) => {
+          delete nextOpenDeliveryKeys[groupDelivery.id];
+        });
         return nextOpenDeliveryKeys;
       });
       setSavedDeliveryId(delivery.id);
@@ -3527,15 +3604,15 @@ export default function DeliveryDispatchPage({
         onSearchQueryChange={setSearchQuery}
         onDriverChange={(delivery, driverName) => {
           setSavedDeliveryId("");
-          updateAssignment(delivery, 0, "driver", driverName);
+          updateGroupedAssignment(delivery, 0, "driver", driverName);
         }}
         onTruckChange={(delivery, vehicleId) => {
           setSavedDeliveryId("");
-          updateAssignment(delivery, 0, "vehicleId", vehicleId);
+          updateGroupedAssignment(delivery, 0, "vehicleId", vehicleId);
         }}
         onScheduleChange={(delivery, field, value) => {
           setSavedDeliveryId("");
-          updateSchedule(delivery, field, value);
+          updateGroupedSchedule(delivery, field, value);
         }}
         onDispatchDelivery={handleDispatchDelivery}
         savingDeliveryId={savingDeliveryId}

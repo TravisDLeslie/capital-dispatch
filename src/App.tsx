@@ -31,6 +31,7 @@ import {
   PackageCheck,
   Percent,
   Plus,
+  ReceiptText,
   Route,
   Search,
   ShieldCheck,
@@ -228,6 +229,7 @@ function lazyPageWithReload(
 }
 
 const BounciePage = lazy(() => import("./pages/BounciePage"));
+const AccountingPage = lazy(() => import("./pages/AccountingPage"));
 const CheckInPage = lazy(() => import("./pages/CheckInPage"));
 const CustomersPage = lazy(() => import("./pages/CustomersPage"));
 const CustomerPaymentLinksPage = lazy(
@@ -307,6 +309,7 @@ const PROTECTED_OFFICE_PAGE_IDS = new Set([
   "vendor-settings",
   "sales-report",
   "accounting",
+  "accounting-expenses",
   "accounting-customers",
   "customer-payment-links",
 ]);
@@ -872,6 +875,7 @@ const LEGACY_ROLE_PAGE_IDS: Record<string, string[]> = {
   accounting: [
     "dashboard",
     "accounting",
+    "accounting-expenses",
     "accounting-customers",
     "customer-payment-links",
   ],
@@ -1381,6 +1385,7 @@ function getAllowedPageIdsForRole(role: string) {
       "woodgrain-price-book",
       "inventory",
       "accounting",
+      "accounting-expenses",
       "accounting-customers",
       "customer-payment-links",
       "fleet",
@@ -1447,6 +1452,7 @@ function getAllowedPageIdsForRole(role: string) {
       "woodgrain-price-book",
       "inventory",
       "accounting",
+      "accounting-expenses",
       "accounting-customers",
       "customer-payment-links",
       "admin",
@@ -1629,6 +1635,13 @@ function getAllowedPageIds(
       !pageIds.includes("documents")
     ) {
       pageIds.push("documents");
+    }
+
+    if (
+      pageIds.includes("accounting") &&
+      !pageIds.includes("accounting-expenses")
+    ) {
+      pageIds.push("accounting-expenses");
     }
 
     return addWorkViewPageIds(pageIds);
@@ -2356,9 +2369,12 @@ export default function App() {
     ].includes(pageId),
   );
   const canReadAccounting = effectiveAllowedPageIds.some((pageId) =>
-    ["accounting", "accounting-customers", "customer-payment-links"].includes(
-      pageId,
-    ),
+    [
+      "accounting",
+      "accounting-expenses",
+      "accounting-customers",
+      "customer-payment-links",
+    ].includes(pageId),
   );
   const canReadAdmin = effectiveAllowedPageIds.some((pageId) =>
     [
@@ -2382,6 +2398,8 @@ export default function App() {
   const canReadCustomerPaymentLinks =
     canReadAccounting &&
     effectiveAllowedPageIds.includes("customer-payment-links");
+  const canReadAccountingExpenses =
+    canReadAccounting && effectiveAllowedPageIds.includes("accounting-expenses");
   const canReadAccountingCustomers =
     canReadAccounting && effectiveAllowedPageIds.includes("accounting-customers");
   const canReadCustomers =
@@ -8342,10 +8360,15 @@ export default function App() {
     }
 
     if (currentPage === "accounting" && canReadAccounting) {
+      const currentMonthPaymentLinkCount = customerPaymentLinks.filter(
+        (paymentLink) =>
+          paymentLink.month === new Date().toISOString().slice(0, 7),
+      ).length;
+
       return (
         <SectionHubPage
           title="Accounting"
-          description="Payment link follow-up and account collection tools."
+          description="Expenses, statements, and account collection tools."
           icon={DollarSign}
           stats={[
             {
@@ -8357,20 +8380,29 @@ export default function App() {
             {
               icon: MailCheck,
               label: "Payment Links",
-              value: customerPaymentLinks.filter(
-                (paymentLink) =>
-                  paymentLink.month === new Date().toISOString().slice(0, 7),
-              ).length,
+              value: currentMonthPaymentLinkCount,
               note: "This month",
             },
           ]}
           actions={[
+            canReadAccountingExpenses
+              ? {
+                  icon: ReceiptText,
+                  label: "Expenses",
+                  title: "Fixed Expenses",
+                  description:
+                    "Maintain recurring monthly costs and review the yearly projection.",
+                  tone: "warning",
+                  onClick: () => setCurrentPage("accounting-expenses"),
+                }
+              : null,
             canReadAccountingCustomers
               ? {
                   icon: UsersRound,
                   label: "Statements",
                   title: "Customer Statements",
-                  description: "View customers with statement balances and monthly history.",
+                  description:
+                    "View customers with statement balances and monthly history.",
                   metric: customerStatements.length,
                   metricLabel: "Balances",
                   tone: "schedule",
@@ -8382,11 +8414,9 @@ export default function App() {
                   icon: MailCheck,
                   label: "A/R",
                   title: "Payment Links",
-                  description: "Build and check off monthly customer payment link reminders.",
-                  metric: customerPaymentLinks.filter(
-                    (paymentLink) =>
-                      paymentLink.month === new Date().toISOString().slice(0, 7),
-                  ).length,
+                  description:
+                    "Build and check off monthly customer payment link reminders.",
+                  metric: currentMonthPaymentLinkCount,
                   metricLabel: "This Month",
                   tone: "dispatch",
                   onClick: () => setCurrentPage("customer-payment-links"),
@@ -9289,6 +9319,7 @@ export default function App() {
               vehicleOptions={southVehicleOptions}
               employeeOptions={deliveryDriverOptions}
               canEditDeliveries={canEditDeliveryDetails}
+              canViewDispatchNotes={canReadDispatch}
               onEditDelivery={handleEditDelivery}
               onViewOrder={(delivery: Delivery) =>
                 setViewingDeliveryCalendarOrderNumber(
@@ -9388,6 +9419,14 @@ export default function App() {
             onPageChange={setCurrentPage}
           />
         );
+
+      case "accounting-expenses":
+        return canReadAccountingExpenses ? (
+          <AccountingPage
+            currentUser={currentUserCreator}
+            onBack={() => setCurrentPage("accounting")}
+          />
+        ) : null;
 
       case "customer-payment-links":
         return canReadCustomerPaymentLinks ? (

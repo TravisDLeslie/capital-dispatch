@@ -302,6 +302,7 @@ const legacyRolePermissionPresets = {
   accounting: [
     "dashboard",
     "accounting",
+    "accounting-expenses",
     "accounting-customers",
     "customer-payment-links",
   ],
