@@ -2114,7 +2114,7 @@ function DeliveryWeekView({
                 </span>
               </button>
 
-              {blockOff ? (
+              {blockOff && isClosedAllDay ? (
                 <div
                   className="mt-2 flex min-h-32 flex-col items-center justify-center rounded-xl border px-3 py-4 text-center shadow-sm"
                   style={{
@@ -2282,6 +2282,34 @@ function DeliveryWeekView({
                   </p>
                 ) : null}
               </div>
+
+              {blockOff && !isClosedAllDay ? (
+                <div
+                  className="mt-3 flex min-h-32 flex-col items-center justify-center rounded-xl border px-3 py-4 text-center shadow-sm"
+                  style={{
+                    backgroundColor: blockOffPresentation.backgroundColor,
+                    borderColor: blockOffPresentation.backgroundColor,
+                    color: blockOffPresentation.textColor,
+                  }}
+                  title={`${blockOff.reason} · ${getCalendarBlockOffScheduleLabel(blockOff)}`}
+                >
+                  <span
+                    className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-4xl shadow-sm"
+                    aria-hidden="true"
+                  >
+                    {blockOff.icon || "📅"}
+                  </span>
+                  <p className="mt-3 text-base font-black uppercase tracking-[0.07em]">
+                    {getCalendarBlockOffScheduleLabel(blockOff)}
+                  </p>
+                  <p
+                    className="mt-2 w-full border-t pt-2 text-lg font-black leading-tight"
+                    style={{ borderColor: blockOffPresentation.dividerColor }}
+                  >
+                    {blockOff.reason}
+                  </p>
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -2438,7 +2466,7 @@ function DeliveryMonthView({
                     {day.date.getDate()}
                   </button>
 
-                  {blockOff ? (
+                  {blockOff && isClosedAllDay ? (
                     <div
                       className="mt-1 flex min-h-24 flex-col items-center justify-center rounded-lg border px-2 py-2.5 text-center shadow-sm"
                       style={{
@@ -2614,6 +2642,36 @@ function DeliveryMonthView({
                       </button>
                     ) : null}
                   </div>
+
+                  {blockOff && !isClosedAllDay ? (
+                    <div
+                      className="mt-2 flex min-h-24 flex-col items-center justify-center rounded-lg border px-2 py-2.5 text-center shadow-sm"
+                      style={{
+                        backgroundColor: blockOffPresentation.backgroundColor,
+                        borderColor: blockOffPresentation.backgroundColor,
+                        color: blockOffPresentation.textColor,
+                      }}
+                      title={`${blockOff.reason} · ${getCalendarBlockOffScheduleLabel(blockOff)}`}
+                    >
+                      <span
+                        className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white text-2xl shadow-sm"
+                        aria-hidden="true"
+                      >
+                        {blockOff.icon || "📅"}
+                      </span>
+                      <span className="mt-1.5 block w-full text-xs font-black uppercase leading-tight tracking-[0.04em]">
+                        <span className="block line-clamp-2">
+                          {getCalendarBlockOffScheduleLabel(blockOff)}
+                        </span>
+                        <span
+                          className="mt-1.5 block line-clamp-2 border-t pt-1.5 text-sm normal-case tracking-normal"
+                          style={{ borderColor: blockOffPresentation.dividerColor }}
+                        >
+                          {blockOff.reason}
+                        </span>
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -4599,7 +4657,8 @@ export default function DeliveryCalendarPage({
         </div>
       </section>
 
-      {selectedDateBlockOff ? (
+      {selectedDateBlockOff &&
+      isAllDayCalendarBlockOff(selectedDateBlockOff) ? (
         <section
           className="mb-6 rounded-2xl border px-4 py-6 text-center shadow-sm sm:px-5"
           style={{
@@ -5156,6 +5215,48 @@ export default function DeliveryCalendarPage({
           </>
         )
       )}
+
+      {calendarView === "day" &&
+      hasSelectedDay &&
+      selectedDateBlockOff &&
+      !isAllDayCalendarBlockOff(selectedDateBlockOff) ? (
+        <section
+          className="mt-6 rounded-2xl border px-4 py-6 text-center shadow-sm sm:px-5"
+          style={{
+            backgroundColor: selectedDateBlockOffPresentation.backgroundColor,
+            borderColor: selectedDateBlockOffPresentation.backgroundColor,
+            color: selectedDateBlockOffPresentation.textColor,
+          }}
+        >
+          <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-white shadow-sm">
+            <span className="text-5xl" aria-hidden="true">
+              {selectedDateBlockOff.icon || "📅"}
+            </span>
+          </span>
+          <div className="mx-auto mt-3 max-w-3xl">
+            <p className="text-lg font-black uppercase tracking-[0.08em]">
+              {getCalendarBlockOffScheduleLabel(selectedDateBlockOff)}
+            </p>
+            <p
+              className="mt-2 border-t pt-2 text-xl font-black sm:text-2xl"
+              style={{
+                borderColor: selectedDateBlockOffPresentation.dividerColor,
+              }}
+            >
+              {formatDateLabel(selectedDate)} · {selectedDateBlockOff.reason}
+            </p>
+            <p
+              className="mt-2 text-xs font-semibold"
+              style={{
+                color: selectedDateBlockOffPresentation.mutedTextColor,
+              }}
+            >
+              Deliveries can be scheduled before closing as long as the full
+              delivery block fits inside the open hours above.
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {isDeliveryModalOpen && selectedTimelineDelivery ? (
         <div
