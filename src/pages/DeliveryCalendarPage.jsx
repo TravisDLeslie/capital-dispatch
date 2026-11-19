@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   Edit3,
+  EllipsisVertical,
   Eye,
   GripVertical,
   Layers,
@@ -15,6 +16,7 @@ import {
   Package,
   StickyNote,
   Truck,
+  Unlink,
   UserMinus,
   X,
 } from "lucide-react";
@@ -3467,6 +3469,7 @@ export default function DeliveryCalendarPage({
   const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [updatingDeliveryId, setUpdatingDeliveryId] = useState("");
+  const [ungroupingGroupId, setUngroupingGroupId] = useState("");
   const [error, setError] = useState("");
   const [deliveryToUnassign, setDeliveryToUnassign] = useState(null);
   const [unassigningDeliveryId, setUnassigningDeliveryId] = useState("");
@@ -3931,6 +3934,48 @@ export default function DeliveryCalendarPage({
     }
 
     return true;
+  }
+
+  async function handleUngroupDeliveryStop(delivery) {
+    const groupId = String(delivery?.deliveryCalendarGroupId || "").trim();
+
+    if (!groupId || !onUpdateDelivery) {
+      return;
+    }
+
+    const groupDeliveries = safeDeliveries.filter(
+      (candidate) => candidate.deliveryCalendarGroupId === groupId,
+    );
+
+    if (groupDeliveries.length < 2) {
+      return;
+    }
+
+    setError("");
+    setUngroupingGroupId(groupId);
+
+    try {
+      for (const groupDelivery of groupDeliveries) {
+        await onUpdateDelivery(groupDelivery.id, {
+          deliveryCalendarGroupId: "",
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      setSelectedTimelineDeliverySnapshot((currentDelivery) =>
+        currentDelivery?.deliveryCalendarGroupId === groupId
+          ? {
+              ...currentDelivery,
+              deliveryCalendarGroupId: "",
+            }
+          : currentDelivery,
+      );
+    } catch (ungroupError) {
+      console.error("Unable to ungroup delivery stop:", ungroupError);
+      setError("Unable to ungroup this stop. Try again.");
+    } finally {
+      setUngroupingGroupId("");
+    }
   }
 
   async function handleScheduleDelivery(delivery, deliveryTimeSlot, driverName = "") {
@@ -4711,7 +4756,7 @@ export default function DeliveryCalendarPage({
             }
           }}
         >
-          <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
+          <section className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-none flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
             <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b border-slate-200 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:px-6 sm:py-5">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -4798,9 +4843,48 @@ export default function DeliveryCalendarPage({
                         Date, time, driver, and truck apply to every order in this stop.
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-full bg-blue-700 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-white">
-                      {selectedDeliveryGroup.length} orders
-                    </span>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-blue-700 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-white">
+                        {selectedDeliveryGroup.length} orders
+                      </span>
+                      {canEditDeliveries ? (
+                        <details className="group/actions relative">
+                          <summary
+                            className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-xl border border-blue-300 bg-white text-blue-800 shadow-sm transition hover:border-blue-500 hover:bg-blue-100 [&::-webkit-details-marker]:hidden"
+                            aria-label="Grouped stop actions"
+                          >
+                            <EllipsisVertical
+                              className="h-5 w-5"
+                              aria-hidden="true"
+                            />
+                          </summary>
+                          <div className="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUngroupDeliveryStop(
+                                  selectedTimelineDelivery,
+                                )
+                              }
+                              disabled={
+                                ungroupingGroupId ===
+                                selectedTimelineDelivery.deliveryCalendarGroupId
+                              }
+                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-black text-slate-700 transition hover:bg-blue-50 hover:text-blue-800 disabled:cursor-wait disabled:opacity-60"
+                            >
+                              <Unlink
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                              />
+                              {ungroupingGroupId ===
+                              selectedTimelineDelivery.deliveryCalendarGroupId
+                                ? "Ungrouping…"
+                                : "Ungroup stop"}
+                            </button>
+                          </div>
+                        </details>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="grid gap-2 p-3 md:grid-cols-2">
                     {selectedDeliveryGroup.map((groupDelivery) => {
