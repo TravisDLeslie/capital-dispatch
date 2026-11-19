@@ -33,6 +33,7 @@ import {
   getCalendarBlockOffMap,
   getCalendarBlockOffScheduleLabel,
   getCalendarBlockOffTextColor,
+  getDeliveryDayFullRestoreBlockOff,
   isAllDayCalendarBlockOff,
   isDeliveryDayFullBlockOff,
   normalizeCalendarBlockOffBackgroundColor,
@@ -1189,6 +1190,7 @@ function CalendarStatusLegend() {
 function DayFullDragTile({
   disabled,
   isDragging,
+  requiresCode = true,
   onDragStart,
   onDragEnd,
   onPointerDown,
@@ -1228,7 +1230,7 @@ function DayFullDragTile({
       <div className="mt-3">
         <p className="text-sm font-black">Day is full</p>
         <p className={`mt-1 text-xs font-bold ${isDragging ? "text-white/75" : "text-slate-500"}`}>
-          Drag onto a date · code required
+          Drag onto a date{requiresCode ? " · code required" : ""}
         </p>
       </div>
     </section>
@@ -3797,6 +3799,7 @@ export default function DeliveryCalendarPage({
   onEditOrder,
   onUpdateDelivery,
   canManageDayLocks = false,
+  dayLockCodeRequired = true,
   onUpdateCalendarBlockOffs,
   onPageChange,
 }) {
@@ -4561,8 +4564,12 @@ export default function DeliveryCalendarPage({
 
     const dateBlockOff = blockedDatesByKey.get(dateKey) || null;
     const isDateFull = isDeliveryDayFullBlockOff(dateBlockOff);
+    const isPartialClosure =
+      Boolean(dateBlockOff) &&
+      !isDateFull &&
+      !isAllDayCalendarBlockOff(dateBlockOff);
 
-    if (dateBlockOff && !isDateFull) {
+    if (dateBlockOff && !isDateFull && !isPartialClosure) {
       setError(
         `${formatDateLabel(dateKey)} already has a closure managed in Admin.`,
       );
@@ -4575,9 +4582,16 @@ export default function DeliveryCalendarPage({
     }
 
     setError("");
+
+    if (!dayLockCodeRequired) {
+      void applyDayLockChange(dateKey);
+      return;
+    }
+
     setPendingDayLockChange({
       dateKey,
       isReopening: isDateFull,
+      hasPartialClosure: isPartialClosure,
     });
   }
 
@@ -4589,19 +4603,34 @@ export default function DeliveryCalendarPage({
     const dateBlockOff = blockedDatesByKey.get(dateKey) || null;
     const isDateFull = isDeliveryDayFullBlockOff(dateBlockOff);
 
+    if (
+      dateBlockOff &&
+      !isDateFull &&
+      isAllDayCalendarBlockOff(dateBlockOff)
+    ) {
+      setError(
+        `${formatDateLabel(dateKey)} already has a closure managed in Admin.`,
+      );
+      return;
+    }
+
+    const restoredBlockOff = isDateFull
+      ? getDeliveryDayFullRestoreBlockOff(dateBlockOff)
+      : null;
+
     const nextBlockOffs = (Array.isArray(calendarBlockOffs)
       ? calendarBlockOffs
       : []
-    ).filter(
-      (blockOff) =>
-        !(
-          String(blockOff?.date || "") === dateKey &&
-          isDeliveryDayFullBlockOff(blockOff)
-        ),
-    );
+    ).filter((blockOff) => String(blockOff?.date || "") !== dateKey);
 
-    if (!isDateFull) {
-      nextBlockOffs.push(createDeliveryDayFullBlockOff(dateKey));
+    if (isDateFull) {
+      if (restoredBlockOff) {
+        nextBlockOffs.push(restoredBlockOff);
+      }
+    } else {
+      nextBlockOffs.push(
+        createDeliveryDayFullBlockOff(dateKey, dateBlockOff),
+      );
     }
 
     setIsUpdatingDayLock(true);
@@ -5191,6 +5220,7 @@ export default function DeliveryCalendarPage({
             <DayFullDragTile
               disabled={isUpdatingDayLock}
               isDragging={isDayFullTileDragging}
+              requiresCode={dayLockCodeRequired}
               onDragStart={handleDayFullDragStart}
               onDragEnd={resetDayFullDrag}
               onPointerDown={handleDayFullPointerDown}
@@ -5914,6 +5944,8 @@ export default function DeliveryCalendarPage({
             ? `${formatDateLabel(pendingDayLockChange.dateKey)} will ${
                 pendingDayLockChange.isReopening
                   ? "accept new deliveries again"
+                  : pendingDayLockChange.hasPartialClosure
+                    ? "be closed to new deliveries while preserving its partial-hours schedule for reopening"
                   : "keep its existing deliveries but stop additional scheduling"
               }. Enter the scheduling code to confirm.`
             : "Enter the scheduling code to confirm this calendar change."

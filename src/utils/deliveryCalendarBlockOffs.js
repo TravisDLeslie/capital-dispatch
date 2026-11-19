@@ -42,7 +42,13 @@ export function isDeliveryDayFullBlockOff(blockOff) {
   );
 }
 
-export function createDeliveryDayFullBlockOff(date) {
+export function createDeliveryDayFullBlockOff(date, restoreBlockOff = null) {
+  const normalizedRestoreBlockOff = normalizeCalendarBlockOffEntry(
+    restoreBlockOff ? { ...restoreBlockOff, date } : null,
+    0,
+    { allowRestore: false },
+  );
+
   return {
     id: `${deliveryDayFullBlockOffIdPrefix}${date}`,
     date,
@@ -52,7 +58,29 @@ export function createDeliveryDayFullBlockOff(date) {
     mode: "allDay",
     openStart: "",
     openEnd: "",
+    ...(normalizedRestoreBlockOff &&
+    !isDeliveryDayFullBlockOff(normalizedRestoreBlockOff)
+      ? { restoreBlockOff: normalizedRestoreBlockOff }
+      : {}),
   };
+}
+
+export function getDeliveryDayFullRestoreBlockOff(blockOff) {
+  if (!isDeliveryDayFullBlockOff(blockOff)) {
+    return null;
+  }
+
+  const restoredBlockOff = normalizeCalendarBlockOffEntry(
+    blockOff?.restoreBlockOff
+      ? { ...blockOff.restoreBlockOff, date: blockOff.date }
+      : null,
+    0,
+    { allowRestore: false },
+  );
+
+  return restoredBlockOff && !isDeliveryDayFullBlockOff(restoredBlockOff)
+    ? restoredBlockOff
+    : null;
 }
 
 export const calendarBlockOffColorOptions = [
@@ -131,41 +159,68 @@ export function getCalendarBlockOffScheduleLabel(blockOff) {
   return `Open ${formatCalendarBlockOffTime(blockOff.openStart)}–${formatCalendarBlockOffTime(blockOff.openEnd)}`;
 }
 
+function normalizeCalendarBlockOffEntry(
+  blockOff,
+  index,
+  { allowRestore = true } = {},
+) {
+  const date = String(blockOff?.date || "").trim();
+  const reason = String(blockOff?.reason || "").trim();
+
+  if (!isValidDateKey(date) || !reason) {
+    return null;
+  }
+
+  const requestedMode =
+    blockOff?.mode === "limitedHours" ? "limitedHours" : "allDay";
+  const openStart = String(blockOff?.openStart || "").trim();
+  const openEnd = String(blockOff?.openEnd || "").trim();
+  const hasValidOpenWindow =
+    requestedMode === "limitedHours" &&
+    timeValueToMinutes(openStart) !== null &&
+    timeValueToMinutes(openEnd) !== null &&
+    timeValueToMinutes(openStart) < timeValueToMinutes(openEnd);
+  const normalizedBlockOff = {
+    id: String(blockOff?.id || `calendar-block-${date}-${index}`),
+    date,
+    reason,
+    icon: String(blockOff?.icon || "📅").trim() || "📅",
+    backgroundColor: normalizeCalendarBlockOffBackgroundColor(
+      blockOff?.backgroundColor,
+    ),
+    mode: hasValidOpenWindow ? "limitedHours" : "allDay",
+    openStart: hasValidOpenWindow ? openStart : "",
+    openEnd: hasValidOpenWindow ? openEnd : "",
+  };
+
+  if (allowRestore && isDeliveryDayFullBlockOff(normalizedBlockOff)) {
+    const restoredBlockOff = normalizeCalendarBlockOffEntry(
+      blockOff?.restoreBlockOff
+        ? { ...blockOff.restoreBlockOff, date }
+        : null,
+      index,
+      { allowRestore: false },
+    );
+
+    if (restoredBlockOff && !isDeliveryDayFullBlockOff(restoredBlockOff)) {
+      normalizedBlockOff.restoreBlockOff = restoredBlockOff;
+    }
+  }
+
+  return normalizedBlockOff;
+}
+
 export function normalizeCalendarBlockOffs(blockOffs) {
   const blockOffByDate = new Map();
 
   (Array.isArray(blockOffs) ? blockOffs : []).forEach((blockOff, index) => {
-    const date = String(blockOff?.date || "").trim();
-    const reason = String(blockOff?.reason || "").trim();
+    const normalizedBlockOff = normalizeCalendarBlockOffEntry(blockOff, index);
 
-    if (!isValidDateKey(date) || !reason) {
+    if (!normalizedBlockOff) {
       return;
     }
 
-    const requestedMode =
-      blockOff?.mode === "limitedHours" ? "limitedHours" : "allDay";
-    const openStart = String(blockOff?.openStart || "").trim();
-    const openEnd = String(blockOff?.openEnd || "").trim();
-    const hasValidOpenWindow =
-      requestedMode === "limitedHours" &&
-      timeValueToMinutes(openStart) !== null &&
-      timeValueToMinutes(openEnd) !== null &&
-      timeValueToMinutes(openStart) < timeValueToMinutes(openEnd);
-    const icon = String(blockOff?.icon || "📅").trim() || "📅";
-    const backgroundColor = normalizeCalendarBlockOffBackgroundColor(
-      blockOff?.backgroundColor,
-    );
-
-    blockOffByDate.set(date, {
-      id: String(blockOff?.id || `calendar-block-${date}-${index}`),
-      date,
-      reason,
-      icon,
-      backgroundColor,
-      mode: hasValidOpenWindow ? "limitedHours" : "allDay",
-      openStart: hasValidOpenWindow ? openStart : "",
-      openEnd: hasValidOpenWindow ? openEnd : "",
-    });
+    blockOffByDate.set(normalizedBlockOff.date, normalizedBlockOff);
   });
 
   return [...blockOffByDate.values()].sort((first, second) =>

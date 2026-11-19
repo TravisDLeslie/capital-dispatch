@@ -1199,6 +1199,16 @@ type DeliverySettings = {
     mode?: "allDay" | "limitedHours";
     openStart?: string;
     openEnd?: string;
+    restoreBlockOff?: {
+      id: string;
+      date: string;
+      reason: string;
+      icon?: string;
+      backgroundColor?: string;
+      mode?: "allDay" | "limitedHours";
+      openStart?: string;
+      openEnd?: string;
+    };
   }>;
   updatedAt?: string;
   [key: string]: unknown;
@@ -9684,6 +9694,7 @@ export default function App() {
               canManageDayLocks={
                 isSuperAdmin || isDeliverySchedulePasswordExempt
               }
+              dayLockCodeRequired={!isDeliverySchedulePasswordExempt}
               onUpdateCalendarBlockOffs={
                 isSuperAdmin || isDeliverySchedulePasswordExempt
                   ? (calendarBlockOffs: NonNullable<
