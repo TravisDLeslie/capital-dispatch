@@ -313,6 +313,51 @@ function isAssignedDelivery(delivery) {
   );
 }
 
+function getDeliveryStopKey(delivery) {
+  const deliveryGroupId = String(
+    delivery?.deliveryCalendarGroupId || "",
+  ).trim();
+
+  return deliveryGroupId
+    ? `group:${deliveryGroupId}`
+    : `delivery:${String(delivery?.id || "")}`;
+}
+
+function groupDeliveriesIntoStops(deliveries) {
+  const stopMap = new Map();
+
+  deliveries.forEach((delivery) => {
+    const stopKey = getDeliveryStopKey(delivery);
+    const currentStop = stopMap.get(stopKey);
+
+    if (currentStop) {
+      currentStop.deliveries.push(delivery);
+      return;
+    }
+
+    stopMap.set(stopKey, {
+      key: stopKey,
+      representative: delivery,
+      deliveries: [delivery],
+    });
+  });
+
+  return [...stopMap.values()];
+}
+
+function getGroupedStopDeliveries(delivery, deliveries) {
+  const groupId = String(delivery?.deliveryCalendarGroupId || "").trim();
+
+  if (!groupId) {
+    return delivery ? [delivery] : [];
+  }
+
+  return deliveries.filter(
+    (candidate) =>
+      String(candidate?.deliveryCalendarGroupId || "").trim() === groupId,
+  );
+}
+
 function DeliveryCard({
   delivery,
   orderBuilds,
@@ -516,6 +561,7 @@ function DeliveryDateGroup({
   onUnassign,
   onViewOrder,
 }) {
+  const deliveryStops = groupDeliveriesIntoStops(deliveries);
   const itemCount = deliveries.reduce(
     (total, delivery) =>
       total + (Array.isArray(delivery.items) ? delivery.items.length : 0),
@@ -561,7 +607,10 @@ function DeliveryDateGroup({
             </span>
           ))}
           <span className="rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-black text-white">
-            {deliveries.length} deliver{deliveries.length === 1 ? "y" : "ies"}
+            {deliveryStops.length} {deliveryStops.length === 1 ? "stop" : "stops"}
+          </span>
+          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-600">
+            {deliveries.length} order{deliveries.length === 1 ? "" : "s"}
           </span>
           {assignedCount > 0 ? (
             <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white shadow-sm">
@@ -575,26 +624,73 @@ function DeliveryDateGroup({
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {deliveries.map((delivery) => (
-          <DeliveryCard
-            key={delivery.id}
-            delivery={delivery}
-            orderBuilds={orderBuilds}
-            routeMetric={routeMetrics[String(delivery.id || "")]}
-            isDriverView={isDriverView}
-            canAssign={canAssign}
-            canUnassign={canUnassign}
-            isAssigning={
-              assigningDeliveryId === String(delivery.id || "")
-            }
-            isUnassigning={
-              unassigningDeliveryId === String(delivery.id || "")
-            }
-            onAssign={onAssign}
-            onUnassign={onUnassign}
-            onViewOrder={onViewOrder}
-          />
-        ))}
+        {deliveryStops.map((stop) => {
+          const isGroupedStop = stop.deliveries.length > 1;
+          const representative = stop.representative;
+          const customerName =
+            formatCustomerName(representative.customerName) ||
+            "Grouped delivery";
+          const address = representative.address || "Address not entered";
+          const cards = stop.deliveries.map((delivery) => (
+            <DeliveryCard
+              key={delivery.id}
+              delivery={delivery}
+              orderBuilds={orderBuilds}
+              routeMetric={routeMetrics[String(delivery.id || "")]}
+              isDriverView={isDriverView}
+              canAssign={canAssign}
+              canUnassign={canUnassign}
+              isAssigning={assigningDeliveryId === stop.key}
+              isUnassigning={unassigningDeliveryId === stop.key}
+              onAssign={onAssign}
+              onUnassign={onUnassign}
+              onViewOrder={onViewOrder}
+            />
+          ));
+
+          if (!isGroupedStop) {
+            return cards[0];
+          }
+
+          return (
+            <section
+              key={stop.key}
+              className="overflow-hidden rounded-3xl border-2 border-blue-300 bg-blue-50/80 shadow-sm sm:col-span-2 xl:col-span-3"
+            >
+              <div className="flex flex-col gap-2 border-b border-blue-200 bg-blue-100/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-blue-700 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-white">
+                      Grouped stop
+                    </span>
+                    <span className="text-xs font-black uppercase tracking-[0.08em] text-blue-800">
+                      {stop.deliveries.length} orders · 1 shared stop
+                    </span>
+                  </div>
+                  <p className="mt-2 truncate text-base font-black text-blue-950">
+                    {customerName}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs font-bold text-blue-800/80">
+                    {address}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-1.5 sm:justify-end">
+                  {stop.deliveries.map((delivery) => (
+                    <span
+                      key={`${stop.key}-${delivery.id}-order`}
+                      className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-[10px] font-black text-blue-800 shadow-sm"
+                    >
+                      Order {delivery.orderNumber || "—"}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-2 p-2.5 sm:grid-cols-2 xl:grid-cols-3">
+                {cards}
+              </div>
+            </section>
+          );
+        })}
       </div>
     </section>
   );
@@ -761,7 +857,10 @@ export default function QueuedUpcomingDeliveriesPage({
       return queuedDeliveries;
     }
 
-    return queuedDeliveries.filter((delivery) => {
+    const matchingDeliveryIds = new Set();
+    const matchingGroupIds = new Set();
+
+    queuedDeliveries.forEach((delivery) => {
       const buildItems = getBuildItems(
         getDeliveryOrderBuild(delivery, orderBuilds),
       );
@@ -773,7 +872,7 @@ export default function QueuedUpcomingDeliveriesPage({
         ],
       );
 
-      return [
+      const matches = [
         delivery.orderNumber,
         delivery.customerName,
         delivery.address,
@@ -781,6 +880,26 @@ export default function QueuedUpcomingDeliveriesPage({
         delivery.phoneNumber,
         ...itemValues,
       ].some((value) => normalizeValue(value).includes(query));
+
+      if (!matches) {
+        return;
+      }
+
+      matchingDeliveryIds.add(String(delivery.id || ""));
+
+      const groupId = String(delivery.deliveryCalendarGroupId || "").trim();
+      if (groupId) {
+        matchingGroupIds.add(groupId);
+      }
+    });
+
+    return queuedDeliveries.filter((delivery) => {
+      const groupId = String(delivery.deliveryCalendarGroupId || "").trim();
+
+      return (
+        matchingDeliveryIds.has(String(delivery.id || "")) ||
+        (groupId && matchingGroupIds.has(groupId))
+      );
     });
   }, [orderBuilds, queuedDeliveries, searchTerm]);
 
@@ -837,6 +956,14 @@ export default function QueuedUpcomingDeliveriesPage({
       })),
     [queuedDeliveries],
   );
+  const assignmentStopDeliveries = getGroupedStopDeliveries(
+    deliveryToAssign,
+    queuedDeliveries,
+  );
+  const unassignmentStopDeliveries = getGroupedStopDeliveries(
+    deliveryToUnassign,
+    queuedDeliveries,
+  );
 
   function openAssignmentModal(delivery) {
     const assignedTruck = Array.isArray(delivery?.dispatchAssignments)
@@ -892,7 +1019,7 @@ export default function QueuedUpcomingDeliveriesPage({
       return;
     }
 
-    setAssigningDeliveryId(deliveryId);
+    setAssigningDeliveryId(getDeliveryStopKey(deliveryToAssign));
     setAssignmentError("");
 
     try {
@@ -904,17 +1031,19 @@ export default function QueuedUpcomingDeliveriesPage({
         vehicleBadge: vehicle.badge || "",
       };
 
-      await onUpdateDelivery(deliveryId, {
-        deliveryTimeSlot,
-        driver,
-        drivers: [driver],
-        vehicleId: assignment.vehicleId,
-        vehicleTitle: assignment.vehicleTitle,
-        vehicleBadge: assignment.vehicleBadge,
-        dispatchAssignments: [assignment],
-        dispatchStatus: "assigned",
-        status: deliveryToAssign.status || "open",
-      });
+      for (const stopDelivery of assignmentStopDeliveries) {
+        await onUpdateDelivery(stopDelivery.id, {
+          deliveryTimeSlot,
+          driver,
+          drivers: [driver],
+          vehicleId: assignment.vehicleId,
+          vehicleTitle: assignment.vehicleTitle,
+          vehicleBadge: assignment.vehicleBadge,
+          dispatchAssignments: [assignment],
+          dispatchStatus: "assigned",
+          status: stopDelivery.status || "open",
+        });
+      }
       setDeliveryToAssign(null);
     } catch (error) {
       console.error("Unable to assign delivery:", error);
@@ -935,20 +1064,22 @@ export default function QueuedUpcomingDeliveriesPage({
       return;
     }
 
-    setUnassigningDeliveryId(deliveryId);
+    setUnassigningDeliveryId(getDeliveryStopKey(deliveryToUnassign));
     setUnassignError("");
 
     try {
-      await onUpdateDelivery(deliveryId, {
-        driver: "",
-        drivers: [],
-        vehicleId: "",
-        vehicleTitle: "",
-        vehicleBadge: "",
-        dispatchAssignments: [],
-        dispatchStatus: "needsDispatch",
-        deliveryRouteOrder: null,
-      });
+      for (const stopDelivery of unassignmentStopDeliveries) {
+        await onUpdateDelivery(stopDelivery.id, {
+          driver: "",
+          drivers: [],
+          vehicleId: "",
+          vehicleTitle: "",
+          vehicleBadge: "",
+          dispatchAssignments: [],
+          dispatchStatus: "needsDispatch",
+          deliveryRouteOrder: null,
+        });
+      }
       setDeliveryToUnassign(null);
     } catch (error) {
       console.error("Unable to unassign delivery:", error);
@@ -1170,7 +1301,9 @@ export default function QueuedUpcomingDeliveriesPage({
               id="assign-delivery-title"
               className="mt-2 text-2xl font-black tracking-tight text-slate-950"
             >
-              Assign order {deliveryToAssign.orderNumber || "—"}
+              {assignmentStopDeliveries.length > 1
+                ? "Assign grouped stop"
+                : `Assign order ${deliveryToAssign.orderNumber || "—"}`}
             </h2>
             <p className="mt-1 truncate text-sm font-bold text-slate-500">
               {formatCustomerName(deliveryToAssign.customerName) ||
@@ -1179,6 +1312,23 @@ export default function QueuedUpcomingDeliveriesPage({
                 ? ` · ${formatDate(deliveryToAssign.deliveryDate)}`
                 : " · Date not set"}
             </p>
+
+            {assignmentStopDeliveries.length > 1 ? (
+              <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                  {assignmentStopDeliveries.length} orders at this stop
+                </p>
+                <p className="mt-1 text-sm font-black text-slate-950">
+                  {assignmentStopDeliveries
+                    .map((delivery) => delivery.orderNumber || "Order")
+                    .join(" · ")}
+                </p>
+                <p className="mt-1 text-xs font-bold leading-5 text-slate-600">
+                  The same driver, truck, and optional time will be saved to
+                  every order in this grouped delivery.
+                </p>
+              </div>
+            ) : null}
 
             <div className="mt-5 grid gap-4 sm:grid-cols-3">
               <label className="block">
@@ -1280,7 +1430,11 @@ export default function QueuedUpcomingDeliveriesPage({
                 disabled={Boolean(assigningDeliveryId)}
                 className="min-h-12 rounded-xl bg-slate-950 px-7 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
               >
-                {assigningDeliveryId ? "Saving..." : "Save assignment"}
+                {assigningDeliveryId
+                  ? "Saving..."
+                  : assignmentStopDeliveries.length > 1
+                    ? "Save group assignment"
+                    : "Save assignment"}
               </button>
             </div>
           </div>
@@ -1311,13 +1465,26 @@ export default function QueuedUpcomingDeliveriesPage({
               id="unassign-delivery-title"
               className="mt-2 text-2xl font-black tracking-tight text-slate-950"
             >
-              Unassign order {deliveryToUnassign.orderNumber || "—"}?
+              {unassignmentStopDeliveries.length > 1
+                ? "Unassign grouped stop?"
+                : `Unassign order ${deliveryToUnassign.orderNumber || "—"}?`}
             </h2>
             <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
-              This removes the current driver and truck and sends the delivery
+              This removes the current driver and truck and sends
+              {unassignmentStopDeliveries.length > 1
+                ? ` all ${unassignmentStopDeliveries.length} grouped orders`
+                : " the delivery"}{" "}
               back to Dispatch. The delivery date, time, address, and order
               details will stay the same.
             </p>
+
+            {unassignmentStopDeliveries.length > 1 ? (
+              <p className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-900">
+                {unassignmentStopDeliveries
+                  .map((delivery) => delivery.orderNumber || "Order")
+                  .join(" · ")}
+              </p>
+            ) : null}
 
             {unassignError ? (
               <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
@@ -1343,7 +1510,11 @@ export default function QueuedUpcomingDeliveriesPage({
                 disabled={Boolean(unassigningDeliveryId)}
                 className="min-h-12 rounded-xl bg-[#FC2C38] px-4 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
               >
-                {unassigningDeliveryId ? "Unassigning..." : "Yes, unassign"}
+                {unassigningDeliveryId
+                  ? "Unassigning..."
+                  : unassignmentStopDeliveries.length > 1
+                    ? "Yes, unassign group"
+                    : "Yes, unassign"}
               </button>
             </div>
           </div>

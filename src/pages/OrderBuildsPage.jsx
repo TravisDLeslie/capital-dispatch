@@ -8,6 +8,7 @@ import {
   ClipboardList,
   PackageCheck,
   Pencil,
+  Plus,
   Search,
   Trash2,
   Truck,
@@ -17,6 +18,7 @@ import {
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import AddressAutocompleteInput from "../components/AddressAutocompleteInput";
+import { createId } from "../utils/idHelpers";
 
 const pathLabels = {
   wePickup: "South pickup",
@@ -110,6 +112,7 @@ function createEditDraft(build, deliveries) {
     deliveryAddress: build.deliveryAddress || linkedDelivery?.address || "",
     waitingItems: getWaitingItems(build).map((item) => ({ ...item })),
     stockItems: getStockItems(build).map((item) => ({ ...item })),
+    addedItemIds: [],
   };
 }
 
@@ -491,6 +494,43 @@ export default function OrderBuildsPage({
       ...currentDraft,
       [section]: currentDraft[section].map((item, index) =>
         index === itemIndex ? { ...item, [field]: value } : item,
+      ),
+    }));
+  }
+
+  function addDraftItem(path) {
+    const itemId = createId();
+    const section = path === "inStock" ? "stockItems" : "waitingItems";
+    const newItem = {
+      id: itemId,
+      quantity: "",
+      itemNumber: "",
+      description: "",
+      path,
+      vendor: "",
+      supplierAddress: "",
+      poNumber: "",
+      routeDate: "",
+      supplierDate: "",
+      supplierNote: "",
+      driverNotesEnabled: false,
+      driverNotes: "",
+      easilyDamaged: false,
+    };
+
+    setEditDraft((currentDraft) => ({
+      ...currentDraft,
+      [section]: [...currentDraft[section], newItem],
+      addedItemIds: [...currentDraft.addedItemIds, itemId],
+    }));
+  }
+
+  function removeAddedDraftItem(section, itemId) {
+    setEditDraft((currentDraft) => ({
+      ...currentDraft,
+      [section]: currentDraft[section].filter((item) => item.id !== itemId),
+      addedItemIds: currentDraft.addedItemIds.filter(
+        (currentItemId) => currentItemId !== itemId,
       ),
     }));
   }
@@ -966,13 +1006,48 @@ export default function OrderBuildsPage({
                 </div>
               ) : null}
 
+              <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">
+                  Add material
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => addDraftItem("inStock")}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-800 transition hover:bg-emerald-100"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Add from Stock
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addDraftItem("wePickup")}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 text-sm font-black text-red-700 transition hover:bg-red-100"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Add South Pickup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addDraftItem("supplierDelivery")}
+                    className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 text-sm font-black text-blue-800 transition hover:bg-blue-100"
+                  >
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    Add Their Truck
+                  </button>
+                </div>
+                <p className="mt-2 text-xs font-bold text-slate-500">
+                  New South and Their Truck items create their linked PO records when you save.
+                </p>
+              </div>
+
               <div className="mt-6">
                 <div className="flex flex-wrap items-end justify-between gap-2">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-700">Outside material</p>
                     <h3 className="mt-1 text-xl font-black text-slate-950">PO items</h3>
                   </div>
-                  <p className="text-xs font-bold text-slate-500">Fulfillment paths stay fixed while editing.</p>
+                  <p className="text-xs font-bold text-slate-500">Existing paths stay fixed; use the buttons above for new items.</p>
                 </div>
                 <div className="mt-3 grid gap-3">
                   {editDraft.waitingItems.map((item, itemIndex) => {
@@ -984,13 +1059,31 @@ export default function OrderBuildsPage({
                           <span className="rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-amber-800">
                             {pathLabels[item.path] || "Outside"}
                           </span>
-                          <span className="text-xs font-black text-slate-400">Item {itemIndex + 1}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black text-slate-400">Item {itemIndex + 1}</span>
+                            {editDraft.addedItemIds.includes(item.id) ? (
+                              <button
+                                type="button"
+                                onClick={() => removeAddedDraftItem("waitingItems", item.id)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-white text-red-600 transition hover:bg-red-50"
+                                aria-label="Remove newly added item"
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                        <div className="grid gap-3 sm:grid-cols-[7rem_1fr]">
+                        <div className="grid gap-3 sm:grid-cols-[7rem_9rem_1fr]">
                           <input
                             value={item.quantity || ""}
                             onChange={(event) => updateDraftItem("waitingItems", itemIndex, "quantity", event.target.value)}
                             placeholder="Qty"
+                            className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
+                          />
+                          <input
+                            value={item.itemNumber || ""}
+                            onChange={(event) => updateDraftItem("waitingItems", itemIndex, "itemNumber", event.target.value)}
+                            placeholder="Item #"
                             className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
                           />
                           <input
@@ -1055,17 +1148,26 @@ export default function OrderBuildsPage({
                 </div>
               </div>
 
-              {editDraft.stockItems.length > 0 ? (
-                <div className="mt-6">
+              <div className="mt-6">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">From stock</p>
                   <h3 className="mt-1 text-xl font-black text-slate-950">Stock items</h3>
                   <div className="mt-3 grid gap-3">
-                    {editDraft.stockItems.map((item, itemIndex) => (
-                      <div key={item.id || itemIndex} className="grid gap-3 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-4 sm:grid-cols-[7rem_1fr]">
+                    {editDraft.stockItems.length === 0 ? (
+                      <p className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/40 px-4 py-4 text-sm font-bold text-emerald-800">
+                        No stock items on this order yet.
+                      </p>
+                    ) : editDraft.stockItems.map((item, itemIndex) => (
+                      <div key={item.id || itemIndex} className="grid gap-3 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-4 sm:grid-cols-[7rem_9rem_1fr_auto]">
                         <input
                           value={item.quantity || ""}
                           onChange={(event) => updateDraftItem("stockItems", itemIndex, "quantity", event.target.value)}
                           placeholder="Qty"
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
+                        />
+                        <input
+                          value={item.itemNumber || ""}
+                          onChange={(event) => updateDraftItem("stockItems", itemIndex, "itemNumber", event.target.value)}
+                          placeholder="Item #"
                           className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
                         />
                         <input
@@ -1074,11 +1176,20 @@ export default function OrderBuildsPage({
                           placeholder="Item description"
                           className="rounded-2xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none focus:border-blue-500"
                         />
+                        {editDraft.addedItemIds.includes(item.id) ? (
+                          <button
+                            type="button"
+                            onClick={() => removeAddedDraftItem("stockItems", item.id)}
+                            className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-red-200 bg-white px-3 text-red-600 transition hover:bg-red-50"
+                            aria-label="Remove newly added stock item"
+                          >
+                            <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        ) : null}
                       </div>
                     ))}
                   </div>
                 </div>
-              ) : null}
 
               {editError ? (
                 <p className="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-700">{editError}</p>

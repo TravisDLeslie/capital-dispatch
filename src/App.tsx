@@ -4096,6 +4096,50 @@ export default function App() {
     ).map((item) => ({ ...item, path: "inStock" }));
     const allItems = [...waitingItems, ...stockItems];
     const editedItemsById = new Map(allItems.map((item) => [item.id, item]));
+    const originalWaitingItems = Array.isArray(orderBuild.waitingItems)
+      ? (orderBuild.waitingItems as Array<Record<string, unknown>>)
+      : Array.isArray(orderBuild.items)
+        ? (orderBuild.items as Array<Record<string, unknown>>).filter(
+            (item) => item.path !== "inStock",
+          )
+        : [];
+    const originalStockItems = Array.isArray(orderBuild.stockItems)
+      ? (orderBuild.stockItems as Array<Record<string, unknown>>)
+      : [];
+    const originalItemIds = new Set(
+      [...originalWaitingItems, ...originalStockItems]
+        .map((item) => String(item.id || ""))
+        .filter(Boolean),
+    );
+    const addedWaitingItems = waitingItems.filter(
+      (item) => !originalItemIds.has(String(item.id || "")),
+    );
+    const sourceOrderId = String(orderBuild.orderId || orderBuild.id || "");
+    const orderedBy =
+      String(orderBuild.orderedBy || currentUserCreator.name || "").trim() ||
+      currentUserCreator.name;
+    const createdSouthRunIds: string[] = [];
+    const createdTheirTruckPOIds: string[] = [];
+    const existingLinkedSouthRunIds = Array.isArray(
+      orderBuild.linkedSouthRunIds,
+    )
+      ? orderBuild.linkedSouthRunIds.map(String)
+      : [];
+    const existingLinkedTheirTruckPOIds = Array.isArray(
+      orderBuild.linkedTheirTruckPOIds,
+    )
+      ? orderBuild.linkedTheirTruckPOIds.map(String)
+      : [];
+    const linkedSouthRunIdSet = new Set(existingLinkedSouthRunIds);
+    const linkedTheirTruckPOIdSet = new Set(existingLinkedTheirTruckPOIds);
+    const southItemAdditionsByRunId = new Map<
+      string,
+      Array<Record<string, unknown>>
+    >();
+    const theirTruckItemAdditionsByPOId = new Map<
+      string,
+      Array<Record<string, unknown>>
+    >();
 
     function mergeLinkedItems(
       recordItems: Array<Record<string, unknown>> = [],
@@ -4125,6 +4169,196 @@ export default function App() {
         .find(Boolean);
     }
 
+    function matchesAddedItemGroup(
+      record: Record<string, unknown>,
+      item: ReturnType<typeof normalizeOrderFlowItems>[number],
+    ) {
+      const recordPO = String(record.poNumber || "").trim().toLowerCase();
+      const itemPO = String(item.poNumber || "").trim().toLowerCase();
+      const recordVendor = String(record.vendor || "").trim().toLowerCase();
+      const itemVendor = String(item.vendor || "").trim().toLowerCase();
+
+      if (itemPO && recordPO !== itemPO) {
+        return false;
+      }
+
+      if (itemVendor && recordVendor !== itemVendor) {
+        return false;
+      }
+
+      return Boolean(itemPO || itemVendor);
+    }
+
+    function createLinkedRecordItems(
+      items: ReturnType<typeof normalizeOrderFlowItems>,
+      includePickupState = false,
+    ) {
+      return items.map((item) => ({
+        id: String(item.id || createId()),
+        quantity: item.quantity,
+        itemNumber: item.itemNumber,
+        description: item.description,
+        materialUse: "order",
+        easilyDamaged: Boolean(item.easilyDamaged),
+        orderNumber,
+        customerName: customerDisplayName,
+        ...(includePickupState
+          ? {
+              pickedUp: false,
+              pickedUpAt: null,
+              pickupPhoto: null,
+              pickupPhotos: [],
+            }
+          : {}),
+      }));
+    }
+
+    const newSouthGroups = groupOrderFlowItems(
+      addedWaitingItems.filter((item) => item.path === "wePickup"),
+      (item) =>
+        `${item.vendor || "Unknown vendor"}|${item.poNumber || item.id}`,
+    );
+    let updatedSupplierRunsAfterAdd = supplierRuns;
+
+    for (const group of newSouthGroups) {
+      const firstItem = group.items[0];
+      const matchingSouthRun = supplierRuns.find((supplierRun) => {
+        const status = String(supplierRun.status || "").toLowerCase();
+
+        return (
+          linkedSouthRunIdSet.has(supplierRun.id) &&
+          status !== "complete" &&
+          status !== "completed" &&
+          matchesAddedItemGroup(
+            supplierRun as unknown as Record<string, unknown>,
+            firstItem,
+          )
+        );
+      });
+
+      if (matchingSouthRun) {
+        const currentAdditions =
+          southItemAdditionsByRunId.get(matchingSouthRun.id) || [];
+        southItemAdditionsByRunId.set(matchingSouthRun.id, [
+          ...currentAdditions,
+          ...createLinkedRecordItems(group.items, true),
+        ]);
+        continue;
+      }
+
+      const driverNotes = Array.from(
+        new Set(group.items.map((item) => item.driverNotes).filter(Boolean)),
+      ).join("\n");
+      const supplierRun: SupplierRun = {
+        id: createId(),
+        poNumber: firstItem.poNumber,
+        vendor: firstItem.vendor,
+        scheduledDate: firstItem.routeDate || deliveryDate,
+        pickupDate: firstItem.routeDate || deliveryDate,
+        orderedBy,
+        customerName: customerDisplayName,
+        orderNumber,
+        driver: "",
+        supplierAddress: firstItem.supplierAddress,
+        createdByName: currentUserCreator.name,
+        createdByEmail: currentUserCreator.email,
+        createdById: currentUserCreator.id,
+        vehicleId: "",
+        vehicleTitle: "",
+        vehicleBadge: "",
+        dispatchStatus: "needsDispatch",
+        status: "open",
+        notes: driverNotes,
+        sourceOrderId,
+        sourceOrderNumber: orderNumber,
+        stopWorkflowVersion: 2,
+        items: createLinkedRecordItems(
+          group.items,
+          true,
+        ) as SupplierRun["items"],
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      updatedSupplierRunsAfterAdd = await addSupplierRun(
+        stripUndefinedFields(supplierRun),
+        updatedSupplierRunsAfterAdd,
+      );
+      createdSouthRunIds.push(supplierRun.id);
+    }
+
+    if (createdSouthRunIds.length > 0) {
+      setSupplierRuns(updatedSupplierRunsAfterAdd);
+    }
+
+    const newTheirTruckGroups = groupOrderFlowItems(
+      addedWaitingItems.filter((item) => item.path === "supplierDelivery"),
+      (item) =>
+        `${item.vendor || "Unknown vendor"}|${item.poNumber || item.id}`,
+    );
+    let updatedTheirTruckPOsAfterAdd = theirTruckPOs;
+
+    for (const group of newTheirTruckGroups) {
+      const firstItem = group.items[0];
+      const matchingTheirTruckPO = theirTruckPOs.find((theirTruckPO) => {
+        const status = String(theirTruckPO.status || "").toLowerCase();
+
+        return (
+          linkedTheirTruckPOIdSet.has(theirTruckPO.id) &&
+          !["complete", "completed", "delivered", "cancelled"].includes(
+            status,
+          ) &&
+          matchesAddedItemGroup(
+            theirTruckPO as unknown as Record<string, unknown>,
+            firstItem,
+          )
+        );
+      });
+
+      if (matchingTheirTruckPO) {
+        const currentAdditions =
+          theirTruckItemAdditionsByPOId.get(matchingTheirTruckPO.id) || [];
+        theirTruckItemAdditionsByPOId.set(matchingTheirTruckPO.id, [
+          ...currentAdditions,
+          ...createLinkedRecordItems(group.items),
+        ]);
+        continue;
+      }
+
+      const theirTruckPO: TheirTruckPO = {
+        id: createId(),
+        poNumber: firstItem.poNumber,
+        deliveryDate: firstItem.supplierDate || deliveryDate,
+        vendor: firstItem.vendor,
+        vendorAddress: firstItem.supplierAddress,
+        customerName: customerDisplayName,
+        businessName,
+        orderNumber,
+        isStock: false,
+        status: "scheduled",
+        createdByName: currentUserCreator.name,
+        createdByEmail: currentUserCreator.email,
+        createdById: currentUserCreator.id,
+        orderedBy,
+        sourceOrderId,
+        sourceOrderNumber: orderNumber,
+        sentToDeliveryCalendarAt: now,
+        supplierNote: firstItem.supplierNote,
+        items: createLinkedRecordItems(group.items),
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      updatedTheirTruckPOsAfterAdd = await saveTheirTruckPO(
+        stripUndefinedFields(theirTruckPO),
+      );
+      createdTheirTruckPOIds.push(theirTruckPO.id);
+    }
+
+    if (createdTheirTruckPOIds.length > 0) {
+      setTheirTruckPOs(updatedTheirTruckPOsAfterAdd);
+    }
+
     const savedBuild = {
       ...orderBuild,
       orderNumber,
@@ -4135,6 +4369,15 @@ export default function App() {
       deliveryAddress,
       waitingItems,
       stockItems,
+      linkedSouthRunIds: Array.from(
+        new Set([...existingLinkedSouthRunIds, ...createdSouthRunIds]),
+      ),
+      linkedTheirTruckPOIds: Array.from(
+        new Set([
+          ...existingLinkedTheirTruckPOIds,
+          ...createdTheirTruckPOIds,
+        ]),
+      ),
       updatedAt: now,
     };
     const updatedOrderBuilds = await saveOrderBuild(savedBuild);
@@ -4163,13 +4406,8 @@ export default function App() {
       setSalesOrders(updatedSalesOrders);
     }
 
-    const linkedSouthRunIds = new Set(
-      Array.isArray(orderBuild.linkedSouthRunIds)
-        ? orderBuild.linkedSouthRunIds.map(String)
-        : [],
-    );
     const southRunUpdates = supplierRuns
-      .filter((supplierRun) => linkedSouthRunIds.has(supplierRun.id))
+      .filter((supplierRun) => linkedSouthRunIdSet.has(supplierRun.id))
       .map((supplierRun) => {
         const recordItems = Array.isArray(supplierRun.items)
           ? supplierRun.items
@@ -4189,26 +4427,23 @@ export default function App() {
             firstEditedItem?.routeDate ?? supplierRun.scheduledDate ?? "",
           pickupDate:
             firstEditedItem?.routeDate ?? supplierRun.pickupDate ?? "",
-          items: mergeLinkedItems(recordItems),
+          items: [
+            ...mergeLinkedItems(recordItems),
+            ...(southItemAdditionsByRunId.get(supplierRun.id) || []),
+          ],
         };
       });
 
     if (southRunUpdates.length > 0) {
       const updatedSupplierRuns = await updateSupplierRunsBulk(
         southRunUpdates,
-        supplierRuns,
+        updatedSupplierRunsAfterAdd,
       );
       setSupplierRuns(updatedSupplierRuns);
     }
 
-    const linkedTheirTruckPOIds = new Set(
-      Array.isArray(orderBuild.linkedTheirTruckPOIds)
-        ? orderBuild.linkedTheirTruckPOIds.map(String)
-        : [],
-    );
-
     for (const theirTruckPO of theirTruckPOs.filter((po) =>
-      linkedTheirTruckPOIds.has(po.id),
+      linkedTheirTruckPOIdSet.has(po.id),
     )) {
       const recordItems = Array.isArray(theirTruckPO.items)
         ? theirTruckPO.items
@@ -4226,7 +4461,10 @@ export default function App() {
           firstEditedItem?.supplierAddress ?? theirTruckPO.vendorAddress ?? "",
         deliveryDate:
           firstEditedItem?.supplierDate ?? theirTruckPO.deliveryDate ?? "",
-        items: mergeLinkedItems(recordItems),
+        items: [
+          ...mergeLinkedItems(recordItems),
+          ...(theirTruckItemAdditionsByPOId.get(theirTruckPO.id) || []),
+        ],
         updatedAt: now,
       });
       setTheirTruckPOs(updatedTheirTruckPOs);
@@ -4267,6 +4505,29 @@ export default function App() {
     );
 
     if (linkedDelivery) {
+      const currentDeliveryItems = Array.isArray(linkedDelivery.items)
+        ? (linkedDelivery.items as Array<Record<string, unknown>>)
+        : [];
+      const currentDeliveryItemIds = new Set(
+        currentDeliveryItems
+          .map((item) => String(item.id || ""))
+          .filter(Boolean),
+      );
+      const addedDeliveryItems = allItems
+        .filter(
+          (item) => !currentDeliveryItemIds.has(String(item.id || "")),
+        )
+        .map((item) => ({
+          id: String(item.id || createId()),
+          quantity: item.quantity,
+          itemNumber: item.itemNumber,
+          description: item.description,
+          vendor: item.vendor,
+          poNumber: item.poNumber,
+          fulfillmentPath: item.path,
+          delivered: false,
+        }));
+
       const updatedDeliveries = await updateDelivery(linkedDelivery.id, {
         orderNumber,
         sourceOrderNumber: orderNumber,
@@ -4276,9 +4537,10 @@ export default function App() {
         phoneNumber,
         address: deliveryAddress,
         deliveryDate,
-        items: mergeLinkedItems(
-          linkedDelivery.items as Array<Record<string, unknown>>,
-        ),
+        items: [
+          ...mergeLinkedItems(currentDeliveryItems),
+          ...addedDeliveryItems,
+        ],
       });
       setDeliveries(updatedDeliveries);
     }
