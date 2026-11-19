@@ -9681,9 +9681,11 @@ export default function App() {
               onUpdateDelivery={
                 canEditDeliverySchedule ? handleUpdateDelivery : undefined
               }
-              canManageDayLocks={isDeliverySchedulePasswordExempt}
+              canManageDayLocks={
+                isSuperAdmin || isDeliverySchedulePasswordExempt
+              }
               onUpdateCalendarBlockOffs={
-                isDeliverySchedulePasswordExempt
+                isSuperAdmin || isDeliverySchedulePasswordExempt
                   ? (calendarBlockOffs: NonNullable<
                       DeliverySettings["calendarBlockOffs"]
                     >) =>

@@ -13,6 +13,7 @@ import {
   FileUp,
   Hand,
   LoaderCircle,
+  LockKeyhole,
   MapPin,
   Package,
   Plus,
@@ -399,7 +400,11 @@ function getDateFromValue(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function FutureDeliveryDatePicker({ value, onChange }) {
+function FutureDeliveryDatePicker({
+  value,
+  onChange,
+  blockedDatesByKey = new Map(),
+}) {
   const triggerRef = useRef(null);
   const popoverRef = useRef(null);
   const selectedDate = getDateFromValue(value);
@@ -611,12 +616,21 @@ function FutureDeliveryDatePicker({ value, onChange }) {
                   const isPast = dateValue < todayValue;
                   const isSelected = dateValue === value;
                   const isCurrentMonth = date.getMonth() === monthStart.getMonth();
+                  const blockOff = blockedDatesByKey.get(dateValue) || null;
+                  const isBlocked = Boolean(
+                    blockOff && isAllDayCalendarBlockOff(blockOff),
+                  );
 
                   return (
                     <button
                       key={dateValue}
                       type="button"
-                      disabled={isPast}
+                      disabled={isPast || isBlocked}
+                      title={
+                        isBlocked
+                          ? getCalendarBlockOffScheduleLabel(blockOff)
+                          : undefined
+                      }
                       onClick={() => {
                         onChange(dateValue);
                         setIsOpen(false);
@@ -624,6 +638,8 @@ function FutureDeliveryDatePicker({ value, onChange }) {
                       className={`grid aspect-square min-h-9 place-items-center rounded-xl text-sm font-black transition ${
                         isSelected
                           ? "bg-[#FC2C38] text-white shadow-sm"
+                          : isBlocked
+                            ? "cursor-not-allowed bg-slate-100 text-slate-400 ring-1 ring-inset ring-slate-300"
                           : isPast
                             ? "cursor-not-allowed text-slate-300"
                             : isCurrentMonth
@@ -631,7 +647,15 @@ function FutureDeliveryDatePicker({ value, onChange }) {
                               : "text-slate-400 hover:bg-slate-50"
                       }`}
                     >
-                      {date.getDate()}
+                      <span className="relative inline-flex items-center justify-center">
+                        {date.getDate()}
+                        {isBlocked ? (
+                          <LockKeyhole
+                            className="absolute -bottom-2 h-2.5 w-2.5"
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                      </span>
                     </button>
                   );
                 })}
@@ -1125,6 +1149,27 @@ export default function OrderFlowPage({
   const selectedDeliveryDateBlockMessage = isSelectedDeliveryDateBlocked
     ? `${getCalendarBlockOffScheduleLabel(selectedDeliveryDateBlockOff)}. Choose another date or use Future Date.`
     : "";
+
+  function handleDeliveryDateChange(nextDate) {
+    const nextDateBlockOff = nextDate
+      ? calendarBlockOffsByDate.get(nextDate) || null
+      : null;
+    const isNextDateBlocked = Boolean(
+      nextDateBlockOff &&
+        isAllDayCalendarBlockOff(nextDateBlockOff) &&
+        orderMethod !== "vendorReturn",
+    );
+
+    if (isNextDateBlocked) {
+      setProcessError(
+        `${getCalendarBlockOffScheduleLabel(nextDateBlockOff)}. Choose another date or use Future Date.`,
+      );
+      return;
+    }
+
+    setDeliveryDate(nextDate);
+    setProcessError("");
+  }
   const [orderImportStatus, setOrderImportStatus] = useState("idle");
   const [orderImportError, setOrderImportError] = useState("");
   const [orderImportFileName, setOrderImportFileName] = useState("");
@@ -3465,7 +3510,9 @@ export default function OrderFlowPage({
                   <TextInput
                     type="date"
                     value={deliveryDate}
-                    onChange={(event) => setDeliveryDate(event.target.value)}
+                    onChange={(event) =>
+                      handleDeliveryDateChange(event.target.value)
+                    }
                   />
                   {selectedDeliveryDateBlockMessage ? (
                     <span className="mt-1.5 block text-xs font-black text-red-600">
@@ -3533,7 +3580,7 @@ export default function OrderFlowPage({
                   <div className="grid grid-cols-[132px_minmax(0,1fr)] gap-2">
                     <button
                       type="button"
-                      onClick={() => setDeliveryDate("")}
+                      onClick={() => handleDeliveryDateChange("")}
                       aria-pressed={!deliveryDate}
                       className={`inline-flex min-h-11 items-center justify-center rounded-xl border px-3 text-sm font-black transition focus:outline-none focus:ring-4 focus:ring-red-100 ${
                         !deliveryDate
@@ -3545,7 +3592,8 @@ export default function OrderFlowPage({
                     </button>
                     <FutureDeliveryDatePicker
                       value={deliveryDate}
-                      onChange={setDeliveryDate}
+                      onChange={handleDeliveryDateChange}
+                      blockedDatesByKey={calendarBlockOffsByDate}
                     />
                   </div>
                   {!deliveryDate ? (

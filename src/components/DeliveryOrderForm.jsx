@@ -404,6 +404,29 @@ export default function DeliveryOrderForm({
     setError("");
   }
 
+  function handleDeliveryDateChange(nextDate) {
+    const nextDateBlockOff = nextDate
+      ? calendarBlockOffsByDate.get(nextDate) || null
+      : null;
+    const keepsExistingDate =
+      Boolean(initialDelivery) &&
+      String(initialDelivery.deliveryDate || "").slice(0, 10) === nextDate;
+
+    if (
+      nextDateBlockOff &&
+      isAllDayCalendarBlockOff(nextDateBlockOff) &&
+      !keepsExistingDate
+    ) {
+      setError(
+        `${getCalendarBlockOffScheduleLabel(nextDateBlockOff)}. Choose another delivery date.`,
+      );
+      return;
+    }
+
+    setDeliveryDate(nextDate);
+    clearError();
+  }
+
   function findMatchingCustomer(value) {
     const normalizedValue = normalizeLookup(value);
 
@@ -1356,8 +1379,7 @@ export default function DeliveryOrderForm({
                   type="date"
                   value={deliveryDate}
                   onChange={(event) => {
-                    setDeliveryDate(event.target.value);
-                    clearError();
+                    handleDeliveryDateChange(event.target.value);
                   }}
                   disabled={isSubmitting}
                   className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-lg font-black text-slate-900 outline-none transition focus:border-[#FC2C38] focus:ring-4 focus:ring-red-100"

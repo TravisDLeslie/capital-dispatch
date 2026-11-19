@@ -8,6 +8,12 @@ export default function DeliveryScheduleAccessModal({
   isOpen = false,
   onClose,
   onUnlock,
+  eyebrow = "Changes protected",
+  title = "Unlock delivery scheduling",
+  description =
+    "Viewing remains available. Enter the password to assign, edit, move, group, ungroup, or remove deliveries.",
+  submitLabel = "Unlock changes",
+  errorMessage = "Incorrect delivery scheduling password. Try again.",
 }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -57,7 +63,7 @@ export default function DeliveryScheduleAccessModal({
       return;
     }
 
-    setError("Incorrect delivery scheduling password. Try again.");
+    setError(errorMessage);
     setPassword("");
   }
 
@@ -89,17 +95,16 @@ export default function DeliveryScheduleAccessModal({
         </div>
 
         <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
-          Changes protected
+          {eyebrow}
         </p>
         <h2
           id="delivery-schedule-access-title"
           className="mt-1 text-2xl font-black tracking-tight text-slate-950"
         >
-          Unlock delivery scheduling
+          {title}
         </h2>
         <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-          Viewing remains available. Enter the password to assign, edit, move,
-          group, ungroup, or remove deliveries.
+          {description}
         </p>
 
         <form onSubmit={handleSubmit} className="mt-5">
@@ -151,7 +156,7 @@ export default function DeliveryScheduleAccessModal({
             type="submit"
             className="mt-5 w-full rounded-2xl bg-[#FC2C38] px-5 py-4 text-base font-black text-white shadow-md transition hover:bg-red-600 focus:outline-none focus:ring-4 focus:ring-red-200"
           >
-            Unlock changes
+            {submitLabel}
           </button>
         </form>
       </section>

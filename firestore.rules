@@ -50,13 +50,16 @@ service cloud.firestore {
     }
 
     function canManageDeliveryCalendarDayLocks() {
-      return isApproved() &&
-        request.auth.token.email is string &&
-        request.auth.token.email in [
-        "dane@capitlalumber.co",
-        "dane@capitallumber.co",
-        "justin@capitallumber.co"
-      ];
+      return isSuperAdmin() ||
+        (
+          isApproved() &&
+          request.auth.token.email is string &&
+          request.auth.token.email in [
+            "dane@capitlalumber.co",
+            "dane@capitallumber.co",
+            "justin@capitallumber.co"
+          ]
+        );
     }
 
     function hasAnyPermission(permissionIds) {

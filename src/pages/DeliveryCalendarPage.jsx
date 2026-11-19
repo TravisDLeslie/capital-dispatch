@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
+import DeliveryScheduleAccessModal from "../components/DeliveryScheduleAccessModal";
 import EmptyState from "../components/EmptyState";
 import MarkDeliveredModal from "../components/MarkDeliveredModal";
 import PageContainer from "../components/PageContainer";
@@ -61,6 +62,7 @@ const timelineWidth = 1080;
 
 const timelineOpenMinutes = 7 * 60 + 30;
 const calendarTbdDropKey = "__delivery_date_tbd__";
+const calendarDayFullDragType = "application/x-delivery-day-full";
 const deliveryGroupHoldMs = 650;
 
 const timelineHourMarks = Array.from({ length: 12 }, (_, index) => {
@@ -1184,11 +1186,76 @@ function CalendarStatusLegend() {
   );
 }
 
+function DayFullDragTile({
+  disabled,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+  onPointerDown,
+  onPointerMove,
+  onPointerEnd,
+  onPointerCancel,
+}) {
+  return (
+    <section
+      draggable={!disabled}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerCancel}
+      className={`flex min-h-28 touch-none select-none flex-col justify-between rounded-3xl border-2 border-dashed p-4 shadow-sm transition ${
+        disabled
+          ? "cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400"
+          : isDragging
+            ? "cursor-grabbing border-slate-950 bg-slate-950 text-white ring-4 ring-slate-200"
+            : "cursor-grab border-slate-400 bg-white text-slate-950 hover:border-slate-950 hover:shadow-md active:cursor-grabbing"
+      }`}
+      aria-label="Drag Day Full onto a calendar date"
+      title="Drag onto a date to stop additional deliveries"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span
+          className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+            isDragging ? "bg-white/15" : "bg-slate-100"
+          }`}
+        >
+          <LockKeyhole className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <GripVertical className="h-5 w-5 shrink-0 opacity-60" aria-hidden="true" />
+      </div>
+      <div className="mt-3">
+        <p className="text-sm font-black">Day is full</p>
+        <p className={`mt-1 text-xs font-bold ${isDragging ? "text-white/75" : "text-slate-500"}`}>
+          Drag onto a date · code required
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function DeliveryClosedDayBadge() {
+  return (
+    <span
+      className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-slate-950 px-2.5 text-white shadow-sm"
+      aria-label="Day full"
+      title="Day full"
+    >
+      <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+      <span className="text-[10px] font-black uppercase tracking-[0.08em]">
+        Day Full
+      </span>
+    </span>
+  );
+}
+
 function DeliveryDateTbdTray({
   deliveries,
   onSelectDelivery,
   canMoveDeliveries,
   deliveryDrag,
+  embedded = false,
 }) {
   const {
     draggedDeliveryId,
@@ -1210,7 +1277,7 @@ function DeliveryDateTbdTray({
         data-delivery-calendar-tbd="true"
         onDragOver={handleTbdDragOver}
         onDrop={handleTbdDrop}
-        className={`mb-6 flex items-center justify-between gap-3 rounded-2xl border bg-blue-50/60 px-4 py-3 shadow-sm transition sm:px-5 ${
+        className={`${embedded ? "" : "mb-6"} flex min-h-28 items-center justify-between gap-3 rounded-2xl border bg-blue-50/60 px-4 py-3 shadow-sm transition sm:px-5 ${
           isTbdDropTarget
             ? "border-blue-500 ring-4 ring-blue-200"
             : "border-blue-200"
@@ -1244,7 +1311,7 @@ function DeliveryDateTbdTray({
       data-delivery-calendar-tbd="true"
       onDragOver={handleTbdDragOver}
       onDrop={handleTbdDrop}
-      className={`mb-6 overflow-hidden rounded-3xl border bg-blue-50/60 shadow-sm transition ${
+      className={`${embedded ? "" : "mb-6"} overflow-hidden rounded-3xl border bg-blue-50/60 shadow-sm transition ${
         isTbdDropTarget
           ? "border-blue-500 ring-4 ring-blue-200"
           : "border-blue-200"
@@ -1974,6 +2041,10 @@ function DeliveryWeekView({
   onSelectDelivery,
   canMoveDeliveries,
   deliveryDrag,
+  dayFullDropDateKey = "",
+  onDayFullDragOver,
+  onDayFullDrop,
+  onRequestDayLockChange,
 }) {
   const weekDays = getWeekDays(selectedDate);
   const today = getTodayDateValue();
@@ -2057,6 +2128,7 @@ function DeliveryWeekView({
             ? getCalendarBlockOffPresentation(blockOff)
             : null;
           const isClosedAllDay = isAllDayCalendarBlockOff(blockOff);
+          const isDayFull = isDeliveryDayFullBlockOff(blockOff);
           const visibleDeliveries = isExpanded
             ? orderedDayDeliveries
             : orderedDayDeliveries.slice(0, 4);
@@ -2064,27 +2136,40 @@ function DeliveryWeekView({
           return (
             <div
               key={day.dateKey}
+              data-delivery-day-lock-date={day.dateKey}
               data-delivery-calendar-day={
                 isClosedAllDay ? undefined : day.dateKey
               }
               onDragOver={(event) => {
+                if (onDayFullDragOver?.(event, day.dateKey)) {
+                  return;
+                }
                 if (!isClosedAllDay) {
                   handleDayDragOver(event, day.dateKey);
                 }
               }}
               onDrop={(event) => {
+                if (onDayFullDrop?.(event, day.dateKey)) {
+                  return;
+                }
                 if (!isClosedAllDay) {
                   handleDayDrop(event, day.dateKey);
                 }
               }}
               className={`min-h-44 p-3 transition-colors ${
-                blockOff
+                dayFullDropDateKey === day.dateKey
+                  ? "bg-slate-100 ring-4 ring-inset ring-slate-950"
+                  : blockOff
                   ? "bg-white"
                   : dropDateKey === day.dateKey
                   ? "bg-red-50 ring-2 ring-inset ring-[#FC2C38]"
                   : "bg-white"
               } ${
-                isSelected ? "ring-2 ring-inset ring-[#FC2C38]" : ""
+                isDayFull
+                  ? "ring-2 ring-inset ring-slate-950"
+                  : isSelected
+                    ? "ring-2 ring-inset ring-[#FC2C38]"
+                    : ""
               }`}
             >
               <button
@@ -2104,11 +2189,14 @@ function DeliveryWeekView({
                           weekday: "short",
                         }).format(day.date)}
                   </span>
-                  <span className="mt-0.5 block text-lg font-black text-slate-950">
-                    {new Intl.DateTimeFormat("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    }).format(day.date)}
+                  <span className="mt-0.5 flex items-center gap-1.5">
+                    <span className="text-lg font-black text-slate-950">
+                      {new Intl.DateTimeFormat("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      }).format(day.date)}
+                    </span>
+                    {isDayFull ? <DeliveryClosedDayBadge /> : null}
                   </span>
                 </span>
                 <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
@@ -2116,7 +2204,17 @@ function DeliveryWeekView({
                 </span>
               </button>
 
-              {blockOff && isClosedAllDay ? (
+              {isDayFull && onRequestDayLockChange ? (
+                <button
+                  type="button"
+                  onClick={() => onRequestDayLockChange(day.dateKey)}
+                  className="mt-2 rounded-lg bg-white px-2 py-1 text-[9px] font-black uppercase tracking-[0.06em] text-slate-700 shadow-sm ring-1 ring-inset ring-slate-200 transition hover:bg-slate-950 hover:text-white"
+                >
+                  Reopen day
+                </button>
+              ) : null}
+
+              {blockOff && isClosedAllDay && !isDayFull ? (
                 <div
                   className="mt-2 flex min-h-32 flex-col items-center justify-center rounded-xl border px-3 py-4 text-center shadow-sm"
                   style={{
@@ -2330,6 +2428,10 @@ function DeliveryMonthView({
   onSelectDelivery,
   canMoveDeliveries,
   deliveryDrag,
+  dayFullDropDateKey = "",
+  onDayFullDragOver,
+  onDayFullDrop,
+  onRequestDayLockChange,
 }) {
   const monthDays = getRollingCalendarMonthDays(monthDate);
   const today = getTodayDateValue();
@@ -2427,6 +2529,7 @@ function DeliveryMonthView({
                 ? getCalendarBlockOffPresentation(blockOff)
                 : null;
               const isClosedAllDay = isAllDayCalendarBlockOff(blockOff);
+              const isDayFull = isDeliveryDayFullBlockOff(blockOff);
               const visibleDeliveries = isExpanded
                 ? orderedDayDeliveries
                 : orderedDayDeliveries.slice(0, 3);
@@ -2434,41 +2537,73 @@ function DeliveryMonthView({
               return (
                 <div
                   key={day.dateKey}
+                  data-delivery-day-lock-date={day.dateKey}
                   data-delivery-calendar-day={
                     isClosedAllDay ? undefined : day.dateKey
                   }
-                  onDragOver={(event) =>
-                    !isClosedAllDay && handleDayDragOver(event, day.dateKey)
-                  }
-                  onDrop={(event) =>
-                    !isClosedAllDay && handleDayDrop(event, day.dateKey)
-                  }
+                  onDragOver={(event) => {
+                    if (onDayFullDragOver?.(event, day.dateKey)) {
+                      return;
+                    }
+                    if (!isClosedAllDay) {
+                      handleDayDragOver(event, day.dateKey);
+                    }
+                  }}
+                  onDrop={(event) => {
+                    if (onDayFullDrop?.(event, day.dateKey)) {
+                      return;
+                    }
+                    if (!isClosedAllDay) {
+                      handleDayDrop(event, day.dateKey);
+                    }
+                  }}
                   className={`min-h-36 p-2 transition-colors ${
-                    blockOff
+                    dayFullDropDateKey === day.dateKey
+                      ? "bg-slate-100 ring-4 ring-inset ring-slate-950"
+                      : blockOff
                       ? "bg-white"
                       : dropDateKey === day.dateKey
                       ? "bg-red-50 ring-2 ring-inset ring-[#FC2C38]"
                       : day.isCurrentMonth
                         ? "bg-white"
                         : "bg-slate-50"
-                  } ${isSelected ? "ring-2 ring-inset ring-[#FC2C38]" : ""}`}
+                  } ${
+                    isDayFull
+                      ? "ring-2 ring-inset ring-slate-950"
+                      : isSelected
+                        ? "ring-2 ring-inset ring-[#FC2C38]"
+                        : ""
+                  }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => onSelectDay(day.dateKey, day.date, true)}
-                    className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-black transition ${
-                      isToday
-                        ? "bg-[#FC2C38] text-white"
-                        : day.isCurrentMonth
-                          ? "text-slate-800 hover:bg-slate-100"
-                          : "text-slate-300 hover:bg-white"
-                    }`}
-                    aria-label={`Open ${formatDateLabel(day.dateKey)}`}
-                  >
-                    {day.date.getDate()}
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onSelectDay(day.dateKey, day.date, true)}
+                      className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-black transition ${
+                        isToday
+                          ? "bg-[#FC2C38] text-white"
+                          : day.isCurrentMonth
+                            ? "text-slate-800 hover:bg-slate-100"
+                            : "text-slate-300 hover:bg-white"
+                      }`}
+                      aria-label={`Open ${formatDateLabel(day.dateKey)}`}
+                    >
+                      {day.date.getDate()}
+                    </button>
+                    {isDayFull ? <DeliveryClosedDayBadge /> : null}
+                  </div>
 
-                  {blockOff && isClosedAllDay ? (
+                  {isDayFull && onRequestDayLockChange ? (
+                    <button
+                      type="button"
+                      onClick={() => onRequestDayLockChange(day.dateKey)}
+                      className="mt-1 rounded-md bg-white px-1.5 py-1 text-[8px] font-black uppercase text-slate-700 shadow-sm ring-1 ring-inset ring-slate-200 transition hover:bg-slate-950 hover:text-white"
+                    >
+                      Reopen
+                    </button>
+                  ) : null}
+
+                  {blockOff && isClosedAllDay && !isDayFull ? (
                     <div
                       className="mt-1 flex min-h-24 flex-col items-center justify-center rounded-lg border px-2 py-2.5 text-center shadow-sm"
                       style={{
@@ -3756,6 +3891,10 @@ export default function DeliveryCalendarPage({
   const [deliveryToMarkDelivered, setDeliveryToMarkDelivered] = useState(null);
   const [markingDeliveredId, setMarkingDeliveredId] = useState("");
   const [isUpdatingDayLock, setIsUpdatingDayLock] = useState(false);
+  const [isDayFullTileDragging, setIsDayFullTileDragging] = useState(false);
+  const [dayFullDropDateKey, setDayFullDropDateKey] = useState("");
+  const [pendingDayLockChange, setPendingDayLockChange] = useState(null);
+  const dayFullPointerDragRef = useRef(null);
   const canMoveCalendarDeliveries =
     canEditDeliveries && Boolean(onUpdateDelivery);
   const calendarDeliveryDrag = useCalendarDeliveryDrag({
@@ -4415,17 +4554,40 @@ export default function DeliveryCalendarPage({
     }
   }
 
-  async function handleToggleSelectedDateFull() {
-    if (!canManageDayLocks || !onUpdateCalendarBlockOffs || !selectedDate) {
+  function requestDayLockChange(dateKey, action = "toggle") {
+    if (!canManageDayLocks || !onUpdateCalendarBlockOffs || !dateKey) {
       return;
     }
 
-    if (selectedDateBlockOff && !isSelectedDateFull) {
+    const dateBlockOff = blockedDatesByKey.get(dateKey) || null;
+    const isDateFull = isDeliveryDayFullBlockOff(dateBlockOff);
+
+    if (dateBlockOff && !isDateFull) {
       setError(
-        `${formatDateLabel(selectedDate)} already has a closure managed in Admin.`,
+        `${formatDateLabel(dateKey)} already has a closure managed in Admin.`,
       );
       return;
     }
+
+    if (action === "lock" && isDateFull) {
+      setError(`${formatDateLabel(dateKey)} is already marked full.`);
+      return;
+    }
+
+    setError("");
+    setPendingDayLockChange({
+      dateKey,
+      isReopening: isDateFull,
+    });
+  }
+
+  async function applyDayLockChange(dateKey) {
+    if (!canManageDayLocks || !onUpdateCalendarBlockOffs || !dateKey) {
+      return;
+    }
+
+    const dateBlockOff = blockedDatesByKey.get(dateKey) || null;
+    const isDateFull = isDeliveryDayFullBlockOff(dateBlockOff);
 
     const nextBlockOffs = (Array.isArray(calendarBlockOffs)
       ? calendarBlockOffs
@@ -4433,13 +4595,13 @@ export default function DeliveryCalendarPage({
     ).filter(
       (blockOff) =>
         !(
-          String(blockOff?.date || "") === selectedDate &&
+          String(blockOff?.date || "") === dateKey &&
           isDeliveryDayFullBlockOff(blockOff)
         ),
     );
 
-    if (!isSelectedDateFull) {
-      nextBlockOffs.push(createDeliveryDayFullBlockOff(selectedDate));
+    if (!isDateFull) {
+      nextBlockOffs.push(createDeliveryDayFullBlockOff(dateKey));
     }
 
     setIsUpdatingDayLock(true);
@@ -4454,6 +4616,105 @@ export default function DeliveryCalendarPage({
       );
     } finally {
       setIsUpdatingDayLock(false);
+    }
+  }
+
+  function resetDayFullDrag() {
+    dayFullPointerDragRef.current = null;
+    setIsDayFullTileDragging(false);
+    setDayFullDropDateKey("");
+  }
+
+  function handleDayFullDragStart(event) {
+    if (!canManageDayLocks || isUpdatingDayLock) {
+      event.preventDefault();
+      return;
+    }
+
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(calendarDayFullDragType, "day-full");
+    event.dataTransfer.setData("text/plain", "delivery-day-full");
+    setIsDayFullTileDragging(true);
+  }
+
+  function handleDayFullDragOver(event, dateKey) {
+    const isDayFullDrag =
+      isDayFullTileDragging ||
+      Array.from(event.dataTransfer?.types || []).includes(
+        calendarDayFullDragType,
+      );
+
+    if (!isDayFullDrag) {
+      return false;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    setDayFullDropDateKey(dateKey);
+    return true;
+  }
+
+  function handleDayFullDrop(event, dateKey) {
+    if (!handleDayFullDragOver(event, dateKey)) {
+      return false;
+    }
+
+    resetDayFullDrag();
+    requestDayLockChange(dateKey, "lock");
+    return true;
+  }
+
+  function getDayFullPointerDate(event) {
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest?.("[data-delivery-day-lock-date]");
+
+    return target?.dataset?.deliveryDayLockDate || "";
+  }
+
+  function handleDayFullPointerDown(event) {
+    if (
+      event.pointerType === "mouse" ||
+      !canManageDayLocks ||
+      isUpdatingDayLock ||
+      event.button !== 0
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dayFullPointerDragRef.current = { pointerId: event.pointerId };
+    setIsDayFullTileDragging(true);
+  }
+
+  function handleDayFullPointerMove(event) {
+    if (
+      event.pointerType === "mouse" ||
+      dayFullPointerDragRef.current?.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    setDayFullDropDateKey(getDayFullPointerDate(event));
+  }
+
+  function handleDayFullPointerEnd(event) {
+    if (
+      event.pointerType === "mouse" ||
+      dayFullPointerDragRef.current?.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    const dateKey = getDayFullPointerDate(event);
+    resetDayFullDrag();
+
+    if (dateKey) {
+      requestDayLockChange(dateKey, "lock");
     }
   }
 
@@ -4500,38 +4761,6 @@ export default function DeliveryCalendarPage({
                 <LockKeyhole className="h-4 w-4" aria-hidden="true" />
               )}
               {isEditAccessUnlocked ? "Lock changes" : "Unlock changes"}
-            </button>
-          ) : null}
-
-          {canManageDayLocks && onUpdateCalendarBlockOffs ? (
-            <button
-              type="button"
-              onClick={handleToggleSelectedDateFull}
-              disabled={
-                isUpdatingDayLock ||
-                Boolean(selectedDateBlockOff && !isSelectedDateFull)
-              }
-              className={`inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-black shadow-sm transition focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50 ${
-                isSelectedDateFull
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 focus:ring-emerald-100"
-                  : "border-slate-300 bg-slate-950 text-white hover:bg-slate-800 focus:ring-slate-200"
-              }`}
-              title={
-                selectedDateBlockOff && !isSelectedDateFull
-                  ? "This date already has a closure configured in Admin"
-                  : undefined
-              }
-            >
-              {isSelectedDateFull ? (
-                <LockOpen className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <LockKeyhole className="h-4 w-4" aria-hidden="true" />
-              )}
-              {isUpdatingDayLock
-                ? "Saving..."
-                : isSelectedDateFull
-                  ? "Reopen day"
-                  : "Mark day full"}
             </button>
           ) : null}
 
@@ -4740,7 +4969,8 @@ export default function DeliveryCalendarPage({
       </section>
 
       {selectedDateBlockOff &&
-      isAllDayCalendarBlockOff(selectedDateBlockOff) ? (
+      isAllDayCalendarBlockOff(selectedDateBlockOff) &&
+      !isSelectedDateFull ? (
         <section
           className="mb-6 rounded-2xl border px-4 py-6 text-center shadow-sm sm:px-5"
           style={{
@@ -4812,6 +5042,7 @@ export default function DeliveryCalendarPage({
               const blockOffPresentation = day.blockOff
                 ? getCalendarBlockOffPresentation(day.blockOff)
                 : null;
+              const isDayFull = isDeliveryDayFullBlockOff(day.blockOff);
 
               return (
                 <button
@@ -4819,7 +5050,7 @@ export default function DeliveryCalendarPage({
                   type="button"
                   onClick={() => selectDay(day.dateKey, day.date)}
                   style={
-                    blockOffPresentation
+                    blockOffPresentation && !isDayFull
                       ? {
                           backgroundColor: blockOffPresentation.backgroundColor,
                           borderColor: blockOffPresentation.backgroundColor,
@@ -4828,7 +5059,9 @@ export default function DeliveryCalendarPage({
                       : undefined
                   }
                   className={`rounded-2xl border p-3 text-left transition focus:outline-none focus:ring-4 focus:ring-red-100 ${
-                    day.blockOff
+                    isDayFull
+                      ? "border-2 border-slate-950 bg-white shadow-sm"
+                      : day.blockOff
                       ? "hover:brightness-95"
                     : isSelected
                       ? "border-[#FC2C38] bg-red-50 shadow-sm"
@@ -4839,34 +5072,37 @@ export default function DeliveryCalendarPage({
                     <div>
                       <p
                         className={`text-xs font-black uppercase tracking-[0.12em] ${
-                          day.blockOff
+                          day.blockOff && !isDayFull
                             ? ""
                             : isSelected
                               ? "text-[#FC2C38]"
                               : "text-slate-500"
                         }`}
                         style={
-                          blockOffPresentation
+                          blockOffPresentation && !isDayFull
                             ? { color: blockOffPresentation.mutedTextColor }
                             : undefined
                         }
                       >
                         {day.isToday ? "Today" : weekdayLabel}
                       </p>
-                      <p
-                        className={`mt-1 text-lg font-black ${day.blockOff ? "" : "text-slate-950"}`}
-                        style={
-                          blockOffPresentation
-                            ? { color: blockOffPresentation.textColor }
-                            : undefined
-                        }
-                      >
-                        {dateLabel}
-                      </p>
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <p
+                          className={`text-lg font-black ${day.blockOff && !isDayFull ? "" : "text-slate-950"}`}
+                          style={
+                            blockOffPresentation && !isDayFull
+                              ? { color: blockOffPresentation.textColor }
+                              : undefined
+                          }
+                        >
+                          {dateLabel}
+                        </p>
+                        {isDayFull ? <DeliveryClosedDayBadge /> : null}
+                      </div>
                     </div>
                     <span
                       style={
-                        blockOffPresentation
+                        blockOffPresentation && !isDayFull
                           ? {
                               color:
                                 day.deliveryCount > 0
@@ -4877,10 +5113,10 @@ export default function DeliveryCalendarPage({
                       }
                       className={`inline-flex min-w-8 items-center justify-center rounded-full px-2 py-1 text-xs font-black ${
                         day.deliveryCount > 0
-                          ? day.blockOff
+                          ? day.blockOff && !isDayFull
                             ? "bg-white"
                             : "bg-slate-950 text-white"
-                          : day.blockOff
+                          : day.blockOff && !isDayFull
                             ? "bg-white/15 text-white"
                             : "bg-white text-slate-400"
                       }`}
@@ -4890,7 +5126,7 @@ export default function DeliveryCalendarPage({
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-black uppercase tracking-[0.07em]">
-                    {day.blockOff ? (
+                    {isDayFull ? null : day.blockOff ? (
                       <span
                         className="flex min-h-32 w-full flex-col items-center justify-center rounded-xl border px-3 py-3 text-center"
                         style={{
@@ -4944,12 +5180,33 @@ export default function DeliveryCalendarPage({
       ) : null}
 
       {calendarView === "week" || calendarView === "month" ? (
-        <DeliveryDateTbdTray
-          deliveries={dateTbdDeliveries}
-          onSelectDelivery={openDeliveryFromCalendar}
-          canMoveDeliveries={canMoveCalendarDeliveries}
-          deliveryDrag={calendarDeliveryDrag}
-        />
+        <div
+          className={`mb-6 grid gap-3 ${
+            canManageDayLocks && onUpdateCalendarBlockOffs
+              ? "lg:grid-cols-[15rem_minmax(0,1fr)]"
+              : ""
+          }`}
+        >
+          {canManageDayLocks && onUpdateCalendarBlockOffs ? (
+            <DayFullDragTile
+              disabled={isUpdatingDayLock}
+              isDragging={isDayFullTileDragging}
+              onDragStart={handleDayFullDragStart}
+              onDragEnd={resetDayFullDrag}
+              onPointerDown={handleDayFullPointerDown}
+              onPointerMove={handleDayFullPointerMove}
+              onPointerEnd={handleDayFullPointerEnd}
+              onPointerCancel={resetDayFullDrag}
+            />
+          ) : null}
+          <DeliveryDateTbdTray
+            deliveries={dateTbdDeliveries}
+            onSelectDelivery={openDeliveryFromCalendar}
+            canMoveDeliveries={canMoveCalendarDeliveries}
+            deliveryDrag={calendarDeliveryDrag}
+            embedded
+          />
+        </div>
       ) : null}
 
       {calendarView === "week" ? (
@@ -4962,6 +5219,12 @@ export default function DeliveryCalendarPage({
           onSelectDelivery={openDeliveryFromCalendar}
           canMoveDeliveries={canMoveCalendarDeliveries}
           deliveryDrag={calendarDeliveryDrag}
+          dayFullDropDateKey={dayFullDropDateKey}
+          onDayFullDragOver={handleDayFullDragOver}
+          onDayFullDrop={handleDayFullDrop}
+          onRequestDayLockChange={
+            canManageDayLocks ? requestDayLockChange : undefined
+          }
         />
       ) : calendarView === "month" ? (
         <DeliveryMonthView
@@ -4974,6 +5237,12 @@ export default function DeliveryCalendarPage({
           onSelectDelivery={openDeliveryFromCalendar}
           canMoveDeliveries={canMoveCalendarDeliveries}
           deliveryDrag={calendarDeliveryDrag}
+          dayFullDropDateKey={dayFullDropDateKey}
+          onDayFullDragOver={handleDayFullDragOver}
+          onDayFullDrop={handleDayFullDrop}
+          onRequestDayLockChange={
+            canManageDayLocks ? requestDayLockChange : undefined
+          }
         />
       ) : hasSelectedDay ? (
         <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
@@ -5622,6 +5891,40 @@ export default function DeliveryCalendarPage({
           </div>
         </div>
       ) : null}
+
+      <DeliveryScheduleAccessModal
+        isOpen={Boolean(pendingDayLockChange)}
+        onClose={() => setPendingDayLockChange(null)}
+        onUnlock={() => {
+          const dateKey = pendingDayLockChange?.dateKey;
+          setPendingDayLockChange(null);
+
+          if (dateKey) {
+            void applyDayLockChange(dateKey);
+          }
+        }}
+        eyebrow="Calendar control"
+        title={
+          pendingDayLockChange?.isReopening
+            ? "Reopen this delivery day"
+            : "Mark this delivery day full"
+        }
+        description={
+          pendingDayLockChange?.dateKey
+            ? `${formatDateLabel(pendingDayLockChange.dateKey)} will ${
+                pendingDayLockChange.isReopening
+                  ? "accept new deliveries again"
+                  : "keep its existing deliveries but stop additional scheduling"
+              }. Enter the scheduling code to confirm.`
+            : "Enter the scheduling code to confirm this calendar change."
+        }
+        submitLabel={
+          pendingDayLockChange?.isReopening
+            ? "Confirm reopening"
+            : "Confirm day is full"
+        }
+        errorMessage="Incorrect scheduling code. The day was not changed."
+      />
 
       <MarkDeliveredModal
         delivery={deliveryToMarkDelivered}
