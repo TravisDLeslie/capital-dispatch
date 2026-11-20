@@ -18,7 +18,11 @@ import {
   saveTwilioSettings,
   subscribeToTwilioSettings,
 } from "../utils/twilioSettingsStorage";
-import { sendTwilioTestMessage } from "../utils/twilioMessaging";
+import { isDeliveryComplete } from "../utils/deliveryStatus";
+import {
+  sendTwilioCustomerMessage,
+  sendTwilioTestMessage,
+} from "../utils/twilioMessaging";
 
 const accountSidPattern = /^AC[0-9a-fA-F]{32}$/;
 const messagingServiceSidPattern = /^MG[0-9a-fA-F]{32}$/;
@@ -37,12 +41,120 @@ const templateFields = [
     description: "Use after the date has been confirmed.",
   },
   {
+    enabledKey: "deliveryCompleteEnabled",
+    templateKey: "deliveryCompleteTemplate",
+    title: "Delivery complete",
+    description: "Send manually after selecting a completed delivery.",
+  },
+  {
     enabledKey: "willCallEnabled",
     templateKey: "willCallTemplate",
     title: "Will Call ready",
     description: "Use when an order is ready for customer pickup.",
   },
 ];
+
+function getDateValue(value) {
+  if (!value) return null;
+  if (typeof value?.toDate === "function") return value.toDate();
+  if (Number.isFinite(Number(value?.seconds))) {
+    return new Date(Number(value.seconds) * 1000);
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getCompletedAt(delivery) {
+  return getDateValue(
+    delivery?.deliveredAt ||
+      delivery?.completedAt ||
+      delivery?.updatedAt ||
+      delivery?.deliveryDate,
+  );
+}
+
+function formatCompletedAt(delivery) {
+  const date = getCompletedAt(delivery);
+  if (!date) return "delivery completion";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function getDeliveryCustomer(delivery) {
+  return (
+    String(delivery?.contactName || "").trim() ||
+    String(delivery?.customerName || "").trim() ||
+    "there"
+  );
+}
+
+function getDeliveryPhone(delivery) {
+  return String(
+    delivery?.contactPhone || delivery?.phoneNumber || delivery?.phone || "",
+  ).trim();
+}
+
+function getDeliveryAddress(delivery) {
+  return String(
+    delivery?.address || delivery?.deliveryAddress || delivery?.jobAddress || "",
+  ).trim();
+}
+
+function getDeliveryPhotos(delivery) {
+  const photoCandidates = [
+    ...(Array.isArray(delivery?.deliveryPhotos)
+      ? delivery.deliveryPhotos
+      : []),
+    delivery?.deliveryPhoto,
+    ...(Array.isArray(delivery?.hardwarePhotos)
+      ? delivery.hardwarePhotos
+      : []),
+    delivery?.hardwarePhoto,
+  ].filter(Boolean);
+  const seenUrls = new Set();
+  let combinedBytes = 0;
+
+  return photoCandidates
+    .map((photo) => {
+      const url = String(photo?.url || photo?.dataUrl || "").trim();
+      const size = Math.max(0, Number(photo?.size) || 0);
+      return { ...photo, url, size };
+    })
+    .filter((photo) => {
+      if (!photo.url.startsWith("https://") || seenUrls.has(photo.url)) {
+        return false;
+      }
+      if (photo.size && combinedBytes + photo.size > 4_500_000) {
+        return false;
+      }
+
+      seenUrls.add(photo.url);
+      combinedBytes += photo.size;
+      return true;
+    })
+    .slice(0, 2);
+}
+
+function fillPreviewTemplate(template, delivery) {
+  const fields = {
+    customer: getDeliveryCustomer(delivery),
+    order: String(delivery?.orderNumber || "your order").trim(),
+    date: formatCompletedAt(delivery),
+    address: getDeliveryAddress(delivery) || "the delivery address",
+  };
+
+  return String(template || "").replace(
+    /{{\s*(customer|order|date|address)\s*}}/gi,
+    (match, key) => fields[String(key).toLowerCase()] || match,
+  );
+}
 
 function ConfigurationStatus({ complete, label }) {
   return (
@@ -61,12 +173,19 @@ function ConfigurationStatus({ complete, label }) {
   );
 }
 
-export default function TwilioSettingsPage({ onPageChange }) {
+export default function TwilioSettingsPage({
+  deliveries = /** @type {Array<Record<string, any>>} */ ([]),
+  onPageChange,
+}) {
   const [settings, setSettings] = useState(defaultTwilioSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState("");
+  const [deliveryPhoneNumber, setDeliveryPhoneNumber] = useState("");
+  const [isSendingDeliveryComplete, setIsSendingDeliveryComplete] =
+    useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -99,6 +218,39 @@ export default function TwilioSettingsPage({ onPageChange }) {
     if (!settings.businessName.trim()) return "Enter the sender business name.";
     return "";
   }, [settings]);
+
+  const completedDeliveries = useMemo(
+    () =>
+      deliveries
+        .filter((delivery) => isDeliveryComplete(delivery))
+        .sort(
+          (firstDelivery, secondDelivery) =>
+            (getCompletedAt(secondDelivery)?.getTime() || 0) -
+            (getCompletedAt(firstDelivery)?.getTime() || 0),
+        ),
+    [deliveries],
+  );
+
+  const selectedDelivery = useMemo(
+    () =>
+      completedDeliveries.find(
+        (delivery) => String(delivery.id) === selectedDeliveryId,
+      ) || null,
+    [completedDeliveries, selectedDeliveryId],
+  );
+
+  const deliveryCompletePreview = useMemo(
+    () =>
+      selectedDelivery
+        ? fillPreviewTemplate(settings.deliveryCompleteTemplate, selectedDelivery)
+        : "",
+    [selectedDelivery, settings.deliveryCompleteTemplate],
+  );
+
+  const selectedDeliveryPhotos = useMemo(
+    () => (selectedDelivery ? getDeliveryPhotos(selectedDelivery) : []),
+    [selectedDelivery],
+  );
 
   function updateSetting(key, value) {
     setSettings((currentSettings) => ({
@@ -172,6 +324,63 @@ export default function TwilioSettingsPage({ onPageChange }) {
       setError(getFirebaseErrorMessage(sendError));
     } finally {
       setIsSendingTest(false);
+    }
+  }
+
+  function chooseCompletedDelivery(deliveryId) {
+    const delivery = completedDeliveries.find(
+      (candidate) => String(candidate.id) === deliveryId,
+    );
+
+    setSelectedDeliveryId(deliveryId);
+    setDeliveryPhoneNumber(getDeliveryPhone(delivery));
+    setMessage("");
+    setError("");
+  }
+
+  async function handleDeliveryCompleteMessage() {
+    if (!selectedDelivery) {
+      setError("Select a completed delivery first.");
+      return;
+    }
+    if (deliveryPhoneNumber.replace(/\D/g, "").length < 10) {
+      setError("Enter a valid customer mobile number, including the area code.");
+      return;
+    }
+    if (!settings.enabled) {
+      setError("Turn on Customer texting and save the Twilio settings first.");
+      return;
+    }
+    if (!settings.deliveryCompleteEnabled) {
+      setError("Enable the Delivery complete message template first.");
+      return;
+    }
+
+    setIsSendingDeliveryComplete(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const savedSettings = await saveTwilioSettings(settings);
+      setSettings(savedSettings);
+      const result = await sendTwilioCustomerMessage({
+        messageType: "deliveryComplete",
+        toPhoneNumber: deliveryPhoneNumber,
+        customer: getDeliveryCustomer(selectedDelivery),
+        order: selectedDelivery.orderNumber,
+        date: formatCompletedAt(selectedDelivery),
+        address: getDeliveryAddress(selectedDelivery),
+        deliveryId: selectedDelivery.id,
+        mediaUrls: selectedDeliveryPhotos.map((photo) => photo.url),
+      });
+      setMessage(
+        `Delivery complete ${selectedDeliveryPhotos.length ? "MMS" : "message"} queued to ${result.maskedTo || "the customer"} for order ${selectedDelivery.orderNumber}${selectedDeliveryPhotos.length ? ` with ${selectedDeliveryPhotos.length} photo${selectedDeliveryPhotos.length === 1 ? "" : "s"}` : ""}.`,
+      );
+    } catch (sendError) {
+      console.error("Unable to send delivery complete message:", sendError);
+      setError(getFirebaseErrorMessage(sendError));
+    } finally {
+      setIsSendingDeliveryComplete(false);
     }
   }
 
@@ -405,6 +614,140 @@ export default function TwilioSettingsPage({ onPageChange }) {
             </div>
           </section>
 
+          <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm sm:p-6">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm">
+                <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  Send a delivery complete message
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-600">
+                  Select a completed delivery, confirm the customer number and
+                  preview the exact message and photos before sending it manually.
+                </p>
+              </div>
+            </div>
+
+            {completedDeliveries.length === 0 ? (
+              <div className="mt-5 rounded-2xl border border-emerald-200 bg-white px-4 py-5 text-sm font-bold text-slate-600">
+                No completed deliveries are available yet.
+              </div>
+            ) : (
+              <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                <div className="space-y-4 rounded-2xl border border-emerald-200 bg-white p-4">
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                      Completed delivery
+                    </span>
+                    <select
+                      value={selectedDeliveryId}
+                      onChange={(event) =>
+                        chooseCompletedDelivery(event.target.value)
+                      }
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                    >
+                      <option value="">Select a delivery…</option>
+                      {completedDeliveries.map((delivery) => (
+                        <option key={delivery.id} value={delivery.id}>
+                          Order {delivery.orderNumber} · {delivery.customerName || "Customer"} · {formatCompletedAt(delivery)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                      Recipient mobile number
+                    </span>
+                    <input
+                      value={deliveryPhoneNumber}
+                      onChange={(event) => {
+                        setDeliveryPhoneNumber(event.target.value);
+                        setMessage("");
+                        setError("");
+                      }}
+                      placeholder="Customer mobile number"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      className="w-full rounded-xl border border-slate-300 px-4 py-3 font-bold text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                    />
+                    <span className="mt-2 block text-xs font-bold text-slate-500">
+                      For a test, replace the customer number with your own mobile number.
+                    </span>
+                  </label>
+
+                  {selectedDelivery ? (
+                    <div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-3 text-sm">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Customer</p>
+                        <p className="mt-1 font-black text-slate-900">{selectedDelivery.customerName || "Not entered"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Order</p>
+                        <p className="mt-1 font-black text-slate-900">{selectedDelivery.orderNumber || "Not entered"}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Delivery address</p>
+                        <p className="mt-1 font-black text-slate-900">{getDeliveryAddress(selectedDelivery) || "Not entered"}</p>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col rounded-2xl border border-emerald-200 bg-white p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Message preview
+                  </p>
+                  <div className="mt-3 min-h-28 flex-1 rounded-2xl bg-slate-950 p-4 text-sm font-semibold leading-6 text-white">
+                    {deliveryCompletePreview ||
+                      "Select a delivery to preview the customer message."}
+                  </div>
+                  {selectedDelivery ? (
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                          MMS photos
+                        </p>
+                        <span className="text-xs font-black text-emerald-700">
+                          {selectedDeliveryPhotos.length} attached
+                        </span>
+                      </div>
+                      {selectedDeliveryPhotos.length > 0 ? (
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          {selectedDeliveryPhotos.map((photo, photoIndex) => (
+                            <img
+                              key={photo.url}
+                              src={photo.previewUrl || photo.url}
+                              alt={`Delivery proof ${photoIndex + 1}`}
+                              className="h-28 w-full rounded-xl border border-slate-200 bg-slate-100 object-cover"
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">
+                          This delivery has no MMS-ready saved photos. The text can still be sent without images.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={handleDeliveryCompleteMessage}
+                    disabled={!selectedDelivery || isSendingDeliveryComplete}
+                    className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Send className="h-4 w-4" aria-hidden="true" />
+                    {isSendingDeliveryComplete
+                      ? "Sending…"
+                      : "Send delivery complete message"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700">
@@ -415,7 +758,7 @@ export default function TwilioSettingsPage({ onPageChange }) {
                   Customer message templates
                 </h2>
                 <p className="text-sm font-semibold text-slate-500">
-                  Available fields: {"{{customer}}"}, {"{{order}}"}, and {"{{date}}"}.
+                  Available fields: {"{{customer}}"}, {"{{order}}"}, {"{{date}}"}, and {"{{address}}"}.
                 </p>
               </div>
             </div>

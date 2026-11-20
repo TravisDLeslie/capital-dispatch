@@ -9179,7 +9179,12 @@ export default function App() {
         );
 
       case "twilio-settings":
-        return <TwilioSettingsPage onPageChange={navigateToPage} />;
+        return (
+          <TwilioSettingsPage
+            deliveries={visibleDeliveries}
+            onPageChange={navigateToPage}
+          />
+        );
 
       case "vendor-settings":
         return (

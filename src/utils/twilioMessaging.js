@@ -4,6 +4,7 @@ import { functions } from "./firebase";
 const SUPPORTED_CUSTOMER_MESSAGE_TYPES = new Set([
   "potentialDelivery",
   "scheduledDelivery",
+  "deliveryComplete",
   "willCall",
 ]);
 
@@ -30,6 +31,9 @@ export async function sendTwilioCustomerMessage({
   customer,
   order,
   date,
+  address,
+  deliveryId,
+  mediaUrls,
 }) {
   if (!SUPPORTED_CUSTOMER_MESSAGE_TYPES.has(messageType)) {
     throw new Error("Choose a supported customer message type.");
@@ -41,5 +45,8 @@ export async function sendTwilioCustomerMessage({
     customer,
     order,
     date,
+    address,
+    deliveryId,
+    mediaUrls,
   });
 }

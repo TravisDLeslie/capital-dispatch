@@ -17,6 +17,9 @@ export const defaultTwilioSettings = {
   scheduledDeliveryEnabled: true,
   scheduledDeliveryTemplate:
     "Hi {{customer}}, your Capital Lumber delivery for order {{order}} is scheduled for {{date}}. Reply STOP to opt out.",
+  deliveryCompleteEnabled: true,
+  deliveryCompleteTemplate:
+    "Hi {{customer}}, Capital Lumber completed delivery of order {{order}} to {{address}} on {{date}}. Delivery photos are attached. Thank you for your business. Reply STOP to opt out.",
   willCallEnabled: true,
   willCallTemplate:
     "Hi {{customer}}, order {{order}} is ready for pickup at Capital Lumber. Reply STOP to opt out.",

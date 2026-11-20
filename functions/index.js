@@ -33,6 +33,10 @@ const TWILIO_MESSAGE_TYPES = {
     enabledKey: "scheduledDeliveryEnabled",
     templateKey: "scheduledDeliveryTemplate",
   },
+  deliveryComplete: {
+    enabledKey: "deliveryCompleteEnabled",
+    templateKey: "deliveryCompleteTemplate",
+  },
   willCall: {
     enabledKey: "willCallEnabled",
     templateKey: "willCallTemplate",
@@ -66,13 +70,37 @@ function fillMessageTemplate(template, fields) {
     customer: String(fields.customer || "there").trim() || "there",
     order: String(fields.order || "").trim() || "your order",
     date: String(fields.date || "").trim() || "a date to be confirmed",
+    address: String(fields.address || "").trim() || "the delivery address",
   };
 
   return String(template || "")
-    .replace(/{{\s*(customer|order|date)\s*}}/gi, (match, key) =>
+    .replace(/{{\s*(customer|order|date|address)\s*}}/gi, (match, key) =>
       replacements[String(key).toLowerCase()] || match,
     )
     .trim();
+}
+
+function normalizeTwilioMediaUrls(value) {
+  if (!Array.isArray(value)) return [];
+
+  const allowedHosts = new Set([
+    "firebasestorage.googleapis.com",
+    "storage.googleapis.com",
+  ]);
+
+  return [...new Set(value)]
+    .slice(0, 10)
+    .map((mediaUrl) => {
+      try {
+        const parsedUrl = new URL(String(mediaUrl || "").trim());
+        return parsedUrl.protocol === "https:" && allowedHosts.has(parsedUrl.hostname)
+          ? parsedUrl.toString()
+          : "";
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean);
 }
 
 async function getTwilioCaller(request, { adminOnly = false } = {}) {
@@ -673,6 +701,7 @@ exports.sendTwilioMessage = onCall(
       adminOnly: isTestMessage,
     });
     const toPhoneNumber = normalizePhoneNumber(request.data?.toPhoneNumber);
+    const mediaUrls = normalizeTwilioMediaUrls(request.data?.mediaUrls);
 
     if (!toPhoneNumber) {
       throw new HttpsError(
@@ -737,6 +766,7 @@ exports.sendTwilioMessage = onCall(
           customer: request.data?.customer,
           order: request.data?.order,
           date: request.data?.date,
+          address: request.data?.address,
         },
       );
     }
@@ -757,11 +787,14 @@ exports.sendTwilioMessage = onCall(
     } else {
       formData.set("From", senderPhoneNumber);
     }
+    mediaUrls.forEach((mediaUrl) => formData.append("MediaUrl", mediaUrl));
 
     const logBase = {
       messageType,
       maskedTo,
       orderNumber: String(request.data?.order || "").trim(),
+      deliveryId: String(request.data?.deliveryId || "").trim(),
+      mediaCount: mediaUrls.length,
       sentBy: caller.userId,
       sentByEmail: caller.email,
     };
