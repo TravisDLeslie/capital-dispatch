@@ -1031,6 +1031,11 @@ function CalendarDeliveryButton({
   const isGrouped = Boolean(delivery.deliveryCalendarGroupId);
   const usesGroupStyle = isGroupTarget || isGrouped;
   const isConnectedGroup = Boolean(groupMeta);
+  const isScheduledGroup = Boolean(
+    !isGroupTarget &&
+      isGrouped &&
+      (groupMeta?.isScheduledGroup ?? !needsDispatch),
+  );
   const groupShapeClass = isConnectedGroup
     ? groupMeta.isFirst && groupMeta.isLast
       ? "rounded-xl"
@@ -1053,9 +1058,13 @@ function CalendarDeliveryButton({
         isGroupTarget
           ? "border-blue-500 bg-blue-200 text-blue-950 ring-2 ring-blue-300 focus:ring-blue-200"
           : isConnectedGroup
-            ? "border-blue-200 bg-white/90 text-blue-950 focus:ring-blue-200"
+            ? isScheduledGroup
+              ? "border-teal-200 bg-white/95 text-teal-950 focus:ring-teal-200"
+              : "border-blue-200 bg-white/90 text-blue-950 focus:ring-blue-200"
             : usesGroupStyle
-              ? "border-blue-400 bg-blue-100 text-blue-950 ring-2 ring-blue-300 focus:ring-blue-200"
+              ? isScheduledGroup
+                ? "border-teal-400 bg-gradient-to-br from-emerald-50 to-blue-100 text-teal-950 ring-2 ring-teal-300 focus:ring-teal-200"
+                : "border-blue-400 bg-blue-100 text-blue-950 ring-2 ring-blue-300 focus:ring-blue-200"
           : needsDispatch
             ? "border-amber-200 bg-amber-50 text-amber-950"
             : "border-emerald-200 bg-emerald-50 text-emerald-950 focus:ring-red-100"
@@ -1066,8 +1075,10 @@ function CalendarDeliveryButton({
       <span className="mb-1 flex items-center justify-between gap-2">
         <span
           className={`inline-flex min-w-0 items-center gap-1 text-[8px] font-black uppercase tracking-[0.1em] ${
-            usesGroupStyle
-              ? "text-blue-700"
+            isScheduledGroup
+              ? "text-teal-700"
+              : usesGroupStyle
+                ? "text-blue-700"
               : needsDispatch
                 ? "text-amber-700"
                 : "text-emerald-700"
@@ -1075,8 +1086,10 @@ function CalendarDeliveryButton({
         >
           <span
             className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-              usesGroupStyle
-                ? "bg-blue-500"
+              isScheduledGroup
+                ? "bg-gradient-to-br from-emerald-500 to-blue-500"
+                : usesGroupStyle
+                  ? "bg-blue-500"
                 : needsDispatch
                   ? "bg-amber-500"
                   : "bg-emerald-500"
@@ -1087,9 +1100,13 @@ function CalendarDeliveryButton({
             {usesGroupStyle
               ? isGroupTarget
                 ? "Release to group"
-                : groupMeta
-                  ? `Stop ${groupMeta.position} of ${groupMeta.count}`
-                  : "Grouped delivery"
+                : isScheduledGroup
+                  ? groupMeta
+                    ? `Scheduled stop ${groupMeta.position} of ${groupMeta.count}`
+                    : "Scheduled group"
+                  : groupMeta
+                    ? `Stop ${groupMeta.position} of ${groupMeta.count}`
+                    : "Grouped delivery"
               : needsDispatch
                 ? "Needs dispatch"
                 : "Scheduled"}
@@ -1135,6 +1152,9 @@ function getDeliveryGroupMeta(
 
   return {
     count: allGroupDeliveries.length,
+    isScheduledGroup: allGroupDeliveries.every(
+      (candidate) => !deliveryNeedsDispatch(candidate),
+    ),
     position:
       allGroupDeliveries.findIndex((candidate) => candidate.id === delivery.id) +
       1,
@@ -1149,20 +1169,23 @@ function getConnectedGroupWrapperClass(groupMeta, compact = false) {
   }
 
   const paddingClass = compact ? "px-1 pt-1" : "px-1.5 pt-1.5";
+  const paletteClass = groupMeta.isScheduledGroup
+    ? "border-teal-300 bg-gradient-to-b from-emerald-50 to-blue-50"
+    : "border-blue-300 bg-blue-50";
 
   if (groupMeta.isFirst && groupMeta.isLast) {
-    return `${compact ? "mb-1.5" : "mb-2"} rounded-2xl border-2 border-blue-300 bg-blue-50 ${paddingClass} pb-1`;
+    return `${compact ? "mb-1.5" : "mb-2"} rounded-2xl border-2 ${paletteClass} ${paddingClass} pb-1`;
   }
 
   if (groupMeta.isFirst) {
-    return `rounded-t-2xl border-x-2 border-t-2 border-blue-300 bg-blue-50 ${paddingClass}`;
+    return `rounded-t-2xl border-x-2 border-t-2 ${paletteClass} ${paddingClass}`;
   }
 
   if (groupMeta.isLast) {
-    return `${compact ? "mb-1.5" : "mb-2"} rounded-b-2xl border-x-2 border-b-2 border-blue-300 bg-blue-50 px-1 pb-1 pt-1`;
+    return `${compact ? "mb-1.5" : "mb-2"} rounded-b-2xl border-x-2 border-b-2 ${paletteClass} px-1 pb-1 pt-1`;
   }
 
-  return "border-x-2 border-blue-300 bg-blue-50 px-1 pt-1";
+  return `border-x-2 ${paletteClass} px-1 pt-1`;
 }
 
 function CalendarStatusLegend() {
@@ -1182,6 +1205,13 @@ function CalendarStatusLegend() {
       <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-1 text-blue-800 ring-1 ring-inset ring-blue-200">
         <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden="true" />
         Grouped
+      </span>
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-50 to-blue-50 px-2 py-1 text-teal-800 ring-1 ring-inset ring-teal-200">
+        <span
+          className="h-2 w-2 rounded-full bg-gradient-to-br from-emerald-500 to-blue-500"
+          aria-hidden="true"
+        />
+        Scheduled group
       </span>
     </div>
   );
@@ -2367,13 +2397,23 @@ function DeliveryWeekView({
                       }`}
                     >
                       {groupMeta?.isFirst ? (
-                        <div className="mb-1 flex items-center justify-between gap-2 px-1 text-[8px] font-black uppercase tracking-[0.1em] text-blue-700">
+                        <div
+                          className={`mb-1 flex items-center justify-between gap-2 px-1 text-[8px] font-black uppercase tracking-[0.1em] ${
+                            groupMeta.isScheduledGroup
+                              ? "text-teal-700"
+                              : "text-blue-700"
+                          }`}
+                        >
                           <span className="inline-flex min-w-0 items-center gap-1">
                             <Layers
                               className="h-3 w-3 shrink-0"
                               aria-hidden="true"
                             />
-                            <span className="truncate">Grouped route</span>
+                            <span className="truncate">
+                              {groupMeta.isScheduledGroup
+                                ? "Scheduled group"
+                                : "Grouped route"}
+                            </span>
                           </span>
                           <span className="shrink-0">
                             {groupMeta.count} deliveries
@@ -2777,13 +2817,23 @@ function DeliveryMonthView({
                           }`}
                         >
                           {groupMeta?.isFirst ? (
-                            <div className="mb-1 flex items-center justify-between gap-1 px-1 text-[7px] font-black uppercase tracking-[0.08em] text-blue-700">
+                            <div
+                              className={`mb-1 flex items-center justify-between gap-1 px-1 text-[7px] font-black uppercase tracking-[0.08em] ${
+                                groupMeta.isScheduledGroup
+                                  ? "text-teal-700"
+                                  : "text-blue-700"
+                              }`}
+                            >
                               <span className="inline-flex min-w-0 items-center gap-1">
                                 <Layers
                                   className="h-2.5 w-2.5 shrink-0"
                                   aria-hidden="true"
                                 />
-                                <span className="truncate">Grouped</span>
+                                <span className="truncate">
+                                  {groupMeta.isScheduledGroup
+                                    ? "Scheduled group"
+                                    : "Grouped"}
+                                </span>
                               </span>
                               <span className="shrink-0">
                                 {groupMeta.count}
