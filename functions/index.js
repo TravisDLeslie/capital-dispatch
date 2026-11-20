@@ -703,7 +703,6 @@ exports.sendTwilioMessage = onCall(
       adminOnly: isTestMessage,
     });
     const toPhoneNumber = normalizePhoneNumber(request.data?.toPhoneNumber);
-    const mediaUrls = normalizeTwilioMediaUrls(request.data?.mediaUrls);
 
     if (!toPhoneNumber) {
       throw new HttpsError(
@@ -721,6 +720,14 @@ exports.sendTwilioMessage = onCall(
     ).trim();
     const senderPhoneNumber = normalizePhoneNumber(settings.senderPhoneNumber);
     const maskedTo = maskPhoneNumber(toPhoneNumber);
+    const globalDeliveryPhotoUrl =
+      messageType === "deliveryComplete"
+        ? settings.deliveryCompleteGlobalPhoto?.url
+        : "";
+    const mediaUrls = normalizeTwilioMediaUrls([
+      ...(Array.isArray(request.data?.mediaUrls) ? request.data.mediaUrls : []),
+      globalDeliveryPhotoUrl,
+    ]);
 
     if (!/^AC[0-9a-fA-F]{32}$/.test(accountSid)) {
       throw new HttpsError(
@@ -861,6 +868,7 @@ exports.sendTwilioMessage = onCall(
       return {
         maskedTo,
         messageType,
+        mediaCount: mediaUrls.length,
         providerMessageId: String(responseData.sid || ""),
         status: String(responseData.status || "queued"),
       };

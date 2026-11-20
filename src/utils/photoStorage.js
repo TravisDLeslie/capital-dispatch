@@ -1,4 +1,5 @@
 import {
+  deleteObject,
   getDownloadURL,
   ref,
   uploadBytes,
@@ -216,6 +217,60 @@ export async function uploadDeliveryProofPhoto({
     height,
     capturedAt,
   };
+}
+
+export async function uploadTwilioDeliveryPhoto({ file }) {
+  if (!storage) {
+    throw new Error("Firebase Storage is not configured.");
+  }
+  if (!String(file?.type || "").startsWith("image/")) {
+    throw new Error("Choose an image file for the all-deliveries photo.");
+  }
+
+  const uploadedAt = new Date().toISOString();
+  const { blob, width, height } = await compressImageFile(file, {
+    maxWidth: 1400,
+    quality: 0.76,
+  });
+
+  if (blob.size > 2_000_000) {
+    throw new Error(
+      "That photo is still too large after compression. Choose an image under 2 MB for reliable MMS delivery.",
+    );
+  }
+
+  const fileName = `${Date.now()}-${safeFileName(file.name || "all-deliveries")}.jpg`;
+  const path = `twilio/delivery-complete/${fileName}`;
+  const photoRef = ref(storage, path);
+
+  await uploadBytes(photoRef, blob, {
+    contentType: "image/jpeg",
+  });
+
+  const url = await getDownloadURL(photoRef);
+
+  return {
+    url,
+    path,
+    name: file.name || fileName,
+    type: "image/jpeg",
+    size: blob.size,
+    width,
+    height,
+    uploadedAt,
+  };
+}
+
+export async function deleteTwilioDeliveryPhoto(path) {
+  if (!storage || !path) return;
+
+  try {
+    await deleteObject(ref(storage, path));
+  } catch (error) {
+    if (String(error?.code || "").toLowerCase() !== "storage/object-not-found") {
+      throw error;
+    }
+  }
 }
 
 export async function uploadSupplierRunPickupPhoto({

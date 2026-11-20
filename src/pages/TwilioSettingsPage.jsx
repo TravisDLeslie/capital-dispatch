@@ -3,12 +3,15 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  ImagePlus,
   KeyRound,
+  LoaderCircle,
   MessageSquareText,
   Save,
   Send,
   ShieldCheck,
   Smartphone,
+  Trash2,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
@@ -19,6 +22,10 @@ import {
   subscribeToTwilioSettings,
 } from "../utils/twilioSettingsStorage";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
+import {
+  deleteTwilioDeliveryPhoto,
+  uploadTwilioDeliveryPhoto,
+} from "../utils/photoStorage";
 import {
   sendTwilioCustomerMessage,
   sendTwilioTestMessage,
@@ -115,7 +122,7 @@ function getDeliveryAddress(delivery) {
   ).trim();
 }
 
-function getDeliveryPhotos(delivery) {
+function getDeliveryPhotos(delivery, maxCombinedBytes = 4_500_000) {
   const photoCandidates = [
     ...(Array.isArray(delivery?.deliveryPhotos)
       ? delivery.deliveryPhotos
@@ -139,7 +146,7 @@ function getDeliveryPhotos(delivery) {
       if (!photo.url.startsWith("https://") || seenUrls.has(photo.url)) {
         return false;
       }
-      if (photo.size && combinedBytes + photo.size > 4_500_000) {
+      if (photo.size && combinedBytes + photo.size > maxCombinedBytes) {
         return false;
       }
 
@@ -148,6 +155,19 @@ function getDeliveryPhotos(delivery) {
       return true;
     })
     .slice(0, 2);
+}
+
+function getGlobalPhotoError(error) {
+  const code = String(error?.code || "").toLowerCase();
+
+  if (code.includes("storage/unauthorized")) {
+    return "Firebase Storage denied the all-deliveries photo. Confirm you are signed in as an administrator and deploy the latest Storage rules.";
+  }
+  if (code.includes("storage/unauthenticated")) {
+    return "Your login expired. Refresh the app, sign in again, and retry the photo.";
+  }
+
+  return String(error?.message || "Unable to save the all-deliveries photo.");
 }
 
 function fillPreviewTemplate(template, delivery) {
@@ -197,6 +217,9 @@ export default function TwilioSettingsPage({
     useState(false);
   const [deliveryCompleteMessage, setDeliveryCompleteMessage] = useState("");
   const [deliveryCompleteError, setDeliveryCompleteError] = useState("");
+  const [isUploadingGlobalPhoto, setIsUploadingGlobalPhoto] = useState(false);
+  const [isRemovingGlobalPhoto, setIsRemovingGlobalPhoto] = useState(false);
+  const [globalPhotoError, setGlobalPhotoError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -259,8 +282,33 @@ export default function TwilioSettingsPage({
   );
 
   const selectedDeliveryPhotos = useMemo(
-    () => (selectedDelivery ? getDeliveryPhotos(selectedDelivery) : []),
-    [selectedDelivery],
+    () => {
+      const globalPhotoSize = Math.max(
+        0,
+        Number(settings.deliveryCompleteGlobalPhoto?.size) || 0,
+      );
+
+      return selectedDelivery
+        ? getDeliveryPhotos(
+            selectedDelivery,
+            Math.max(0, 4_500_000 - globalPhotoSize),
+          )
+        : [];
+    }, [selectedDelivery, settings.deliveryCompleteGlobalPhoto?.size],
+  );
+  const selectedDeliveryMedia = useMemo(
+    () => [
+      ...(settings.deliveryCompleteGlobalPhoto?.url
+        ? [
+            {
+              ...settings.deliveryCompleteGlobalPhoto,
+              isGlobal: true,
+            },
+          ]
+        : []),
+      ...selectedDeliveryPhotos,
+    ],
+    [selectedDeliveryPhotos, settings.deliveryCompleteGlobalPhoto],
   );
 
   function updateSetting(key, value) {
@@ -270,6 +318,68 @@ export default function TwilioSettingsPage({
     }));
     setMessage("");
     setError("");
+  }
+
+  async function handleGlobalPhotoUpload(file) {
+    if (!file) return;
+
+    setIsUploadingGlobalPhoto(true);
+    setGlobalPhotoError("");
+    setMessage("");
+    setError("");
+
+    const previousPhoto = settings.deliveryCompleteGlobalPhoto;
+
+    try {
+      const uploadedPhoto = await uploadTwilioDeliveryPhoto({ file });
+      const savedSettings = await saveTwilioSettings({
+        ...settings,
+        deliveryCompleteGlobalPhoto: uploadedPhoto,
+      });
+      setSettings(savedSettings);
+      setMessage("The all-deliveries photo is saved and will be attached to every delivery-complete MMS.");
+
+      if (previousPhoto?.path && previousPhoto.path !== uploadedPhoto.path) {
+        deleteTwilioDeliveryPhoto(previousPhoto.path).catch((deleteError) => {
+          console.warn("Unable to remove replaced Twilio photo:", deleteError);
+        });
+      }
+    } catch (uploadError) {
+      console.error("Unable to save all-deliveries photo:", uploadError);
+      setGlobalPhotoError(getGlobalPhotoError(uploadError));
+    } finally {
+      setIsUploadingGlobalPhoto(false);
+    }
+  }
+
+  async function handleGlobalPhotoRemove() {
+    const currentPhoto = settings.deliveryCompleteGlobalPhoto;
+    if (!currentPhoto) return;
+
+    setIsRemovingGlobalPhoto(true);
+    setGlobalPhotoError("");
+    setMessage("");
+    setError("");
+
+    try {
+      const savedSettings = await saveTwilioSettings({
+        ...settings,
+        deliveryCompleteGlobalPhoto: null,
+      });
+      setSettings(savedSettings);
+      setMessage("The all-deliveries photo was removed.");
+
+      if (currentPhoto.path) {
+        deleteTwilioDeliveryPhoto(currentPhoto.path).catch((deleteError) => {
+          console.warn("Unable to remove Twilio photo file:", deleteError);
+        });
+      }
+    } catch (removeError) {
+      console.error("Unable to remove all-deliveries photo:", removeError);
+      setGlobalPhotoError(getGlobalPhotoError(removeError));
+    } finally {
+      setIsRemovingGlobalPhoto(false);
+    }
   }
 
   async function handleSubmit(event) {
@@ -397,8 +507,12 @@ export default function TwilioSettingsPage({
         deliveryId: selectedDelivery.id,
         mediaUrls: selectedDeliveryPhotos.map((photo) => photo.url),
       });
+      const sentPhotoCount = Math.max(
+        0,
+        Number(result.mediaCount) || selectedDeliveryMedia.length,
+      );
       setDeliveryCompleteMessage(
-        `Delivery complete ${selectedDeliveryPhotos.length ? "MMS" : "message"} queued to ${result.maskedTo || "the customer"} for order ${selectedDelivery.orderNumber}${selectedDeliveryPhotos.length ? ` with ${selectedDeliveryPhotos.length} photo${selectedDeliveryPhotos.length === 1 ? "" : "s"}` : ""}.`,
+        `Delivery complete ${sentPhotoCount ? "MMS" : "message"} queued to ${result.maskedTo || "the customer"} for order ${selectedDelivery.orderNumber}${sentPhotoCount ? ` with ${sentPhotoCount} photo${sentPhotoCount === 1 ? "" : "s"}` : ""}.`,
       );
     } catch (sendError) {
       console.error("Unable to send delivery complete message:", sendError);
@@ -638,6 +752,122 @@ export default function TwilioSettingsPage({
             </div>
           </section>
 
+          <section className="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-sm sm:p-6">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-violet-700 shadow-sm">
+                <ImagePlus className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  Photo attached to every delivery
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm font-semibold text-slate-600">
+                  Upload one reusable image for every delivery-complete MMS. It
+                  will be included alongside each delivery&apos;s proof photos.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 rounded-2xl border border-violet-200 bg-white p-4 md:grid-cols-[minmax(0,360px)_minmax(0,1fr)] md:items-center">
+              {settings.deliveryCompleteGlobalPhoto?.url ? (
+                <img
+                  src={settings.deliveryCompleteGlobalPhoto.url}
+                  alt="All-deliveries MMS attachment"
+                  className="h-52 w-full rounded-2xl border border-slate-200 bg-slate-100 object-contain"
+                />
+              ) : (
+                <div className="flex h-52 items-center justify-center rounded-2xl border-2 border-dashed border-violet-200 bg-violet-50/60 px-6 text-center">
+                  <div>
+                    <ImagePlus className="mx-auto h-9 w-9 text-violet-500" aria-hidden="true" />
+                    <p className="mt-3 text-sm font-black text-slate-800">
+                      No all-deliveries photo yet
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                      JPG, PNG, HEIC, or another image format
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                {settings.deliveryCompleteGlobalPhoto?.url ? (
+                  <>
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-violet-700">
+                      Active on every completed delivery
+                    </p>
+                    <p className="mt-2 break-words text-base font-black text-slate-950">
+                      {settings.deliveryCompleteGlobalPhoto.name || "All-deliveries photo"}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      This photo is automatically added by Firebase when the
+                      delivery-complete message is sent.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-base font-black text-slate-950">
+                      Add the standard customer photo
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      The image is compressed for reliable MMS delivery and
+                      saved immediately after upload.
+                    </p>
+                  </>
+                )}
+
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 text-sm font-black text-white transition hover:bg-violet-800 has-[:disabled]:cursor-wait has-[:disabled]:opacity-60">
+                    {isUploadingGlobalPhoto ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <ImagePlus className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    {isUploadingGlobalPhoto
+                      ? "Uploading…"
+                      : settings.deliveryCompleteGlobalPhoto?.url
+                        ? "Replace photo"
+                        : "Upload photo"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploadingGlobalPhoto || isRemovingGlobalPhoto}
+                      onChange={(event) => {
+                        handleGlobalPhotoUpload(event.target.files?.[0]);
+                        event.target.value = "";
+                      }}
+                      className="sr-only"
+                    />
+                  </label>
+
+                  {settings.deliveryCompleteGlobalPhoto?.url ? (
+                    <button
+                      type="button"
+                      onClick={handleGlobalPhotoRemove}
+                      disabled={isUploadingGlobalPhoto || isRemovingGlobalPhoto}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-black text-red-700 transition hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {isRemovingGlobalPhoto ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      )}
+                      {isRemovingGlobalPhoto ? "Removing…" : "Remove photo"}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {globalPhotoError ? (
+              <div
+                role="alert"
+                className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700"
+              >
+                {globalPhotoError}
+              </div>
+            ) : null}
+          </section>
+
           <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm sm:p-6">
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm">
@@ -737,18 +967,24 @@ export default function TwilioSettingsPage({
                           MMS photos
                         </p>
                         <span className="text-xs font-black text-emerald-700">
-                          {selectedDeliveryPhotos.length} attached
+                          {selectedDeliveryMedia.length} attached
                         </span>
                       </div>
-                      {selectedDeliveryPhotos.length > 0 ? (
+                      {selectedDeliveryMedia.length > 0 ? (
                         <div className="mt-2 grid grid-cols-2 gap-2">
-                          {selectedDeliveryPhotos.map((photo, photoIndex) => (
-                            <img
-                              key={photo.url}
-                              src={photo.previewUrl || photo.url}
-                              alt={`Delivery proof ${photoIndex + 1}`}
-                              className="h-28 w-full rounded-xl border border-slate-200 bg-slate-100 object-cover"
-                            />
+                          {selectedDeliveryMedia.map((photo, photoIndex) => (
+                            <div key={photo.url} className="relative">
+                              <img
+                                src={photo.previewUrl || photo.url}
+                                alt={photo.isGlobal ? "All-deliveries attachment" : `Delivery proof ${photoIndex + 1}`}
+                                className="h-28 w-full rounded-xl border border-slate-200 bg-slate-100 object-cover"
+                              />
+                              {photo.isGlobal ? (
+                                <span className="absolute bottom-2 left-2 rounded-full bg-violet-700 px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] text-white shadow-sm">
+                                  All deliveries
+                                </span>
+                              ) : null}
+                            </div>
                           ))}
                         </div>
                       ) : (

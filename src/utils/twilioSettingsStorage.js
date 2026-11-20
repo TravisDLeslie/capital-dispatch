@@ -23,6 +23,7 @@ export const defaultTwilioSettings = {
     "Hi {{customer}}, your Capital Lumber delivery for order {{order}} is scheduled for {{date}}. Reply STOP to opt out.",
   deliveryCompleteEnabled: true,
   deliveryCompleteTemplate: DEFAULT_DELIVERY_COMPLETE_TEMPLATE,
+  deliveryCompleteGlobalPhoto: null,
   willCallEnabled: true,
   willCallTemplate:
     "Hi {{customer}}, order {{order}} is ready for pickup at Capital Lumber. Reply STOP to opt out.",
@@ -43,6 +44,7 @@ export function normalizeTwilioSettings(settings) {
   const savedDeliveryCompleteTemplate = String(
     settings?.deliveryCompleteTemplate || "",
   ).trim();
+  const savedGlobalPhoto = settings?.deliveryCompleteGlobalPhoto;
 
   return {
     ...defaultTwilioSettings,
@@ -59,6 +61,14 @@ export function normalizeTwilioSettings(settings) {
       savedDeliveryCompleteTemplate === LEGACY_DELIVERY_COMPLETE_TEMPLATE
         ? DEFAULT_DELIVERY_COMPLETE_TEMPLATE
         : savedDeliveryCompleteTemplate,
+    deliveryCompleteGlobalPhoto:
+      savedGlobalPhoto && String(savedGlobalPhoto.url || "").startsWith("https://")
+        ? {
+            ...savedGlobalPhoto,
+            url: String(savedGlobalPhoto.url).trim(),
+            path: String(savedGlobalPhoto.path || "").trim(),
+          }
+        : null,
   };
 }
 
