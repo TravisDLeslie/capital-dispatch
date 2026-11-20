@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import MarkDeliveredModal from "./MarkDeliveredModal";
 import ReceivingLocationPhotosModal from "./ReceivingLocationPhotosModal";
 import {
   getPOReceivingSummary,
@@ -18,6 +19,7 @@ import {
   getWaitingReceivingItems,
 } from "../utils/poReceivingSummary";
 import { formatCustomerName } from "../utils/textFormatters";
+import { isDeliveryComplete } from "../utils/deliveryStatus";
 
 const pathLabels = {
   south: "South pickup",
@@ -132,6 +134,9 @@ export default function OrderDetailsModal({
   orderNumber,
   sources = {},
   onDeleteOrder,
+  onMarkDeliveryDelivered = /** @type {((deliveryId: string, deliveredAt: string) => Promise<unknown>) | undefined} */ (
+    undefined
+  ),
   onSendPoToSouthDispatch,
   onClose,
 }) {
@@ -142,6 +147,9 @@ export default function OrderDetailsModal({
   const [sendingSouthPoNumber, setSendingSouthPoNumber] = useState("");
   const [southDispatchMessage, setSouthDispatchMessage] = useState("");
   const [southDispatchError, setSouthDispatchError] = useState("");
+  const [deliveryToMarkDelivered, setDeliveryToMarkDelivered] = useState(null);
+  const [isMarkingDeliveryDelivered, setIsMarkingDeliveryDelivered] =
+    useState(false);
   const orderDetails = useMemo(() => {
     const orderKey = normalizeOrderNumber(orderNumber);
     const orderBuilds = Array.isArray(sources.orderBuilds)
@@ -163,7 +171,7 @@ export default function OrderDetailsModal({
     const delivery = (Array.isArray(sources.deliveries)
       ? sources.deliveries
       : []
-    ).find((record) => normalizeOrderNumber(record?.orderNumber) === orderKey);
+    ).find((record) => recordMatchesOrder(record, orderKey));
     const primaryRecord = orderBuild || delivery || matchingRecords[0] || {};
     const savedOrderItems = getRecordItems(orderBuild);
     const groupedOrderItems = [
@@ -332,6 +340,7 @@ export default function OrderDetailsModal({
       stockItems,
       poNumbers,
       receivingSummaries,
+      deliveryRecord: delivery || null,
       found: Boolean(orderBuild || delivery || matchingRecords.length),
     };
   }, [orderNumber, sources]);
@@ -373,6 +382,34 @@ export default function OrderDetailsModal({
   const canSendPoToSouthDispatch =
     typeof onSendPoToSouthDispatch === "function" &&
     orderDetails.poNumbers.length > 0;
+  const canMarkDeliveryDelivered =
+    typeof onMarkDeliveryDelivered === "function" &&
+    Boolean(orderDetails.deliveryRecord?.id) &&
+    !isDeliveryComplete(orderDetails.deliveryRecord);
+
+  async function handleConfirmMarkDelivered(deliveredAt) {
+    const delivery = deliveryToMarkDelivered;
+
+    if (!delivery?.id || !deliveredAt || isMarkingDeliveryDelivered) {
+      return;
+    }
+
+    setIsMarkingDeliveryDelivered(true);
+
+    try {
+      await onMarkDeliveryDelivered(delivery.id, deliveredAt);
+      setDeliveryToMarkDelivered(null);
+      onClose?.();
+    } catch (error) {
+      throw new Error(
+        error instanceof Error
+          ? error.message
+          : "Unable to mark this delivery as delivered. Please try again.",
+      );
+    } finally {
+      setIsMarkingDeliveryDelivered(false);
+    }
+  }
 
   async function handleDeleteOrder() {
     if (typeof onDeleteOrder !== "function" || isDeletingOrder) {
@@ -500,6 +537,18 @@ export default function OrderDetailsModal({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {canMarkDeliveryDelivered ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setDeliveryToMarkDelivered(orderDetails.deliveryRecord)
+                }
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 text-xs font-black text-white shadow-sm transition hover:bg-emerald-800 sm:px-4 sm:text-sm"
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                Mark Delivered
+              </button>
+            ) : null}
             {canDeleteOrder ? (
               <button
                 type="button"
@@ -1022,6 +1071,18 @@ export default function OrderDetailsModal({
           ) : null}
 
         </div>
+
+        <MarkDeliveredModal
+          delivery={deliveryToMarkDelivered}
+          isSaving={isMarkingDeliveryDelivered}
+          zIndexClass="z-[170]"
+          onClose={() => {
+            if (!isMarkingDeliveryDelivered) {
+              setDeliveryToMarkDelivered(null);
+            }
+          }}
+          onConfirm={handleConfirmMarkDelivered}
+        />
       </div>
 
       {viewingReceivingPhotos ? (

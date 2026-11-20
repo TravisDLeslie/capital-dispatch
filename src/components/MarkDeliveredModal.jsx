@@ -27,6 +27,7 @@ export default function MarkDeliveredModal({
   helperText =
     "This timestamp is used in Delivery History. Photos can still be added later when the driver returns.",
   submitLabel = "Confirm Delivered",
+  zIndexClass = "z-[80]",
   onClose,
   onConfirm,
 }) {
@@ -96,14 +97,22 @@ export default function MarkDeliveredModal({
       return;
     }
 
-    await onConfirm?.(deliveredAtDate.toISOString());
+    try {
+      await onConfirm?.(deliveredAtDate.toISOString());
+    } catch (confirmError) {
+      setError(
+        confirmError instanceof Error
+          ? confirmError.message
+          : "Unable to mark this delivery as delivered. Please try again.",
+      );
+    }
   }
 
   const customerName = formatCustomerName(delivery.customerName);
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/65 p-4"
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center bg-slate-950/65 p-4`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="mark-delivered-title"

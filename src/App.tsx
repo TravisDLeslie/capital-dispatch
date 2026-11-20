@@ -9756,6 +9756,17 @@ export default function App() {
                     ? handlePermanentlyDeleteOrder
                     : undefined
                 }
+                onMarkDeliveryDelivered={
+                  canEditDeliverySchedule
+                    ? (deliveryId: string, deliveredAt: string) =>
+                        handleUpdateDelivery(deliveryId, {
+                          status: "complete",
+                          deliveredAt,
+                          deliveryCompletionSource: "calendarOverride",
+                          deliveryOverrideAt: deliveredAt,
+                        })
+                    : undefined
+                }
                 onSendPoToSouthDispatch={
                   canEditDeliverySchedule && canReadSouth
                     ? handleSendOrderPOToSouthDispatch

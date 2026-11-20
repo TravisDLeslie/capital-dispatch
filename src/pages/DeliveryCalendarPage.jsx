@@ -5846,15 +5846,37 @@ export default function DeliveryCalendarPage({
                 </p>
               </div>
 
-              {onViewOrder ? (
-                <button
-                  type="button"
-                  onClick={() => onViewOrder(selectedTimelineDelivery)}
-                  className="order-3 col-span-2 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#e21f2b] focus:outline-none focus:ring-4 focus:ring-red-100 sm:order-none sm:col-span-1"
-                >
-                  <Eye className="h-4 w-4" aria-hidden="true" />
-                  View order
-                </button>
+              {onViewOrder || (canEditDeliveries && onUpdateDelivery) ? (
+                <div className="order-3 col-span-2 flex flex-col justify-center gap-2 sm:order-none sm:col-span-1 sm:flex-row">
+                  {canEditDeliveries && onUpdateDelivery ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleMarkDelivered(selectedTimelineDelivery)
+                      }
+                      disabled={
+                        markingDeliveredId === selectedTimelineDelivery.id
+                      }
+                      className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-100 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                      {markingDeliveredId === selectedTimelineDelivery.id
+                        ? "Saving…"
+                        : "Mark Delivered"}
+                    </button>
+                  ) : null}
+
+                  {onViewOrder ? (
+                    <button
+                      type="button"
+                      onClick={() => onViewOrder(selectedTimelineDelivery)}
+                      className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[#e21f2b] focus:outline-none focus:ring-4 focus:ring-red-100"
+                    >
+                      <Eye className="h-4 w-4" aria-hidden="true" />
+                      View order
+                    </button>
+                  ) : null}
+                </div>
               ) : (
                 <span className="hidden sm:block" aria-hidden="true" />
               )}
