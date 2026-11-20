@@ -5547,7 +5547,7 @@ export default function DeliveryCalendarPage({
                     className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-100"
                   >
                     <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                    Mark delivered
+                    Deliver Manually
                   </button>
                 ) : null}
 
@@ -5862,7 +5862,7 @@ export default function DeliveryCalendarPage({
                       <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                       {markingDeliveredId === selectedTimelineDelivery.id
                         ? "Saving…"
-                        : "Mark Delivered"}
+                        : "Deliver Manually"}
                     </button>
                   ) : null}
 

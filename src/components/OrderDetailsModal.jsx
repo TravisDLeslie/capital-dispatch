@@ -546,7 +546,7 @@ export default function OrderDetailsModal({
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 text-xs font-black text-white shadow-sm transition hover:bg-emerald-800 sm:px-4 sm:text-sm"
               >
                 <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                Mark Delivered
+                Deliver Manually
               </button>
             ) : null}
             {canDeleteOrder ? (
