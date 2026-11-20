@@ -68,13 +68,15 @@ function maskPhoneNumber(phoneNumber) {
 function fillMessageTemplate(template, fields) {
   const replacements = {
     customer: String(fields.customer || "there").trim() || "there",
+    business:
+      String(fields.business || "your business").trim() || "your business",
     order: String(fields.order || "").trim() || "your order",
     date: String(fields.date || "").trim() || "a date to be confirmed",
     address: String(fields.address || "").trim() || "the delivery address",
   };
 
   return String(template || "")
-    .replace(/{{\s*(customer|order|date|address)\s*}}/gi, (match, key) =>
+    .replace(/{{\s*(customer|business|order|date|address)\s*}}/gi, (match, key) =>
       replacements[String(key).toLowerCase()] || match,
     )
     .trim();
@@ -764,6 +766,7 @@ exports.sendTwilioMessage = onCall(
         settings[messageConfiguration.templateKey],
         {
           customer: request.data?.customer,
+          business: request.data?.business,
           order: request.data?.order,
           date: request.data?.date,
           address: request.data?.address,

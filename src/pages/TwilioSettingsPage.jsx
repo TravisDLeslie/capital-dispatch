@@ -95,6 +95,14 @@ function getDeliveryCustomer(delivery) {
   );
 }
 
+function getDeliveryBusiness(delivery) {
+  return (
+    String(delivery?.businessName || "").trim() ||
+    String(delivery?.customerName || "").trim() ||
+    "your business"
+  );
+}
+
 function getDeliveryPhone(delivery) {
   return String(
     delivery?.contactPhone || delivery?.phoneNumber || delivery?.phone || "",
@@ -145,13 +153,14 @@ function getDeliveryPhotos(delivery) {
 function fillPreviewTemplate(template, delivery) {
   const fields = {
     customer: getDeliveryCustomer(delivery),
+    business: getDeliveryBusiness(delivery),
     order: String(delivery?.orderNumber || "your order").trim(),
     date: formatCompletedAt(delivery),
     address: getDeliveryAddress(delivery) || "the delivery address",
   };
 
   return String(template || "").replace(
-    /{{\s*(customer|order|date|address)\s*}}/gi,
+    /{{\s*(customer|business|order|date|address)\s*}}/gi,
     (match, key) => fields[String(key).toLowerCase()] || match,
   );
 }
@@ -381,6 +390,7 @@ export default function TwilioSettingsPage({
         messageType: "deliveryComplete",
         toPhoneNumber: deliveryPhoneNumber,
         customer: getDeliveryCustomer(selectedDelivery),
+        business: getDeliveryBusiness(selectedDelivery),
         order: selectedDelivery.orderNumber,
         date: formatCompletedAt(selectedDelivery),
         address: getDeliveryAddress(selectedDelivery),
@@ -790,7 +800,7 @@ export default function TwilioSettingsPage({
                   Customer message templates
                 </h2>
                 <p className="text-sm font-semibold text-slate-500">
-                  Available fields: {"{{customer}}"}, {"{{order}}"}, {"{{date}}"}, and {"{{address}}"}.
+                  Available fields: {"{{customer}}"}, {"{{business}}"}, {"{{order}}"}, {"{{date}}"}, and {"{{address}}"}.
                 </p>
               </div>
             </div>

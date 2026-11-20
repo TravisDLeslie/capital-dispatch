@@ -3,6 +3,10 @@ import { db } from "./firebase";
 
 const SETTINGS_COLLECTION = "appSettings";
 const TWILIO_SETTINGS_DOC = "twilioMessaging";
+const LEGACY_DELIVERY_COMPLETE_TEMPLATE =
+  "Hi {{customer}}, Capital Lumber completed delivery of order {{order}} to {{address}} on {{date}}. Delivery photos are attached. Thank you for your business. Reply STOP to opt out.";
+const DEFAULT_DELIVERY_COMPLETE_TEMPLATE =
+  "Hi {{customer}}, your order for {{business}} to {{address}} on {{date}} has been delivered by Capital Lumber Co. Photos are attached. If you have any questions, please give us a call at 208-343-5481. Thank you for your business. Reply STOP to opt out.";
 
 export const defaultTwilioSettings = {
   id: TWILIO_SETTINGS_DOC,
@@ -18,8 +22,7 @@ export const defaultTwilioSettings = {
   scheduledDeliveryTemplate:
     "Hi {{customer}}, your Capital Lumber delivery for order {{order}} is scheduled for {{date}}. Reply STOP to opt out.",
   deliveryCompleteEnabled: true,
-  deliveryCompleteTemplate:
-    "Hi {{customer}}, Capital Lumber completed delivery of order {{order}} to {{address}} on {{date}}. Delivery photos are attached. Thank you for your business. Reply STOP to opt out.",
+  deliveryCompleteTemplate: DEFAULT_DELIVERY_COMPLETE_TEMPLATE,
   willCallEnabled: true,
   willCallTemplate:
     "Hi {{customer}}, order {{order}} is ready for pickup at Capital Lumber. Reply STOP to opt out.",
@@ -37,6 +40,10 @@ function normalizePhoneNumber(value) {
 }
 
 export function normalizeTwilioSettings(settings) {
+  const savedDeliveryCompleteTemplate = String(
+    settings?.deliveryCompleteTemplate || "",
+  ).trim();
+
   return {
     ...defaultTwilioSettings,
     ...(settings || {}),
@@ -47,6 +54,11 @@ export function normalizeTwilioSettings(settings) {
     businessName:
       String(settings?.businessName || "").trim() ||
       defaultTwilioSettings.businessName,
+    deliveryCompleteTemplate:
+      !savedDeliveryCompleteTemplate ||
+      savedDeliveryCompleteTemplate === LEGACY_DELIVERY_COMPLETE_TEMPLATE
+        ? DEFAULT_DELIVERY_COMPLETE_TEMPLATE
+        : savedDeliveryCompleteTemplate,
   };
 }
 
