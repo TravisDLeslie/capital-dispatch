@@ -298,6 +298,7 @@ export default function TwilioSettingsPage({
   );
   const selectedDeliveryMedia = useMemo(
     () => [
+      ...selectedDeliveryPhotos,
       ...(settings.deliveryCompleteGlobalPhoto?.url
         ? [
             {
@@ -306,7 +307,6 @@ export default function TwilioSettingsPage({
             },
           ]
         : []),
-      ...selectedDeliveryPhotos,
     ],
     [selectedDeliveryPhotos, settings.deliveryCompleteGlobalPhoto],
   );
