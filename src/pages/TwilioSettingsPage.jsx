@@ -186,6 +186,8 @@ export default function TwilioSettingsPage({
   const [deliveryPhoneNumber, setDeliveryPhoneNumber] = useState("");
   const [isSendingDeliveryComplete, setIsSendingDeliveryComplete] =
     useState(false);
+  const [deliveryCompleteMessage, setDeliveryCompleteMessage] = useState("");
+  const [deliveryCompleteError, setDeliveryCompleteError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -334,34 +336,46 @@ export default function TwilioSettingsPage({
 
     setSelectedDeliveryId(deliveryId);
     setDeliveryPhoneNumber(getDeliveryPhone(delivery));
+    setDeliveryCompleteMessage("");
+    setDeliveryCompleteError("");
     setMessage("");
     setError("");
   }
 
   async function handleDeliveryCompleteMessage() {
     if (!selectedDelivery) {
-      setError("Select a completed delivery first.");
+      setDeliveryCompleteError("Select a completed delivery first.");
       return;
     }
     if (deliveryPhoneNumber.replace(/\D/g, "").length < 10) {
-      setError("Enter a valid customer mobile number, including the area code.");
+      setDeliveryCompleteError(
+        "Enter a valid customer mobile number, including the area code.",
+      );
       return;
     }
-    if (!settings.enabled) {
-      setError("Turn on Customer texting and save the Twilio settings first.");
+    if (validationError) {
+      setDeliveryCompleteError(validationError);
       return;
     }
-    if (!settings.deliveryCompleteEnabled) {
-      setError("Enable the Delivery complete message template first.");
+    if (!String(settings.deliveryCompleteTemplate || "").trim()) {
+      setDeliveryCompleteError("Enter a Delivery complete message template.");
       return;
     }
 
     setIsSendingDeliveryComplete(true);
+    setDeliveryCompleteMessage("");
+    setDeliveryCompleteError("");
     setMessage("");
     setError("");
 
     try {
-      const savedSettings = await saveTwilioSettings(settings);
+      // Clicking the explicit manual-send button is sufficient intent to turn
+      // on the two switches required by the server for this message type.
+      const savedSettings = await saveTwilioSettings({
+        ...settings,
+        enabled: true,
+        deliveryCompleteEnabled: true,
+      });
       setSettings(savedSettings);
       const result = await sendTwilioCustomerMessage({
         messageType: "deliveryComplete",
@@ -373,12 +387,12 @@ export default function TwilioSettingsPage({
         deliveryId: selectedDelivery.id,
         mediaUrls: selectedDeliveryPhotos.map((photo) => photo.url),
       });
-      setMessage(
+      setDeliveryCompleteMessage(
         `Delivery complete ${selectedDeliveryPhotos.length ? "MMS" : "message"} queued to ${result.maskedTo || "the customer"} for order ${selectedDelivery.orderNumber}${selectedDeliveryPhotos.length ? ` with ${selectedDeliveryPhotos.length} photo${selectedDeliveryPhotos.length === 1 ? "" : "s"}` : ""}.`,
       );
     } catch (sendError) {
       console.error("Unable to send delivery complete message:", sendError);
-      setError(getFirebaseErrorMessage(sendError));
+      setDeliveryCompleteError(getFirebaseErrorMessage(sendError));
     } finally {
       setIsSendingDeliveryComplete(false);
     }
@@ -665,6 +679,8 @@ export default function TwilioSettingsPage({
                       value={deliveryPhoneNumber}
                       onChange={(event) => {
                         setDeliveryPhoneNumber(event.target.value);
+                        setDeliveryCompleteMessage("");
+                        setDeliveryCompleteError("");
                         setMessage("");
                         setError("");
                       }}
@@ -743,6 +759,22 @@ export default function TwilioSettingsPage({
                       ? "Sending…"
                       : "Send delivery complete message"}
                   </button>
+                  {deliveryCompleteError ? (
+                    <div
+                      role="alert"
+                      className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700"
+                    >
+                      {deliveryCompleteError}
+                    </div>
+                  ) : null}
+                  {deliveryCompleteMessage ? (
+                    <div
+                      role="status"
+                      className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-800"
+                    >
+                      {deliveryCompleteMessage}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             )}
