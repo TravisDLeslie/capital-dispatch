@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   CheckCircle2,
+  LockKeyhole,
   MapPin,
   Maximize2,
   Package,
@@ -135,6 +136,9 @@ export default function OrderDetailsModal({
   sources = {},
   onDeleteOrder,
   onMarkDeliveryDelivered = /** @type {((deliveryId: string, deliveredAt: string) => Promise<unknown>) | undefined} */ (
+    undefined
+  ),
+  onRequestDeliveryEditAccess = /** @type {(() => void) | undefined} */ (
     undefined
   ),
   onSendPoToSouthDispatch,
@@ -386,6 +390,12 @@ export default function OrderDetailsModal({
     typeof onMarkDeliveryDelivered === "function" &&
     Boolean(orderDetails.deliveryRecord?.id) &&
     !isDeliveryComplete(orderDetails.deliveryRecord);
+  const canRequestDeliveryEditAccess =
+    typeof onRequestDeliveryEditAccess === "function";
+  const canOfferManualDelivery =
+    Boolean(orderDetails.deliveryRecord?.id) &&
+    !isDeliveryComplete(orderDetails.deliveryRecord) &&
+    (canMarkDeliveryDelivered || canRequestDeliveryEditAccess);
 
   async function handleConfirmMarkDelivered(deliveredAt) {
     const delivery = deliveryToMarkDelivered;
@@ -537,15 +547,24 @@ export default function OrderDetailsModal({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {canMarkDeliveryDelivered ? (
+            {canOfferManualDelivery ? (
               <button
                 type="button"
-                onClick={() =>
-                  setDeliveryToMarkDelivered(orderDetails.deliveryRecord)
-                }
+                onClick={() => {
+                  if (canMarkDeliveryDelivered) {
+                    setDeliveryToMarkDelivered(orderDetails.deliveryRecord);
+                    return;
+                  }
+
+                  onRequestDeliveryEditAccess?.();
+                }}
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3 text-xs font-black text-white shadow-sm transition hover:bg-emerald-800 sm:px-4 sm:text-sm"
               >
-                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                {canMarkDeliveryDelivered ? (
+                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+                )}
                 Deliver Manually
               </button>
             ) : null}

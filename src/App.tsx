@@ -9767,6 +9767,11 @@ export default function App() {
                         })
                     : undefined
                 }
+                onRequestDeliveryEditAccess={
+                  isDeliverySchedulePasswordExempt
+                    ? undefined
+                    : () => setIsDeliveryScheduleAccessOpen(true)
+                }
                 onSendPoToSouthDispatch={
                   canEditDeliverySchedule && canReadSouth
                     ? handleSendOrderPOToSouthDispatch

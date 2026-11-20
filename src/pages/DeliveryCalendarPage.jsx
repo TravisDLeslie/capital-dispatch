@@ -4027,6 +4027,9 @@ export default function DeliveryCalendarPage({
   const dayFullPointerDragRef = useRef(null);
   const canMoveCalendarDeliveries =
     canEditDeliveries && Boolean(onUpdateDelivery);
+  const canOfferManualDelivery =
+    (canEditDeliveries && Boolean(onUpdateDelivery)) ||
+    typeof onRequestEditAccess === "function";
   const calendarDeliveryDrag = useCalendarDeliveryDrag({
     deliveries: safeDeliveries,
     canMoveDeliveries: canMoveCalendarDeliveries,
@@ -4651,6 +4654,7 @@ export default function DeliveryCalendarPage({
 
   function handleMarkDelivered(delivery) {
     if (!canEditDeliveries || !onUpdateDelivery) {
+      onRequestEditAccess?.();
       return;
     }
 
@@ -5540,13 +5544,17 @@ export default function DeliveryCalendarPage({
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row">
-                {canEditDeliveries && onUpdateDelivery ? (
+                {canOfferManualDelivery ? (
                   <button
                     type="button"
                     onClick={() => handleMarkDelivered(selectedTimelineDelivery)}
                     className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-100"
                   >
-                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                    {canEditDeliveries && onUpdateDelivery ? (
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+                    )}
                     Deliver Manually
                   </button>
                 ) : null}
@@ -5846,9 +5854,9 @@ export default function DeliveryCalendarPage({
                 </p>
               </div>
 
-              {onViewOrder || (canEditDeliveries && onUpdateDelivery) ? (
+              {onViewOrder || canOfferManualDelivery ? (
                 <div className="order-3 col-span-2 flex flex-col justify-center gap-2 sm:order-none sm:col-span-1 sm:flex-row">
-                  {canEditDeliveries && onUpdateDelivery ? (
+                  {canOfferManualDelivery ? (
                     <button
                       type="button"
                       onClick={() =>
@@ -5859,7 +5867,11 @@ export default function DeliveryCalendarPage({
                       }
                       className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-800 focus:outline-none focus:ring-4 focus:ring-emerald-100 disabled:cursor-wait disabled:opacity-60"
                     >
-                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                      {canEditDeliveries && onUpdateDelivery ? (
+                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+                      )}
                       {markingDeliveredId === selectedTimelineDelivery.id
                         ? "Saving…"
                         : "Deliver Manually"}
