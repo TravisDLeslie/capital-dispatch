@@ -105,6 +105,45 @@ function buildCustomerAccountOptions(customers) {
   );
 }
 
+function getCustomerDisplayName(customer) {
+  return String(customer?.companyName || customer?.name || "").trim();
+}
+
+function getCustomerContacts(customer) {
+  return (Array.isArray(customer?.contacts) ? customer.contacts : [])
+    .map((contact, contactIndex) => ({
+      id: String(
+        contact?.id ||
+          `${String(customer?.id || "customer")}-contact-${contactIndex + 1}`,
+      ).trim(),
+      label: String(contact?.label || "").trim(),
+      name: String(contact?.name || "").trim(),
+      phone: String(contact?.phone || "").trim(),
+      email: String(contact?.email || "").trim(),
+    }))
+    .filter(
+      (contact) =>
+        contact.label ||
+        contact.name ||
+        contact.phone ||
+        contact.email,
+    );
+}
+
+function getPreferredCustomerContact(customer) {
+  const contacts = getCustomerContacts(customer);
+  const preferredContactId = String(
+    customer?.deliveryContactId || customer?.primaryContactId || "",
+  ).trim();
+
+  return (
+    contacts.find((contact) => contact.id === preferredContactId) ||
+    contacts.find((contact) => contact.phone) ||
+    contacts[0] ||
+    null
+  );
+}
+
 const inventoryCatalog = [
   {
     itemNumber: "SHIP",
@@ -1104,6 +1143,7 @@ export default function OrderFlowPage({
   const [businessName, setBusinessName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
+  const [customerContactId, setCustomerContactId] = useState("");
   const [orderMethod, setOrderMethod] = useState("delivery");
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
@@ -1214,6 +1254,41 @@ export default function OrderFlowPage({
     () => buildCustomerAccountOptions(customers),
     [customers],
   );
+  const customerBusinessOptions = useMemo(() => {
+    const optionsByName = new Map();
+
+    (Array.isArray(customers) ? customers : []).forEach((customer) => {
+      const name = getCustomerDisplayName(customer);
+
+      if (!name) {
+        return;
+      }
+
+      optionsByName.set(name.toLowerCase(), {
+        id: String(customer.id || ""),
+        name,
+        accountNumber: String(customer.accountNumber || "").trim(),
+      });
+    });
+
+    customerAccountOptions.forEach((account) => {
+      const name = String(account.name || "").trim();
+
+      if (name && !optionsByName.has(name.toLowerCase())) {
+        optionsByName.set(name.toLowerCase(), {
+          id: String(account.customerId || ""),
+          name,
+          accountNumber: String(account.accountNumber || "").trim(),
+        });
+      }
+    });
+
+    return [...optionsByName.values()].sort((firstOption, secondOption) =>
+      firstOption.name.localeCompare(secondOption.name, "en-US", {
+        sensitivity: "base",
+      }),
+    );
+  }, [customerAccountOptions, customers]);
   const linkedCustomerAccount = useMemo(
     () =>
       customerAccountOptions.find(
@@ -1222,6 +1297,39 @@ export default function OrderFlowPage({
           normalizeAccountNumber(accountNumber),
       ) || null,
     [accountNumber, customerAccountOptions],
+  );
+  const linkedSavedCustomer = useMemo(() => {
+    const linkedCustomerId = String(
+      linkedCustomerAccount?.customerId || "",
+    ).trim();
+    const normalizedBusinessName = String(businessName || "")
+      .trim()
+      .toLowerCase();
+
+    return (
+      (Array.isArray(customers) ? customers : []).find((customer) => {
+        if (linkedCustomerId && String(customer.id || "") === linkedCustomerId) {
+          return true;
+        }
+
+        return (
+          normalizedBusinessName &&
+          getCustomerDisplayName(customer).toLowerCase() ===
+            normalizedBusinessName
+        );
+      }) || null
+    );
+  }, [businessName, customers, linkedCustomerAccount]);
+  const linkedCustomerContacts = useMemo(
+    () => getCustomerContacts(linkedSavedCustomer),
+    [linkedSavedCustomer],
+  );
+  const selectedCustomerContact = useMemo(
+    () =>
+      linkedCustomerContacts.find(
+        (contact) => contact.id === customerContactId,
+      ) || null,
+    [customerContactId, linkedCustomerContacts],
   );
   const availableInventoryCatalog = useMemo(() => {
     const removedItemNumberSet = new Set(
@@ -1745,7 +1853,7 @@ export default function OrderFlowPage({
     }
 
     if (orderImportDraft.accountNumber) {
-      setAccountNumber(orderImportDraft.accountNumber);
+      handleAccountNumberChange(orderImportDraft.accountNumber);
     }
 
     if (["delivery", "willCall", "pod"].includes(orderImportDraft.orderMethod)) {
@@ -1835,7 +1943,13 @@ export default function OrderFlowPage({
       businessName: isVendorReturnOrder ? vendorReturnVendor : businessName,
       phoneNumber,
       accountNumber,
-      customerId: linkedCustomerAccount?.customerId || "",
+      customerId:
+        String(linkedSavedCustomer?.id || "").trim() ||
+        linkedCustomerAccount?.customerId ||
+        "",
+      customerContactId: selectedCustomerContact?.id || "",
+      customerContactLabel: selectedCustomerContact?.label || "",
+      customerContactEmail: selectedCustomerContact?.email || "",
       customerAccountType: linkedCustomerAccount?.accountType || "",
       orderKind: isVendorReturnOrder
         ? "vendorReturn"
@@ -1928,6 +2042,27 @@ export default function OrderFlowPage({
   function handleBusinessNameChange(nextBusinessName) {
     setBusinessName(nextBusinessName);
 
+    const matchingSavedCustomer = (
+      Array.isArray(customers) ? customers : []
+    ).find(
+      (customer) =>
+        getCustomerDisplayName(customer).toLowerCase() ===
+        String(nextBusinessName || "").trim().toLowerCase(),
+    );
+
+    if (matchingSavedCustomer) {
+      const preferredContact = getPreferredCustomerContact(matchingSavedCustomer);
+
+      setBusinessName(getCustomerDisplayName(matchingSavedCustomer));
+      setAccountNumber(String(matchingSavedCustomer.accountNumber || "").trim());
+      setCustomerContactId(preferredContact?.id || "");
+      setCustomerName(preferredContact?.name || "");
+      setPhoneNumber(formatPhoneInput(preferredContact?.phone));
+      return;
+    }
+
+    setCustomerContactId("");
+
     const matchingCustomer = customerAccountOptions.find(
       (account) =>
         String(account.name || "").trim().toLowerCase() ===
@@ -1940,6 +2075,49 @@ export default function OrderFlowPage({
 
     setBusinessName(matchingCustomer.businessName || matchingCustomer.name);
     setAccountNumber(matchingCustomer.accountNumber);
+  }
+
+  function handleAccountNumberChange(nextAccountNumber) {
+    setAccountNumber(nextAccountNumber);
+
+    const matchingAccount = customerAccountOptions.find(
+      (account) =>
+        normalizeAccountNumber(account.accountNumber) ===
+        normalizeAccountNumber(nextAccountNumber),
+    );
+    const matchingSavedCustomer = (
+      Array.isArray(customers) ? customers : []
+    ).find(
+      (customer) =>
+        String(customer.id || "") === String(matchingAccount?.customerId || ""),
+    );
+
+    if (!matchingSavedCustomer) {
+      setCustomerContactId("");
+      return;
+    }
+
+    const preferredContact = getPreferredCustomerContact(matchingSavedCustomer);
+
+    setBusinessName(getCustomerDisplayName(matchingSavedCustomer));
+    setCustomerContactId(preferredContact?.id || "");
+    setCustomerName(preferredContact?.name || "");
+    setPhoneNumber(formatPhoneInput(preferredContact?.phone));
+  }
+
+  function handleCustomerContactChange(nextContactId) {
+    setCustomerContactId(nextContactId);
+
+    const contact = linkedCustomerContacts.find(
+      (candidate) => candidate.id === nextContactId,
+    );
+
+    if (!contact) {
+      return;
+    }
+
+    setCustomerName(contact.name || "");
+    setPhoneNumber(formatPhoneInput(contact.phone));
   }
 
   async function processOrder({ allowDuplicateOrder = false } = {}) {
@@ -3300,17 +3478,15 @@ export default function OrderFlowPage({
                 autoComplete="off"
               />
               <datalist id="order-business-names">
-                {customerAccountOptions.map((account) => (
+                {customerBusinessOptions.map((customerOption) => (
                   <option
-                    key={`${account.accountType}-${account.accountNumber}-${account.name}`}
-                    value={account.name}
-                    label={`Account ${account.accountNumber} · ${
-                      account.accountType === "charge"
-                        ? "Charge"
-                        : account.accountType === "cash"
-                          ? "Cash"
-                          : "Customer"
-                    }`}
+                    key={`${customerOption.id}-${customerOption.name}`}
+                    value={customerOption.name}
+                    label={
+                      customerOption.accountNumber
+                        ? `Account ${customerOption.accountNumber}`
+                        : "Saved customer"
+                    }
                   />
                 ))}
               </datalist>
@@ -3349,7 +3525,9 @@ export default function OrderFlowPage({
               <div className="relative">
                 <TextInput
                   value={accountNumber}
-                  onChange={(event) => setAccountNumber(event.target.value)}
+                  onChange={(event) =>
+                    handleAccountNumberChange(event.target.value)
+                  }
                   placeholder="Optional"
                   list="order-customer-accounts"
                   autoComplete="off"
@@ -3393,6 +3571,49 @@ export default function OrderFlowPage({
           </Field>
         </div>
         )}
+
+        {!isVendorReturnOrder && linkedSavedCustomer ? (
+          <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-blue-700">
+                Saved customer contact
+              </p>
+              <p className="mt-1 text-sm font-bold text-slate-600">
+                This contact stays with the order and delivery. Selecting it
+                does not send a text.
+              </p>
+            </div>
+            {linkedCustomerContacts.length > 0 ? (
+              <select
+                value={customerContactId}
+                onChange={(event) =>
+                  handleCustomerContactChange(event.target.value)
+                }
+                className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100 sm:max-w-sm"
+              >
+                <option value="">Choose saved contact…</option>
+                {linkedCustomerContacts.map((contact) => (
+                  <option key={contact.id} value={contact.id}>
+                    {[
+                      contact.name || contact.label,
+                      contact.phone || contact.email,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onPageChange?.("customers-view")}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+              >
+                Add a contact in Customers
+              </button>
+            )}
+          </div>
+        ) : null}
 
         {duplicateOrderMatch ? (
           <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3">

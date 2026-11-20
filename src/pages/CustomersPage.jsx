@@ -637,11 +637,11 @@ export default function CustomersPage({
 
     const savedContacts = contacts
       .map((contact) => ({
-        id: contact.id,
+        id: contact.id || createId(),
         label: contact.label.trim(),
         name: contact.name.trim(),
-        phone: contact.phone.trim(),
-        email: contact.email.trim(),
+        phone: formatPhoneNumber(contact.phone.trim()),
+        email: contact.email.trim().toLowerCase(),
       }))
       .filter(
         (contact) =>
@@ -1013,7 +1013,8 @@ export default function CustomersPage({
                   Contacts
                 </h2>
                 <p className="mt-1 text-sm font-semibold text-slate-500">
-                  Start with one contact and add more as needed.
+                  Save contacts for future orders and deliveries. Saving a
+                  contact does not send a text.
                 </p>
               </div>
 

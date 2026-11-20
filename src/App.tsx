@@ -5294,6 +5294,19 @@ export default function App() {
     const deliveryTitle = String(orderPayload.deliveryTitle || "").trim();
     const customerName = String(orderPayload.customerName || "").trim();
     const businessName = String(orderPayload.businessName || "").trim();
+    const customerId = String(orderPayload.customerId || "").trim();
+    const customerContactId = String(
+      orderPayload.customerContactId || "",
+    ).trim();
+    const customerContactLabel = String(
+      orderPayload.customerContactLabel || "",
+    ).trim();
+    const customerContactEmail = String(
+      orderPayload.customerContactEmail || "",
+    ).trim();
+    const customerPhoneNumber = String(
+      orderPayload.phoneNumber || "",
+    ).trim();
     const orderKind = String(orderPayload.orderKind || "customer");
     const isReturnOrder = orderKind === "return";
     const isVendorReturnOrder = orderKind === "vendorReturn";
@@ -5400,9 +5413,15 @@ export default function App() {
     const salesOrder: SalesOrder = {
       id: orderId,
       orderNumber: sourceOrderNumber,
+      customerId,
       customerName,
       businessName,
-      phone: String(orderPayload.phoneNumber || "").trim(),
+      contactId: customerContactId,
+      contactLabel: customerContactLabel,
+      contactName: customerName,
+      contactEmail: customerContactEmail,
+      contactPhone: customerPhoneNumber,
+      phone: customerPhoneNumber,
       accountNumber: String(orderPayload.accountNumber || "").trim(),
       orderKind,
       handoffType,
@@ -5419,7 +5438,7 @@ export default function App() {
       deliveryNotes: isDeliveryOrder
         ? savedDeliveryNotes
         : "",
-      phoneNumber: String(orderPayload.phoneNumber || "").trim(),
+      phoneNumber: customerPhoneNumber,
       poNumbers,
       items: cleanItems,
       status: "processed",
@@ -5643,12 +5662,16 @@ export default function App() {
       const delivery: Delivery = {
         id: createId(),
         orderNumber: sourceOrderNumber,
+        customerId,
         deliveryTitle,
         customerName: customerDisplayName,
         address: String(orderPayload.deliveryAddress || "").trim(),
+        contactId: customerContactId,
+        contactLabel: customerContactLabel,
         contactName: customerName,
-        contactPhone: String(orderPayload.phoneNumber || "").trim(),
-        phoneNumber: String(orderPayload.phoneNumber || "").trim(),
+        contactEmail: customerContactEmail,
+        contactPhone: customerPhoneNumber,
+        phoneNumber: customerPhoneNumber,
         driver: "",
         drivers: [],
         dispatchAssignments: [],
@@ -5710,9 +5733,13 @@ export default function App() {
       id: createId(),
       orderId,
       orderNumber: sourceOrderNumber,
+      customerId,
       customerName,
       businessName,
-      phoneNumber: String(orderPayload.phoneNumber || "").trim(),
+      customerContactId,
+      customerContactLabel,
+      customerContactEmail,
+      phoneNumber: customerPhoneNumber,
       handoffType: String(orderPayload.orderMethod || "willCall"),
       orderKind,
       deliveryDate: scheduledDeliveryDate,
