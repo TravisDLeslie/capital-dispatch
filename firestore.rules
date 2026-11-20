@@ -321,6 +321,25 @@ service cloud.firestore {
       );
     }
 
+    function canReadCustomers() {
+      return isSales() ||
+        isReceiving() ||
+        canAccessAccounting() ||
+        hasAnyPermission([
+          "customers-add",
+          "customers-view",
+          "email-list"
+        ]);
+    }
+
+    function canManageCustomers() {
+      return isSales() ||
+        hasAnyPermission([
+          "customers-add",
+          "customers-view"
+        ]);
+    }
+
     function canAccessPodPickups() {
       return isSouth() || isReceiving() || isSales() ||
         hasAnyPermission(["order-builds"]);
@@ -681,6 +700,12 @@ service cloud.firestore {
     match /salesOrders/{salesOrderId} {
       allow read: if isSales() || isReceiving() || isSouth() || isDelivery();
       allow create, update: if isSales();
+      allow delete: if isAdmin();
+    }
+
+    match /customers/{customerId} {
+      allow read: if canReadCustomers();
+      allow create, update: if canManageCustomers();
       allow delete: if isAdmin();
     }
 
