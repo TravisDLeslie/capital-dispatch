@@ -10,6 +10,7 @@ const { Resend } = require("resend");
 initializeApp();
 
 const resendApiKey = defineSecret("RESEND_API_KEY");
+const twilioAuthToken = defineSecret("TWILIO_AUTH_TOKEN");
 const supplierChatFromEmail = defineString("SUPPLIER_CHAT_FROM_EMAIL", {
   default: "Capital Lumber <supplier-chat@mail.capitallumber.co>",
   description: "Verified Resend sender used for supplier invitations.",
@@ -20,9 +21,107 @@ const appBaseUrl = defineString("APP_BASE_URL", {
 });
 
 const BOOTSTRAP_SUPER_ADMIN_EMAIL = "travis@capitallumber.co";
+const TWILIO_SETTINGS_PATH = "appSettings/twilioMessaging";
+const TWILIO_MESSAGE_LOG_COLLECTION = "twilioMessageLog";
+
+const TWILIO_MESSAGE_TYPES = {
+  potentialDelivery: {
+    enabledKey: "potentialDeliveryEnabled",
+    templateKey: "potentialDeliveryTemplate",
+  },
+  scheduledDelivery: {
+    enabledKey: "scheduledDeliveryEnabled",
+    templateKey: "scheduledDeliveryTemplate",
+  },
+  willCall: {
+    enabledKey: "willCallEnabled",
+    templateKey: "willCallTemplate",
+  },
+};
 
 function normalizedEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizePhoneNumber(value) {
+  const cleanValue = String(value || "").trim();
+  const digits = cleanValue.replace(/\D/g, "");
+
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  if (cleanValue.startsWith("+") && /^\+[1-9]\d{7,14}$/.test(cleanValue)) {
+    return cleanValue;
+  }
+
+  return "";
+}
+
+function maskPhoneNumber(phoneNumber) {
+  const digits = String(phoneNumber || "").replace(/\D/g, "");
+  return digits.length >= 4 ? `•••-•••-${digits.slice(-4)}` : "Hidden";
+}
+
+function fillMessageTemplate(template, fields) {
+  const replacements = {
+    customer: String(fields.customer || "there").trim() || "there",
+    order: String(fields.order || "").trim() || "your order",
+    date: String(fields.date || "").trim() || "a date to be confirmed",
+  };
+
+  return String(template || "")
+    .replace(/{{\s*(customer|order|date)\s*}}/gi, (match, key) =>
+      replacements[String(key).toLowerCase()] || match,
+    )
+    .trim();
+}
+
+async function getTwilioCaller(request, { adminOnly = false } = {}) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Sign in before sending a message.");
+  }
+
+  const firestore = getFirestore();
+  const email = normalizedEmail(request.auth.token.email);
+  const profileSnapshot = await firestore.doc(`users/${request.auth.uid}`).get();
+  const profile = profileSnapshot.data() || {};
+  const isBootstrapSuperAdmin = email === BOOTSTRAP_SUPER_ADMIN_EMAIL;
+  const isApprovedEmployee =
+    isBootstrapSuperAdmin ||
+    (profile.status === "approved" && profile.role !== "supplier");
+  const isAdmin =
+    isBootstrapSuperAdmin ||
+    (isApprovedEmployee && ["admin", "superAdmin"].includes(profile.role));
+
+  if (!isApprovedEmployee || (adminOnly && !isAdmin)) {
+    throw new HttpsError(
+      "permission-denied",
+      adminOnly
+        ? "Only an approved administrator can send a Twilio test message."
+        : "Your account is not approved to send customer messages.",
+    );
+  }
+
+  return {
+    email,
+    isAdmin,
+    profile,
+    userId: request.auth.uid,
+  };
+}
+
+async function writeTwilioMessageLog(data) {
+  try {
+    await getFirestore().collection(TWILIO_MESSAGE_LOG_COLLECTION).add({
+      ...data,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (error) {
+    logger.error("Unable to write Twilio message log", {
+      error: error?.message || String(error),
+      messageType: data.messageType,
+      status: data.status,
+    });
+  }
 }
 
 exports.claimSupplierInvitation = onCall(
@@ -558,6 +657,198 @@ exports.sendSupplierInvitation = onDocumentCreated(
         emailError: String(error?.message || "Unable to send invitation.").slice(0, 500),
         updatedAt: FieldValue.serverTimestamp(),
       });
+    }
+  },
+);
+
+exports.sendTwilioMessage = onCall(
+  {
+    region: "us-central1",
+    secrets: [twilioAuthToken],
+  },
+  async (request) => {
+    const messageType = String(request.data?.messageType || "").trim();
+    const isTestMessage = messageType === "test";
+    const caller = await getTwilioCaller(request, {
+      adminOnly: isTestMessage,
+    });
+    const toPhoneNumber = normalizePhoneNumber(request.data?.toPhoneNumber);
+
+    if (!toPhoneNumber) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter a valid customer phone number, including the area code.",
+      );
+    }
+
+    const firestore = getFirestore();
+    const settingsSnapshot = await firestore.doc(TWILIO_SETTINGS_PATH).get();
+    const settings = settingsSnapshot.data() || {};
+    const accountSid = String(settings.accountSid || "").trim();
+    const messagingServiceSid = String(
+      settings.messagingServiceSid || "",
+    ).trim();
+    const senderPhoneNumber = normalizePhoneNumber(settings.senderPhoneNumber);
+    const maskedTo = maskPhoneNumber(toPhoneNumber);
+
+    if (!/^AC[0-9a-fA-F]{32}$/.test(accountSid)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The Twilio Account SID is missing or invalid in Admin settings.",
+      );
+    }
+    if (
+      !/^MG[0-9a-fA-F]{32}$/.test(messagingServiceSid) &&
+      !senderPhoneNumber
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Add a Messaging Service SID or sender phone number in Admin settings.",
+      );
+    }
+
+    let messageBody = "";
+    if (isTestMessage) {
+      messageBody = `${String(settings.businessName || "Capital Lumber").trim() || "Capital Lumber"} Twilio test message. Messaging is connected and ready.`;
+    } else {
+      const messageConfiguration = TWILIO_MESSAGE_TYPES[messageType];
+      if (!messageConfiguration) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Choose a supported customer message type.",
+        );
+      }
+      if (!settings.enabled) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Customer texting is disabled in Twilio Messaging settings.",
+        );
+      }
+      if (!settings[messageConfiguration.enabledKey]) {
+        throw new HttpsError(
+          "failed-precondition",
+          "That customer message type is disabled in Twilio Messaging settings.",
+        );
+      }
+
+      messageBody = fillMessageTemplate(
+        settings[messageConfiguration.templateKey],
+        {
+          customer: request.data?.customer,
+          order: request.data?.order,
+          date: request.data?.date,
+        },
+      );
+    }
+
+    if (!messageBody || messageBody.length > 1600) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The saved message template must contain between 1 and 1,600 characters.",
+      );
+    }
+
+    const formData = new URLSearchParams({
+      To: toPhoneNumber,
+      Body: messageBody,
+    });
+    if (/^MG[0-9a-fA-F]{32}$/.test(messagingServiceSid)) {
+      formData.set("MessagingServiceSid", messagingServiceSid);
+    } else {
+      formData.set("From", senderPhoneNumber);
+    }
+
+    const logBase = {
+      messageType,
+      maskedTo,
+      orderNumber: String(request.data?.order || "").trim(),
+      sentBy: caller.userId,
+      sentByEmail: caller.email,
+    };
+
+    try {
+      const response = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${Buffer.from(
+              `${accountSid}:${twilioAuthToken.value()}`,
+            ).toString("base64")}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: formData,
+        },
+      );
+      const responseText = await response.text();
+      let responseData = {};
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        responseData = {};
+      }
+
+      if (!response.ok) {
+        const providerMessage = String(
+          responseData.message || "Twilio rejected the message.",
+        ).slice(0, 300);
+        await writeTwilioMessageLog({
+          ...logBase,
+          status: "failed",
+          provider: "twilio",
+          providerCode: String(responseData.code || response.status),
+          error: providerMessage,
+        });
+        logger.error("Twilio rejected a message", {
+          messageType,
+          providerCode: responseData.code || response.status,
+          sentBy: caller.userId,
+        });
+        throw new HttpsError(
+          "internal",
+          `Twilio could not send the message: ${providerMessage}`,
+        );
+      }
+
+      await writeTwilioMessageLog({
+        ...logBase,
+        status: String(responseData.status || "queued"),
+        provider: "twilio",
+        providerMessageId: String(responseData.sid || ""),
+      });
+      logger.info("Twilio message queued", {
+        messageType,
+        providerMessageId: responseData.sid || "",
+        sentBy: caller.userId,
+      });
+
+      return {
+        maskedTo,
+        messageType,
+        providerMessageId: String(responseData.sid || ""),
+        status: String(responseData.status || "queued"),
+      };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+
+      await writeTwilioMessageLog({
+        ...logBase,
+        status: "failed",
+        provider: "twilio",
+        error: String(error?.message || "Unable to reach Twilio.").slice(
+          0,
+          300,
+        ),
+      });
+      logger.error("Unable to reach Twilio", {
+        messageType,
+        error: error?.message || String(error),
+        sentBy: caller.userId,
+      });
+      throw new HttpsError(
+        "unavailable",
+        "Twilio could not be reached. Try again in a moment.",
+      );
     }
   },
 );

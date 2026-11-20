@@ -6,6 +6,7 @@ import {
   KeyRound,
   MessageSquareText,
   Save,
+  Send,
   ShieldCheck,
   Smartphone,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import {
   saveTwilioSettings,
   subscribeToTwilioSettings,
 } from "../utils/twilioSettingsStorage";
+import { sendTwilioTestMessage } from "../utils/twilioMessaging";
 
 const accountSidPattern = /^AC[0-9a-fA-F]{32}$/;
 const messagingServiceSidPattern = /^MG[0-9a-fA-F]{32}$/;
@@ -63,6 +65,8 @@ export default function TwilioSettingsPage({ onPageChange }) {
   const [settings, setSettings] = useState(defaultTwilioSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testPhoneNumber, setTestPhoneNumber] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -139,6 +143,35 @@ export default function TwilioSettingsPage({ onPageChange }) {
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       setError("The command could not be copied. Select it manually below.");
+    }
+  }
+
+  async function handleTestMessage() {
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (testPhoneNumber.replace(/\D/g, "").length < 10) {
+      setError("Enter a valid mobile number for the test message.");
+      return;
+    }
+
+    setIsSendingTest(true);
+    setMessage("");
+    setError("");
+
+    try {
+      const savedSettings = await saveTwilioSettings(settings);
+      setSettings(savedSettings);
+      const result = await sendTwilioTestMessage(testPhoneNumber);
+      setMessage(
+        `Twilio queued the test message to ${result.maskedTo || "the test phone"}.`,
+      );
+    } catch (sendError) {
+      console.error("Unable to send Twilio test message:", sendError);
+      setError(getFirebaseErrorMessage(sendError));
+    } finally {
+      setIsSendingTest(false);
     }
   }
 
@@ -325,6 +358,53 @@ export default function TwilioSettingsPage({ onPageChange }) {
             </div>
           </section>
 
+          <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-700 shadow-sm">
+                  <Send className="h-6 w-6" aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-950">
+                    Send a connection test
+                  </h2>
+                  <p className="mt-1 max-w-2xl text-sm font-semibold text-slate-600">
+                    Saves the settings above, then sends a fixed Capital Lumber
+                    test message through the secure Firebase function. The Auth
+                    Token never enters this browser.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex w-full flex-col gap-3 sm:flex-row lg:max-w-xl">
+                <label className="min-w-0 flex-1">
+                  <span className="sr-only">Test mobile number</span>
+                  <input
+                    value={testPhoneNumber}
+                    onChange={(event) => {
+                      setTestPhoneNumber(event.target.value);
+                      setMessage("");
+                      setError("");
+                    }}
+                    placeholder="Test mobile number"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3 font-bold text-slate-950 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleTestMessage}
+                  disabled={isSendingTest}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Send className="h-4 w-4" aria-hidden="true" />
+                  {isSendingTest ? "Sending…" : "Send test"}
+                </button>
+              </div>
+            </div>
+          </section>
+
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700">
@@ -405,8 +485,9 @@ export default function TwilioSettingsPage({ onPageChange }) {
 
           <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
-            The Auth Token stays server-side. Customer phones and text history
-            will be protected separately before actual sending is enabled.
+            The Auth Token stays server-side. Message logs store the message
+            type, sender, provider status, and a masked phone number—not the
+            full customer phone number or message body.
           </div>
         </form>
       )}
