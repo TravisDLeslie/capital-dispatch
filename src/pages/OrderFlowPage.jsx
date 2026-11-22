@@ -3351,13 +3351,34 @@ export default function OrderFlowPage({
                   : "Order information"}
             </h2>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
-            {isVendorReturnOrder
-              ? "Existing order + PO"
-              : isReturnOrder
-                ? "Unique return ID"
-                : "6 digit order"}
-          </span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {!isReturnWorkflow ? (
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-black transition ${
+                  customerTextUpdatesEnabled
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={customerTextUpdatesEnabled}
+                  onChange={(event) =>
+                    setCustomerTextUpdatesEnabled(event.target.checked)
+                  }
+                  className="h-4 w-4 shrink-0 accent-emerald-600"
+                />
+                <span>Customer to get updates via text</span>
+              </label>
+            ) : null}
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
+              {isVendorReturnOrder
+                ? "Existing order + PO"
+                : isReturnOrder
+                  ? "Unique return ID"
+                  : "6 digit order"}
+            </span>
+          </div>
         </div>
 
         {isVendorReturnOrder ? (
@@ -3444,7 +3465,7 @@ export default function OrderFlowPage({
             </Field>
           </div>
         ) : (
-        <div className="grid gap-2.5 xl:grid-cols-[150px_minmax(180px,1.1fr)_minmax(170px,1fr)_minmax(230px,0.9fr)_135px] xl:items-end">
+        <div className="grid gap-2.5 xl:grid-cols-[150px_minmax(180px,1.1fr)_minmax(170px,1fr)_170px_135px] xl:items-end">
           <Field label={isReturnOrder ? "Return #" : "Order #"}>
             <TextInput
               value={orderNumber}
@@ -3511,45 +3532,24 @@ export default function OrderFlowPage({
             </div>
           </Field>
 
-          <div className="block">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 sm:text-[11px]">
-                Phone
-              </span>
-              <label
-                className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2 py-1 text-[9px] font-black leading-tight transition sm:text-[10px] ${
-                  customerTextUpdatesEnabled
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={customerTextUpdatesEnabled}
-                  onChange={(event) =>
-                    setCustomerTextUpdatesEnabled(event.target.checked)
-                  }
-                  className="h-3.5 w-3.5 shrink-0 accent-emerald-600"
-                />
-                <span>Customer to get updates via text</span>
-              </label>
+          <Field label="Phone">
+            <div>
+              <TextInput
+                value={phoneNumber}
+                onChange={(event) =>
+                  setPhoneNumber(formatPhoneInput(event.target.value))
+                }
+                placeholder="(208) 555-0192"
+                inputMode="tel"
+                autoComplete="tel"
+              />
+              {customerTextUpdatesEnabled && !hasValidCustomerTextPhone ? (
+                <p className="mt-1 text-[10px] font-bold text-amber-700">
+                  Enter a valid phone number for text updates.
+                </p>
+              ) : null}
             </div>
-            <TextInput
-              value={phoneNumber}
-              onChange={(event) =>
-                setPhoneNumber(formatPhoneInput(event.target.value))
-              }
-              placeholder="(208) 555-0192"
-              inputMode="tel"
-              autoComplete="tel"
-              aria-label="Customer phone number"
-            />
-            {customerTextUpdatesEnabled && !hasValidCustomerTextPhone ? (
-              <p className="mt-1 text-[10px] font-bold text-amber-700">
-                Enter a valid phone number for text updates.
-              </p>
-            ) : null}
-          </div>
+          </Field>
 
           <Field label="Account #">
             <div>
