@@ -1011,6 +1011,7 @@ type Delivery = {
   contactName?: string;
   contactPhone?: string;
   phoneNumber?: string;
+  customerTextUpdatesEnabled?: boolean;
   driver: string;
   deliveryType?: string;
   unloadType: string;
@@ -1075,6 +1076,7 @@ type SalesOrder = {
   customerId?: string;
   customerName?: string;
   phone?: string;
+  customerTextUpdatesEnabled?: boolean;
   poNumbers?: string[];
   status?: string;
   notes?: string;
@@ -5307,6 +5309,8 @@ export default function App() {
     const customerPhoneNumber = String(
       orderPayload.phoneNumber || "",
     ).trim();
+    const customerTextUpdatesEnabled =
+      orderPayload.customerTextUpdatesEnabled === true;
     const orderKind = String(orderPayload.orderKind || "customer");
     const isReturnOrder = orderKind === "return";
     const isVendorReturnOrder = orderKind === "vendorReturn";
@@ -5422,6 +5426,7 @@ export default function App() {
       contactEmail: customerContactEmail,
       contactPhone: customerPhoneNumber,
       phone: customerPhoneNumber,
+      customerTextUpdatesEnabled,
       accountNumber: String(orderPayload.accountNumber || "").trim(),
       orderKind,
       handoffType,
@@ -5672,6 +5677,7 @@ export default function App() {
         contactEmail: customerContactEmail,
         contactPhone: customerPhoneNumber,
         phoneNumber: customerPhoneNumber,
+        customerTextUpdatesEnabled,
         driver: "",
         drivers: [],
         dispatchAssignments: [],
@@ -5740,6 +5746,7 @@ export default function App() {
       customerContactLabel,
       customerContactEmail,
       phoneNumber: customerPhoneNumber,
+      customerTextUpdatesEnabled,
       handoffType: String(orderPayload.orderMethod || "willCall"),
       orderKind,
       deliveryDate: scheduledDeliveryDate,

@@ -1142,6 +1142,8 @@ export default function OrderFlowPage({
   const [customerName, setCustomerName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [customerTextUpdatesEnabled, setCustomerTextUpdatesEnabled] =
+    useState(false);
   const [accountNumber, setAccountNumber] = useState("");
   const [customerContactId, setCustomerContactId] = useState("");
   const [orderMethod, setOrderMethod] = useState("delivery");
@@ -1436,6 +1438,8 @@ export default function OrderFlowPage({
     duplicateOrderMatch?.archived ||
       String(duplicateOrderMatch?.status || "").toLowerCase() === "archived",
   );
+  const hasValidCustomerTextPhone =
+    phoneNumber.replace(/\D/g, "").length >= 10;
   const canProcessOrder = Boolean(
     (isReturnOrder ? /^R\d{6}$/.test(orderNumber) : orderNumber) &&
       orderedBy &&
@@ -1444,6 +1448,9 @@ export default function OrderFlowPage({
         : customerName) &&
       savedItems.length > 0 &&
       (!isReturnWorkflow || deliveryDate) &&
+      (isReturnWorkflow ||
+        !customerTextUpdatesEnabled ||
+        hasValidCustomerTextPhone) &&
       !isSelectedDeliveryDateBlocked &&
       (!["delivery", "return", "vendorReturn"].includes(orderMethod) ||
         deliveryAddress),
@@ -1936,6 +1943,8 @@ export default function OrderFlowPage({
       customerName: isVendorReturnOrder ? vendorReturnVendor : customerName,
       businessName: isVendorReturnOrder ? vendorReturnVendor : businessName,
       phoneNumber,
+      customerTextUpdatesEnabled:
+        !isReturnWorkflow && customerTextUpdatesEnabled,
       accountNumber,
       customerId:
         String(linkedSavedCustomer?.id || "").trim() ||
@@ -1989,6 +1998,7 @@ export default function OrderFlowPage({
 
   function showReturnOrder() {
     if (orderMethod !== "return") {
+      setCustomerTextUpdatesEnabled(false);
       setOrderNumber(createReturnOrderNumber());
       setOrderMethod("return");
       setItems((currentItems) =>
@@ -2011,6 +2021,7 @@ export default function OrderFlowPage({
 
   function showVendorReturnOrder() {
     if (orderMethod !== "vendorReturn") {
+      setCustomerTextUpdatesEnabled(false);
       if (isReturnOrder) {
         setOrderNumber("");
       }
@@ -3433,7 +3444,7 @@ export default function OrderFlowPage({
             </Field>
           </div>
         ) : (
-        <div className="grid gap-2.5 xl:grid-cols-[150px_minmax(180px,1.1fr)_minmax(170px,1fr)_170px_135px] xl:items-end">
+        <div className="grid gap-2.5 xl:grid-cols-[150px_minmax(180px,1.1fr)_minmax(170px,1fr)_minmax(230px,0.9fr)_135px] xl:items-end">
           <Field label={isReturnOrder ? "Return #" : "Order #"}>
             <TextInput
               value={orderNumber}
@@ -3500,7 +3511,29 @@ export default function OrderFlowPage({
             </div>
           </Field>
 
-          <Field label="Phone">
+          <div className="block">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500 sm:text-[11px]">
+                Phone
+              </span>
+              <label
+                className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2 py-1 text-[9px] font-black leading-tight transition sm:text-[10px] ${
+                  customerTextUpdatesEnabled
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={customerTextUpdatesEnabled}
+                  onChange={(event) =>
+                    setCustomerTextUpdatesEnabled(event.target.checked)
+                  }
+                  className="h-3.5 w-3.5 shrink-0 accent-emerald-600"
+                />
+                <span>Customer to get updates via text</span>
+              </label>
+            </div>
             <TextInput
               value={phoneNumber}
               onChange={(event) =>
@@ -3509,8 +3542,14 @@ export default function OrderFlowPage({
               placeholder="(208) 555-0192"
               inputMode="tel"
               autoComplete="tel"
+              aria-label="Customer phone number"
             />
-          </Field>
+            {customerTextUpdatesEnabled && !hasValidCustomerTextPhone ? (
+              <p className="mt-1 text-[10px] font-bold text-amber-700">
+                Enter a valid phone number for text updates.
+              </p>
+            ) : null}
+          </div>
 
           <Field label="Account #">
             <div>
