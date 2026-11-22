@@ -3646,57 +3646,6 @@ export default function OrderFlowPage({
           </div>
         ) : null}
 
-        {duplicateOrderMatch ? (
-          <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[11px] font-black uppercase tracking-[0.14em] text-amber-700">
-                    Duplicate order number
-                  </p>
-                  {duplicateOrderIsArchived ? (
-                    <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-slate-600">
-                      Archived
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-1 text-sm font-bold text-amber-950">
-                  Order {duplicateOrderNumber} already exists for {duplicateOrderCustomer}.
-                </p>
-                <p className="mt-1 text-xs font-bold text-amber-800">
-                  You can still create an additional order for missed or backordered items.
-                </p>
-              </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewingDuplicateOrderNumber(duplicateOrderNumber);
-                  }}
-                  className="inline-flex min-h-10 items-center justify-center rounded-xl bg-amber-900 px-4 text-sm font-black text-white transition hover:bg-amber-800"
-                >
-                  View existing order
-                </button>
-                {typeof onDeleteExistingOrder === "function" ? (
-                  <button
-                    type="button"
-                    onClick={() => void deleteDuplicateOrder()}
-                    disabled={isDeletingDuplicateOrder}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-red-300 bg-white px-4 text-sm font-black text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    {isDeletingDuplicateOrder ? "Deleting..." : "Delete permanently"}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            {duplicateDeleteError ? (
-              <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-black text-red-700">
-                {duplicateDeleteError}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
       </section>
 
       <section className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-3.5">
@@ -4823,15 +4772,15 @@ export default function OrderFlowPage({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-amber-700">
-                  Duplicate order number
+                  Existing order found
                 </p>
                 <h2 className="mt-2 text-2xl font-black text-slate-950">
-                  Order {duplicateOrderNumber} already exists
+                  Create an additional order?
                 </h2>
                 <p className="mt-2 text-sm font-bold leading-6 text-slate-600">
-                  An order already exists for {duplicateOrderCustomer}. View it
-                  to compare details, or create an additional order for missed
-                  or backordered items.
+                  Order {duplicateOrderNumber} already exists for {duplicateOrderCustomer}.
+                  View it to compare details, or create an additional order for
+                  missed or backordered items.
                 </p>
                 {duplicateOrderIsArchived ? (
                   <p className="mt-2 inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-600">
