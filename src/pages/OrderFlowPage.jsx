@@ -1169,8 +1169,6 @@ export default function OrderFlowPage({
     useState(false);
   const [viewingDuplicateOrderNumber, setViewingDuplicateOrderNumber] =
     useState("");
-  const [reviewedDuplicateOrderKey, setReviewedDuplicateOrderKey] =
-    useState("");
   const [isDeletingDuplicateOrder, setIsDeletingDuplicateOrder] =
     useState(false);
   const [duplicateDeleteError, setDuplicateDeleteError] = useState("");
@@ -1426,10 +1424,6 @@ export default function OrderFlowPage({
   const duplicateOrderNumber = duplicateOrderMatch
     ? getRecordOrderNumber(duplicateOrderMatch) || orderNumber
     : "";
-  const duplicateOrderKey = normalizeOrderNumberForMatch(duplicateOrderNumber);
-  const duplicateOrderWasReviewed = Boolean(
-    duplicateOrderKey && reviewedDuplicateOrderKey === duplicateOrderKey,
-  );
   const duplicateOrderCustomer = duplicateOrderMatch
     ? String(
         duplicateOrderMatch.businessName ||
@@ -2183,7 +2177,6 @@ export default function OrderFlowPage({
 
       setIsDuplicateOrderPromptOpen(false);
       setViewingDuplicateOrderNumber("");
-      setReviewedDuplicateOrderKey("");
     } catch (error) {
       console.error("Unable to permanently delete duplicate order:", error);
       setDuplicateDeleteError(
@@ -3448,7 +3441,6 @@ export default function OrderFlowPage({
                 if (!isReturnOrder) {
                   setOrderNumber(formatOrderNumberInput(event.target.value));
                   setIsDuplicateOrderPromptOpen(false);
-                  setReviewedDuplicateOrderKey("");
                 }
               }}
               placeholder={isReturnOrder ? "R000000" : "019-390"}
@@ -3632,12 +3624,14 @@ export default function OrderFlowPage({
                 <p className="mt-1 text-sm font-bold text-amber-950">
                   Order {duplicateOrderNumber} already exists for {duplicateOrderCustomer}.
                 </p>
+                <p className="mt-1 text-xs font-bold text-amber-800">
+                  You can still create an additional order for missed or backordered items.
+                </p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    setReviewedDuplicateOrderKey(duplicateOrderKey);
                     setViewingDuplicateOrderNumber(duplicateOrderNumber);
                   }}
                   className="inline-flex min-h-10 items-center justify-center rounded-xl bg-amber-900 px-4 text-sm font-black text-white transition hover:bg-amber-800"
@@ -4796,8 +4790,9 @@ export default function OrderFlowPage({
                   Order {duplicateOrderNumber} already exists
                 </h2>
                 <p className="mt-2 text-sm font-bold leading-6 text-slate-600">
-                  Check the existing order for {duplicateOrderCustomer} before
-                  creating another order with the same number.
+                  An order already exists for {duplicateOrderCustomer}. View it
+                  to compare details, or create an additional order for missed
+                  or backordered items.
                 </p>
                 {duplicateOrderIsArchived ? (
                   <p className="mt-2 inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-600">
@@ -4820,33 +4815,22 @@ export default function OrderFlowPage({
                 type="button"
                 onClick={() => {
                   setIsDuplicateOrderPromptOpen(false);
-                  setReviewedDuplicateOrderKey(duplicateOrderKey);
                   setViewingDuplicateOrderNumber(duplicateOrderNumber);
                 }}
                 className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-slate-950 px-5 text-base font-black text-white transition hover:bg-slate-800"
               >
                 View existing order
               </button>
-              {duplicateOrderWasReviewed ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDuplicateOrderPromptOpen(false);
-                    void processOrder({ allowDuplicateOrder: true });
-                  }}
-                  className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-amber-300 bg-amber-50 px-5 text-base font-black text-amber-900 transition hover:bg-amber-100"
-                >
-                  Create another anyway
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  className="inline-flex min-h-14 cursor-not-allowed items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-5 text-base font-black text-slate-400"
-                >
-                  Review order first
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDuplicateOrderPromptOpen(false);
+                  void processOrder({ allowDuplicateOrder: true });
+                }}
+                className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-amber-300 bg-amber-50 px-5 text-base font-black text-amber-900 transition hover:bg-amber-100"
+              >
+                Create additional order
+              </button>
             </div>
             {typeof onDeleteExistingOrder === "function" ? (
               <button
