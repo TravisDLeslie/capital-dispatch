@@ -1576,6 +1576,7 @@ export default function DeliveryQueuePage({
   const [deliveryStepKeys, setDeliveryStepKeys] = useState({});
   const [pendingDriverSelections, setPendingDriverSelections] = useState({});
   const [activeDriverDeliveryId, setActiveDriverDeliveryId] = useState("");
+  const [openDriverGroupKeys, setOpenDriverGroupKeys] = useState({});
   const [draggingDeliveryId, setDraggingDeliveryId] = useState("");
   const [dragOverDeliveryId, setDragOverDeliveryId] = useState("");
   const [reorderingRouteId, setReorderingRouteId] = useState("");
@@ -2221,6 +2222,15 @@ export default function DeliveryQueuePage({
     const currentDriverStopHasHardware = currentDriverStopDeliveries.some(
       (stopDelivery) => Boolean(stopDelivery.hasHardware),
     );
+    const currentDriverStopItemCount = currentDriverStopDeliveries.reduce(
+      (itemCount, stopDelivery) =>
+        itemCount +
+        (Array.isArray(stopDelivery.items) ? stopDelivery.items.length : 0),
+      0,
+    );
+    const isCurrentDriverGroupOpen = currentDriverStop
+      ? openDriverGroupKeys[currentDriverStop.key] === true
+      : false;
     const currentDriverFlowDelivery = currentDriverDelivery
       ? {
           ...currentDriverDelivery,
@@ -2268,71 +2278,101 @@ export default function DeliveryQueuePage({
 
             {currentDriverStopDeliveries.length > 1 ? (
               <section className="overflow-hidden rounded-3xl border-2 border-blue-300 bg-blue-50 shadow-sm">
-                <div className="flex items-center justify-between gap-3 border-b border-blue-200 px-4 py-3">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
-                      One stop · grouped delivery
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenDriverGroupKeys((currentOpenGroupKeys) => ({
+                      ...currentOpenGroupKeys,
+                      [currentDriverStop.key]: !isCurrentDriverGroupOpen,
+                    }))
+                  }
+                  className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
+                  aria-expanded={isCurrentDriverGroupOpen}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">
+                        One stop · grouped delivery
+                      </p>
+                      <span className="rounded-full bg-blue-700 px-2.5 py-1 text-[10px] font-black text-white">
+                        {currentDriverStopDeliveries.length} orders
+                      </span>
+                    </div>
+                    <p className="mt-1 truncate text-sm font-black text-blue-950">
+                      {formatCustomerName(currentDriverDelivery.customerName)}
                     </p>
-                    <p className="mt-1 text-sm font-bold text-blue-950">
-                      Same contractor, address, truck, and arrival time. Check every order and material list below.
+                    <p className="mt-1 text-xs font-bold text-blue-700">
+                      {currentDriverStopItemCount} material {currentDriverStopItemCount === 1 ? "line" : "lines"} · one photo set
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-blue-700 px-3 py-1.5 text-xs font-black text-white">
-                    {currentDriverStopDeliveries.length} orders
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white text-blue-700 shadow-sm">
+                    <ChevronDown
+                      className={`h-5 w-5 transition-transform ${
+                        isCurrentDriverGroupOpen ? "rotate-180" : ""
+                      }`}
+                      aria-hidden="true"
+                    />
                   </span>
-                </div>
+                </button>
 
-                <div className="grid gap-2 p-3 sm:grid-cols-2">
-                  {currentDriverStopDeliveries.map((stopDelivery) => {
-                    const stopItems = Array.isArray(stopDelivery.items)
-                      ? stopDelivery.items
-                      : [];
-                    const isCurrentOrder =
-                      stopDelivery.id === currentDriverDelivery.id;
+                {isCurrentDriverGroupOpen ? (
+                  <div className="border-t border-blue-200 p-3">
+                    <p className="mb-3 text-xs font-bold text-blue-900">
+                      Review each order and its material list. The stop shares the same address, driver, truck, and proof photos.
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {currentDriverStopDeliveries.map((stopDelivery) => {
+                        const stopItems = Array.isArray(stopDelivery.items)
+                          ? stopDelivery.items
+                          : [];
+                        const isCurrentOrder =
+                          stopDelivery.id === currentDriverDelivery.id;
 
-                    return (
-                      <button
-                        key={stopDelivery.id}
-                        type="button"
-                        onClick={() => handleSelectDriverDelivery(stopDelivery.id)}
-                        className={`rounded-2xl border p-3 text-left transition ${
-                          isCurrentOrder
-                            ? "border-blue-600 bg-white shadow-sm ring-2 ring-blue-100"
-                            : "border-blue-200 bg-white/80 hover:border-blue-400"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-xs font-black uppercase tracking-[0.1em] text-blue-700">
-                              Order {stopDelivery.orderNumber || "—"}
-                            </p>
-                            <p className="mt-1 truncate text-sm font-black text-slate-950">
-                              {formatCustomerName(stopDelivery.customerName)}
-                            </p>
-                          </div>
-                          <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
-                            {stopItems.length} {stopItems.length === 1 ? "item" : "items"}
-                          </span>
-                        </div>
-                        <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
-                          {stopItems.slice(0, 4).map((item, itemIndex) => (
-                            <p
-                              key={`${stopDelivery.id}-driver-material-${itemIndex}`}
-                              className="truncate text-xs font-bold text-slate-600"
-                            >
-                              QTY {item.quantity || item.qty || "—"} · {item.description || item.name || item.itemNumber || "Material"}
-                            </p>
-                          ))}
-                          {stopItems.length > 4 ? (
-                            <p className="text-xs font-black text-blue-700">
-                              +{stopItems.length - 4} more material lines
-                            </p>
-                          ) : null}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                        return (
+                          <button
+                            key={stopDelivery.id}
+                            type="button"
+                            onClick={() => handleSelectDriverDelivery(stopDelivery.id)}
+                            className={`rounded-2xl border p-3 text-left transition ${
+                              isCurrentOrder
+                                ? "border-blue-600 bg-white shadow-sm ring-2 ring-blue-100"
+                                : "border-blue-200 bg-white/80 hover:border-blue-400"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-xs font-black uppercase tracking-[0.1em] text-blue-700">
+                                  Order {stopDelivery.orderNumber || "—"}
+                                </p>
+                                <p className="mt-1 truncate text-sm font-black text-slate-950">
+                                  {formatCustomerName(stopDelivery.customerName)}
+                                </p>
+                              </div>
+                              <span className="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-600">
+                                {stopItems.length} {stopItems.length === 1 ? "item" : "items"}
+                              </span>
+                            </div>
+                            <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                              {stopItems.slice(0, 4).map((item, itemIndex) => (
+                                <p
+                                  key={`${stopDelivery.id}-driver-material-${itemIndex}`}
+                                  className="truncate text-xs font-bold text-slate-600"
+                                >
+                                  QTY {item.quantity || item.qty || "—"} · {item.description || item.name || item.itemNumber || "Material"}
+                                </p>
+                              ))}
+                              {stopItems.length > 4 ? (
+                                <p className="text-xs font-black text-blue-700">
+                                  +{stopItems.length - 4} more material lines
+                                </p>
+                              ) : null}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </section>
             ) : null}
 
