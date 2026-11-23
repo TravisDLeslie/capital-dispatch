@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Clock,
   CloudRain,
+  Download,
   Images,
   MapPin,
   Package,
@@ -25,6 +26,7 @@ import MarkDeliveredModal from "../components/MarkDeliveredModal";
 import PageContainer from "../components/PageContainer";
 import { getDeliveryScopeSummary } from "../utils/deliveryScope";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
+import { downloadDeliveryPhoto } from "../utils/photoDownload";
 import {
   getDeliveryPhotoUploadError,
   uploadDeliveryProofPhoto,
@@ -248,42 +250,56 @@ function PhotoPreview({
     return null;
   }
 
+  const handleView = () =>
+    onView?.({
+      ...photo,
+      label,
+      deliveryId,
+      photoField,
+      photosField,
+      gallery: photos,
+      galleryIndex: photoIndex,
+      galleryLabel: label.replace(/\s+\d+$/, ""),
+    });
+
   return (
-    <button
-      type="button"
-      onClick={() =>
-        onView?.({
-          ...photo,
-          label,
-          deliveryId,
-          photoField,
-          photosField,
-          gallery: photos,
-          galleryIndex: photoIndex,
-          galleryLabel: label.replace(/\s+\d+$/, ""),
-        })
-      }
-      className={`block w-full overflow-hidden rounded-2xl border bg-white text-left transition ${
+    <div
+      className={`overflow-hidden rounded-2xl border bg-white transition ${
         isHardware
           ? "border-red-200 hover:bg-red-50"
           : "border-slate-200 hover:bg-slate-50"
       }`}
     >
-      <img
-        src={photo.previewUrl || photo.dataUrl}
-        alt={label}
-        className="h-48 w-full bg-slate-100 object-contain sm:h-64"
-      />
+      <button type="button" onClick={handleView} className="block w-full text-left">
+        <img
+          src={photo.previewUrl || photo.dataUrl}
+          alt={label}
+          className="h-48 w-full bg-slate-100 object-contain sm:h-64"
+        />
+      </button>
 
-      <span
-        className={`flex items-center gap-2 px-3 py-2 text-sm font-black ${
-          isHardware ? "text-[#FC2C38]" : "text-slate-700"
-        }`}
-      >
-        <Camera className="h-4 w-4" aria-hidden="true" />
-        View {label}
-      </span>
-    </button>
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <button
+          type="button"
+          onClick={handleView}
+          className={`flex items-center gap-2 text-sm font-black ${
+            isHardware ? "text-[#FC2C38]" : "text-slate-700"
+          }`}
+        >
+          <Camera className="h-4 w-4" aria-hidden="true" />
+          View {label}
+        </button>
+        <button
+          type="button"
+          onClick={() => void downloadDeliveryPhoto(photo, label)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-black text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+          aria-label={`Download ${label}`}
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+          Download
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1519,6 +1535,19 @@ export default function DeliveryHistoryPage({
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void downloadDeliveryPhoto(
+                      viewingPhoto,
+                      viewingPhoto.label || "delivery-photo",
+                    )
+                  }
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Download
+                </button>
                 {isSuperAdmin ? (
                   <button
                     type="button"

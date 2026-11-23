@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Clock,
   CloudRain,
+  Download,
   Edit3,
   ExternalLink,
   FileText,
@@ -41,6 +42,7 @@ import {
   scheduleWindowsOverlap,
 } from "../utils/deliverySchedule";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
+import { downloadDeliveryPhoto } from "../utils/photoDownload";
 import {
   getDeliveryPhotoUploadError,
   uploadDeliveryProofPhoto,
@@ -393,21 +395,38 @@ function PhotoPreview({ photo, label, onView }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => onView?.({ ...photo, label })}
-      className="block w-full overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:border-red-200"
-    >
-      <img
-        src={photo.previewUrl || photo.dataUrl}
-        alt={label}
-        className="h-56 w-full bg-slate-100 object-contain sm:h-72"
-      />
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-red-200">
+      <button
+        type="button"
+        onClick={() => onView?.({ ...photo, label })}
+        className="block w-full text-left"
+      >
+        <img
+          src={photo.previewUrl || photo.dataUrl}
+          alt={label}
+          className="h-56 w-full bg-slate-100 object-contain sm:h-72"
+        />
+      </button>
 
-      <span className="block px-3 py-2 text-sm font-black text-slate-700">
-        View {label}
-      </span>
-    </button>
+      <div className="flex items-center justify-between gap-2 px-3 py-2">
+        <button
+          type="button"
+          onClick={() => onView?.({ ...photo, label })}
+          className="text-sm font-black text-slate-700 hover:text-[#FC2C38]"
+        >
+          View {label}
+        </button>
+        <button
+          type="button"
+          onClick={() => void downloadDeliveryPhoto(photo, label)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-black text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+          aria-label={`Download ${label}`}
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+          Download
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -3632,14 +3651,29 @@ export default function DeliveryQueuePage({
               <p className="truncate text-sm font-black uppercase tracking-[0.12em] text-slate-700">
                 {viewingPhoto.label || "Delivery Photo"}
               </p>
-              <button
-                type="button"
-                onClick={() => setViewingPhoto(null)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100"
-                aria-label="Close photo"
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void downloadDeliveryPhoto(
+                      viewingPhoto,
+                      viewingPhoto.label || "delivery-photo",
+                    )
+                  }
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Download
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingPhoto(null)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-100"
+                  aria-label="Close photo"
+                >
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             <div className="flex min-h-0 flex-1 items-center justify-center bg-slate-950 p-3">
