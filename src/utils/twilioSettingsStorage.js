@@ -15,12 +15,18 @@ export const defaultTwilioSettings = {
   messagingServiceSid: "",
   senderPhoneNumber: "",
   businessName: "Capital Lumber",
+  orderSummaryEnabled: true,
+  orderSummaryTemplate:
+    "Hi {{customer}}, thank you for your order with Capital Lumber Co. View your order summary and details here: {{summaryUrl}} Please call us at 208-343-5481 with any questions. We will text you again when your order is scheduled for delivery or ready for pickup. Reply STOP to opt out.",
   potentialDeliveryEnabled: true,
   potentialDeliveryTemplate:
     "Hi {{customer}}, Capital Lumber is preparing a possible delivery for order {{order}}. We will text again when the date is confirmed.",
   scheduledDeliveryEnabled: true,
   scheduledDeliveryTemplate:
-    "Hi {{customer}}, your Capital Lumber delivery for order {{order}} is scheduled for {{date}}. Reply STOP to opt out.",
+    "Hi {{customer}}, your Capital Lumber delivery for order {{order}} has been scheduled for {{date}}. We will text you again the morning of delivery. Reply STOP to opt out.",
+  deliveryTodayEnabled: true,
+  deliveryTodayTemplate:
+    "Hi {{customer}}, your Capital Lumber delivery for order {{order}} is scheduled for today at {{address}}. Please call 208-343-5481 with any questions. Reply STOP to opt out.",
   deliveryCompleteEnabled: true,
   deliveryCompleteTemplate: DEFAULT_DELIVERY_COMPLETE_TEMPLATE,
   deliveryCompleteGlobalPhoto: null,

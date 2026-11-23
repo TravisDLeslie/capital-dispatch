@@ -1,4 +1,10 @@
 {
+  "rewrites": [
+    {
+      "source": "/s/:token",
+      "destination": "https://us-central1-capital-lumber-dispatch.cloudfunctions.net/orderSummaryRedirect?token=:token"
+    }
+  ],
   "headers": [
     {
       "source": "/",

@@ -1,11 +1,18 @@
+const { randomBytes, randomUUID } = require("node:crypto");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { FieldValue, getFirestore } = require("firebase-admin/firestore");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { HttpsError, onCall } = require("firebase-functions/v2/https");
+const { getStorage } = require("firebase-admin/storage");
+const {
+  onDocumentCreated,
+  onDocumentUpdated,
+} = require("firebase-functions/v2/firestore");
+const { HttpsError, onCall, onRequest } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const { logger } = require("firebase-functions");
 const { Resend } = require("resend");
+const { generateOrderSummaryPdf } = require("./orderSummaryPdf");
 
 initializeApp();
 
@@ -25,6 +32,13 @@ const TWILIO_SETTINGS_PATH = "appSettings/twilioMessaging";
 const TWILIO_MESSAGE_LOG_COLLECTION = "twilioMessageLog";
 
 const TWILIO_MESSAGE_TYPES = {
+  orderSummary: {
+    enabledKey: "orderSummaryEnabled",
+    templateKey: "orderSummaryTemplate",
+    defaultEnabled: true,
+    defaultTemplate:
+      "Hi {{customer}}, thank you for your order with Capital Lumber Co. View your order summary and details here: {{summaryUrl}} Please call us at 208-343-5481 with any questions. We will text you again when your order is scheduled for delivery or ready for pickup. Reply STOP to opt out.",
+  },
   potentialDelivery: {
     enabledKey: "potentialDeliveryEnabled",
     templateKey: "potentialDeliveryTemplate",
@@ -32,10 +46,23 @@ const TWILIO_MESSAGE_TYPES = {
   scheduledDelivery: {
     enabledKey: "scheduledDeliveryEnabled",
     templateKey: "scheduledDeliveryTemplate",
+    defaultEnabled: true,
+    defaultTemplate:
+      "Hi {{customer}}, your Capital Lumber delivery for order {{order}} has been scheduled for {{date}}. We will text you again the morning of delivery. Reply STOP to opt out.",
+  },
+  deliveryToday: {
+    enabledKey: "deliveryTodayEnabled",
+    templateKey: "deliveryTodayTemplate",
+    defaultEnabled: true,
+    defaultTemplate:
+      "Hi {{customer}}, your Capital Lumber delivery for order {{order}} is scheduled for today at {{address}}. Please call 208-343-5481 with any questions. Reply STOP to opt out.",
   },
   deliveryComplete: {
     enabledKey: "deliveryCompleteEnabled",
     templateKey: "deliveryCompleteTemplate",
+    defaultEnabled: true,
+    defaultTemplate:
+      "Hi {{customer}}, your order for {{business}} to {{address}} on {{date}} has been delivered by Capital Lumber Co. Photos are attached. If you have any questions, please give us a call at 208-343-5481. Thank you for your business. Reply STOP to opt out.",
   },
   willCall: {
     enabledKey: "willCallEnabled",
@@ -73,10 +100,11 @@ function fillMessageTemplate(template, fields) {
     order: String(fields.order || "").trim() || "your order",
     date: String(fields.date || "").trim() || "a date to be confirmed",
     address: String(fields.address || "").trim() || "the delivery address",
+    summaryurl: String(fields.summaryUrl || "").trim(),
   };
 
   return String(template || "")
-    .replace(/{{\s*(customer|business|order|date|address)\s*}}/gi, (match, key) =>
+    .replace(/{{\s*(customer|business|order|date|address|summaryUrl)\s*}}/gi, (match, key) =>
       replacements[String(key).toLowerCase()] || match,
     )
     .trim();
@@ -103,6 +131,66 @@ function normalizeTwilioMediaUrls(value) {
       }
     })
     .filter(Boolean);
+}
+
+function isAllowedOrderSummaryTarget(value) {
+  try {
+    const target = new URL(String(value || "").trim());
+    return (
+      target.protocol === "https:" &&
+      ["firebasestorage.googleapis.com", "storage.googleapis.com"].includes(
+        target.hostname,
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function ensureOrderSummaryShortLink({
+  firestore,
+  orderReference,
+  orderId,
+  orderSummary,
+  targetUrl,
+}) {
+  const existingShortUrl = String(orderSummary?.shortUrl || "").trim();
+  const existingToken = String(orderSummary?.shortToken || "").trim();
+
+  if (
+    existingShortUrl.startsWith(`${appBaseUrl.value().replace(/\/+$/, "")}/s/`) &&
+    /^[A-Za-z0-9_-]{20,32}$/.test(existingToken)
+  ) {
+    return existingShortUrl;
+  }
+
+  if (!isAllowedOrderSummaryTarget(targetUrl)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "The customer order summary link is not valid.",
+    );
+  }
+
+  const shortToken = randomBytes(16).toString("base64url");
+  const shortUrl = `${appBaseUrl.value().replace(/\/+$/, "")}/s/${shortToken}`;
+  const createdAt = new Date().toISOString();
+  const linkReference = firestore.doc(`orderSummaryLinks/${shortToken}`);
+  const batch = firestore.batch();
+
+  batch.set(linkReference, {
+    active: true,
+    createdAt,
+    orderId,
+    targetUrl,
+  });
+  batch.update(orderReference, {
+    "orderSummary.shortToken": shortToken,
+    "orderSummary.shortUrl": shortUrl,
+    updatedAt: createdAt,
+  });
+  await batch.commit();
+
+  return shortUrl;
 }
 
 async function getTwilioCaller(request, { adminOnly = false } = {}) {
@@ -153,6 +241,519 @@ async function writeTwilioMessageLog(data) {
     });
   }
 }
+
+const DELIVERY_MESSAGE_TIME_ZONE = "America/Boise";
+const ACTIVE_MESSAGE_STATUSES = new Set([
+  "accepted",
+  "delivered",
+  "queued",
+  "sending",
+  "sent",
+]);
+
+function getDateKeyInTimeZone(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: DELIVERY_MESSAGE_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const partMap = Object.fromEntries(
+    parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]),
+  );
+
+  return `${partMap.year}-${partMap.month}-${partMap.day}`;
+}
+
+function formatDeliveryDate(value) {
+  const cleanValue = String(value || "").trim();
+
+  if (!cleanValue) return "a date to be confirmed";
+
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(cleanValue)
+    ? new Date(`${cleanValue}T18:00:00.000Z`)
+    : new Date(cleanValue);
+
+  if (Number.isNaN(date.getTime())) return cleanValue;
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: DELIVERY_MESSAGE_TIME_ZONE,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatDeliveryCompletionDate(value) {
+  const date = new Date(value || Date.now());
+
+  if (Number.isNaN(date.getTime())) return "today";
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: DELIVERY_MESSAGE_TIME_ZONE,
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function deliveryIsComplete(delivery) {
+  return (
+    String(delivery?.status || "").toLowerCase() === "complete" ||
+    Boolean(delivery?.deliveredAt || delivery?.completedAt || delivery?.delivered)
+  );
+}
+
+function deliveryHasDriverAndTruck(delivery) {
+  const assignments = Array.isArray(delivery?.dispatchAssignments)
+    ? delivery.dispatchAssignments
+    : [];
+  const hasDriver = Boolean(
+    String(delivery?.driver || delivery?.driverName || "").trim() ||
+      (Array.isArray(delivery?.drivers) &&
+        delivery.drivers.some((driver) => String(driver || "").trim())) ||
+      assignments.some((assignment) => String(assignment?.driver || "").trim()),
+  );
+  const hasTruck = Boolean(
+    String(
+      delivery?.truck ||
+        delivery?.vehicleId ||
+        delivery?.vehicleTitle ||
+        delivery?.vehicleBadge ||
+        "",
+    ).trim() ||
+      assignments.some((assignment) =>
+        String(
+          assignment?.vehicleId ||
+            assignment?.vehicleTitle ||
+            assignment?.vehicleBadge ||
+            "",
+        ).trim(),
+      ),
+  );
+
+  return hasDriver && hasTruck;
+}
+
+function deliveryIsScheduled(delivery) {
+  return (
+    !deliveryIsComplete(delivery) &&
+    Boolean(String(delivery?.deliveryDate || "").trim()) &&
+    deliveryHasDriverAndTruck(delivery)
+  );
+}
+
+function getDeliveryPhotoUrls(delivery) {
+  const photoValues = [
+    delivery?.deliveryPhoto,
+    ...(Array.isArray(delivery?.deliveryPhotos) ? delivery.deliveryPhotos : []),
+    delivery?.hardwarePhoto,
+    ...(Array.isArray(delivery?.hardwarePhotos) ? delivery.hardwarePhotos : []),
+  ];
+
+  return normalizeTwilioMediaUrls(
+    photoValues.map((photo) =>
+      typeof photo === "string"
+        ? photo
+        : String(photo?.url || photo?.dataUrl || "").trim(),
+    ),
+  );
+}
+
+function getAutomatedDeliveryMessageFields(delivery, messageType) {
+  return {
+    customer:
+      String(delivery?.contactName || "").trim() ||
+      String(delivery?.customerName || "").trim() ||
+      "there",
+    business:
+      String(delivery?.businessName || "").trim() ||
+      String(delivery?.customerName || "").trim() ||
+      "your business",
+    order: String(delivery?.orderNumber || "").trim(),
+    date:
+      messageType === "deliveryComplete"
+        ? formatDeliveryCompletionDate(
+            delivery?.deliveredAt || delivery?.completedAt || delivery?.updatedAt,
+          )
+        : formatDeliveryDate(delivery?.deliveryDate),
+    address: String(delivery?.address || delivery?.deliveryAddress || "").trim(),
+  };
+}
+
+function getAutomatedMessageConfiguration(settings, messageType) {
+  const messageConfiguration = TWILIO_MESSAGE_TYPES[messageType];
+
+  if (!settings?.enabled || !messageConfiguration) return null;
+
+  const isEnabled =
+    settings[messageConfiguration.enabledKey] ??
+    messageConfiguration.defaultEnabled ??
+    false;
+  const template = String(
+    settings[messageConfiguration.templateKey] ||
+      messageConfiguration.defaultTemplate ||
+      "",
+  ).trim();
+
+  return isEnabled && template ? { messageConfiguration, template } : null;
+}
+
+async function queueAutomatedTwilioMessage({
+  settings,
+  messageType,
+  delivery,
+  deliveryId,
+  mediaUrls = [],
+}) {
+  const configuration = getAutomatedMessageConfiguration(settings, messageType);
+
+  if (!configuration) {
+    return { skipped: true, reason: "disabled" };
+  }
+
+  const toPhoneNumber = normalizePhoneNumber(
+    delivery?.contactPhone || delivery?.phoneNumber || delivery?.phone,
+  );
+
+  if (delivery?.customerTextUpdatesEnabled !== true || !toPhoneNumber) {
+    return { skipped: true, reason: "customer-not-eligible" };
+  }
+
+  const accountSid = String(settings.accountSid || "").trim();
+  const messagingServiceSid = String(settings.messagingServiceSid || "").trim();
+  const senderPhoneNumber = normalizePhoneNumber(settings.senderPhoneNumber);
+
+  if (!/^AC[0-9a-fA-F]{32}$/.test(accountSid)) {
+    throw new Error("The Twilio Account SID is missing or invalid.");
+  }
+  if (!/^MG[0-9a-fA-F]{32}$/.test(messagingServiceSid) && !senderPhoneNumber) {
+    throw new Error("The Twilio sender is not configured.");
+  }
+
+  const messageBody = fillMessageTemplate(
+    configuration.template,
+    getAutomatedDeliveryMessageFields(delivery, messageType),
+  );
+  if (!messageBody || messageBody.length > 1600) {
+    throw new Error(
+      "The saved message template must contain between 1 and 1,600 characters.",
+    );
+  }
+
+  const globalDeliveryPhotoUrl =
+    messageType === "deliveryComplete"
+      ? settings.deliveryCompleteGlobalPhoto?.url
+      : "";
+  const deliveryMediaUrls = normalizeTwilioMediaUrls(mediaUrls);
+  const normalizedGlobalPhoto = normalizeTwilioMediaUrls([
+    globalDeliveryPhotoUrl,
+  ])[0];
+  const normalizedMediaUrls = [
+    ...deliveryMediaUrls.slice(0, normalizedGlobalPhoto ? 9 : 10),
+    ...(normalizedGlobalPhoto ? [normalizedGlobalPhoto] : []),
+  ];
+  const formData = new URLSearchParams({ To: toPhoneNumber, Body: messageBody });
+
+  if (/^MG[0-9a-fA-F]{32}$/.test(messagingServiceSid)) {
+    formData.set("MessagingServiceSid", messagingServiceSid);
+  } else {
+    formData.set("From", senderPhoneNumber);
+  }
+  normalizedMediaUrls.forEach((mediaUrl) => formData.append("MediaUrl", mediaUrl));
+
+  const logBase = {
+    messageType,
+    maskedTo: maskPhoneNumber(toPhoneNumber),
+    orderNumber: String(delivery?.orderNumber || "").trim(),
+    deliveryId,
+    mediaCount: normalizedMediaUrls.length,
+    sentBy: "delivery-automation",
+    sentByEmail: "automation@capitallumber.co",
+  };
+  const response = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${Buffer.from(
+          `${accountSid}:${twilioAuthToken.value()}`,
+        ).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: formData,
+    },
+  );
+  const responseText = await response.text();
+  let responseData = {};
+
+  try {
+    responseData = JSON.parse(responseText);
+  } catch {
+    responseData = {};
+  }
+
+  if (!response.ok) {
+    const providerMessage = String(
+      responseData.message || "Twilio rejected the message.",
+    ).slice(0, 300);
+    await writeTwilioMessageLog({
+      ...logBase,
+      status: "failed",
+      provider: "twilio",
+      providerCode: String(responseData.code || response.status),
+      error: providerMessage,
+    });
+    throw new Error(`Twilio could not send the message: ${providerMessage}`);
+  }
+
+  const result = {
+    providerMessageId: String(responseData.sid || ""),
+    status: String(responseData.status || "queued"),
+  };
+  await writeTwilioMessageLog({
+    ...logBase,
+    ...result,
+    provider: "twilio",
+  });
+
+  return result;
+}
+
+async function claimDeliveryMessage({
+  deliveryReference,
+  signature,
+  signatureField,
+  statusField,
+  sentAtField,
+  allowNewSignature = false,
+}) {
+  const firestore = getFirestore();
+
+  return firestore.runTransaction(async (transaction) => {
+    const deliverySnapshot = await transaction.get(deliveryReference);
+
+    if (!deliverySnapshot.exists) return false;
+
+    const currentDelivery = deliverySnapshot.data() || {};
+    const currentSignature = String(currentDelivery[signatureField] || "");
+    const currentStatus = String(currentDelivery[statusField] || "").toLowerCase();
+
+    if (
+      (currentSignature === signature && ACTIVE_MESSAGE_STATUSES.has(currentStatus)) ||
+      (!allowNewSignature && currentDelivery[sentAtField])
+    ) {
+      return false;
+    }
+
+    transaction.update(deliveryReference, {
+      [signatureField]: signature,
+      [statusField]: "sending",
+      [`${statusField.replace(/Status$/, "")}AttemptedAt`]:
+        FieldValue.serverTimestamp(),
+      [`${statusField.replace(/Status$/, "")}Error`]: FieldValue.delete(),
+    });
+
+    return true;
+  });
+}
+
+async function sendDeliveryLifecycleMessage({
+  deliveryReference,
+  delivery,
+  messageType,
+  signature,
+  signatureField,
+  statusField,
+  sentAtField,
+  allowNewSignature = false,
+  mediaUrls = [],
+}) {
+  const settingsSnapshot = await getFirestore().doc(TWILIO_SETTINGS_PATH).get();
+  const settings = settingsSnapshot.data() || {};
+  const configuration = getAutomatedMessageConfiguration(settings, messageType);
+  const toPhoneNumber = normalizePhoneNumber(
+    delivery?.contactPhone || delivery?.phoneNumber || delivery?.phone,
+  );
+
+  if (
+    !configuration ||
+    delivery?.customerTextUpdatesEnabled !== true ||
+    !toPhoneNumber
+  ) {
+    return { skipped: true };
+  }
+
+  const didClaim = await claimDeliveryMessage({
+    deliveryReference,
+    signature,
+    signatureField,
+    statusField,
+    sentAtField,
+    allowNewSignature,
+  });
+
+  if (!didClaim) return { skipped: true };
+
+  try {
+    const result = await queueAutomatedTwilioMessage({
+      settings,
+      messageType,
+      delivery,
+      deliveryId: deliveryReference.id,
+      mediaUrls,
+    });
+
+    if (result.skipped) {
+      await deliveryReference.update({
+        [statusField]: "skipped",
+      });
+      return result;
+    }
+
+    await deliveryReference.update({
+      [statusField]: result.status || "queued",
+      [sentAtField]: FieldValue.serverTimestamp(),
+      [`${statusField.replace(/Status$/, "")}ProviderMessageId`]:
+        result.providerMessageId || "",
+      [`${statusField.replace(/Status$/, "")}Error`]: FieldValue.delete(),
+    });
+
+    logger.info("Automated delivery text queued", {
+      deliveryId: deliveryReference.id,
+      messageType,
+      orderNumber: delivery?.orderNumber || "",
+    });
+    return result;
+  } catch (error) {
+    await deliveryReference.update({
+      [statusField]: "failed",
+      [`${statusField.replace(/Status$/, "")}Error`]: String(
+        error?.message || "Unable to send the automated delivery text.",
+      ).slice(0, 500),
+    });
+    logger.error("Unable to send automated delivery text", {
+      deliveryId: deliveryReference.id,
+      messageType,
+      error: error?.message || String(error),
+    });
+    return { failed: true };
+  }
+}
+
+exports.sendDeliveryLifecycleMessages = onDocumentUpdated(
+  {
+    document: "deliveries/{deliveryId}",
+    region: "us-central1",
+    secrets: [twilioAuthToken],
+  },
+  async (event) => {
+    const before = event.data?.before?.data() || {};
+    const after = event.data?.after?.data() || {};
+    const deliveryReference = event.data?.after?.ref;
+
+    if (!deliveryReference) return;
+
+    const scheduledNow = deliveryIsScheduled(after);
+    const wasScheduled = deliveryIsScheduled(before);
+    const deliveryDate = String(after.deliveryDate || "").trim();
+    const previousDeliveryDate = String(before.deliveryDate || "").trim();
+
+    if (
+      scheduledNow &&
+      (!wasScheduled || deliveryDate !== previousDeliveryDate)
+    ) {
+      await sendDeliveryLifecycleMessage({
+        deliveryReference,
+        delivery: after,
+        messageType: "scheduledDelivery",
+        signature: deliveryDate,
+        signatureField: "scheduledDeliveryTextSignature",
+        statusField: "scheduledDeliveryTextStatus",
+        sentAtField: "scheduledDeliveryTextSentAt",
+        allowNewSignature: true,
+      });
+    }
+
+    const beforePhotos = getDeliveryPhotoUrls(before);
+    const afterPhotos = getDeliveryPhotoUrls(after);
+    const completedNow = deliveryIsComplete(after);
+    const wasComplete = deliveryIsComplete(before);
+
+    if (
+      completedNow &&
+      afterPhotos.length > 0 &&
+      (!wasComplete || beforePhotos.length === 0)
+    ) {
+      await sendDeliveryLifecycleMessage({
+        deliveryReference,
+        delivery: after,
+        messageType: "deliveryComplete",
+        signature: "complete",
+        signatureField: "deliveryCompleteTextSignature",
+        statusField: "deliveryCompleteTextStatus",
+        sentAtField: "deliveryCompleteTextSentAt",
+        mediaUrls: afterPhotos,
+      });
+    }
+  },
+);
+
+exports.sendDeliveryTodayMessages = onSchedule(
+  {
+    schedule: "0 7 * * *",
+    timeZone: DELIVERY_MESSAGE_TIME_ZONE,
+    region: "us-central1",
+    secrets: [twilioAuthToken],
+  },
+  async () => {
+    const deliveryDate = getDateKeyInTimeZone();
+    const deliverySnapshot = await getFirestore()
+      .collection("deliveries")
+      .where("deliveryDate", "==", deliveryDate)
+      .get();
+    const results = {
+      reviewed: deliverySnapshot.size,
+      eligible: 0,
+      queued: 0,
+      skipped: 0,
+      failed: 0,
+    };
+
+    for (const deliveryDocument of deliverySnapshot.docs) {
+      const delivery = deliveryDocument.data() || {};
+
+      if (!deliveryIsScheduled(delivery)) {
+        results.skipped += 1;
+        continue;
+      }
+
+      results.eligible += 1;
+      const result = await sendDeliveryLifecycleMessage({
+        deliveryReference: deliveryDocument.ref,
+        delivery,
+        messageType: "deliveryToday",
+        signature: deliveryDate,
+        signatureField: "deliveryTodayTextSignature",
+        statusField: "deliveryTodayTextStatus",
+        sentAtField: "deliveryTodayTextSentAt",
+      });
+
+      if (result?.failed) results.failed += 1;
+      else if (result?.skipped) results.skipped += 1;
+      else results.queued += 1;
+    }
+
+    logger.info("Delivery-today text run complete", {
+      deliveryDate,
+      ...results,
+    });
+  },
+);
 
 exports.claimSupplierInvitation = onCall(
   { region: "us-central1" },
@@ -691,6 +1292,284 @@ exports.sendSupplierInvitation = onDocumentCreated(
   },
 );
 
+exports.createOrderSummary = onCall(
+  { region: "us-central1", memory: "512MiB" },
+  async (request) => {
+    const caller = await getTwilioCaller(request);
+    const orderId = String(request.data?.orderId || "").trim();
+
+    if (!orderId || orderId.length > 160 || orderId.includes("/")) {
+      throw new HttpsError("invalid-argument", "Choose a valid processed order.");
+    }
+
+    const firestore = getFirestore();
+    const orderReference = firestore.doc(`salesOrders/${orderId}`);
+    const orderSnapshot = await orderReference.get();
+
+    if (!orderSnapshot.exists) {
+      throw new HttpsError(
+        "not-found",
+        "The processed order could not be found for its PDF summary.",
+      );
+    }
+
+    const order = { id: orderSnapshot.id, ...orderSnapshot.data() };
+    if (order.customerTextUpdatesEnabled !== true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The customer has not opted in to text updates for this order.",
+      );
+    }
+
+    const toPhoneNumber = normalizePhoneNumber(
+      order.contactPhone || order.phoneNumber || order.phone,
+    );
+    if (!toPhoneNumber) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The order needs a valid customer mobile number before its summary can be texted.",
+      );
+    }
+
+    const existingSummaryUrl = String(order.orderSummary?.url || "").trim();
+    if (existingSummaryUrl.startsWith("https://")) {
+      const shortSummaryUrl = await ensureOrderSummaryShortLink({
+        firestore,
+        orderReference,
+        orderId,
+        orderSummary: order.orderSummary,
+        targetUrl: existingSummaryUrl,
+      });
+      return {
+        summaryUrl: shortSummaryUrl,
+        toPhoneNumber,
+        customer: String(order.contactName || order.customerName || "there").trim(),
+        business: String(order.businessName || order.customerName || "your business").trim(),
+        order: String(order.orderNumber || "").trim(),
+        date: String(order.createdAt || "").trim(),
+        address: String(order.deliveryAddress || order.address || "").trim(),
+        reused: true,
+      };
+    }
+
+    let pdfBuffer;
+    try {
+      pdfBuffer = await generateOrderSummaryPdf(order);
+    } catch (error) {
+      logger.error("Unable to generate order summary PDF", {
+        orderId,
+        error: error?.message || String(error),
+        requestedBy: caller.userId,
+      });
+      throw new HttpsError(
+        "internal",
+        "The customer order summary PDF could not be generated.",
+      );
+    }
+
+    const downloadToken = randomUUID();
+    const fileId = randomUUID();
+    const safeOrderNumber = String(order.orderNumber || "order")
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
+      .slice(0, 80);
+    const filePath = `order-summaries/${orderId}/${safeOrderNumber}-${fileId}.pdf`;
+    const bucket = getStorage().bucket();
+    const file = bucket.file(filePath);
+
+    try {
+      await file.save(pdfBuffer, {
+        resumable: false,
+        contentType: "application/pdf",
+        metadata: {
+          cacheControl: "private, max-age=3600",
+          contentDisposition: `inline; filename="Capital-Lumber-Order-${safeOrderNumber}.pdf"`,
+          metadata: {
+            firebaseStorageDownloadTokens: downloadToken,
+            orderId,
+            generatedBy: caller.userId,
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Unable to store order summary PDF", {
+        orderId,
+        error: error?.message || String(error),
+        requestedBy: caller.userId,
+      });
+      throw new HttpsError(
+        "unavailable",
+        "The customer order summary could not be stored. Try again in a moment.",
+      );
+    }
+
+    const summaryUrl =
+      `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket.name)}` +
+      `/o/${encodeURIComponent(filePath)}?alt=media&token=${encodeURIComponent(downloadToken)}`;
+    const generatedAt = new Date().toISOString();
+
+    await orderReference.set(
+      {
+        orderSummary: {
+          url: summaryUrl,
+          path: filePath,
+          generatedAt,
+          generatedBy: caller.userId,
+          generatedByEmail: caller.email,
+        },
+        updatedAt: generatedAt,
+      },
+      { merge: true },
+    );
+
+    const shortSummaryUrl = await ensureOrderSummaryShortLink({
+      firestore,
+      orderReference,
+      orderId,
+      orderSummary: {},
+      targetUrl: summaryUrl,
+    });
+
+    logger.info("Customer order summary PDF created", {
+      orderId,
+      filePath,
+      requestedBy: caller.userId,
+    });
+
+    return {
+      summaryUrl: shortSummaryUrl,
+      toPhoneNumber,
+      customer: String(order.contactName || order.customerName || "there").trim(),
+      business: String(order.businessName || order.customerName || "your business").trim(),
+      order: String(order.orderNumber || "").trim(),
+      date: String(order.createdAt || "").trim(),
+      address: String(order.deliveryAddress || order.address || "").trim(),
+      reused: false,
+    };
+  },
+);
+
+exports.orderSummaryRedirect = onRequest(
+  { region: "us-central1" },
+  async (request, response) => {
+    if (!["GET", "HEAD"].includes(request.method)) {
+      response.set("Allow", "GET, HEAD");
+      response.status(405).send("Method not allowed");
+      return;
+    }
+
+    const shortToken = String(request.query.token || "").trim();
+    if (!/^[A-Za-z0-9_-]{20,32}$/.test(shortToken)) {
+      response.status(404).send("Order summary not found");
+      return;
+    }
+
+    const linkSnapshot = await getFirestore()
+      .doc(`orderSummaryLinks/${shortToken}`)
+      .get();
+    const link = linkSnapshot.data() || {};
+    const targetUrl = String(link.targetUrl || "").trim();
+
+    if (!linkSnapshot.exists || link.active !== true || !isAllowedOrderSummaryTarget(targetUrl)) {
+      response.status(404).send("Order summary not found");
+      return;
+    }
+
+    response.set("Cache-Control", "private, no-store, max-age=0");
+    response.set("Referrer-Policy", "no-referrer");
+    response.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    response.redirect(302, targetUrl);
+  },
+);
+
+function normalizeOrderSummaryPreviewDraft(value) {
+  const draft = value && typeof value === "object" ? value : {};
+  const orderNumber = String(draft.orderNumber || "").trim();
+  const orderDigits = orderNumber.replace(/\D/g, "");
+
+  if (orderDigits.length !== 6) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Enter the unique six-digit order number before previewing the PDF.",
+    );
+  }
+
+  const cleanText = (input, maxLength = 300) =>
+    String(input ?? "").trim().slice(0, maxLength);
+  const items = (Array.isArray(draft.items) ? draft.items : [])
+    .slice(0, 250)
+    .map((item) => ({
+      quantity: cleanText(item?.quantity, 40),
+      itemNumber: cleanText(item?.itemNumber, 100),
+      description: cleanText(item?.description, 800),
+      path: cleanText(item?.path || item?.fulfillmentPath, 80),
+      fulfillmentPath: cleanText(item?.fulfillmentPath || item?.path, 80),
+      poNumber: cleanText(item?.poNumber, 100),
+      vendor: cleanText(item?.vendor, 200),
+    }));
+
+  if (items.length === 0) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Add at least one order item before previewing the PDF.",
+    );
+  }
+
+  return {
+    orderNumber,
+    customerName: cleanText(draft.customerName, 200),
+    businessName: cleanText(draft.businessName, 200),
+    contactName: cleanText(draft.customerName || draft.contactName, 200),
+    contactPhone: cleanText(draft.phoneNumber || draft.contactPhone, 40),
+    phoneNumber: cleanText(draft.phoneNumber, 40),
+    accountNumber: cleanText(draft.accountNumber, 80),
+    orderedBy: cleanText(draft.orderedBy, 160),
+    orderMethod: cleanText(draft.orderMethod, 80),
+    handoffType: cleanText(draft.orderMethod || draft.handoffType, 80),
+    deliveryAddress: cleanText(draft.deliveryAddress, 500),
+    deliveryDate: cleanText(draft.deliveryDate, 80),
+    deliveryNotes: cleanText(draft.deliveryNotes, 2_000),
+    createdAt: new Date().toISOString(),
+    items,
+  };
+}
+
+exports.previewOrderSummary = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const caller = await getTwilioCaller(request);
+    const order = normalizeOrderSummaryPreviewDraft(request.data?.order);
+
+    try {
+      const pdfBuffer = await generateOrderSummaryPdf(order);
+      const safeOrderNumber = String(order.orderNumber || "order")
+        .replace(/[^a-zA-Z0-9_-]+/g, "-")
+        .slice(0, 80);
+
+      logger.info("Draft customer order summary PDF preview created", {
+        orderNumber: order.orderNumber,
+        requestedBy: caller.userId,
+      });
+
+      return {
+        pdfBase64: pdfBuffer.toString("base64"),
+        fileName: `Capital-Lumber-Order-${safeOrderNumber}-Draft.pdf`,
+      };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+
+      logger.error("Unable to generate draft order summary PDF preview", {
+        orderNumber: order.orderNumber,
+        error: error?.message || String(error),
+        requestedBy: caller.userId,
+      });
+      throw new HttpsError(
+        "internal",
+        "The draft order summary PDF could not be generated.",
+      );
+    }
+  },
+);
+
 exports.sendTwilioMessage = onCall(
   {
     region: "us-central1",
@@ -762,7 +1641,11 @@ exports.sendTwilioMessage = onCall(
           "Customer texting is disabled in Twilio Messaging settings.",
         );
       }
-      if (!settings[messageConfiguration.enabledKey]) {
+      const isMessageTypeEnabled =
+        settings[messageConfiguration.enabledKey] ??
+        messageConfiguration.defaultEnabled ??
+        false;
+      if (!isMessageTypeEnabled) {
         throw new HttpsError(
           "failed-precondition",
           "That customer message type is disabled in Twilio Messaging settings.",
@@ -770,13 +1653,15 @@ exports.sendTwilioMessage = onCall(
       }
 
       messageBody = fillMessageTemplate(
-        settings[messageConfiguration.templateKey],
+        settings[messageConfiguration.templateKey] ||
+          messageConfiguration.defaultTemplate,
         {
           customer: request.data?.customer,
           business: request.data?.business,
           order: request.data?.order,
           date: request.data?.date,
           address: request.data?.address,
+          summaryUrl: request.data?.summaryUrl,
         },
       );
     }

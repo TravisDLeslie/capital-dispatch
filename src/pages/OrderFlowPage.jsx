@@ -43,6 +43,82 @@ import {
 // Keep the shortcut implementation available for a later rollout.
 const SHOW_SHIP_ORDER_COMPLETE_SHORTCUT = false;
 
+const orderProcessStageContent = {
+  saving: {
+    label: "Saving order",
+    detail: "Creating delivery and fulfillment records...",
+  },
+  buildingPreview: {
+    label: "Building order preview",
+    detail: "Generating the customer PDF and secure link...",
+  },
+  generatingText: {
+    label: "Generating order text",
+    detail: "Preparing and sending the customer update...",
+  },
+  finishing: {
+    label: "Finishing order",
+    detail: "Checking the linked order records...",
+  },
+  done: {
+    label: "Order complete",
+    detail: "The order and linked records were saved.",
+  },
+  doneWithText: {
+    label: "Order and text complete",
+    detail: "Twilio confirmed the customer message.",
+  },
+  doneWithWarning: {
+    label: "Order saved",
+    detail: "The customer text was not sent. Check the alert next.",
+  },
+};
+
+function ProcessOrderButtonContent({ stage = "idle", idleLabel }) {
+  const status = orderProcessStageContent[stage];
+
+  if (!status) {
+    return idleLabel;
+  }
+
+  const isComplete = stage.startsWith("done");
+
+  return (
+    <span className="inline-flex items-center gap-3 text-left" aria-live="polite">
+      {isComplete ? (
+        <Check className="h-6 w-6 shrink-0" aria-hidden="true" />
+      ) : (
+        <LoaderCircle
+          className="h-6 w-6 shrink-0 animate-spin"
+          aria-hidden="true"
+        />
+      )}
+      <span className="flex flex-col items-start leading-tight">
+        <span className="text-base font-black sm:text-lg">{status.label}</span>
+        <span className="mt-0.5 text-[11px] font-bold text-white/80 sm:text-xs">
+          {status.detail}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+function getProcessOrderButtonTone(isProcessing, stage) {
+  if (!isProcessing) {
+    return "bg-[#FC2C38] hover:bg-red-600 disabled:bg-slate-300";
+  }
+
+  if (stage === "doneWithWarning") {
+    return "bg-amber-500 disabled:bg-amber-500";
+  }
+
+  if (stage.startsWith("done")) {
+    return "bg-emerald-600 disabled:bg-emerald-600";
+  }
+
+  return "bg-[#FC2C38] disabled:bg-[#FC2C38]";
+}
+
 const normalizeInventorySearch = (value) =>
   String(value || "")
     .toLowerCase()
@@ -1115,7 +1191,8 @@ function ChoiceButton({
  *   removedInventoryItemNumbers?: string[];
  *   calendarBlockOffs?: Array<Record<string, any>>;
  *   existingOrderSources?: Record<string, Array<Record<string, any>>>;
- *   onProcessOrder?: (orderPayload: Record<string, any>) => Promise<Record<string, any> | void>;
+ *   onProcessOrder?: (orderPayload: Record<string, any>, onProgress?: (stage: string) => void) => Promise<Record<string, any> | void>;
+ *   onPreviewOrderSummary?: (orderPayload: Record<string, any>) => Promise<{ pdfBase64: string; fileName: string }>;
  *   onProcessStockPO?: (stockPayload: Record<string, any>) => Promise<Record<string, any> | void>;
  *   onDeleteExistingOrder?: (orderNumber: string) => Promise<boolean>;
  *   onSendPoToSouthDispatch?: (payload: { poNumber: string; orderNumber?: string; sourceOrderId?: string; customerName?: string; vendor?: string; supplierAddress?: string; notes?: string; items?: Array<Record<string, any>> }) => Promise<Record<string, any>>;
@@ -1132,6 +1209,7 @@ export default function OrderFlowPage({
   calendarBlockOffs = [],
   existingOrderSources = {},
   onProcessOrder,
+  onPreviewOrderSummary,
   onProcessStockPO,
   onDeleteExistingOrder,
   onSendPoToSouthDispatch,
@@ -1165,6 +1243,12 @@ export default function OrderFlowPage({
   const [deliveryNotes, setDeliveryNotes] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
+  const [orderProcessStage, setOrderProcessStage] = useState("idle");
+  const [isPreviewingOrderSummary, setIsPreviewingOrderSummary] = useState(false);
+  const [orderSummaryPreviewUrl, setOrderSummaryPreviewUrl] = useState("");
+  const [orderSummaryPreviewFileName, setOrderSummaryPreviewFileName] = useState("");
+  const [orderSummaryPreviewError, setOrderSummaryPreviewError] = useState("");
+  const orderSummaryPreviewUrlRef = useRef("");
   const [processError, setProcessError] = useState("");
   const [processSummary, setProcessSummary] = useState(null);
   const [isDuplicateOrderPromptOpen, setIsDuplicateOrderPromptOpen] =
@@ -1174,6 +1258,14 @@ export default function OrderFlowPage({
   const [isDeletingDuplicateOrder, setIsDeletingDuplicateOrder] =
     useState(false);
   const [duplicateDeleteError, setDuplicateDeleteError] = useState("");
+
+  useEffect(
+    () => () => {
+      if (orderSummaryPreviewUrlRef.current) {
+        URL.revokeObjectURL(orderSummaryPreviewUrlRef.current);
+      }
+    },
+  );
   const calendarBlockOffsByDate = useMemo(
     () => getCalendarBlockOffMap(calendarBlockOffs),
     [calendarBlockOffs],
@@ -2125,6 +2217,54 @@ export default function OrderFlowPage({
     setPhoneNumber(formatPhoneInput(contact.phone));
   }
 
+  function closeOrderSummaryPreview() {
+    if (orderSummaryPreviewUrlRef.current) {
+      URL.revokeObjectURL(orderSummaryPreviewUrlRef.current);
+      orderSummaryPreviewUrlRef.current = "";
+    }
+
+    setOrderSummaryPreviewUrl("");
+    setOrderSummaryPreviewFileName("");
+  }
+
+  async function previewOrderSummary() {
+    if (
+      typeof onPreviewOrderSummary !== "function" ||
+      !canProcessOrder ||
+      isPreviewingOrderSummary
+    ) {
+      return;
+    }
+
+    setIsPreviewingOrderSummary(true);
+    setOrderSummaryPreviewError("");
+
+    try {
+      const preview = await onPreviewOrderSummary(buildOrderPayload());
+      const binaryPdf = window.atob(preview.pdfBase64);
+      const pdfBytes = new Uint8Array(binaryPdf.length);
+
+      for (let index = 0; index < binaryPdf.length; index += 1) {
+        pdfBytes[index] = binaryPdf.charCodeAt(index);
+      }
+
+      closeOrderSummaryPreview();
+      const previewUrl = URL.createObjectURL(
+        new Blob([pdfBytes], { type: "application/pdf" }),
+      );
+      orderSummaryPreviewUrlRef.current = previewUrl;
+      setOrderSummaryPreviewFileName(preview.fileName);
+      setOrderSummaryPreviewUrl(previewUrl);
+    } catch (error) {
+      console.error("Unable to preview order summary PDF:", error);
+      setOrderSummaryPreviewError(
+        error?.message || "Unable to create the PDF preview. Please try again.",
+      );
+    } finally {
+      setIsPreviewingOrderSummary(false);
+    }
+  }
+
   async function processOrder({ allowDuplicateOrder = false } = {}) {
     if (isSelectedDeliveryDateBlocked) {
       setProcessError(selectedDeliveryDateBlockMessage);
@@ -2146,14 +2286,28 @@ export default function OrderFlowPage({
     }
 
     setIsProcessingOrder(true);
+    setOrderProcessStage("saving");
     setProcessError("");
     setProcessSummary(null);
 
     try {
       const summary = await onProcessOrder(
         buildOrderPayload({ allowDuplicateOrder }),
+        (nextStage) => {
+          if (orderProcessStageContent[nextStage]) {
+            setOrderProcessStage(nextStage);
+          }
+        },
       );
       setProcessSummary(summary || {});
+      setOrderProcessStage(
+        summary?.orderSummaryError
+          ? "doneWithWarning"
+          : summary?.orderSummarySent
+            ? "doneWithText"
+            : "done",
+      );
+      await new Promise((resolve) => window.setTimeout(resolve, 850));
       onPageChange?.(
         summary?.vendorReturnCreated ? "supplier-runs-dispatch" : "dashboard",
       );
@@ -2164,6 +2318,7 @@ export default function OrderFlowPage({
       );
     } finally {
       setIsProcessingOrder(false);
+      setOrderProcessStage("idle");
     }
   }
 
@@ -2539,14 +2694,47 @@ export default function OrderFlowPage({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => processOrder()}
-            disabled={!canProcessOrder || isProcessingOrder}
-            className="mt-5 inline-flex min-h-[64px] w-full items-center justify-center rounded-[1.5rem] bg-[#FC2C38] px-6 text-xl font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {isProcessingOrder ? "Processing..." : "Process Order"}
-          </button>
+          <div className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,0.45fr)_minmax(0,1fr)]">
+            <button
+              type="button"
+              onClick={previewOrderSummary}
+              disabled={
+                !canProcessOrder ||
+                isProcessingOrder ||
+                isPreviewingOrderSummary ||
+                isReturnWorkflow
+              }
+              className="inline-flex min-h-[64px] w-full items-center justify-center gap-2 rounded-[1.5rem] border border-slate-300 bg-white px-5 text-lg font-black text-slate-900 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              {isPreviewingOrderSummary ? (
+                <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+              ) : (
+                <FileText className="h-5 w-5" aria-hidden="true" />
+              )}
+              {isPreviewingOrderSummary ? "Creating Preview..." : "Preview PDF"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => processOrder()}
+              disabled={!canProcessOrder || isProcessingOrder || isPreviewingOrderSummary}
+              className={`inline-flex min-h-[64px] w-full items-center justify-center rounded-[1.5rem] px-6 py-3 text-xl font-black text-white shadow-sm transition disabled:cursor-not-allowed ${getProcessOrderButtonTone(
+                isProcessingOrder,
+                orderProcessStage,
+              )}`}
+            >
+              <ProcessOrderButtonContent
+                stage={isProcessingOrder ? orderProcessStage : "idle"}
+                idleLabel="Process Order"
+              />
+            </button>
+          </div>
+
+          {orderSummaryPreviewError ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-800">
+              {orderSummaryPreviewError}
+            </div>
+          ) : null}
 
           {processError ? (
             <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
@@ -2596,6 +2784,53 @@ export default function OrderFlowPage({
             </div>
           ) : null}
         </section>
+
+        {orderSummaryPreviewUrl ? (
+          <div className="fixed inset-0 z-[90] flex items-end bg-slate-950/70 p-0 backdrop-blur-sm sm:items-center sm:p-6">
+            <div className="mx-auto flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
+              <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                    Draft - Nothing Sent Yet
+                  </p>
+                  <h2 className="mt-1 truncate text-xl font-black text-slate-950 sm:text-2xl">
+                    Order {orderNumber} PDF Preview
+                  </h2>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <a
+                    href={orderSummaryPreviewUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hidden h-11 items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 text-sm font-black text-white transition hover:bg-red-600 sm:inline-flex"
+                  >
+                    Open PDF
+                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={closeOrderSummaryPreview}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
+                    aria-label="Close PDF preview"
+                  >
+                    <X className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+              <iframe
+                title={`Draft PDF preview for order ${orderNumber}`}
+                src={orderSummaryPreviewUrl}
+                className="min-h-0 flex-1 bg-slate-100"
+              />
+              <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 text-xs font-bold text-slate-500 sm:px-6">
+                <span className="truncate">
+                  {orderSummaryPreviewFileName || "Capital Lumber order summary draft"}
+                </span>
+                <span className="shrink-0">Process Order to save and send</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </PageContainer>
     );
   }
@@ -3368,7 +3603,12 @@ export default function OrderFlowPage({
                   }
                   className="h-4 w-4 shrink-0 accent-emerald-600"
                 />
-                <span>Customer to get updates via text</span>
+                <span className="flex flex-col leading-tight">
+                  <span>Customer to get updates via text</span>
+                  <span className="text-[10px] font-bold opacity-75">
+                    Secure PDF summary sends after Process
+                  </span>
+                </span>
               </label>
             ) : null}
             <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
@@ -4748,15 +4988,21 @@ export default function OrderFlowPage({
             type="button"
             onClick={() => processOrder()}
             disabled={!canProcessOrder || isProcessingOrder}
-            className="mt-5 inline-flex min-h-[64px] w-full items-center justify-center rounded-[1.5rem] bg-[#FC2C38] px-6 text-xl font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className={`mt-5 inline-flex min-h-[64px] w-full items-center justify-center rounded-[1.5rem] px-6 py-3 text-xl font-black text-white shadow-sm transition disabled:cursor-not-allowed ${getProcessOrderButtonTone(
+              isProcessingOrder,
+              orderProcessStage,
+            )}`}
           >
-            {isProcessingOrder
-              ? "Processing..."
-              : isVendorReturnOrder
-                ? "Create Vendor Return"
-                : isReturnOrder
-                  ? "Create Return"
-                  : "Process Order"}
+            <ProcessOrderButtonContent
+              stage={isProcessingOrder ? orderProcessStage : "idle"}
+              idleLabel={
+                isVendorReturnOrder
+                  ? "Create Vendor Return"
+                  : isReturnOrder
+                    ? "Create Return"
+                    : "Process Order"
+              }
+            />
           </button>
           {processError ? (
             <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">

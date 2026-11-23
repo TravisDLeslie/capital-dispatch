@@ -2,8 +2,10 @@ import { httpsCallable } from "firebase/functions";
 import { functions } from "./firebase";
 
 const SUPPORTED_CUSTOMER_MESSAGE_TYPES = new Set([
+  "orderSummary",
   "potentialDelivery",
   "scheduledDelivery",
+  "deliveryToday",
   "deliveryComplete",
   "willCall",
 ]);
@@ -35,6 +37,7 @@ export async function sendTwilioCustomerMessage({
   address,
   deliveryId,
   mediaUrls,
+  summaryUrl,
 }) {
   if (!SUPPORTED_CUSTOMER_MESSAGE_TYPES.has(messageType)) {
     throw new Error("Choose a supported customer message type.");
@@ -50,5 +53,53 @@ export async function sendTwilioCustomerMessage({
     address,
     deliveryId,
     mediaUrls,
+    summaryUrl,
   });
+}
+
+export async function createAndSendOrderSummary(orderId, onProgress) {
+  if (!functions) {
+    throw new Error("Order summary messaging is unavailable until Firebase is configured.");
+  }
+
+  onProgress?.("buildingPreview");
+  const createSummary = httpsCallable(functions, "createOrderSummary");
+  const summaryResponse = await createSummary({ orderId });
+  const summary = summaryResponse.data || {};
+  onProgress?.("generatingText");
+  const message = await sendTwilioCustomerMessage({
+    messageType: "orderSummary",
+    toPhoneNumber: summary.toPhoneNumber,
+    customer: summary.customer,
+    business: summary.business,
+    order: summary.order,
+    date: summary.date,
+    address: summary.address,
+    summaryUrl: summary.summaryUrl,
+  });
+
+  return {
+    summaryUrl: String(summary.summaryUrl || ""),
+    reused: summary.reused === true,
+    message,
+  };
+}
+
+export async function createOrderSummaryPreview(order) {
+  if (!functions) {
+    throw new Error("Order summary previews are unavailable until Firebase is configured.");
+  }
+
+  const previewSummary = httpsCallable(functions, "previewOrderSummary");
+  const response = await previewSummary({ order });
+  const preview = response.data || {};
+
+  if (!preview.pdfBase64) {
+    throw new Error("The order summary preview did not return a PDF.");
+  }
+
+  return {
+    pdfBase64: String(preview.pdfBase64),
+    fileName: String(preview.fileName || "Capital-Lumber-Order-Draft.pdf"),
+  };
 }

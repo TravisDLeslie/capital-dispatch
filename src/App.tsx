@@ -173,6 +173,10 @@ import {
 } from "./utils/inventorySettingsStorage";
 import { capitalLumberAddress } from "./data/options";
 import { formatCustomerName } from "./utils/textFormatters";
+import {
+  createAndSendOrderSummary,
+  createOrderSummaryPreview,
+} from "./utils/twilioMessaging";
 
 type LazyPageModule = {
   default: ComponentType<any>;
@@ -5287,7 +5291,11 @@ export default function App() {
     return value;
   }
 
-  async function handleProcessOrderFlow(orderPayload: Record<string, unknown>) {
+  async function handleProcessOrderFlow(
+    orderPayload: Record<string, unknown>,
+    onProgress?: (stage: string) => void,
+  ) {
+    onProgress?.("saving");
     const now = new Date().toISOString();
     const orderId = createId();
     const cleanItems = normalizeOrderFlowItems(
@@ -5775,7 +5783,31 @@ export default function App() {
     if (!isVendorReturnOrder) {
       await handleSaveOrderBuild(orderBuild);
     }
-    setSyncError("");
+    let orderSummarySent = false;
+    let orderSummaryUrl = "";
+    let orderSummaryError = "";
+
+    if (!isReturnWorkflow && customerTextUpdatesEnabled) {
+      try {
+        const orderSummaryResult = await createAndSendOrderSummary(
+          orderId,
+          onProgress,
+        );
+        orderSummarySent = true;
+        orderSummaryUrl = String(orderSummaryResult?.summaryUrl || "");
+      } catch (error) {
+        console.error("Unable to create or text the customer order summary:", error);
+        orderSummaryError = getFirebaseErrorMessage(error);
+      }
+    }
+
+    setSyncError(
+      orderSummaryError
+        ? `Order ${sourceOrderNumber} was saved, but its customer summary text was not sent: ${orderSummaryError}`
+        : "",
+    );
+
+    onProgress?.("finishing");
 
     return {
       orderId,
@@ -5787,6 +5819,9 @@ export default function App() {
       returnCreated: isReturnOrder,
       vendorReturnCreated: isVendorReturnOrder,
       buildCreated: !isVendorReturnOrder,
+      orderSummarySent,
+      orderSummaryUrl,
+      orderSummaryError,
     };
   }
 
@@ -9139,6 +9174,7 @@ export default function App() {
         return effectiveAllowedPageIds.includes("order-builds") ? (
           <OrderBuildsPage
             builds={orderBuilds}
+            salesOrders={salesOrders}
             deliveries={deliveries}
             podPickups={podPickups}
             supplierRuns={supplierRuns}
@@ -9251,6 +9287,7 @@ export default function App() {
               canReadSouth ? handleSendOrderPOToSouthDispatch : undefined
             }
             onProcessOrder={handleProcessOrderFlow}
+            onPreviewOrderSummary={createOrderSummaryPreview}
             onProcessStockPO={handleProcessStockPO}
             onDeleteExistingOrder={handlePermanentlyDeleteOrder}
             onPageChange={navigateToPage}

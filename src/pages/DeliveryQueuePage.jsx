@@ -438,10 +438,50 @@ function getDeliveryItemsLabel(items, scopeSummary) {
   return `${items.length} ${items.length === 1 ? "item" : "items"}`;
 }
 
+function normalizeDeliveryStopValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function normalizeDeliveryStopPhone(delivery) {
+  return String(
+    delivery?.contactPhone ||
+      delivery?.phoneNumber ||
+      delivery?.customerPhone ||
+      delivery?.phone ||
+      "",
+  ).replace(/\D/g, "");
+}
+
 function getDeliveryStopKey(delivery) {
-  return delivery?.deliveryCalendarGroupId
-    ? `group:${delivery.deliveryCalendarGroupId}`
-    : `delivery:${delivery?.id || ""}`;
+  const customerName = normalizeDeliveryStopValue(
+    delivery?.customerName || delivery?.businessName || delivery?.deliveryTitle,
+  );
+  const deliveryAddress = normalizeDeliveryStopValue(
+    delivery?.address || delivery?.deliveryAddress,
+  );
+  const contactPhone = normalizeDeliveryStopPhone(delivery);
+  const deliveryDate = normalizeDeliveryStopValue(delivery?.deliveryDate);
+  const driver = normalizeDeliveryStopValue(
+    delivery?.driver || delivery?.driverName,
+  );
+
+  if (
+    delivery?.deliveryCalendarGroupId &&
+    customerName &&
+    deliveryAddress &&
+    contactPhone &&
+    deliveryDate &&
+    driver
+  ) {
+    const matchingStop = `${deliveryDate}:${driver}:${customerName}:${deliveryAddress}:${contactPhone}`;
+    return `group:${delivery.deliveryCalendarGroupId}:${matchingStop}`;
+  }
+
+  return `delivery:${delivery?.id || ""}`;
 }
 
 function groupDeliveriesIntoStops(deliveries) {
@@ -926,6 +966,7 @@ function MobileDeliveryFlowCard({
   onCompleteDelivery,
   onViewPhoto,
   isFocusedDriverView = false,
+  stopDeliveryCount = 1,
 }) {
   const deliveryCardRef = useRef(null);
   const isReturn = isReturnDelivery(delivery);
@@ -943,6 +984,7 @@ function MobileDeliveryFlowCard({
     !delivery.hasHardware || hardwarePhotos.length > 0;
   const canCompleteDelivery =
     hasRequiredMaterialPhoto && hasRequiredHardwarePhoto;
+  const isGroupedStop = stopDeliveryCount > 1;
   const originAddress =
     delivery.deliveryOriginAddress || "3105 W State St, Boise, ID 83703";
   const isUpcomingScheduledDelivery =
@@ -1243,7 +1285,9 @@ function MobileDeliveryFlowCard({
                 {proofPhotoCount} of {MAX_DELIVERY_PROOF_PHOTOS} proof photos saved
               </p>
               <p className="mt-1 text-xs font-bold text-blue-700">
-                Delivery and hardware photos share this total.
+                {isGroupedStop
+                  ? `One photo set is saved to all ${stopDeliveryCount} orders at this drop.`
+                  : "Delivery and hardware photos share this total."}
               </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -1491,14 +1535,16 @@ function MobileDeliveryFlowCard({
                 ? "Complete Vendor Return"
                 : isReturn
                   ? "Complete Return Pickup"
-                  : "Complete Delivery"}
+                  : isGroupedStop
+                    ? `Complete All ${stopDeliveryCount} Orders`
+                    : "Complete Delivery"}
               <ArrowRight className="h-5 w-5" aria-hidden="true" />
             </button>
             {!canCompleteDelivery ? (
               <p className="text-center text-xs font-black text-red-700">
                 Add one material photo
                 {delivery.hasHardware ? " and one hardware photo" : ""} to
-                complete this delivery.
+                complete {isGroupedStop ? "this drop" : "this delivery"}.
               </p>
             ) : null}
           </>
@@ -1883,21 +1929,38 @@ export default function DeliveryQueuePage({
       return;
     }
 
-    const savedDeliveryPhotos = getPhotoList(
-      delivery,
-      "deliveryPhoto",
-      "deliveryPhotos",
-    );
-    const savedHardwarePhotos = getPhotoList(
-      delivery,
-      "hardwarePhoto",
-      "hardwarePhotos",
+    const deliveryStopKey = getDeliveryStopKey(delivery);
+    const proofTargetDeliveries = isDriverView
+      ? deliveries.filter(
+          (candidate) =>
+            !isDeliveryComplete(candidate) &&
+            getDeliveryStopKey(candidate) === deliveryStopKey,
+        )
+      : [delivery];
+    const remainingSlotsByDelivery = proofTargetDeliveries.map(
+      (targetDelivery) => {
+        const savedDeliveryPhotos = getPhotoList(
+          targetDelivery,
+          "deliveryPhoto",
+          "deliveryPhotos",
+        );
+        const savedHardwarePhotos = getPhotoList(
+          targetDelivery,
+          "hardwarePhoto",
+          "hardwarePhotos",
+        );
+
+        return Math.max(
+          0,
+          MAX_DELIVERY_PROOF_PHOTOS -
+            savedDeliveryPhotos.length -
+            savedHardwarePhotos.length,
+        );
+      },
     );
     const remainingPhotoSlots = Math.max(
       0,
-      MAX_DELIVERY_PROOF_PHOTOS -
-        savedDeliveryPhotos.length -
-        savedHardwarePhotos.length,
+      Math.min(...remainingSlotsByDelivery),
     );
 
     if (remainingPhotoSlots === 0) {
@@ -1920,31 +1983,45 @@ export default function DeliveryQueuePage({
     }));
 
     try {
-      const photos = [];
       const category = photosField === "hardwarePhotos" ? "hardware" : "material";
+      const uploadedPhotosByDelivery = await Promise.all(
+        proofTargetDeliveries.map(async (targetDelivery) => {
+          const photos = [];
 
-      for (const file of filesToSave) {
-        photos.push(
-          await uploadDeliveryProofPhoto({
-            deliveryId: delivery.id,
-            category,
-            file,
-          }),
-        );
-      }
+          for (const file of filesToSave) {
+            photos.push(
+              await uploadDeliveryProofPhoto({
+                deliveryId: targetDelivery.id,
+                category,
+                file,
+              }),
+            );
+          }
 
-      const currentPhotos = getPhotoList(delivery, photoField, photosField);
-      const nextPhotos = [...currentPhotos, ...photos];
-      const latestPhoto = photos[photos.length - 1];
+          return { targetDelivery, photos };
+        }),
+      );
 
-      await onUpdateDelivery(delivery.id, {
-        [photoField]: latestPhoto,
-        [photosField]: nextPhotos,
-      });
+      await Promise.all(
+        uploadedPhotosByDelivery.map(({ targetDelivery, photos }) => {
+          const currentPhotos = getPhotoList(
+            targetDelivery,
+            photoField,
+            photosField,
+          );
+          const nextPhotos = [...currentPhotos, ...photos];
+          const latestPhoto = photos[photos.length - 1];
+
+          return onUpdateDelivery(targetDelivery.id, {
+            [photoField]: latestPhoto,
+            [photosField]: nextPhotos,
+          });
+        }),
+      );
 
       if (skippedPhotoCount > 0) {
         setError(
-          `Saved ${photos.length} photo${photos.length === 1 ? "" : "s"}. A delivery can have up to ${MAX_DELIVERY_PROOF_PHOTOS} delivery and hardware photos total.`,
+          `Saved ${filesToSave.length} photo${filesToSave.length === 1 ? "" : "s"}. A delivery can have up to ${MAX_DELIVERY_PROOF_PHOTOS} delivery and hardware photos total.`,
         );
       }
     } catch (photoError) {
@@ -2070,27 +2147,36 @@ export default function DeliveryQueuePage({
   }
 
   async function handleCompleteDelivery(delivery) {
-    const deliveryPhotos = getPhotoList(
-      delivery,
-      "deliveryPhoto",
-      "deliveryPhotos",
+    const deliveryStopKey = getDeliveryStopKey(delivery);
+    const deliveriesAtStop = isDriverView
+      ? deliveries.filter(
+          (candidate) =>
+            !isDeliveryComplete(candidate) &&
+            getDeliveryStopKey(candidate) === deliveryStopKey,
+        )
+      : [delivery];
+    const deliveryMissingMaterialPhoto = deliveriesAtStop.find(
+      (stopDelivery) =>
+        getPhotoList(stopDelivery, "deliveryPhoto", "deliveryPhotos").length ===
+        0,
     );
-    const hardwarePhotos = getPhotoList(
-      delivery,
-      "hardwarePhoto",
-      "hardwarePhotos",
+    const deliveryMissingHardwarePhoto = deliveriesAtStop.find(
+      (stopDelivery) =>
+        stopDelivery.hasHardware &&
+        getPhotoList(stopDelivery, "hardwarePhoto", "hardwarePhotos").length ===
+          0,
     );
 
-    if (deliveryPhotos.length === 0) {
+    if (deliveryMissingMaterialPhoto) {
       setError(
-        `Add a material photo before completing order ${delivery.orderNumber}.`,
+        `Add a material photo before completing order ${deliveryMissingMaterialPhoto.orderNumber}.`,
       );
       return;
     }
 
-    if (delivery.hasHardware && hardwarePhotos.length === 0) {
+    if (deliveryMissingHardwarePhoto) {
       setError(
-        `Add a hardware photo before completing order ${delivery.orderNumber}.`,
+        `Add a hardware photo before completing order ${deliveryMissingHardwarePhoto.orderNumber}.`,
       );
       return;
     }
@@ -2099,10 +2185,16 @@ export default function DeliveryQueuePage({
     setUpdatingDeliveryId(delivery.id);
 
     try {
-      await onUpdateDelivery(delivery.id, {
-        status: "complete",
-        deliveredAt: new Date().toISOString(),
-      });
+      const deliveredAt = new Date().toISOString();
+
+      await Promise.all(
+        deliveriesAtStop.map((stopDelivery) =>
+          onUpdateDelivery(stopDelivery.id, {
+            status: "complete",
+            deliveredAt,
+          }),
+        ),
+      );
     } finally {
       setUpdatingDeliveryId("");
     }
@@ -2125,6 +2217,15 @@ export default function DeliveryQueuePage({
       : [];
     const currentScopeSummary = currentDriverDelivery
       ? getDeliveryScopeSummary(currentDriverDelivery)
+      : null;
+    const currentDriverStopHasHardware = currentDriverStopDeliveries.some(
+      (stopDelivery) => Boolean(stopDelivery.hasHardware),
+    );
+    const currentDriverFlowDelivery = currentDriverDelivery
+      ? {
+          ...currentDriverDelivery,
+          hasHardware: currentDriverStopHasHardware,
+        }
       : null;
     const currentDeliveryStep = currentDriverDelivery
       ? getDeliveryStep(currentDriverDelivery.id)
@@ -2242,7 +2343,7 @@ export default function DeliveryQueuePage({
 
               <div id={`driver-delivery-${currentDriverDelivery.id}`}>
                 <MobileDeliveryFlowCard
-                  delivery={currentDriverDelivery}
+                  delivery={currentDriverFlowDelivery}
                   deliveryIndex={Math.max(
                     currentDriverStopIndex,
                     0,
@@ -2275,6 +2376,7 @@ export default function DeliveryQueuePage({
                   onCompleteDelivery={handleCompleteDelivery}
                   onViewPhoto={setViewingPhoto}
                   isFocusedDriverView
+                  stopDeliveryCount={currentDriverStopDeliveries.length}
                 />
               </div>
             </section>

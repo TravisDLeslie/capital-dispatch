@@ -36,6 +36,12 @@ const messagingServiceSidPattern = /^MG[0-9a-fA-F]{32}$/;
 
 const templateFields = [
   {
+    enabledKey: "orderSummaryEnabled",
+    templateKey: "orderSummaryTemplate",
+    title: "Processed order summary",
+    description: "Send automatically after an opted-in customer order is processed.",
+  },
+  {
     enabledKey: "potentialDeliveryEnabled",
     templateKey: "potentialDeliveryTemplate",
     title: "Potential delivery",
@@ -45,13 +51,21 @@ const templateFields = [
     enabledKey: "scheduledDeliveryEnabled",
     templateKey: "scheduledDeliveryTemplate",
     title: "Scheduled delivery",
-    description: "Use after the date has been confirmed.",
+    description:
+      "Send automatically after the date, driver, and truck are assigned.",
+  },
+  {
+    enabledKey: "deliveryTodayEnabled",
+    templateKey: "deliveryTodayTemplate",
+    title: "Delivery today",
+    description: "Send automatically at 7:00 AM on the delivery date.",
   },
   {
     enabledKey: "deliveryCompleteEnabled",
     templateKey: "deliveryCompleteTemplate",
     title: "Delivery complete",
-    description: "Send manually after selecting a completed delivery.",
+    description:
+      "Send automatically after delivery completion photos are saved.",
   },
   {
     enabledKey: "willCallEnabled",
@@ -177,10 +191,11 @@ function fillPreviewTemplate(template, delivery) {
     order: String(delivery?.orderNumber || "your order").trim(),
     date: formatCompletedAt(delivery),
     address: getDeliveryAddress(delivery) || "the delivery address",
+    summaryurl: "https://secure-order-link.example",
   };
 
   return String(template || "").replace(
-    /{{\s*(customer|business|order|date|address)\s*}}/gi,
+    /{{\s*(customer|business|order|date|address|summaryUrl)\s*}}/gi,
     (match, key) => fields[String(key).toLowerCase()] || match,
   );
 }
@@ -541,7 +556,7 @@ export default function TwilioSettingsPage({
           </h1>
           <p className="mt-2 max-w-3xl text-base font-semibold text-slate-500 sm:text-lg">
             Manage customer text settings for potential deliveries, scheduled
-            deliveries, and Will Call orders.
+            order summaries, deliveries, and Will Call orders.
           </p>
         </div>
 
@@ -1036,7 +1051,7 @@ export default function TwilioSettingsPage({
                   Customer message templates
                 </h2>
                 <p className="text-sm font-semibold text-slate-500">
-                  Available fields: {"{{customer}}"}, {"{{business}}"}, {"{{order}}"}, {"{{date}}"}, and {"{{address}}"}.
+                  Available fields: {"{{customer}}"}, {"{{business}}"}, {"{{order}}"}, {"{{date}}"}, {"{{address}}"}, and {"{{summaryUrl}}"}.
                 </p>
               </div>
             </div>
