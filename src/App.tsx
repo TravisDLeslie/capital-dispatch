@@ -42,6 +42,7 @@ import {
   Warehouse,
 } from "lucide-react";
 import AppHeader from "./components/AppHeader";
+import ActivityNotificationBell from "./components/ActivityNotificationBell";
 import AdminAccessGate from "./components/AdminAccessGate";
 import DispatchOpsDeliveryOverview from "./components/DispatchOpsDeliveryOverview";
 import DeliveryScheduleAccessModal from "./components/DeliveryScheduleAccessModal";
@@ -10193,6 +10194,22 @@ export default function App() {
             }}
             onSignOut={handleSignOut}
           />
+
+          {effectiveWorkView !== "receiving" &&
+          effectiveWorkView !== "driver" ? (
+            <ActivityNotificationBell
+              key={currentUser?.uid || currentUser?.email || "activity-alerts"}
+              currentUserKey={
+                currentUser?.uid ||
+                currentUser?.email ||
+                userProfile?.id ||
+                "activity-alerts"
+              }
+              supplierRuns={canReadSouth ? supplierRuns : []}
+              checkIns={canReadReceiving ? checkIns : []}
+              deliveries={canReadDeliveries ? deliveries : []}
+            />
+          ) : null}
 
           <main className="md:pl-72">
             <div className="mx-auto max-w-6xl px-4 pt-4 sm:px-6 lg:px-8">
