@@ -66,9 +66,9 @@ const navigationItems = [
     label: "Sales",
   },
   {
-    group: "Quote Requests",
+    group: "Quotes",
     id: "quote-requests",
-    label: "Quote Requests",
+    label: "Quotes",
   },
   {
     group: "Documents",
@@ -112,7 +112,7 @@ const navigationGroupOrder = [
   "Yard Tasks",
   "Yard Documents",
   "Sales",
-  "Quote Requests",
+  "Quotes",
   "Suppliers",
   "Documents",
   "Accounting",
@@ -129,7 +129,7 @@ const navigationGroupSections = {
   "Yard Tasks": "Operations",
   "Yard Documents": "Operations",
   Sales: "Customers & Suppliers",
-  "Quote Requests": "Customers & Suppliers",
+  Quotes: "Customers & Suppliers",
   Suppliers: "Customers & Suppliers",
   Documents: "Resources",
   Accounting: "Resources",
@@ -380,7 +380,7 @@ function getCurrentPageGroup(currentPage) {
   }
 
   if (currentPage === "quote-requests") {
-    return "Quote Requests";
+    return "Quotes";
   }
 
   if (
@@ -455,7 +455,7 @@ function getNavGroupIcon(group) {
     return UsersRound;
   }
 
-  if (group === "Quote Requests") {
+  if (group === "Quotes") {
     return ClipboardList;
   }
 
@@ -539,7 +539,7 @@ export default function AppHeader({
     South: false,
     Deliveries: false,
     Sales: false,
-    "Quote Requests": false,
+    Quotes: false,
     Suppliers: false,
     Documents: false,
     Accounting: false,
@@ -576,7 +576,7 @@ export default function AppHeader({
       South: false,
       Deliveries: false,
       Sales: false,
-      "Quote Requests": false,
+      Quotes: false,
       Suppliers: false,
       Documents: false,
       Accounting: false,
@@ -627,7 +627,7 @@ export default function AppHeader({
         South: false,
         Deliveries: false,
         Sales: false,
-        "Quote Requests": false,
+        Quotes: false,
         Documents: false,
         Accounting: false,
         Admin: false,
@@ -1033,7 +1033,7 @@ export default function AppHeader({
         "South",
         "Deliveries",
         "Sales",
-        "Quote Requests",
+        "Quotes",
         "Accounting",
         "Admin",
         "Fleet",

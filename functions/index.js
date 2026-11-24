@@ -1299,13 +1299,33 @@ exports.getCustomerPortalProfile = onCall(
     let quoteRequests = [];
 
     if (request.data?.includeQuoteHistory === true) {
-      const requestsSnapshot = await context.firestore
-        .collection("customerQuoteRequests")
-        .where("customerUid", "==", context.userId)
-        .limit(100)
-        .get();
+      const quoteRequestsCollection = context.firestore.collection(
+        "customerQuoteRequests",
+      );
+      const [requestsByUserSnapshot, requestsByEmailSnapshot] =
+        await Promise.all([
+          quoteRequestsCollection
+            .where("customerUid", "==", context.userId)
+            .limit(100)
+            .get(),
+          quoteRequestsCollection
+            .where("email", "==", context.email)
+            .limit(100)
+            .get(),
+        ]);
+      const requestDocuments = new Map();
+      [
+        ...requestsByUserSnapshot.docs,
+        ...requestsByEmailSnapshot.docs,
+      ].forEach((requestDocument) => {
+        requestDocuments.set(requestDocument.id, requestDocument);
+      });
 
-      quoteRequests = requestsSnapshot.docs
+      quoteRequests = Array.from(requestDocuments.values())
+        .filter(
+          (requestDocument) =>
+            requestDocument.data()?.customerVisible !== false,
+        )
         .map((requestDocument) => {
           const requestData = requestDocument.data() || {};
           const pricingPublished = requestData.pricingPublished === true;
@@ -1473,6 +1493,10 @@ exports.submitCustomerQuoteRequest = onCall(
     cors: true,
   },
   async (request) => {
+    if (request.data?.operation === "update") {
+      return updateMyCustomerQuoteRequestHandler(request);
+    }
+
     const context = await getVerifiedCustomerPortalContext(request);
     const submittedItems = Array.isArray(request.data?.items)
       ? request.data.items
@@ -1591,12 +1615,262 @@ exports.submitCustomerQuoteRequest = onCall(
   },
 );
 
-exports.updateMyCustomerQuoteRequest = onCall(
+async function createCustomerQuoteForCustomerHandler(request) {
+    const { email: reviewerEmail, firestore } =
+      await getCustomerPortalQuoteReviewer(request);
+    const enteredEmail = normalizedEmail(request.data?.email);
+    const rawPhone = String(request.data?.phone || "").trim();
+    const enteredPhone = normalizePhoneNumber(rawPhone);
+    const enteredName = String(request.data?.name || "").trim();
+    const enteredBusinessName = String(
+      request.data?.businessName || "",
+    ).trim();
+    const enteredAccountNumber = String(
+      request.data?.accountNumber || "",
+    ).trim();
+    const deliveryNeeded = request.data?.deliveryNeeded === true;
+    const deliveryAddress = String(
+      request.data?.deliveryAddress || "",
+    ).trim();
+    const neededBy = String(
+      request.data?.neededBy || "as-soon-as-possible",
+    ).trim();
+    const notes = String(request.data?.notes || "").trim();
+    const allowedTimelines = new Set([
+      "as-soon-as-possible",
+      "within-one-week",
+      "within-two-weeks",
+      "this-month",
+      "flexible",
+    ]);
+
+    if (!enteredEmail && !rawPhone) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter the customer's email or phone number.",
+      );
+    }
+    if (
+      enteredEmail &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(enteredEmail)
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter a valid customer email address.",
+      );
+    }
+    if (rawPhone && !enteredPhone) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter a valid customer phone number.",
+      );
+    }
+    if (
+      enteredName.length > 120 ||
+      enteredBusinessName.length > 160 ||
+      enteredAccountNumber.length > 60
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Review the customer name, business, and account number.",
+      );
+    }
+    if (!allowedTimelines.has(neededBy)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Choose how soon the customer needs the material.",
+      );
+    }
+    if (deliveryNeeded && (!deliveryAddress || deliveryAddress.length > 300)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter the delivery address for this quote.",
+      );
+    }
+    if (notes.length > 1200) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Keep quote notes under 1,200 characters.",
+      );
+    }
+
+    const portalUsers = firestore.collection("customerPortalUsers");
+    const accountRequests = firestore.collection("customerAccountRequests");
+    const [
+      portalByEmailSnapshot,
+      portalByPhoneSnapshot,
+      requestByEmailSnapshot,
+      requestByPhoneSnapshot,
+    ] = await Promise.all([
+      enteredEmail
+        ? portalUsers.where("email", "==", enteredEmail).limit(10).get()
+        : Promise.resolve(null),
+      enteredPhone
+        ? portalUsers.where("phone", "==", enteredPhone).limit(10).get()
+        : Promise.resolve(null),
+      enteredEmail
+        ? accountRequests.where("email", "==", enteredEmail).limit(20).get()
+        : Promise.resolve(null),
+      enteredPhone
+        ? accountRequests.where("phone", "==", enteredPhone).limit(20).get()
+        : Promise.resolve(null),
+    ]);
+    const portalDocuments = [
+      ...(portalByEmailSnapshot?.docs || []),
+      ...(portalByPhoneSnapshot?.docs || []),
+    ];
+    const accountRequestDocuments = [
+      ...(requestByEmailSnapshot?.docs || []),
+      ...(requestByPhoneSnapshot?.docs || []),
+    ];
+    const uniquePortalDocuments = Array.from(
+      new Map(
+        portalDocuments.map((portalDocument) => [
+          portalDocument.id,
+          portalDocument,
+        ]),
+      ).values(),
+    );
+    const uniqueAccountRequestDocuments = Array.from(
+      new Map(
+        accountRequestDocuments.map((accountDocument) => [
+          accountDocument.id,
+          accountDocument,
+        ]),
+      ).values(),
+    );
+    const matchedEmails = new Set(
+      [
+        ...uniquePortalDocuments.map((document) =>
+          normalizedEmail(document.data()?.email),
+        ),
+        ...uniqueAccountRequestDocuments.map((document) =>
+          normalizedEmail(document.data()?.email),
+        ),
+      ].filter(Boolean),
+    );
+
+    if (!enteredEmail && matchedEmails.size > 1) {
+      throw new HttpsError(
+        "failed-precondition",
+        "That phone number matches more than one customer. Enter the customer's email to choose the correct account.",
+      );
+    }
+    if (
+      enteredEmail &&
+      enteredPhone &&
+      Array.from(matchedEmails).some(
+        (matchedEmail) => matchedEmail !== enteredEmail,
+      )
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "That email and phone number are linked to different customer records.",
+      );
+    }
+
+    const selectedPortalDocument =
+      uniquePortalDocuments.find(
+        (document) =>
+          normalizedEmail(document.data()?.email) === enteredEmail,
+      ) || uniquePortalDocuments[0] || null;
+    const selectedAccountRequestDocument =
+      selectCustomerAccountRequestDocument(
+        uniqueAccountRequestDocuments,
+        selectedPortalDocument?.data()?.accountRequestId || "",
+      );
+    const portalData = selectedPortalDocument?.data() || {};
+    const accountData = selectedAccountRequestDocument?.data() || {};
+    const resolvedEmail =
+      enteredEmail ||
+      normalizedEmail(portalData.email) ||
+      normalizedEmail(accountData.email);
+
+    if (!resolvedEmail) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Enter the customer's email, or use a phone number already linked to a customer portal account.",
+      );
+    }
+
+    const requestId = randomUUID();
+    const reference = `Q-${requestId.slice(0, 8).toUpperCase()}`;
+    const resolvedName =
+      enteredName ||
+      String(portalData.name || accountData.name || "").trim();
+    const resolvedBusinessName =
+      enteredBusinessName ||
+      String(
+        portalData.businessName || accountData.businessName || "",
+      ).trim();
+    const resolvedPhone =
+      enteredPhone ||
+      normalizePhoneNumber(portalData.phone || accountData.phone);
+    const resolvedAccountNumber =
+      enteredAccountNumber ||
+      String(
+        portalData.accountNumber ||
+          accountData.verifiedAccountNumber ||
+          accountData.accountNumber ||
+          "",
+      ).trim();
+
+    await firestore.doc(`customerQuoteRequests/${requestId}`).set({
+      reference,
+      status: "reviewing",
+      validityDays: 14,
+      source: "employee",
+      createdBy: reviewerEmail,
+      customerVisible: false,
+      customerUid: selectedPortalDocument?.id || "",
+      email: resolvedEmail,
+      accountNumber: resolvedAccountNumber,
+      name: resolvedName,
+      businessName: resolvedBusinessName,
+      phone: resolvedPhone,
+      accountStatus: String(
+        portalData.status || accountData.status || "unlinked",
+      ).trim(),
+      items: [],
+      deliveryNeeded,
+      deliveryAddress: deliveryNeeded ? deliveryAddress : "",
+      neededBy,
+      notes,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    logger.info("Employee-created customer quote started", {
+      requestId,
+      reference,
+      reviewerEmail,
+      customerUid: selectedPortalDocument?.id || "",
+      customerEmailDomain: resolvedEmail.split("@")[1] || "",
+      matchedByPhone: !enteredEmail && Boolean(enteredPhone),
+    });
+
+    return {
+      requestId,
+      reference,
+      status: "reviewing",
+      email: resolvedEmail,
+      phone: resolvedPhone,
+      name: resolvedName,
+      businessName: resolvedBusinessName,
+      accountNumber: resolvedAccountNumber,
+    };
+}
+
+exports.createCustomerQuoteForCustomer = onCall(
   {
     region: "us-central1",
     cors: true,
+    invoker: "private",
   },
-  async (request) => {
+  createCustomerQuoteForCustomerHandler,
+);
+
+async function updateMyCustomerQuoteRequestHandler(request) {
     const context = await getVerifiedCustomerPortalContext(request);
     const requestId = String(request.data?.requestId || "").trim();
     const submittedItems = Array.isArray(request.data?.items)
@@ -1693,7 +1967,12 @@ exports.updateMyCustomerQuoteRequest = onCall(
       }
 
       const quoteData = quoteSnapshot.data() || {};
-      if (String(quoteData.customerUid || "") !== context.userId) {
+      const quoteCustomerUid = String(quoteData.customerUid || "").trim();
+      const quoteCustomerEmail = normalizedEmail(quoteData.email);
+      if (
+        quoteCustomerUid !== context.userId &&
+        quoteCustomerEmail !== context.email
+      ) {
         throw new HttpsError(
           "permission-denied",
           "You can only update quote requests from your account.",
@@ -1772,6 +2051,8 @@ exports.updateMyCustomerQuoteRequest = onCall(
       transaction.set(
         quoteReference,
         {
+          customerUid: context.userId,
+          email: context.email,
           status: "new",
           items,
           deliveryNeeded,
@@ -1825,7 +2106,15 @@ exports.updateMyCustomerQuoteRequest = onCall(
       validityDays: 14,
       updatedAt: updatedAtIso,
     };
+}
+
+exports.updateMyCustomerQuoteRequest = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+    invoker: "private",
   },
+  updateMyCustomerQuoteRequestHandler,
 );
 
 exports.listCustomerQuoteRequests = onCall(
@@ -1835,6 +2124,80 @@ exports.listCustomerQuoteRequests = onCall(
   },
   async (request) => {
     const { firestore } = await getCustomerPortalQuoteReviewer(request);
+    const pricingVersionsForRequestId = String(
+      request.data?.pricingVersionsForRequestId || "",
+    ).trim();
+
+    if (pricingVersionsForRequestId) {
+      if (!/^[A-Za-z0-9_-]{10,80}$/.test(pricingVersionsForRequestId)) {
+        throw new HttpsError("invalid-argument", "Choose a valid quote request.");
+      }
+
+      const quoteReference = firestore.doc(
+        `customerQuoteRequests/${pricingVersionsForRequestId}`,
+      );
+      const quoteSnapshot = await quoteReference.get();
+      if (!quoteSnapshot.exists) {
+        throw new HttpsError("not-found", "That quote request no longer exists.");
+      }
+
+      const versionsSnapshot = await quoteReference
+        .collection("pricingVersions")
+        .orderBy("revision", "desc")
+        .limit(50)
+        .get();
+
+      return {
+        versions: versionsSnapshot.docs.map((versionDocument) => {
+          const versionData = versionDocument.data() || {};
+          return {
+            id: versionDocument.id,
+            revision: Math.max(1, Number(versionData.revision) || 1),
+            customerVersion: Math.max(
+              0,
+              Number(versionData.customerVersion) || 0,
+            ),
+            type: String(versionData.type || "draft").trim(),
+            title: String(versionData.title || "Pricing update").trim(),
+            note: String(versionData.note || "").trim(),
+            status: String(versionData.status || "").trim(),
+            items: Array.isArray(versionData.items)
+              ? versionData.items.slice(0, 30).map((item) => ({
+                  itemNumber: String(item?.itemNumber || "").trim(),
+                  description: String(item?.description || "").trim(),
+                  quantity: Number(item?.quantity) || 0,
+                  unitPrice:
+                    item?.unitPrice === null || item?.unitPrice === undefined
+                      ? null
+                      : Number(item.unitPrice),
+                  lineTotal:
+                    item?.lineTotal === null || item?.lineTotal === undefined
+                      ? null
+                      : Number(item.lineTotal),
+                }))
+              : [],
+            publicNote: String(versionData.publicNote || "").trim(),
+            internalNote: String(versionData.internalNote || "").trim(),
+            taxRate:
+              versionData.taxRate === null || versionData.taxRate === undefined
+                ? null
+                : Number(versionData.taxRate),
+            deliveryCharge:
+              versionData.deliveryCharge === null ||
+              versionData.deliveryCharge === undefined
+                ? null
+                : Number(versionData.deliveryCharge),
+            materialSubtotal: Number(versionData.materialSubtotal) || 0,
+            subtotal: Number(versionData.subtotal) || 0,
+            taxAmount: Number(versionData.taxAmount) || 0,
+            total: Number(versionData.total) || 0,
+            createdAt: customerPortalDateToIso(versionData.createdAt),
+            createdBy: String(versionData.createdBy || "").trim(),
+          };
+        }),
+      };
+    }
+
     const requestsSnapshot = await firestore
       .collection("customerQuoteRequests")
       .orderBy("createdAt", "desc")
@@ -1882,6 +2245,9 @@ exports.listCustomerQuoteRequests = onCall(
           businessName: String(requestData.businessName || "").trim(),
           phone: String(requestData.phone || "").trim(),
           email: normalizedEmail(requestData.email),
+          source: String(requestData.source || "customerPortal").trim(),
+          createdBy: String(requestData.createdBy || "").trim(),
+          customerVisible: requestData.customerVisible !== false,
           items,
           deliveryNeeded: requestData.deliveryNeeded === true,
           deliveryAddress: String(
@@ -1904,6 +2270,9 @@ exports.listCustomerQuoteRequests = onCall(
             requestData.latestPricingRevisionBy || "",
           ).trim(),
           pricingDraftHasChanges: requestData.pricingDraftHasChanges === true,
+          archiveOutcome: String(requestData.archiveOutcome || "").trim(),
+          archivedAt: customerPortalDateToIso(requestData.archivedAt),
+          archivedBy: String(requestData.archivedBy || "").trim(),
           pricingDraft: {
             items: Array.isArray(pricingDraftData.items)
               ? pricingDraftData.items.slice(0, 30).map((item) => ({
@@ -2032,6 +2401,10 @@ exports.updateCustomerQuoteRequest = onCall(
     cors: true,
   },
   async (request) => {
+    if (request.data?.operation === "create") {
+      return createCustomerQuoteForCustomerHandler(request);
+    }
+
     const { email: reviewerEmail, firestore } =
       await getCustomerPortalQuoteReviewer(request);
     const requestId = String(request.data?.requestId || "").trim();
@@ -2039,9 +2412,17 @@ exports.updateCustomerQuoteRequest = onCall(
     const internalNote = String(request.data?.internalNote || "").trim();
     const versionTitle = String(request.data?.versionTitle || "").trim();
     const versionNote = String(request.data?.versionNote || "").trim();
+    const archiveOutcome = String(request.data?.archiveOutcome || "").trim();
     const publishPricing = request.data?.publishPricing === true;
     const savePricingDraft = request.data?.savePricingDraft === true;
-    const allowedStatuses = new Set(["new", "reviewing", "quoted", "closed"]);
+    const allowedStatuses = new Set([
+      "new",
+      "reviewing",
+      "quoted",
+      "closed",
+      "archived_order",
+      "archived_no_order",
+    ]);
     const roundCurrency = (value) => Math.round(value * 100) / 100;
 
     if (!requestId || !/^[A-Za-z0-9_-]{10,80}$/.test(requestId)) {
@@ -2049,6 +2430,15 @@ exports.updateCustomerQuoteRequest = onCall(
     }
     if (!allowedStatuses.has(status)) {
       throw new HttpsError("invalid-argument", "Choose a valid quote status.");
+    }
+    if (
+      (status === "archived_order" && archiveOutcome !== "order") ||
+      (status === "archived_no_order" && archiveOutcome !== "no_order")
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Choose whether the archived quote became an order.",
+      );
     }
     if (internalNote.length > 800) {
       throw new HttpsError(
@@ -2132,6 +2522,13 @@ exports.updateCustomerQuoteRequest = onCall(
       reviewedBy: reviewerEmail,
       updatedAt: reviewedAt,
     };
+    if (["archived_order", "archived_no_order"].includes(status)) {
+      Object.assign(quoteUpdate, {
+        archiveOutcome,
+        archivedAt: reviewedAt,
+        archivedBy: reviewerEmail,
+      });
+    }
     const currentPricingRevision = Math.max(
       0,
       Number(quoteData.pricingRevision) || 0,
@@ -2405,6 +2802,7 @@ exports.updateCustomerQuoteRequest = onCall(
 
       Object.assign(quoteUpdate, {
         status: "quoted",
+        customerVisible: true,
         items: publishedItems,
         publicNote,
         pricingPublished: true,

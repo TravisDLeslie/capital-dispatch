@@ -9,7 +9,6 @@ import {
   Building2,
   ChevronDown,
   ClipboardList,
-  History,
   Mail,
   MapPin,
   PackageCheck,
@@ -28,6 +27,7 @@ import PageContainer from "../components/PageContainer";
 import { inventoryCatalogItems } from "../data/inventoryCatalog";
 import { auth } from "../utils/firebase";
 import {
+  createCustomerQuoteForCustomer,
   listCustomerAccountRequests,
   listCustomerQuotePricingVersions,
   listCustomerQuoteRequests,
@@ -159,7 +159,7 @@ const permissionGroups = [
     title: "Sales",
     permissions: [
       { id: "sales", label: "Sales" },
-      { id: "quote-requests", label: "Quote Requests" },
+      { id: "quote-requests", label: "Quotes" },
       { id: "sales-orders", label: "Sales Orders" },
       { id: "customers-add", label: "Add Customer" },
       { id: "customers-view", label: "View Customers" },
@@ -402,6 +402,14 @@ const quoteStatusOptions = [
   { value: "closed", label: "Closed" },
 ];
 
+const quoteStatusFilterOptions = [
+  { value: "active", label: "Active quotes" },
+  ...quoteStatusOptions,
+  { value: "archived_order", label: "Archived · Order" },
+  { value: "archived_no_order", label: "Archived · No order" },
+  { value: "all", label: "All quotes" },
+];
+
 const quoteTimelineLabels = {
   "as-soon-as-possible": "As soon as possible",
   "within-one-week": "Within one week",
@@ -409,6 +417,20 @@ const quoteTimelineLabels = {
   "this-month": "Sometime this month",
   flexible: "Timing is flexible",
 };
+
+function getEmptyEmployeeQuoteCustomer() {
+  return {
+    email: "",
+    phone: "",
+    name: "",
+    businessName: "",
+    accountNumber: "",
+    deliveryNeeded: false,
+    deliveryAddress: "",
+    neededBy: "as-soon-as-possible",
+    notes: "",
+  };
+}
 
 const DEFAULT_QUOTE_TAX_RATE = 6;
 const QUOTE_ITEM_CATALOG = inventoryCatalogItems
@@ -505,6 +527,12 @@ function getQuoteRequestDraft(quoteRequest) {
 }
 
 function getQuoteStatus(status) {
+  if (status === "archived_order") {
+    return { label: "Archived · Order", className: "bg-emerald-100 text-emerald-700" };
+  }
+  if (status === "archived_no_order") {
+    return { label: "Archived · No order", className: "bg-slate-200 text-slate-600" };
+  }
   if (status === "quoted") {
     return { label: "Quote prepared", className: "bg-emerald-100 text-emerald-700" };
   }
@@ -609,14 +637,23 @@ export default function UserAdminPage({
   const [isLoadingQuoteRequests, setIsLoadingQuoteRequests] = useState(true);
   const [savingQuoteRequestId, setSavingQuoteRequestId] = useState("");
   const [publishingQuoteRequestId, setPublishingQuoteRequestId] = useState("");
+  const [archivingQuoteRequestId, setArchivingQuoteRequestId] = useState("");
   const [pricingValidationRequestId, setPricingValidationRequestId] = useState("");
   const [quotePricingVersions, setQuotePricingVersions] = useState({});
-  const [openQuotePricingHistory, setOpenQuotePricingHistory] = useState({});
+  const [selectedQuotePricingRevisions, setSelectedQuotePricingRevisions] =
+    useState({});
+  const [showAllQuotePricingVersions, setShowAllQuotePricingVersions] =
+    useState({});
   const [expandedQuoteRequests, setExpandedQuoteRequests] = useState({});
   const [loadingQuotePricingHistoryId, setLoadingQuotePricingHistoryId] = useState("");
   const [quoteSearch, setQuoteSearch] = useState("");
-  const [quoteStatusFilter, setQuoteStatusFilter] = useState("all");
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState("active");
   const [quoteResultLimit, setQuoteResultLimit] = useState(20);
+  const [showCreateQuote, setShowCreateQuote] = useState(false);
+  const [isCreatingQuote, setIsCreatingQuote] = useState(false);
+  const [newQuoteCustomer, setNewQuoteCustomer] = useState(
+    getEmptyEmployeeQuoteCustomer,
+  );
   const vendorList = Array.isArray(vendors) ? vendors : [];
   const driverNameOptions = getUniqueOptions(
     users
@@ -652,8 +689,14 @@ export default function UserAdminPage({
   const normalizedQuoteSearch = quoteSearch.trim().toLowerCase();
   const quoteSearchDigits = normalizedQuoteSearch.replace(/\D/g, "");
   const filteredQuoteRequests = quoteRequests.filter((quoteRequest) => {
+    const isArchived = ["archived_order", "archived_no_order"].includes(
+      quoteRequest.status,
+    );
+    if (quoteStatusFilter === "active" && isArchived) {
+      return false;
+    }
     if (
-      quoteStatusFilter !== "all" &&
+      !["active", "all"].includes(quoteStatusFilter) &&
       quoteRequest.status !== quoteStatusFilter
     ) {
       return false;
@@ -756,22 +799,84 @@ export default function UserAdminPage({
     }
   }
 
-  async function toggleQuotePricingHistory(quoteRequest) {
-    const requestId = quoteRequest.id;
-    const isOpen = Boolean(openQuotePricingHistory[requestId]);
-    if (isOpen) {
-      setOpenQuotePricingHistory((current) => ({
-        ...current,
-        [requestId]: false,
-      }));
+  function updateNewQuoteCustomer(field, value) {
+    setNewQuoteCustomer((current) => ({ ...current, [field]: value }));
+    setMessage("");
+    setError("");
+  }
+
+  async function createEmployeeQuote(event) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+
+    if (!newQuoteCustomer.email.trim() && !newQuoteCustomer.phone.trim()) {
+      setError("Enter the customer's email or phone number.");
+      return;
+    }
+    if (
+      newQuoteCustomer.deliveryNeeded &&
+      !newQuoteCustomer.deliveryAddress.trim()
+    ) {
+      setError("Enter the delivery address for this quote.");
       return;
     }
 
-    setOpenQuotePricingHistory((current) => ({
-      ...current,
-      [requestId]: true,
-    }));
-    if (quotePricingVersions[requestId]) return;
+    setIsCreatingQuote(true);
+    try {
+      const createdQuote = await createCustomerQuoteForCustomer({
+        ...newQuoteCustomer,
+        email: newQuoteCustomer.email.trim(),
+        phone: newQuoteCustomer.phone.trim(),
+        name: newQuoteCustomer.name.trim(),
+        businessName: newQuoteCustomer.businessName.trim(),
+        accountNumber: newQuoteCustomer.accountNumber.trim(),
+        deliveryAddress: newQuoteCustomer.deliveryNeeded
+          ? newQuoteCustomer.deliveryAddress.trim()
+          : "",
+        notes: newQuoteCustomer.notes.trim(),
+      });
+
+      await loadQuoteRequests({ quiet: true });
+      setExpandedQuoteRequests((current) => ({
+        ...current,
+        [createdQuote.requestId]: true,
+      }));
+      setSelectedQuotePricingRevisions((current) => ({
+        ...current,
+        [createdQuote.requestId]: "draft",
+      }));
+      setQuoteSearch(createdQuote.reference || "");
+      setQuoteStatusFilter("active");
+      setQuoteResultLimit(20);
+      setNewQuoteCustomer(getEmptyEmployeeQuoteCustomer());
+      setShowCreateQuote(false);
+      setMessage(
+        `${createdQuote.reference || "Quote"} started for ${
+          createdQuote.businessName ||
+          createdQuote.name ||
+          createdQuote.email ||
+          createdQuote.phone
+        }. Add the material, then price and send it when ready.`,
+      );
+    } catch (createError) {
+      console.error("Unable to create customer quote:", createError);
+      setError(
+        getCustomerPortalAdminError(
+          createError,
+          "Unable to create that customer quote.",
+        ),
+      );
+    } finally {
+      setIsCreatingQuote(false);
+    }
+  }
+
+  async function loadQuotePricingHistory(quoteRequest) {
+    const requestId = quoteRequest.id;
+    if (quotePricingVersions[requestId]) {
+      return quotePricingVersions[requestId];
+    }
 
     setLoadingQuotePricingHistoryId(requestId);
     try {
@@ -780,6 +885,7 @@ export default function UserAdminPage({
         ...current,
         [requestId]: versions,
       }));
+      return versions;
     } catch (historyError) {
       console.error("Unable to load quote pricing history:", historyError);
       setError(
@@ -788,8 +894,53 @@ export default function UserAdminPage({
           "Unable to load the pricing version history.",
         ),
       );
+      return [];
     } finally {
       setLoadingQuotePricingHistoryId("");
+    }
+  }
+
+  async function selectQuotePricingRevision(quoteRequest, revision) {
+    setExpandedQuoteRequests((current) => ({
+      ...current,
+      [quoteRequest.id]: true,
+    }));
+
+    await loadQuotePricingHistory(quoteRequest);
+    setSelectedQuotePricingRevisions((current) => ({
+      ...current,
+      [quoteRequest.id]: revision,
+    }));
+  }
+
+  function selectQuoteWorkingDraft(quoteRequest) {
+    setExpandedQuoteRequests((current) => ({
+      ...current,
+      [quoteRequest.id]: true,
+    }));
+    setSelectedQuotePricingRevisions((current) => ({
+      ...current,
+      [quoteRequest.id]: "draft",
+    }));
+  }
+
+  function toggleQuoteRequest(quoteRequest, isExpanded) {
+    setExpandedQuoteRequests((current) => ({
+      ...current,
+      [quoteRequest.id]: !isExpanded,
+    }));
+    if (!isExpanded) {
+      const latestRevision = Math.max(
+        0,
+        Number(quoteRequest.pricingRevision) ||
+          Number(quoteRequest.pricingVersion) ||
+          0,
+      );
+      setSelectedQuotePricingRevisions((current) => ({
+        ...current,
+        [quoteRequest.id]: latestRevision > 0 ? latestRevision : "draft",
+      }));
+      loadQuotePricingHistory(quoteRequest);
     }
   }
 
@@ -854,29 +1005,42 @@ export default function UserAdminPage({
     setError("");
   }
 
-  function addQuoteItem(requestId, catalogItem) {
-    setQuoteRequestDrafts((currentDrafts) => {
-      const currentDraft = currentDrafts[requestId] || {};
-      const items = currentDraft.items || [];
-      if (items.some((item) => item.itemNumber === catalogItem.itemNumber)) {
-        return currentDrafts;
-      }
-      return {
-        ...currentDrafts,
-        [requestId]: {
-          ...currentDraft,
-          items: [...items, { ...catalogItem, quantity: 1 }],
-          itemPrices: [...(currentDraft.itemPrices || []), ""],
-        },
-      };
-    });
+  async function addQuoteItem(quoteRequest, catalogItem) {
+    const requestId = quoteRequest.id;
+    const currentDraft =
+      quoteRequestDrafts[requestId] || getQuoteRequestDraft(quoteRequest);
+    const items = currentDraft.items || [];
+
+    if (items.some((item) => item.itemNumber === catalogItem.itemNumber)) {
+      setError("That material item is already on this quote.");
+      return;
+    }
+
+    const nextDraft = {
+      ...currentDraft,
+      items: [...items, { ...catalogItem, quantity: 1 }],
+      itemPrices: [...(currentDraft.itemPrices || []), ""],
+      versionTitle:
+        currentDraft.versionTitle?.trim() || `Added item ${catalogItem.itemNumber}`,
+    };
+
+    setQuoteRequestDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [requestId]: nextDraft,
+    }));
     setQuoteItemSearches((current) => ({ ...current, [requestId]: "" }));
-    setMessage("");
-    setError("");
+    await saveQuoteRequest(quoteRequest, {
+      draftOverride: nextDraft,
+      successMessage: `Added ${catalogItem.itemNumber} and saved it to the quote.`,
+    });
   }
 
-  async function saveQuoteRequest(quoteRequest, { publishPricing = false } = {}) {
-    const draft = quoteRequestDrafts[quoteRequest.id] || {};
+  async function saveQuoteRequest(
+    quoteRequest,
+    { publishPricing = false, draftOverride = null, successMessage = "" } = {},
+  ) {
+    const draft =
+      draftOverride || quoteRequestDrafts[quoteRequest.id] || {};
     const requestItems = draft.items || quoteRequest.items || [];
     setMessage("");
     setError("");
@@ -974,9 +1138,10 @@ export default function UserAdminPage({
         versionNote: draft.versionNote?.trim() || "",
       });
       setMessage(
-        publishPricing
-          ? `Pricing Version ${Math.max(1, Number(quoteRequest.pricingVersion) + 1 || 1)} sent to the customer for ${quoteRequest.reference || "quote request"}.`
-          : `Saved Pricing Version ${Math.max(1, Number(saveResult?.pricingRevision) || Number(quoteRequest.pricingRevision) + 1 || 1)} for ${quoteRequest.reference || "quote request"}.`,
+        successMessage ||
+          (publishPricing
+            ? `Pricing Version ${Math.max(1, Number(quoteRequest.pricingVersion) + 1 || 1)} sent to the customer for ${quoteRequest.reference || "quote request"}.`
+            : `Saved Pricing Version ${Math.max(1, Number(saveResult?.pricingRevision) || Number(quoteRequest.pricingRevision) + 1 || 1)} for ${quoteRequest.reference || "quote request"}.`),
       );
       if (publishPricing) setPricingValidationRequestId("");
       setQuotePricingVersions((current) => {
@@ -984,7 +1149,12 @@ export default function UserAdminPage({
         delete nextVersions[quoteRequest.id];
         return nextVersions;
       });
-      setOpenQuotePricingHistory((current) => ({
+      setSelectedQuotePricingRevisions((current) => {
+        const nextRevisions = { ...current };
+        delete nextRevisions[quoteRequest.id];
+        return nextRevisions;
+      });
+      setShowAllQuotePricingVersions((current) => ({
         ...current,
         [quoteRequest.id]: false,
       }));
@@ -1000,6 +1170,45 @@ export default function UserAdminPage({
     } finally {
       setSavingQuoteRequestId("");
       setPublishingQuoteRequestId("");
+    }
+  }
+
+  async function archiveQuoteRequest(quoteRequest, archiveOutcome) {
+    const archivedStatus =
+      archiveOutcome === "order" ? "archived_order" : "archived_no_order";
+    const draft =
+      quoteRequestDrafts[quoteRequest.id] || getQuoteRequestDraft(quoteRequest);
+
+    setMessage("");
+    setError("");
+    setArchivingQuoteRequestId(quoteRequest.id);
+    try {
+      await updateCustomerQuoteRequest({
+        requestId: quoteRequest.id,
+        status: archivedStatus,
+        internalNote: draft.internalNote?.trim() || "",
+        archiveOutcome,
+      });
+      setExpandedQuoteRequests((current) => ({
+        ...current,
+        [quoteRequest.id]: false,
+      }));
+      setMessage(
+        `${quoteRequest.reference || "Quote"} archived as ${
+          archiveOutcome === "order" ? "turned into an order" : "no order"
+        }.`,
+      );
+      await loadQuoteRequests({ quiet: true });
+    } catch (archiveError) {
+      console.error("Unable to archive customer quote request:", archiveError);
+      setError(
+        getCustomerPortalAdminError(
+          archiveError,
+          "Unable to archive that customer quote request.",
+        ),
+      );
+    } finally {
+      setArchivingQuoteRequestId("");
     }
   }
 
@@ -1305,7 +1514,7 @@ export default function UserAdminPage({
           quoteRequestsOnly
             ? [
                 { label: "Sales", onClick: () => onPageChange?.("sales") },
-                { label: "Quote Requests" },
+                { label: "Quotes" },
               ]
             : [
                 { label: "Admin", onClick: () => onPageChange?.("admin") },
@@ -1320,12 +1529,12 @@ export default function UserAdminPage({
         </p>
 
         <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
-          {quoteRequestsOnly ? "Quote Requests" : "User Access"}
+          {quoteRequestsOnly ? "Quotes" : "User Access"}
         </h1>
 
         <p className="mt-2 text-lg text-slate-500">
           {quoteRequestsOnly
-            ? "Review customer material requests, delivery details, and quote status."
+            ? "Create quotes for customers, review portal requests, and manage every pricing version."
             : "Manage employee and supplier access, and manually connect customer portal emails to the correct account on file."}
         </p>
       </div>
@@ -1385,7 +1594,7 @@ export default function UserAdminPage({
                 : "text-slate-600 hover:text-slate-950"
             }`}
           >
-            Quote Requests
+            Quotes
             {openQuoteRequestCount > 0 ? (
               <span className="ml-2 rounded-full bg-[#FC2C38] px-2 py-0.5 text-xs text-white">
                 {openQuoteRequestCount}
@@ -1633,22 +1842,237 @@ export default function UserAdminPage({
                 <ClipboardList className="h-6 w-6" aria-hidden="true" />
               </span>
               <div>
-                <h2 className="text-xl font-black text-slate-950">Customer quote requests</h2>
+                <h2 className="text-xl font-black text-slate-950">Customer quotes</h2>
                 <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
-                  Every request submitted from the customer portal appears here with its material list, quantity, timing, and delivery details.
+                  Customer requests and quotes created by your team live together here with their full pricing history.
                 </p>
               </div>
             </div>
-            <button type="button" onClick={() => loadQuoteRequests()} disabled={isLoadingQuoteRequests} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-100 disabled:cursor-wait disabled:opacity-60">
-              <RefreshCw className={`h-4 w-4 ${isLoadingQuoteRequests ? "animate-spin" : ""}`} aria-hidden="true" />
-              Refresh
-            </button>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateQuote((current) => !current);
+                  setMessage("");
+                  setError("");
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-violet-700"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Create Quote
+              </button>
+              <button type="button" onClick={() => loadQuoteRequests()} disabled={isLoadingQuoteRequests} className="inline-flex items-center justify-center gap-2 rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-100 disabled:cursor-wait disabled:opacity-60">
+                <RefreshCw className={`h-4 w-4 ${isLoadingQuoteRequests ? "animate-spin" : ""}`} aria-hidden="true" />
+                Refresh
+              </button>
+            </div>
           </section>
+
+          {showCreateQuote ? (
+            <form
+              onSubmit={createEmployeeQuote}
+              className="overflow-hidden rounded-3xl border border-violet-200 bg-white shadow-sm"
+            >
+              <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-700">
+                    New customer quote
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">
+                    Link the customer, then build the quote
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Use an email, or a phone number already saved to a customer account. The customer only sees the quote after pricing is sent.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateQuote(false);
+                    setNewQuoteCustomer(getEmptyEmployeeQuoteCustomer());
+                  }}
+                  className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-600 transition hover:bg-slate-100"
+                >
+                  <XCircle className="h-4 w-4" aria-hidden="true" />
+                  Cancel
+                </button>
+              </div>
+
+              <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+                <label>
+                  <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    Customer email
+                  </span>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={newQuoteCustomer.email}
+                    onChange={(event) =>
+                      updateNewQuoteCustomer("email", event.target.value)
+                    }
+                    placeholder="customer@business.com"
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-950 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                  />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    Customer phone
+                  </span>
+                  <input
+                    type="tel"
+                    autoComplete="tel"
+                    value={newQuoteCustomer.phone}
+                    onChange={(event) =>
+                      updateNewQuoteCustomer("phone", event.target.value)
+                    }
+                    placeholder="(208) 555-0123"
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-950 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                  />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    Account number
+                  </span>
+                  <input
+                    type="text"
+                    value={newQuoteCustomer.accountNumber}
+                    onChange={(event) =>
+                      updateNewQuoteCustomer("accountNumber", event.target.value)
+                    }
+                    placeholder="Optional"
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-950 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                  />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    Contact name
+                  </span>
+                  <input
+                    type="text"
+                    autoComplete="name"
+                    value={newQuoteCustomer.name}
+                    onChange={(event) =>
+                      updateNewQuoteCustomer("name", event.target.value)
+                    }
+                    placeholder="Optional if already on file"
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-950 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                  />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    Business name
+                  </span>
+                  <input
+                    type="text"
+                    autoComplete="organization"
+                    value={newQuoteCustomer.businessName}
+                    onChange={(event) =>
+                      updateNewQuoteCustomer("businessName", event.target.value)
+                    }
+                    placeholder="Optional if already on file"
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-950 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                  />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    Needed
+                  </span>
+                  <select
+                    value={newQuoteCustomer.neededBy}
+                    onChange={(event) =>
+                      updateNewQuoteCustomer("neededBy", event.target.value)
+                    }
+                    className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                  >
+                    {Object.entries(quoteTimelineLabels).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <fieldset className="sm:col-span-2 xl:col-span-1">
+                  <legend className="mb-1.5 text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    Fulfillment
+                  </legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateNewQuoteCustomer("deliveryNeeded", false)}
+                      className={`rounded-2xl border px-4 py-3.5 text-sm font-black transition ${
+                        !newQuoteCustomer.deliveryNeeded
+                          ? "border-slate-950 bg-slate-950 text-white"
+                          : "border-slate-300 bg-white text-slate-600 hover:border-slate-500"
+                      }`}
+                    >
+                      Pickup
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateNewQuoteCustomer("deliveryNeeded", true)}
+                      className={`rounded-2xl border px-4 py-3.5 text-sm font-black transition ${
+                        newQuoteCustomer.deliveryNeeded
+                          ? "border-violet-600 bg-violet-600 text-white"
+                          : "border-slate-300 bg-white text-slate-600 hover:border-violet-400"
+                      }`}
+                    >
+                      Delivery
+                    </button>
+                  </div>
+                </fieldset>
+
+                {newQuoteCustomer.deliveryNeeded ? (
+                  <label className="sm:col-span-2">
+                    <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                      Delivery address
+                    </span>
+                    <input
+                      type="text"
+                      value={newQuoteCustomer.deliveryAddress}
+                      onChange={(event) =>
+                        updateNewQuoteCustomer("deliveryAddress", event.target.value)
+                      }
+                      placeholder="Jobsite address"
+                      className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-950 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                    />
+                  </label>
+                ) : null}
+
+                <label className={newQuoteCustomer.deliveryNeeded ? "xl:col-span-1" : "sm:col-span-2"}>
+                  <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+                    Quote notes
+                  </span>
+                  <textarea
+                    rows="3"
+                    value={newQuoteCustomer.notes}
+                    onChange={(event) =>
+                      updateNewQuoteCustomer("notes", event.target.value)
+                    }
+                    placeholder="Project details or what the customer needs…"
+                    className="w-full resize-y rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-bold text-slate-950 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs font-bold text-slate-500">
+                  Email is the safest match. Phone lookup works when that number is already saved to a customer account.
+                </p>
+                <button
+                  type="submit"
+                  disabled={isCreatingQuote}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-700 disabled:cursor-wait disabled:bg-slate-400"
+                >
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  {isCreatingQuote ? "Starting quote…" : "Start quote"}
+                </button>
+              </div>
+            </form>
+          ) : null}
 
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
               <label className="min-w-0 flex-1">
-                <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Search quote requests</span>
+                <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Search quotes</span>
                 <span className="relative block">
                   <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
                   <input
@@ -1673,19 +2097,18 @@ export default function UserAdminPage({
                   }}
                   className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
                 >
-                  <option value="all">All statuses</option>
-                  {quoteStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  {quoteStatusFilterOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </label>
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-500">
               <span>Showing {displayedQuoteRequests.length} of {filteredQuoteRequests.length} matching {filteredQuoteRequests.length === 1 ? "quote" : "quotes"}</span>
-              {quoteSearch || quoteStatusFilter !== "all" ? (
+              {quoteSearch || quoteStatusFilter !== "active" ? (
                 <button
                   type="button"
                   onClick={() => {
                     setQuoteSearch("");
-                    setQuoteStatusFilter("all");
+                    setQuoteStatusFilter("active");
                     setQuoteResultLimit(20);
                   }}
                   className="font-black text-violet-700 hover:text-violet-900"
@@ -1697,17 +2120,17 @@ export default function UserAdminPage({
           </section>
 
           {isLoadingQuoteRequests ? (
-            <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">Loading customer quote requests…</div>
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">Loading quotes…</div>
           ) : quoteRequests.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
               <ClipboardList className="mx-auto h-9 w-9 text-slate-300" />
-              <p className="mt-3 text-lg font-black text-slate-800">No quote requests yet</p>
-              <p className="mt-1 text-sm font-semibold text-slate-500">New customer portal quote requests will appear here automatically.</p>
+              <p className="mt-3 text-lg font-black text-slate-800">No quotes yet</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Create a quote here, or wait for a customer portal request.</p>
             </div>
           ) : filteredQuoteRequests.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
               <Search className="mx-auto h-9 w-9 text-slate-300" />
-              <p className="mt-3 text-lg font-black text-slate-800">No matching quote requests</p>
+              <p className="mt-3 text-lg font-black text-slate-800">No matching quotes</p>
               <p className="mt-1 text-sm font-semibold text-slate-500">Try a different customer, phone number, quote number, item, or status.</p>
             </div>
           ) : (
@@ -1719,9 +2142,75 @@ export default function UserAdminPage({
               };
               const isSaving = savingQuoteRequestId === quoteRequest.id;
               const isPublishing = publishingQuoteRequestId === quoteRequest.id;
-              const pricingSummary = getQuotePricingSummary(quoteRequest, draft);
+              const isArchiving = archivingQuoteRequestId === quoteRequest.id;
+              const isArchived = [
+                "archived_order",
+                "archived_no_order",
+              ].includes(quoteRequest.status);
               const isExpanded = Boolean(expandedQuoteRequests[quoteRequest.id]);
-              const draftItems = draft.items || quoteRequest.items || [];
+              const quoteRevisionNumber = Math.max(
+                0,
+                Number(quoteRequest.pricingRevision) ||
+                  Number(quoteRequest.pricingVersion) ||
+                  0,
+              );
+              const hasSelectedRevision = Object.prototype.hasOwnProperty.call(
+                selectedQuotePricingRevisions,
+                quoteRequest.id,
+              );
+              const selectedRevision = hasSelectedRevision
+                ? selectedQuotePricingRevisions[quoteRequest.id]
+                : quoteRevisionNumber > 0
+                  ? quoteRevisionNumber
+                  : "draft";
+              const pricingVersions =
+                quotePricingVersions[quoteRequest.id] || [];
+              const selectedSavedVersion =
+                selectedRevision !== "draft"
+                  ? pricingVersions.find(
+                      (version) =>
+                        Number(version.revision) === selectedRevision,
+                    )
+                  : null;
+              const selectedVersionMetadata = selectedSavedVersion || null;
+              const isViewingHistoricalVersion = selectedRevision !== "draft";
+              const isQuoteReadOnly = isArchived || isViewingHistoricalVersion;
+              const visibleDraft = selectedSavedVersion
+                ? {
+                    ...draft,
+                    items: selectedSavedVersion.items || [],
+                    itemPrices: (selectedSavedVersion.items || []).map((item) =>
+                      item.unitPrice === null || item.unitPrice === undefined
+                        ? ""
+                        : String(item.unitPrice),
+                    ),
+                    deliveryCharge: String(
+                      selectedSavedVersion.deliveryCharge ?? "",
+                    ),
+                    taxRate: String(selectedSavedVersion.taxRate ?? ""),
+                    publicNote: selectedSavedVersion.publicNote || "",
+                  }
+                : draft;
+              const draftItems =
+                visibleDraft.items || quoteRequest.items || [];
+              const pricingSummary = getQuotePricingSummary(
+                quoteRequest,
+                visibleDraft,
+              );
+              const versionNumbers = Array.from(
+                { length: quoteRevisionNumber },
+                (_, index) => index + 1,
+              );
+              const showAllVersions = Boolean(
+                showAllQuotePricingVersions[quoteRequest.id],
+              );
+              const visibleVersionNumbers = showAllVersions
+                ? versionNumbers
+                : versionNumbers.slice(-4);
+              const hiddenVersionCount = Math.max(
+                0,
+                versionNumbers.length - visibleVersionNumbers.length,
+              );
               const itemSearch = quoteItemSearches[quoteRequest.id] || "";
               const normalizedItemSearch = itemSearch.trim().toLowerCase();
               const existingItemNumbers = new Set(
@@ -1751,6 +2240,11 @@ export default function UserAdminPage({
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">{quoteRequest.reference || "Quote request"}</p>
                         <span className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.1em] ${status.className}`}>{status.label}</span>
+                        {quoteRequest.source === "employee" ? (
+                          <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black uppercase tracking-[0.1em] text-violet-700">
+                            Team created
+                          </span>
+                        ) : null}
                       </div>
                       <h2 className="mt-2 text-2xl font-black text-slate-950">{quoteRequest.businessName || quoteRequest.name || "Customer quote"}</h2>
                       <p className="mt-1 text-sm font-semibold text-slate-500">{quoteRequest.name || "Contact not provided"} · {quoteRequest.email || "No email"} · {quoteRequest.phone || "No phone"}</p>
@@ -1758,20 +2252,85 @@ export default function UserAdminPage({
                     </div>
 
                     <div className="shrink-0 lg:w-[520px]">
-                      <div className="mb-2 flex justify-start lg:justify-end">
-                        <span
-                          className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] ${
-                            quoteRequest.pricingDraftHasChanges
-                              ? "bg-amber-100 text-amber-800"
-                              : quoteRequest.pricingPublished
-                                ? "bg-violet-100 text-violet-700"
-                                : "bg-slate-100 text-slate-600"
+                      <div
+                        className="mb-2 flex flex-wrap justify-start gap-1.5 lg:justify-end"
+                        role="tablist"
+                        aria-label={`Versions for ${quoteRequest.reference || "quote"}`}
+                      >
+                        {hiddenVersionCount > 0 && !showAllVersions ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowAllQuotePricingVersions((current) => ({
+                                ...current,
+                                [quoteRequest.id]: true,
+                              }))
+                            }
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 transition hover:border-violet-300 hover:text-violet-700"
+                            aria-label={`Show ${hiddenVersionCount} older quote versions`}
+                          >
+                            +{hiddenVersionCount} older
+                          </button>
+                        ) : showAllVersions && versionNumbers.length > 4 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowAllQuotePricingVersions((current) => ({
+                                ...current,
+                                [quoteRequest.id]: false,
+                              }))
+                            }
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 transition hover:border-violet-300 hover:text-violet-700"
+                          >
+                            Latest 4
+                          </button>
+                        ) : null}
+                        {visibleVersionNumbers.map((revision) => (
+                          <button
+                            key={`${quoteRequest.id}-version-${revision}`}
+                            type="button"
+                            role="tab"
+                            aria-selected={selectedRevision === revision}
+                            onClick={() =>
+                              selectQuotePricingRevision(quoteRequest, revision)
+                            }
+                            className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] transition ${
+                              selectedRevision === revision
+                                ? "border-violet-600 bg-violet-600 text-white shadow-sm"
+                                : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
+                            }`}
+                            aria-label={`View quote version ${revision}`}
+                          >
+                            V{revision}
+                          </button>
+                        ))}
+                        {!isArchived ? <button
+                          type="button"
+                          role="tab"
+                          aria-selected={selectedRevision === "draft"}
+                          onClick={() => selectQuoteWorkingDraft(quoteRequest)}
+                          className={`rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] transition ${
+                            selectedRevision === "draft"
+                              ? "border-slate-950 bg-slate-950 text-white shadow-sm"
+                              : "border-slate-300 bg-white text-slate-700 hover:border-slate-500 hover:bg-slate-50"
                           }`}
+                          aria-label={`Edit the working draft for ${quoteRequest.reference || "quote"}`}
                         >
-                          {quoteRequest.pricingRevision || quoteRequest.pricingVersion
-                            ? `V${Math.max(1, Number(quoteRequest.pricingRevision) || Number(quoteRequest.pricingVersion) || 1)}${quoteRequest.pricingDraftHasChanges ? " · Unsent changes" : ""}`
-                            : "Draft"}
-                        </span>
+                          {quoteRevisionNumber > 0
+                            ? `New V${quoteRevisionNumber + 1}`
+                            : "Create V1"}
+                        </button> : null}
+                        {loadingQuotePricingHistoryId === quoteRequest.id ? (
+                          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                            Loading versions…
+                          </span>
+                        ) : null}
+                        {quoteRequest.pricingDraftHasChanges &&
+                        selectedRevision === "draft" ? (
+                          <span className="rounded-full bg-amber-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-amber-800">
+                            Unsent changes
+                          </span>
+                        ) : null}
                       </div>
                       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
                         <div className="rounded-2xl bg-slate-50 p-4">
@@ -1784,12 +2343,7 @@ export default function UserAdminPage({
                         </div>
                         <button
                           type="button"
-                          onClick={() =>
-                            setExpandedQuoteRequests((current) => ({
-                              ...current,
-                              [quoteRequest.id]: !isExpanded,
-                            }))
-                          }
+                          onClick={() => toggleQuoteRequest(quoteRequest, isExpanded)}
                           className="inline-flex min-h-16 items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-white px-4 text-sm font-black text-violet-700 transition hover:bg-violet-50"
                           aria-expanded={isExpanded}
                           aria-controls={`quote-details-${quoteRequest.id}`}
@@ -1808,6 +2362,66 @@ export default function UserAdminPage({
                   <div className="grid gap-5 p-5 xl:grid-cols-[1fr_360px]">
                     <span id={`quote-details-${quoteRequest.id}`} className="sr-only">Quote details</span>
                     <div>
+                      {isViewingHistoricalVersion || selectedVersionMetadata ? (
+                        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-violet-200 bg-violet-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-xs font-black uppercase tracking-[0.14em] text-violet-700">
+                                V{selectedRevision} · Read only
+                              </p>
+                              {selectedVersionMetadata ? (
+                                <span
+                                  className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${
+                                    selectedVersionMetadata.type === "published"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-slate-200 text-slate-600"
+                                  }`}
+                                >
+                                  {selectedVersionMetadata.type === "published"
+                                    ? "Sent to customer"
+                                    : "Saved internally"}
+                                  {selectedVersionMetadata.type === "published" &&
+                                  selectedVersionMetadata.customerVersion
+                                    ? ` · Customer V${selectedVersionMetadata.customerVersion}`
+                                    : ""}
+                                </span>
+                              ) : null}
+                            </div>
+                            {selectedVersionMetadata ? (
+                              <>
+                                <p className="mt-2 text-base font-black text-slate-800">
+                                  {selectedVersionMetadata.title || "Pricing update"}
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-slate-600">
+                                  {selectedVersionMetadata.type === "published"
+                                    ? "Sent"
+                                    : "Saved"}
+                                  {selectedVersionMetadata.createdAt
+                                    ? ` ${formatCustomerRequestDate(selectedVersionMetadata.createdAt)}`
+                                    : ""}
+                                  {selectedVersionMetadata.createdBy
+                                    ? ` by ${selectedVersionMetadata.createdBy}`
+                                    : ""}
+                                </p>
+                                {selectedVersionMetadata.note ? (
+                                  <p className="mt-2 whitespace-pre-wrap text-sm font-semibold text-slate-500">
+                                    {selectedVersionMetadata.note}
+                                  </p>
+                                ) : null}
+                              </>
+                            ) : null}
+                          </div>
+                          {isViewingHistoricalVersion && !isArchived ? (
+                            <button
+                              type="button"
+                              onClick={() => selectQuoteWorkingDraft(quoteRequest)}
+                              className="rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-violet-700"
+                            >
+                              Create V{quoteRevisionNumber + 1}
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                           <PackageCheck className="h-5 w-5 text-violet-600" />
@@ -1818,7 +2432,7 @@ export default function UserAdminPage({
                       <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
                         {draftItems.map((item, itemIndex) => {
                           const quantity = Math.max(0, Number(item.quantity) || 0);
-                          const rawUnitPrice = draft.itemPrices?.[itemIndex];
+                          const rawUnitPrice = visibleDraft.itemPrices?.[itemIndex];
                           const unitPrice = Number(rawUnitPrice);
                           const hasUnitPriceError =
                             pricingValidationRequestId === quoteRequest.id &&
@@ -1841,6 +2455,7 @@ export default function UserAdminPage({
                                   step="0.01"
                                   inputMode="decimal"
                                   value={item.quantity}
+                                  disabled={isQuoteReadOnly}
                                   onChange={(event) =>
                                     updateQuoteItemQuantity(
                                       quoteRequest.id,
@@ -1849,7 +2464,7 @@ export default function UserAdminPage({
                                     )
                                   }
                                   aria-label={`Quantity for ${item.description}`}
-                                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-right text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-right text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
                                 />
                               </label>
                               <label>
@@ -1864,11 +2479,12 @@ export default function UserAdminPage({
                                     step="0.01"
                                     inputMode="decimal"
                                     value={rawUnitPrice ?? ""}
+                                    disabled={isQuoteReadOnly}
                                     onChange={(event) => updateQuoteItemPrice(quoteRequest.id, itemIndex, event.target.value)}
                                     placeholder="Required"
                                     aria-label={`Unit price for ${item.description}`}
                                     aria-invalid={hasUnitPriceError}
-                                    className={`w-full rounded-xl border py-2.5 pl-7 pr-3 text-right text-sm font-black outline-none placeholder:text-xs placeholder:font-black ${
+                                    className={`w-full rounded-xl border py-2.5 pl-7 pr-3 text-right text-sm font-black outline-none placeholder:text-xs placeholder:font-black disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${
                                       hasUnitPriceError
                                         ? "border-red-400 bg-red-50 text-red-950 placeholder:text-red-600 focus:border-red-500 focus:ring-4 focus:ring-red-100"
                                         : "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
@@ -1884,7 +2500,7 @@ export default function UserAdminPage({
                               <button
                                 type="button"
                                 onClick={() => removeQuoteItem(quoteRequest.id, itemIndex)}
-                                disabled={draftItems.length === 1}
+                                disabled={isQuoteReadOnly || draftItems.length === 1}
                                 className="grid h-10 w-10 place-items-center rounded-xl text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
                                 aria-label={`Remove ${item.description}`}
                                 title={draftItems.length === 1 ? "A quote needs at least one item" : "Remove item"}
@@ -1896,6 +2512,7 @@ export default function UserAdminPage({
                         })}
                       </div>
 
+                      {!isQuoteReadOnly ? (
                       <div className="relative mt-3 rounded-2xl border border-dashed border-violet-300 bg-violet-50/40 p-3">
                         <label htmlFor={`add-quote-item-${quoteRequest.id}`} className="text-xs font-black uppercase tracking-[0.12em] text-violet-700">
                           Add material to this quote
@@ -1922,8 +2539,9 @@ export default function UserAdminPage({
                               <button
                                 key={catalogItem.itemNumber}
                                 type="button"
-                                onClick={() => addQuoteItem(quoteRequest.id, catalogItem)}
-                                className="flex w-full items-center justify-between gap-4 border-b border-slate-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-violet-50"
+                                onClick={() => addQuoteItem(quoteRequest, catalogItem)}
+                                disabled={isSaving || isPublishing}
+                                className="flex w-full items-center justify-between gap-4 border-b border-slate-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-violet-50 disabled:cursor-wait disabled:opacity-50"
                               >
                                 <span className="min-w-0">
                                   <span className="block text-xs font-black uppercase tracking-[0.1em] text-violet-700">{catalogItem.itemNumber}</span>
@@ -1939,9 +2557,10 @@ export default function UserAdminPage({
                           <p className="mt-2 text-sm font-bold text-slate-500">No additional catalog items match that search.</p>
                         ) : null}
                       </div>
+                      ) : null}
 
                       <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="text-xs font-black uppercase tracking-[0.14em] text-violet-700">Customer pricing</p>
@@ -1953,16 +2572,14 @@ export default function UserAdminPage({
                                 </span>
                               ) : <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">Draft</span>}
                             </div>
-                            <p className="mt-1 text-sm font-semibold text-slate-600">Enter unit prices, delivery, and tax. Save keeps a private draft; Send creates a new customer-visible version.</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-600">
+                              {isArchived
+                                ? "This quote is archived and read only."
+                                : isViewingHistoricalVersion
+                                ? `Saved values from V${selectedRevision}. Numbered versions are permanent snapshots; choose New V${quoteRevisionNumber + 1} to make changes.`
+                                : `Working draft for V${quoteRevisionNumber + 1}. Enter unit prices, delivery, and tax, then save or send it.`}
+                            </p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => toggleQuotePricingHistory(quoteRequest)}
-                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-black text-violet-700 transition hover:bg-violet-100"
-                          >
-                            <History className="h-4 w-4" aria-hidden="true" />
-                            {openQuotePricingHistory[quoteRequest.id] ? "Hide history" : `Pricing history${quoteRequest.pricingRevision ? ` (${quoteRequest.pricingRevision})` : ""}`}
-                          </button>
                         </div>
 
                         <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_260px]">
@@ -1972,20 +2589,20 @@ export default function UserAdminPage({
                                 <span className="mb-1 block text-xs font-black text-slate-600">Delivery charge</span>
                                 <span className="relative block">
                                   <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-black text-slate-400">$</span>
-                                  <input type="number" min="0" step="0.01" inputMode="decimal" value={draft.deliveryCharge ?? ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "deliveryCharge", event.target.value)} placeholder="0.00" className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-7 pr-3 text-right text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                                  <input type="number" min="0" step="0.01" inputMode="decimal" value={visibleDraft.deliveryCharge ?? ""} disabled={isQuoteReadOnly} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "deliveryCharge", event.target.value)} placeholder="0.00" className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-7 pr-3 text-right text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500" />
                                 </span>
                               </label>
                             ) : null}
                             <label>
                               <span className="mb-1 block text-xs font-black text-slate-600">Sales tax rate</span>
                               <span className="relative block">
-                                <input type="number" min="0" max="25" step="0.01" inputMode="decimal" value={draft.taxRate ?? ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "taxRate", event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-3 pr-8 text-right text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                                <input type="number" min="0" max="25" step="0.01" inputMode="decimal" value={visibleDraft.taxRate ?? ""} disabled={isQuoteReadOnly} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "taxRate", event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-3 pr-8 text-right text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500" />
                                 <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-black text-slate-400">%</span>
                               </span>
                             </label>
                             <label className="sm:col-span-2">
                               <span className="mb-1 block text-xs font-black text-slate-600">Note to customer <span className="font-semibold text-slate-400">(optional)</span></span>
-                              <textarea value={draft.publicNote || ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "publicNote", event.target.value)} maxLength={800} rows={3} placeholder="Pricing details, substitutions, or a short message for the customer…" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                              <textarea value={visibleDraft.publicNote || ""} disabled={isQuoteReadOnly} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "publicNote", event.target.value)} maxLength={800} rows={3} placeholder="Pricing details, substitutions, or a short message for the customer…" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500" />
                             </label>
                           </div>
 
@@ -2004,53 +2621,6 @@ export default function UserAdminPage({
                           </div>
                         </div>
 
-                        {openQuotePricingHistory[quoteRequest.id] ? (
-                          <div className="mt-4 border-t border-violet-200 pt-4">
-                            {loadingQuotePricingHistoryId === quoteRequest.id ? (
-                              <p className="text-sm font-bold text-slate-500">Loading pricing versions…</p>
-                            ) : (quotePricingVersions[quoteRequest.id] || []).length === 0 ? (
-                              <p className="text-sm font-bold text-slate-500">No saved pricing versions yet.</p>
-                            ) : (
-                              <div className="space-y-2">
-                                {(quotePricingVersions[quoteRequest.id] || []).map((version) => (
-                                  <div key={version.id} className="rounded-2xl border border-violet-100 bg-white p-3 shadow-sm">
-                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                      <div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-violet-700">Version {version.revision}</span>
-                                          {version.type === "published" ? <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-emerald-700">Sent to customer{version.customerVersion ? ` · V${version.customerVersion}` : ""}</span> : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-slate-600">Internal draft</span>}
-                                        </div>
-                                        <p className="mt-2 text-sm font-black text-slate-950">{version.title || "Pricing update"}</p>
-                                        {version.note ? <p className="mt-1 whitespace-pre-wrap text-xs font-semibold leading-5 text-slate-600">{version.note}</p> : null}
-                                        <p className="mt-2 text-[11px] font-semibold text-slate-400">{version.createdAt ? formatCustomerRequestDate(version.createdAt) : "Time unavailable"}{version.createdBy ? ` · ${version.createdBy}` : ""}</p>
-                                      </div>
-                                      <p className="text-lg font-black text-slate-950">{formatQuoteCurrency(version.total)}</p>
-                                    </div>
-                                    <details className="mt-3 border-t border-slate-100 pt-3">
-                                      <summary className="cursor-pointer text-xs font-black text-violet-700">View saved prices</summary>
-                                      <div className="mt-3 space-y-2">
-                                        {(version.items || []).map((item, itemIndex) => (
-                                          <div key={`${version.id}-${item.itemNumber}-${itemIndex}`} className="grid gap-1 rounded-xl bg-slate-50 px-3 py-2 text-xs sm:grid-cols-[70px_1fr_70px_90px] sm:items-center">
-                                            <span className="font-black text-slate-500">{item.itemNumber || `Item ${itemIndex + 1}`}</span>
-                                            <span className="font-bold text-slate-800">{item.description || "Item description unavailable"}</span>
-                                            <span className="font-bold text-slate-600 sm:text-right">Qty {item.quantity}</span>
-                                            <span className="font-black text-slate-950 sm:text-right">{item.unitPrice === null || item.unitPrice === undefined ? "Not priced" : `${formatQuoteCurrency(item.unitPrice)} ea.`}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                      <dl className="mt-3 ml-auto grid max-w-xs gap-1 text-xs font-bold text-slate-600">
-                                        <div className="flex justify-between gap-4"><dt>Material</dt><dd>{formatQuoteCurrency(version.materialSubtotal)}</dd></div>
-                                        <div className="flex justify-between gap-4"><dt>Delivery</dt><dd>{formatQuoteCurrency(version.deliveryCharge)}</dd></div>
-                                        <div className="flex justify-between gap-4"><dt>Tax{version.taxRate !== null && version.taxRate !== undefined ? ` (${Number(version.taxRate).toFixed(2)}%)` : ""}</dt><dd>{formatQuoteCurrency(version.taxAmount)}</dd></div>
-                                        <div className="flex justify-between gap-4 border-t border-slate-200 pt-1 font-black text-slate-950"><dt>Total</dt><dd>{formatQuoteCurrency(version.total)}</dd></div>
-                                      </dl>
-                                    </details>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ) : null}
                       </div>
 
                       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -2075,31 +2645,80 @@ export default function UserAdminPage({
                       <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Internal follow-up</p>
                       <label className="mt-4 block">
                         <span className="mb-1 block text-xs font-black text-slate-600">Status</span>
-                        <select value={draft.status || "new"} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "status", event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100">
+                        <select value={isArchived ? quoteRequest.status : isViewingHistoricalVersion ? selectedSavedVersion?.status || "new" : draft.status || "new"} disabled={isQuoteReadOnly} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "status", event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500">
+                          {isArchived ? <option value={quoteRequest.status}>{status.label}</option> : null}
                           {quoteStatusOptions.map((option) => <option key={option.value} value={option.value} disabled={option.value === "quoted" && !quoteRequest.pricingPublished}>{option.label}</option>)}
                         </select>
                       </label>
                       <label className="mt-4 block">
                         <span className="mb-1 block text-xs font-black text-slate-600">Internal note</span>
-                        <textarea value={draft.internalNote || ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "internalNote", event.target.value)} maxLength={800} rows={4} placeholder="Who is preparing this quote, follow-up details, or outcome…" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                        <textarea value={isViewingHistoricalVersion ? selectedSavedVersion?.internalNote || "" : draft.internalNote || ""} disabled={isQuoteReadOnly} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "internalNote", event.target.value)} maxLength={800} rows={4} placeholder="Who is preparing this quote, follow-up details, or outcome…" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500" />
                       </label>
                       <div className="mt-4 rounded-2xl border border-violet-200 bg-white p-3">
                         <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-700">New pricing version</p>
                         <label className="mt-3 block">
                           <span className="mb-1 block text-xs font-black text-slate-600">Version title <span className="font-semibold text-slate-400">(optional)</span></span>
-                          <input value={draft.versionTitle || ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "versionTitle", event.target.value)} maxLength={80} placeholder="Example: Updated framing package" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                          <input value={isViewingHistoricalVersion ? selectedSavedVersion?.title || "" : draft.versionTitle || ""} disabled={isQuoteReadOnly} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "versionTitle", event.target.value)} maxLength={80} placeholder="Example: Updated framing package" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500" />
                         </label>
                         <label className="mt-3 block">
                           <span className="mb-1 block text-xs font-black text-slate-600">Version note <span className="font-semibold text-slate-400">(internal)</span></span>
-                          <textarea value={draft.versionNote || ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "versionNote", event.target.value)} maxLength={400} rows={2} placeholder="What changed in this version?" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                          <textarea value={isViewingHistoricalVersion ? selectedSavedVersion?.note || "" : draft.versionNote || ""} disabled={isQuoteReadOnly} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "versionNote", event.target.value)} maxLength={400} rows={2} placeholder="What changed in this version?" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500" />
                         </label>
                       </div>
-                      <button type="button" onClick={() => saveQuoteRequest(quoteRequest)} disabled={isSaving || isPublishing} className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-wait disabled:bg-slate-400">{isSaving ? "Saving version…" : "Save new pricing version"}</button>
-                      <button type="button" onClick={() => saveQuoteRequest(quoteRequest, { publishPricing: true })} disabled={isSaving || isPublishing} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-wait disabled:bg-slate-400">
+                      <button type="button" onClick={() => saveQuoteRequest(quoteRequest)} disabled={isQuoteReadOnly || isSaving || isPublishing} className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-400">{isArchived ? "Archived · read only" : isSaving ? "Saving version…" : isViewingHistoricalVersion ? `V${selectedRevision} · read only` : `Save as V${quoteRevisionNumber + 1}`}</button>
+                      <button type="button" onClick={() => saveQuoteRequest(quoteRequest, { publishPricing: true })} disabled={isQuoteReadOnly || isSaving || isPublishing} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400">
                         <Send className="h-4 w-4" aria-hidden="true" />
-                        {isPublishing ? "Sending pricing…" : quoteRequest.pricingPublished ? `Send as Version ${Math.max(2, Number(quoteRequest.pricingVersion) + 1 || 2)}` : "Send pricing to customer"}
+                        {isArchived
+                          ? "Archived quote"
+                          : isViewingHistoricalVersion
+                          ? `Viewing V${selectedRevision}`
+                          : isPublishing
+                            ? "Sending pricing…"
+                            : quoteRequest.pricingPublished
+                              ? `Send as Version ${Math.max(2, Number(quoteRequest.pricingVersion) + 1 || 2)}`
+                              : "Send pricing to customer"}
                       </button>
                       {quoteRequest.reviewedAt ? <p className="mt-3 text-xs font-semibold leading-5 text-slate-400">Last updated {formatCustomerRequestDate(quoteRequest.reviewedAt)}{quoteRequest.reviewedBy ? ` by ${quoteRequest.reviewedBy}` : ""}</p> : null}
+                      {isArchived ? (
+                        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Archive outcome</p>
+                          <p className="mt-2 text-sm font-black text-slate-900">
+                            {quoteRequest.status === "archived_order"
+                              ? "Turned into an order"
+                              : "Archived without an order"}
+                          </p>
+                          {quoteRequest.archivedAt ? (
+                            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                              Archived {formatCustomerRequestDate(quoteRequest.archivedAt)}
+                              {quoteRequest.archivedBy ? ` by ${quoteRequest.archivedBy}` : ""}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="mt-4 border-t border-slate-200 pt-4">
+                          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Archive quote</p>
+                          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                            Remove it from the active feed and record the final outcome.
+                          </p>
+                          <select
+                            aria-label={`Archive ${quoteRequest.reference || "quote"}`}
+                            value=""
+                            onChange={(event) => {
+                              const outcome = event.target.value;
+                              if (outcome) archiveQuoteRequest(quoteRequest, outcome);
+                            }}
+                            disabled={isArchiving || isSaving || isPublishing}
+                            className="mt-3 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-800 outline-none transition focus:border-violet-600 focus:ring-4 focus:ring-violet-100 disabled:cursor-wait disabled:bg-slate-100 disabled:text-slate-400"
+                          >
+                            <option value="">Select outcome…</option>
+                            <option value="order">Order</option>
+                            <option value="no_order">No order</option>
+                          </select>
+                          {isArchiving ? (
+                            <p className="mt-2 text-center text-xs font-bold text-slate-500">Archiving quote…</p>
+                          ) : null}
+                        </div>
+                      )}
                     </aside>
                   </div>
                   ) : null}

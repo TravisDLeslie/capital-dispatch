@@ -1775,7 +1775,7 @@ export default function SalesConverterPage({
   if (dashboardMode) {
     return (
       <PageContainer>
-        <div className="mb-6 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
               Main Dashboard
@@ -1783,28 +1783,27 @@ export default function SalesConverterPage({
             <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
               Main
             </h1>
-            <p className="mt-2 max-w-3xl text-lg font-semibold text-slate-500">
-              Start an order, find activity across the app, or open a pricing tool.
-            </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => onPageChange?.("deliveries-calendar")}
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-6 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-red-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200 sm:w-auto sm:justify-self-center"
-          >
-            <CalendarDays aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
-            View Calendar
-          </button>
+          <div className="flex w-full flex-col-reverse gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => onPageChange?.("deliveries-calendar")}
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-[#FC2C38] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-200 sm:w-auto"
+            >
+              <CalendarDays aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
+              View Calendar
+            </button>
 
-          <button
-            type="button"
-            onClick={() => onPageChange?.("order-flow")}
-            className="inline-flex min-h-12 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 sm:w-auto sm:justify-self-end"
-          >
-            <ClipboardList aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
-            New Order
-          </button>
+            <button
+              type="button"
+              onClick={() => onPageChange?.("order-flow")}
+              className="inline-flex min-h-12 w-full shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 text-sm font-black text-white shadow-sm transition hover:bg-red-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200 sm:w-auto"
+            >
+              <ClipboardList aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />
+              New Order
+            </button>
+          </div>
         </div>
 
         <form

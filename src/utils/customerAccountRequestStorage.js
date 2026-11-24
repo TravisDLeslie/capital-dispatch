@@ -103,11 +103,11 @@ export async function updateMyCustomerQuoteRequest(quoteRequest) {
     throw new Error("Quote updates are temporarily unavailable.");
   }
 
-  const updateQuote = httpsCallable(
-    functions,
-    "updateMyCustomerQuoteRequest",
-  );
-  const response = await updateQuote(quoteRequest);
+  const updateQuote = httpsCallable(functions, "submitCustomerQuoteRequest");
+  const response = await updateQuote({
+    ...quoteRequest,
+    operation: "update",
+  });
 
   return response.data;
 }
@@ -139,16 +139,27 @@ export async function listCustomerQuoteRequests() {
   return Array.isArray(response.data?.requests) ? response.data.requests : [];
 }
 
+export async function createCustomerQuoteForCustomer(customerQuote) {
+  if (!functions) {
+    throw new Error("Quotes are temporarily unavailable.");
+  }
+
+  const createQuote = httpsCallable(functions, "updateCustomerQuoteRequest");
+  const response = await createQuote({
+    ...customerQuote,
+    operation: "create",
+  });
+
+  return response.data;
+}
+
 export async function listCustomerQuotePricingVersions(requestId) {
   if (!functions) {
     throw new Error("Quote pricing history is temporarily unavailable.");
   }
 
-  const listVersions = httpsCallable(
-    functions,
-    "listCustomerQuotePricingVersions",
-  );
-  const response = await listVersions({ requestId });
+  const listVersions = httpsCallable(functions, "listCustomerQuoteRequests");
+  const response = await listVersions({ pricingVersionsForRequestId: requestId });
 
   return Array.isArray(response.data?.versions)
     ? response.data.versions
@@ -172,6 +183,7 @@ export async function updateCustomerQuoteRequest({
   publicNote = "",
   versionTitle = "",
   versionNote = "",
+  archiveOutcome = "",
 }) {
   if (!functions) {
     throw new Error("Customer quote requests are temporarily unavailable.");
@@ -195,6 +207,7 @@ export async function updateCustomerQuoteRequest({
     publicNote,
     versionTitle,
     versionNote,
+    archiveOutcome,
   });
 
   return response.data;

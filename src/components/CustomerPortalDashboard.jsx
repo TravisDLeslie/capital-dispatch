@@ -79,6 +79,14 @@ const QUOTE_STATUS_DETAILS = {
     label: "Closed",
     className: "bg-slate-200 text-slate-600",
   },
+  archived_order: {
+    label: "Order placed",
+    className: "bg-emerald-100 text-emerald-800",
+  },
+  archived_no_order: {
+    label: "Archived",
+    className: "bg-slate-200 text-slate-600",
+  },
 };
 
 function formatQuoteDate(value, options = {}) {
@@ -104,6 +112,8 @@ function formatCustomerCurrency(value) {
 }
 
 function getQuoteValidityLabel(quote) {
+  if (quote.status === "archived_order") return "Converted to an order";
+  if (quote.status === "archived_no_order") return "Quote archived";
   if (quote.status === "closed") return "Quote closed";
   if (quote.status !== "quoted") return "Valid for 2 weeks once issued";
 

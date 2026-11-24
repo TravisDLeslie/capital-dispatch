@@ -2,12 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  BookmarkCheck,
   Building2,
   Check,
   CircleUserRound,
+  ClipboardList,
   Hash,
   Mail,
   MapPin,
+  MapPinned,
+  PackagePlus,
   Phone,
   Send,
   ShieldCheck,
@@ -37,6 +41,33 @@ const EMPTY_FORM = {
   email: "",
   website: "",
 };
+
+const CUSTOMER_PORTAL_FEATURES = [
+  {
+    title: "Request quotes",
+    description:
+      "Choose materials and quantities from our catalog, then send the request directly to our team.",
+    icon: ClipboardList,
+  },
+  {
+    title: "Save every quote",
+    description:
+      "Keep current and past quotes together so you can return when the project is ready.",
+    icon: BookmarkCheck,
+  },
+  {
+    title: "See delivery pricing",
+    description:
+      "Use the quote address to view the delivery charge before you make a decision.",
+    icon: MapPinned,
+  },
+  {
+    title: "Add items anytime",
+    description:
+      "Update a quote with more material as the scope changes without starting over.",
+    icon: PackagePlus,
+  },
+];
 
 function normalizePhone(value) {
   return String(value || "").replace(/\D/g, "");
@@ -411,20 +442,26 @@ export default function CustomerAccountOnboarding({
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F7F5] text-slate-950">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_76%_18%,rgba(252,44,56,0.08),transparent_30%),linear-gradient(180deg,#FAF9F7_0%,#F6F4F1_100%)] text-slate-950">
+      <header className="border-b border-slate-200/80 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-[1380px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-10">
           <img
             src={capitalLumberLogo}
             alt="Capital Lumber Co."
             className="h-auto w-44 sm:w-52"
           />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <a
+              href="tel:+12083435481"
+              className="hidden text-sm font-bold text-slate-500 transition hover:text-slate-950 md:block"
+            >
+              Need help? 208-343-5481
+            </a>
             {customerAuthUser ? (
               <button
                 type="button"
                 onClick={handleCustomerSignOut}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:border-slate-400 hover:text-slate-950 sm:px-4 sm:text-sm"
+                className="rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-[#FC2C38] sm:px-5 sm:text-sm"
               >
                 Customer sign out
               </button>
@@ -432,7 +469,7 @@ export default function CustomerAccountOnboarding({
               <button
                 type="button"
                 onClick={openCustomerSignIn}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:border-slate-400 hover:text-slate-950 sm:px-4 sm:text-sm"
+                className="rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-[#FC2C38] sm:px-5 sm:text-sm"
               >
                 Customer sign in
               </button>
@@ -441,51 +478,58 @@ export default function CustomerAccountOnboarding({
         </div>
       </header>
 
-      <section className="mx-auto grid min-h-[calc(100vh-81px)] max-w-6xl items-start gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:px-8 lg:py-16">
-        <div className="lg:pr-8">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-[#FC2C38]">
+      <section className="mx-auto grid min-h-[calc(100vh-81px)] max-w-[1380px] items-start gap-x-10 gap-y-0 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-[minmax(0,1.03fr)_minmax(560px,0.97fr)] lg:gap-14 lg:px-10 lg:py-14 xl:gap-20">
+        <div className="contents lg:block lg:pt-3">
+          <p className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.22em] text-[#FC2C38]">
+            <span className="h-0.5 w-8 rounded-full bg-[#FC2C38]" aria-hidden="true" />
             Capital Lumber Customer Portal
           </p>
-          <h1 className="mt-4 max-w-xl text-4xl font-black leading-[1.02] tracking-tight text-slate-950 sm:text-5xl">
-            Your Capital Lumber account, built around you.
+          <h1 className="mt-5 max-w-2xl text-4xl font-black leading-[0.98] tracking-[-0.045em] text-slate-950 sm:text-5xl xl:text-6xl">
+            Build, save, and update material quotes in one place.
           </h1>
-          <p className="mt-5 max-w-lg text-base font-semibold leading-7 text-slate-600 sm:text-lg">
-            Tell us who you are so we can connect you to the right Capital
-            Lumber account and prepare your online access.
+          <p className="mt-6 max-w-xl text-base font-semibold leading-7 text-slate-600 sm:text-lg">
+            Request materials, see delivery pricing for the job address, and
+            keep every quote organized as your project changes.
           </p>
 
-          <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            {[
-              "Your information stays separate from our internal operations.",
-              "We will verify existing account numbers before linking access.",
-              "Questions? Call us at 208-343-5481.",
-            ].map((item) => (
-              <div
-                key={item}
-                className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm"
-              >
-                <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700">
-                  <Check className="h-4 w-4" aria-hidden="true" />
+          <div className="order-2 mt-8 grid gap-3 sm:grid-cols-2 lg:order-none">
+            {CUSTOMER_PORTAL_FEATURES.map(
+              ({ title, description, icon: FeatureIcon }) => (
+                <div
+                  key={title}
+                  className="group rounded-2xl border border-white bg-white/90 p-5 shadow-[0_8px_25px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/80 transition hover:-translate-y-0.5 hover:ring-red-200"
+                >
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-red-50 text-[#FC2C38] transition group-hover:bg-[#FC2C38] group-hover:text-white">
+                  <FeatureIcon className="h-5 w-5" aria-hidden="true" />
                 </span>
-                <p className="text-sm font-bold leading-5 text-slate-700">
-                  {item}
+                <p className="mt-4 text-base font-black text-slate-950">
+                  {title}
+                </p>
+                <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                  {description}
                 </p>
               </div>
-            ))}
+              ),
+            )}
           </div>
+
         </div>
 
-        <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.12)]">
-          <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-7">
+        <section className="order-1 mt-8 overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.13)] ring-1 ring-white/80 lg:order-none lg:mt-3">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/70 px-5 py-4 sm:px-7">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
                 Create your account
+              </p>
+              <p className="mt-1 max-w-xl text-xs font-bold leading-5 text-slate-600 sm:text-sm">
+                Free portal access with help from a real Capital Lumber team
+                member. Questions? Call 208-343-5481.
               </p>
               <p className="mt-1 text-sm font-bold text-slate-500">
                 {progressLabel}
               </p>
             </div>
-            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-950 text-white">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-950 text-white shadow-sm">
               <ShieldCheck className="h-6 w-6" aria-hidden="true" />
             </span>
           </div>
@@ -595,12 +639,12 @@ export default function CustomerAccountOnboarding({
                 <button
                   type="button"
                   onClick={() => chooseAccountStatus(true)}
-                  className="group flex min-h-48 flex-col items-start rounded-3xl border-2 border-slate-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-[#FC2C38] hover:shadow-lg"
+                  className="group flex min-h-44 flex-col items-start rounded-3xl border-2 border-red-100 bg-red-50/40 p-5 text-left transition hover:-translate-y-0.5 hover:border-[#FC2C38] hover:bg-red-50 hover:shadow-lg"
                 >
                   <span className="grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-[#FC2C38] transition group-hover:bg-[#FC2C38] group-hover:text-white">
                     <Hash className="h-6 w-6" aria-hidden="true" />
                   </span>
-                  <span className="mt-5 text-xl font-black text-slate-950">
+                  <span className="mt-4 text-xl font-black text-slate-950">
                     Yes, I have an account
                   </span>
                   <span className="mt-2 text-sm font-semibold leading-5 text-slate-500">
@@ -614,12 +658,12 @@ export default function CustomerAccountOnboarding({
                 <button
                   type="button"
                   onClick={() => chooseAccountStatus(false)}
-                  className="group flex min-h-48 flex-col items-start rounded-3xl border-2 border-slate-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-slate-950 hover:shadow-lg"
+                  className="group flex min-h-44 flex-col items-start rounded-3xl border-2 border-slate-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-slate-950 hover:bg-slate-50 hover:shadow-lg"
                 >
                   <span className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-700 transition group-hover:bg-slate-950 group-hover:text-white">
                     <CircleUserRound className="h-6 w-6" aria-hidden="true" />
                   </span>
-                  <span className="mt-5 text-xl font-black text-slate-950">
+                  <span className="mt-4 text-xl font-black text-slate-950">
                     No, I&apos;m new here
                   </span>
                   <span className="mt-2 text-sm font-semibold leading-5 text-slate-500">
