@@ -799,6 +799,28 @@ function deliveryNeedsDispatch(delivery) {
   );
 }
 
+function getCalendarReturnKind(delivery) {
+  if (
+    delivery?.deliveryType === "vendorReturn" ||
+    delivery?.routeStopType === "vendorReturn" ||
+    delivery?.deliveryScope === "vendorReturn" ||
+    delivery?.vendorReturn === true
+  ) {
+    return "vendorReturn";
+  }
+
+  if (
+    delivery?.deliveryType === "return" ||
+    delivery?.routeStopType === "returnPickup" ||
+    delivery?.deliveryScope === "return" ||
+    delivery?.isReturn === true
+  ) {
+    return "return";
+  }
+
+  return "";
+}
+
 function deliveryNeedsTime(delivery) {
   return timeToMinutes(delivery?.deliveryTimeSlot || "") === null;
 }
@@ -964,13 +986,20 @@ function DeliveryStatusOverview({
               {section.deliveries.map((delivery) => {
                 const drivers = getDeliveryDrivers(delivery);
                 const trucks = getDeliveryTrucks(delivery);
+                const returnKind = getCalendarReturnKind(delivery);
+                const isReturn = Boolean(returnKind);
 
                 return (
                   <button
                     key={delivery.id}
                     type="button"
                     onClick={() => onSelectDelivery?.(delivery.id)}
-                    className="grid w-full gap-2 rounded-2xl border border-white/90 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                    title={delivery.address || undefined}
+                    className={`grid w-full gap-2 rounded-2xl border p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
+                      isReturn
+                        ? "border-red-300 bg-red-100 ring-1 ring-inset ring-red-200"
+                        : "border-white/90 bg-white"
+                    }`}
                   >
                     <span className="min-w-0">
                       <span className="flex items-center gap-2 text-sm font-black text-slate-950">
@@ -980,14 +1009,30 @@ function DeliveryStatusOverview({
                             "Delivery"}
                         </span>
                         <DeliveryNotesBadge delivery={delivery} />
+                        {isReturn ? (
+                          <span className="shrink-0 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-white">
+                            {returnKind === "vendorReturn"
+                              ? "Vendor return"
+                              : "Return"}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="mt-0.5 block truncate text-xs font-bold text-slate-500">
                         {delivery.deliveryTitle
                           ? `${formatCustomerName(delivery.customerName) || "No customer"} · `
                           : ""}
                         Order {delivery.orderNumber || "—"}
-                        {delivery.address ? ` · ${delivery.address}` : ""}
                       </span>
+                      {delivery.address ? (
+                        <span
+                          className={`mt-1 block truncate text-[11px] font-bold ${
+                            isReturn ? "text-red-800" : "text-slate-600"
+                          }`}
+                          title={delivery.address}
+                        >
+                          {delivery.address}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="text-left sm:text-right">
                       <span className="block text-xs font-black text-slate-800">
@@ -1028,6 +1073,10 @@ function CalendarDeliveryButton({
   groupMeta = null,
 }) {
   const needsDispatch = deliveryNeedsDispatch(delivery);
+  const returnKind = getCalendarReturnKind(delivery);
+  const isReturn = Boolean(returnKind);
+  const returnLabel =
+    returnKind === "vendorReturn" ? "Vendor return" : "Return";
   const isGrouped = Boolean(delivery.deliveryCalendarGroupId);
   const usesGroupStyle = isGroupTarget || isGrouped;
   const isConnectedGroup = Boolean(groupMeta);
@@ -1054,9 +1103,12 @@ function CalendarDeliveryButton({
     <button
       type="button"
       onClick={onClick}
+      title={delivery.address || undefined}
       className={`w-full border text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-4 ${groupShapeClass} ${
         isGroupTarget
           ? "border-blue-500 bg-blue-200 text-blue-950 ring-2 ring-blue-300 focus:ring-blue-200"
+          : isReturn
+            ? "border-red-400 bg-red-100 text-red-950 ring-1 ring-inset ring-red-200 focus:ring-red-200"
           : isConnectedGroup
             ? isScheduledGroup
               ? "border-teal-200 bg-white/95 text-teal-950 focus:ring-teal-200"
@@ -1075,7 +1127,9 @@ function CalendarDeliveryButton({
       <span className="mb-1 flex items-center justify-between gap-2">
         <span
           className={`inline-flex min-w-0 items-center gap-1 text-[8px] font-black uppercase tracking-[0.1em] ${
-            isScheduledGroup
+            isReturn
+              ? "text-red-700"
+              : isScheduledGroup
               ? "text-teal-700"
               : usesGroupStyle
                 ? "text-blue-700"
@@ -1086,7 +1140,9 @@ function CalendarDeliveryButton({
         >
           <span
             className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-              isScheduledGroup
+              isReturn
+                ? "bg-red-600"
+                : isScheduledGroup
                 ? "bg-gradient-to-br from-emerald-500 to-blue-500"
                 : usesGroupStyle
                   ? "bg-blue-500"
@@ -1097,7 +1153,11 @@ function CalendarDeliveryButton({
             aria-hidden="true"
           />
           <span className="truncate">
-            {usesGroupStyle
+            {isReturn
+              ? groupMeta
+                ? `${returnLabel} · ${groupMeta.position} of ${groupMeta.count}`
+                : returnLabel
+              : usesGroupStyle
               ? isGroupTarget
                 ? "Release to group"
                 : isScheduledGroup
@@ -1123,6 +1183,16 @@ function CalendarDeliveryButton({
           ? ` · ${getTimeSlotLabel(delivery.deliveryTimeSlot)}`
           : ""}
       </span>
+      {delivery.address ? (
+        <span
+          className={`mt-1 block truncate font-bold ${
+            compact ? "text-[9px]" : "text-[10px]"
+          } ${isReturn ? "text-red-800" : "opacity-75"}`}
+          title={delivery.address}
+        >
+          {delivery.address}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -1152,6 +1222,9 @@ function getDeliveryGroupMeta(
 
   return {
     count: allGroupDeliveries.length,
+    isReturnGroup: allGroupDeliveries.some((candidate) =>
+      Boolean(getCalendarReturnKind(candidate)),
+    ),
     isScheduledGroup: allGroupDeliveries.every(
       (candidate) => !deliveryNeedsDispatch(candidate),
     ),
@@ -1169,9 +1242,11 @@ function getConnectedGroupWrapperClass(groupMeta, compact = false) {
   }
 
   const paddingClass = compact ? "px-1 pt-1" : "px-1.5 pt-1.5";
-  const paletteClass = groupMeta.isScheduledGroup
-    ? "border-teal-300 bg-gradient-to-b from-emerald-50 to-blue-50"
-    : "border-blue-300 bg-blue-50";
+  const paletteClass = groupMeta.isReturnGroup
+    ? "border-red-300 bg-red-50"
+    : groupMeta.isScheduledGroup
+      ? "border-teal-300 bg-gradient-to-b from-emerald-50 to-blue-50"
+      : "border-blue-300 bg-blue-50";
 
   if (groupMeta.isFirst && groupMeta.isLast) {
     return `${compact ? "mb-1.5" : "mb-2"} rounded-2xl border-2 ${paletteClass} ${paddingClass} pb-1`;
@@ -1201,6 +1276,10 @@ function CalendarStatusLegend() {
           aria-hidden="true"
         />
         Scheduled
+      </span>
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2 py-1 text-red-800 ring-1 ring-inset ring-red-300">
+        <span className="h-2 w-2 rounded-full bg-red-600" aria-hidden="true" />
+        Return
       </span>
       <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-1 text-blue-800 ring-1 ring-inset ring-blue-200">
         <span className="h-2 w-2 rounded-full bg-blue-500" aria-hidden="true" />
@@ -2399,7 +2478,9 @@ function DeliveryWeekView({
                       {groupMeta?.isFirst ? (
                         <div
                           className={`mb-1 flex items-center justify-between gap-2 px-1 text-[8px] font-black uppercase tracking-[0.1em] ${
-                            groupMeta.isScheduledGroup
+                            groupMeta.isReturnGroup
+                              ? "text-red-700"
+                              : groupMeta.isScheduledGroup
                               ? "text-teal-700"
                               : "text-blue-700"
                           }`}
@@ -2410,7 +2491,9 @@ function DeliveryWeekView({
                               aria-hidden="true"
                             />
                             <span className="truncate">
-                              {groupMeta.isScheduledGroup
+                              {groupMeta.isReturnGroup
+                                ? "Return group"
+                                : groupMeta.isScheduledGroup
                                 ? "Scheduled group"
                                 : "Grouped route"}
                             </span>
@@ -2819,7 +2902,9 @@ function DeliveryMonthView({
                           {groupMeta?.isFirst ? (
                             <div
                               className={`mb-1 flex items-center justify-between gap-1 px-1 text-[7px] font-black uppercase tracking-[0.08em] ${
-                                groupMeta.isScheduledGroup
+                                groupMeta.isReturnGroup
+                                  ? "text-red-700"
+                                  : groupMeta.isScheduledGroup
                                   ? "text-teal-700"
                                   : "text-blue-700"
                               }`}
@@ -2830,7 +2915,9 @@ function DeliveryMonthView({
                                   aria-hidden="true"
                                 />
                                 <span className="truncate">
-                                  {groupMeta.isScheduledGroup
+                                  {groupMeta.isReturnGroup
+                                    ? "Return group"
+                                    : groupMeta.isScheduledGroup
                                     ? "Scheduled group"
                                     : "Grouped"}
                                 </span>
