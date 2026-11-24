@@ -6,6 +6,7 @@ const { getStorage } = require("firebase-admin/storage");
 const {
   onDocumentCreated,
   onDocumentUpdated,
+  onDocumentWritten,
 } = require("firebase-functions/v2/firestore");
 const { HttpsError, onCall, onRequest } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
@@ -67,6 +68,9 @@ const TWILIO_MESSAGE_TYPES = {
   willCall: {
     enabledKey: "willCallEnabled",
     templateKey: "willCallTemplate",
+    defaultEnabled: true,
+    defaultTemplate:
+      "Hi {{customer}}, order {{order}} is ready for pickup at Capital Lumber. Reply STOP to opt out.",
   },
 };
 
@@ -644,6 +648,257 @@ async function sendDeliveryLifecycleMessage({
     return { failed: true };
   }
 }
+
+function normalizeOrderKey(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+}
+
+function getDocumentIds(value) {
+  return Array.from(
+    new Set(
+      (Array.isArray(value) ? value : [])
+        .map((entry) => String(entry || "").trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function isWillCallOrder(orderBuild) {
+  const handoffType = String(
+    orderBuild?.handoffType || orderBuild?.orderMethod || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  return handoffType === "willcall" || handoffType === "will call";
+}
+
+function getRelevantSourceItems(sourceRecord, orderNumber) {
+  const items = Array.isArray(sourceRecord?.items) ? sourceRecord.items : [];
+  const orderKey = normalizeOrderKey(orderNumber);
+
+  if (!orderKey) return items;
+
+  const matchingItems = items.filter(
+    (item) =>
+      normalizeOrderKey(
+        item?.orderNumber || item?.internalReference || item?.sourceOrderNumber,
+      ) === orderKey,
+  );
+
+  return matchingItems.length > 0 ? matchingItems : items;
+}
+
+function getReceivedSourceItemCount(checkInDocuments, itemIdsField) {
+  const receivedItemIds = new Set();
+  let receivedItemsWithoutIds = 0;
+
+  checkInDocuments.forEach((checkInDocument) => {
+    const checkIn = checkInDocument.data() || {};
+
+    (Array.isArray(checkIn[itemIdsField]) ? checkIn[itemIdsField] : [])
+      .map((itemId) => String(itemId || "").trim())
+      .filter(Boolean)
+      .forEach((itemId) => receivedItemIds.add(itemId));
+
+    const materials = Array.isArray(checkIn.materials)
+      ? checkIn.materials
+      : Array.isArray(checkIn.items)
+        ? checkIn.items
+        : [];
+
+    materials.forEach((material) => {
+      const sourceItemId = String(material?.sourceItemId || "").trim();
+
+      if (sourceItemId) receivedItemIds.add(sourceItemId);
+      else receivedItemsWithoutIds += 1;
+    });
+  });
+
+  return { receivedItemIds, receivedItemsWithoutIds };
+}
+
+async function sourceRecordIsFullyCheckedIn({
+  firestore,
+  collectionName,
+  sourceId,
+  checkInSourceField,
+  checkInItemIdsField,
+  orderNumber,
+}) {
+  const sourceSnapshot = await firestore
+    .collection(collectionName)
+    .doc(sourceId)
+    .get();
+
+  if (!sourceSnapshot.exists) return false;
+
+  const expectedItems = getRelevantSourceItems(
+    sourceSnapshot.data() || {},
+    orderNumber,
+  );
+
+  if (expectedItems.length === 0) return false;
+
+  const checkInSnapshot = await firestore
+    .collection("checkIns")
+    .where(checkInSourceField, "==", sourceId)
+    .get();
+
+  if (checkInSnapshot.empty) return false;
+
+  const { receivedItemIds, receivedItemsWithoutIds } =
+    getReceivedSourceItemCount(checkInSnapshot.docs, checkInItemIdsField);
+  const expectedItemIds = expectedItems
+    .map((item) => String(item?.id || "").trim())
+    .filter(Boolean);
+
+  if (expectedItemIds.length === expectedItems.length) {
+    return expectedItemIds.every((itemId) => receivedItemIds.has(itemId));
+  }
+
+  return receivedItemIds.size + receivedItemsWithoutIds >= expectedItems.length;
+}
+
+async function willCallOrderIsFullyCheckedIn(orderBuild) {
+  const firestore = getFirestore();
+  const orderNumber = String(orderBuild?.orderNumber || "").trim();
+  const southRunIds = getDocumentIds(orderBuild?.linkedSouthRunIds);
+  const theirTruckPOIds = getDocumentIds(orderBuild?.linkedTheirTruckPOIds);
+  const sourceChecks = [
+    ...southRunIds.map((sourceId) =>
+      sourceRecordIsFullyCheckedIn({
+        firestore,
+        collectionName: "supplierRuns",
+        sourceId,
+        checkInSourceField: "sourceSupplierRunId",
+        checkInItemIdsField: "sourceSupplierRunItemIds",
+        orderNumber,
+      }),
+    ),
+    ...theirTruckPOIds.map((sourceId) =>
+      sourceRecordIsFullyCheckedIn({
+        firestore,
+        collectionName: "theirTruckPOs",
+        sourceId,
+        checkInSourceField: "sourceTheirTruckPOId",
+        checkInItemIdsField: "sourceTheirTruckItemIds",
+        orderNumber,
+      }),
+    ),
+  ];
+
+  if (sourceChecks.length === 0) return false;
+
+  const results = await Promise.all(sourceChecks);
+  return results.every(Boolean);
+}
+
+async function getWillCallOrderBuildsForCheckIn(checkIn) {
+  const firestore = getFirestore();
+  const orderBuilds = firestore.collection("orderBuilds");
+  const sourceSupplierRunId = String(
+    checkIn?.sourceSupplierRunId || "",
+  ).trim();
+  const sourceTheirTruckPOId = String(
+    checkIn?.sourceTheirTruckPOId || "",
+  ).trim();
+  const orderNumber = String(
+    checkIn?.orderAssignment?.internalReference ||
+      checkIn?.sourceTheirTruckOrderNumber ||
+      checkIn?.orderNumber ||
+      "",
+  ).trim();
+  const lookups = [];
+
+  if (sourceSupplierRunId) {
+    lookups.push(
+      orderBuilds
+        .where("linkedSouthRunIds", "array-contains", sourceSupplierRunId)
+        .get(),
+    );
+  }
+  if (sourceTheirTruckPOId) {
+    lookups.push(
+      orderBuilds
+        .where("linkedTheirTruckPOIds", "array-contains", sourceTheirTruckPOId)
+        .get(),
+    );
+  }
+  if (orderNumber) {
+    lookups.push(orderBuilds.where("orderNumber", "==", orderNumber).get());
+  }
+
+  if (lookups.length === 0) return [];
+
+  const snapshots = await Promise.all(lookups);
+  const matchingDocuments = new Map();
+
+  snapshots.forEach((snapshot) => {
+    snapshot.docs.forEach((document) => {
+      if (isWillCallOrder(document.data())) {
+        matchingDocuments.set(document.id, document);
+      }
+    });
+  });
+
+  return [...matchingDocuments.values()];
+}
+
+exports.sendWillCallReadyMessages = onDocumentWritten(
+  {
+    document: "checkIns/{checkInId}",
+    region: "us-central1",
+    secrets: [twilioAuthToken],
+  },
+  async (event) => {
+    const afterSnapshot = event.data?.after;
+
+    if (!afterSnapshot?.exists) return;
+
+    const checkIn = afterSnapshot.data() || {};
+    const orderBuildDocuments = await getWillCallOrderBuildsForCheckIn(checkIn);
+
+    for (const orderBuildDocument of orderBuildDocuments) {
+      const orderBuild = orderBuildDocument.data() || {};
+      const orderStatus = String(orderBuild.status || "").trim().toLowerCase();
+
+      if (orderStatus === "complete" || orderStatus === "archived") continue;
+      if (!(await willCallOrderIsFullyCheckedIn(orderBuild))) continue;
+
+      if (!orderBuild.willCallReadyAt) {
+        await orderBuildDocument.ref.set(
+          {
+            willCallReadyAt: FieldValue.serverTimestamp(),
+            willCallReadyCheckInId: afterSnapshot.id,
+          },
+          { merge: true },
+        );
+      }
+
+      const result = await sendDeliveryLifecycleMessage({
+        deliveryReference: orderBuildDocument.ref,
+        delivery: orderBuild,
+        messageType: "willCall",
+        signature: "ready-for-pickup",
+        signatureField: "willCallTextSignature",
+        statusField: "willCallTextStatus",
+        sentAtField: "willCallTextSentAt",
+      });
+
+      logger.info("Will Call readiness reviewed", {
+        orderBuildId: orderBuildDocument.id,
+        orderNumber: orderBuild.orderNumber || "",
+        checkInId: afterSnapshot.id,
+        skipped: result?.skipped === true,
+        failed: result?.failed === true,
+      });
+    }
+  },
+);
 
 exports.sendDeliveryLifecycleMessages = onDocumentUpdated(
   {
@@ -1578,8 +1833,9 @@ exports.sendTwilioMessage = onCall(
   async (request) => {
     const messageType = String(request.data?.messageType || "").trim();
     const isTestMessage = messageType === "test";
+    const isTemplateTest = request.data?.templateTest === true;
     const caller = await getTwilioCaller(request, {
-      adminOnly: isTestMessage,
+      adminOnly: isTestMessage || isTemplateTest,
     });
     const toPhoneNumber = normalizePhoneNumber(request.data?.toPhoneNumber);
 
@@ -1635,7 +1891,7 @@ exports.sendTwilioMessage = onCall(
           "Choose a supported customer message type.",
         );
       }
-      if (!settings.enabled) {
+      if (!isTemplateTest && !settings.enabled) {
         throw new HttpsError(
           "failed-precondition",
           "Customer texting is disabled in Twilio Messaging settings.",
@@ -1645,15 +1901,19 @@ exports.sendTwilioMessage = onCall(
         settings[messageConfiguration.enabledKey] ??
         messageConfiguration.defaultEnabled ??
         false;
-      if (!isMessageTypeEnabled) {
+      if (!isTemplateTest && !isMessageTypeEnabled) {
         throw new HttpsError(
           "failed-precondition",
           "That customer message type is disabled in Twilio Messaging settings.",
         );
       }
 
+      const templateTestOverride = isTemplateTest
+        ? String(request.data?.messageTemplate || "").trim()
+        : "";
       messageBody = fillMessageTemplate(
-        settings[messageConfiguration.templateKey] ||
+        templateTestOverride ||
+          settings[messageConfiguration.templateKey] ||
           messageConfiguration.defaultTemplate,
         {
           customer: request.data?.customer,
@@ -1685,13 +1945,14 @@ exports.sendTwilioMessage = onCall(
     mediaUrls.forEach((mediaUrl) => formData.append("MediaUrl", mediaUrl));
 
     const logBase = {
-      messageType,
+      messageType: isTemplateTest ? `${messageType}Test` : messageType,
       maskedTo,
       orderNumber: String(request.data?.order || "").trim(),
       deliveryId: String(request.data?.deliveryId || "").trim(),
       mediaCount: mediaUrls.length,
       sentBy: caller.userId,
       sentByEmail: caller.email,
+      templateTest: isTemplateTest,
     };
 
     try {
@@ -1753,6 +2014,7 @@ exports.sendTwilioMessage = onCall(
       return {
         maskedTo,
         messageType,
+        templateTest: isTemplateTest,
         mediaCount: mediaUrls.length,
         providerMessageId: String(responseData.sid || ""),
         status: String(responseData.status || "queued"),

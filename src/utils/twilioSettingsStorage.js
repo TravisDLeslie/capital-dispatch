@@ -111,3 +111,18 @@ export async function saveTwilioSettings(settings) {
 
   return cleanSettings;
 }
+
+export async function saveTwilioSetting(key, value) {
+  if (db) {
+    await setDoc(
+      doc(db, SETTINGS_COLLECTION, TWILIO_SETTINGS_DOC),
+      {
+        [key]: value,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+  }
+
+  return value;
+}

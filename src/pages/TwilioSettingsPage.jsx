@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
   CheckCircle2,
   Copy,
   ExternalLink,
@@ -10,6 +11,7 @@ import {
   Save,
   Send,
   ShieldCheck,
+  Settings2,
   Smartphone,
   Trash2,
 } from "lucide-react";
@@ -18,6 +20,7 @@ import PageContainer from "../components/PageContainer";
 import { getFirebaseErrorMessage } from "../utils/firebaseErrorMessages";
 import {
   defaultTwilioSettings,
+  saveTwilioSetting,
   saveTwilioSettings,
   subscribeToTwilioSettings,
 } from "../utils/twilioSettingsStorage";
@@ -28,6 +31,7 @@ import {
 } from "../utils/photoStorage";
 import {
   sendTwilioCustomerMessage,
+  sendTwilioNotificationTestMessage,
   sendTwilioTestMessage,
 } from "../utils/twilioMessaging";
 
@@ -36,18 +40,21 @@ const messagingServiceSidPattern = /^MG[0-9a-fA-F]{32}$/;
 
 const templateFields = [
   {
+    messageType: "orderSummary",
     enabledKey: "orderSummaryEnabled",
     templateKey: "orderSummaryTemplate",
     title: "Processed order summary",
     description: "Send automatically after an opted-in customer order is processed.",
   },
   {
+    messageType: "potentialDelivery",
     enabledKey: "potentialDeliveryEnabled",
     templateKey: "potentialDeliveryTemplate",
     title: "Potential delivery",
     description: "Use when an order may be delivered but is not scheduled yet.",
   },
   {
+    messageType: "scheduledDelivery",
     enabledKey: "scheduledDeliveryEnabled",
     templateKey: "scheduledDeliveryTemplate",
     title: "Scheduled delivery",
@@ -55,12 +62,14 @@ const templateFields = [
       "Send automatically after the date, driver, and truck are assigned.",
   },
   {
+    messageType: "deliveryToday",
     enabledKey: "deliveryTodayEnabled",
     templateKey: "deliveryTodayTemplate",
     title: "Delivery today",
     description: "Send automatically at 7:00 AM on the delivery date.",
   },
   {
+    messageType: "deliveryComplete",
     enabledKey: "deliveryCompleteEnabled",
     templateKey: "deliveryCompleteTemplate",
     title: "Delivery complete",
@@ -68,12 +77,41 @@ const templateFields = [
       "Send automatically after delivery completion photos are saved.",
   },
   {
+    messageType: "willCall",
     enabledKey: "willCallEnabled",
     templateKey: "willCallTemplate",
     title: "Will Call ready",
-    description: "Use when an order is ready for customer pickup.",
+    description:
+      "Send automatically after every South and Their Truck item on a Will Call order is checked into receiving.",
   },
 ];
+
+function getDefaultTemplateTestDate() {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date());
+}
+
+function fillTemplateTestPreview(template, values) {
+  const fields = {
+    customer: String(values.customer || "Customer").trim(),
+    business: String(values.business || "Customer business").trim(),
+    order: String(values.order || "123-456").trim(),
+    date: String(values.date || getDefaultTemplateTestDate()).trim(),
+    address: String(values.address || "123 Test Jobsite, Boise, ID").trim(),
+    summaryurl: String(
+      values.summaryUrl || "https://dispatch.capitallumber.co",
+    ).trim(),
+  };
+
+  return String(template || "").replace(
+    /{{\s*(customer|business|order|date|address|summaryUrl)\s*}}/gi,
+    (match, key) => fields[String(key).toLowerCase()] || match,
+  );
+}
 
 function getDateValue(value) {
   if (!value) return null;
@@ -222,10 +260,27 @@ export default function TwilioSettingsPage({
   onPageChange,
 }) {
   const [settings, setSettings] = useState(defaultTwilioSettings);
+  const [activeView, setActiveView] = useState("menu");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testPhoneNumber, setTestPhoneNumber] = useState("");
+  const [notificationTestDraft, setNotificationTestDraft] = useState({
+    toPhoneNumber: "",
+    customer: "Jordan",
+    business: "ABC Construction",
+    order: "123-456",
+    date: getDefaultTemplateTestDate(),
+    address: "123 Test Jobsite, Boise, ID",
+    summaryUrl: "https://dispatch.capitallumber.co",
+  });
+  const [sendingNotificationTestType, setSendingNotificationTestType] =
+    useState("");
+  const [notificationTestResults, setNotificationTestResults] = useState({});
+  const [notificationTestError, setNotificationTestError] = useState("");
+  const [savingNotificationToggleType, setSavingNotificationToggleType] =
+    useState("");
+  const [notificationToggleResults, setNotificationToggleResults] = useState({});
   const [selectedDeliveryId, setSelectedDeliveryId] = useState("");
   const [deliveryPhoneNumber, setDeliveryPhoneNumber] = useState("");
   const [isSendingDeliveryComplete, setIsSendingDeliveryComplete] =
@@ -463,6 +518,108 @@ export default function TwilioSettingsPage({
     }
   }
 
+  function updateNotificationTestDraft(key, value) {
+    setNotificationTestDraft((currentDraft) => ({
+      ...currentDraft,
+      [key]: value,
+    }));
+    setNotificationTestError("");
+    setNotificationTestResults({});
+  }
+
+  async function handleNotificationTemplateTest(field) {
+    if (validationError) {
+      setNotificationTestError(validationError);
+      return;
+    }
+    if (notificationTestDraft.toPhoneNumber.replace(/\D/g, "").length < 10) {
+      setNotificationTestError(
+        "Enter a valid mobile number for the notification test.",
+      );
+      return;
+    }
+    if (!String(settings[field.templateKey] || "").trim()) {
+      setNotificationTestError(`Enter a ${field.title} message template first.`);
+      return;
+    }
+
+    setSendingNotificationTestType(field.messageType);
+    setNotificationTestError("");
+    setNotificationTestResults((currentResults) => ({
+      ...currentResults,
+      [field.messageType]: null,
+    }));
+    setMessage("");
+    setError("");
+
+    try {
+      const result = await sendTwilioNotificationTestMessage({
+        messageType: field.messageType,
+        messageTemplate: settings[field.templateKey],
+        ...notificationTestDraft,
+      });
+      setNotificationTestResults((currentResults) => ({
+        ...currentResults,
+        [field.messageType]: {
+          status: "success",
+          message: `Queued to ${result.maskedTo || "the test phone"}.`,
+        },
+      }));
+    } catch (sendError) {
+      console.error(`Unable to test ${field.messageType}:`, sendError);
+      setNotificationTestResults((currentResults) => ({
+        ...currentResults,
+        [field.messageType]: {
+          status: "error",
+          message: getFirebaseErrorMessage(sendError),
+        },
+      }));
+    } finally {
+      setSendingNotificationTestType("");
+    }
+  }
+
+  async function handleNotificationToggle(field) {
+    const wasEnabled = Boolean(settings[field.enabledKey]);
+    const nextEnabled = !wasEnabled;
+
+    setSavingNotificationToggleType(field.messageType);
+    setNotificationToggleResults((currentResults) => ({
+      ...currentResults,
+      [field.messageType]: null,
+    }));
+    setSettings((currentSettings) => ({
+      ...currentSettings,
+      [field.enabledKey]: nextEnabled,
+    }));
+
+    try {
+      await saveTwilioSetting(field.enabledKey, nextEnabled);
+      setNotificationToggleResults((currentResults) => ({
+        ...currentResults,
+        [field.messageType]: {
+          status: "success",
+          message: `${field.title} ${nextEnabled ? "turned on" : "turned off"}.`,
+        },
+      }));
+    } catch (saveError) {
+      console.error(`Unable to toggle ${field.messageType}:`, saveError);
+      setSettings((currentSettings) => ({
+        ...currentSettings,
+        [field.enabledKey]: wasEnabled,
+      }));
+      setNotificationToggleResults((currentResults) => ({
+        ...currentResults,
+        [field.messageType]: {
+          status: "error",
+          message: getFirebaseErrorMessage(saveError),
+        },
+      }));
+    } finally {
+      setSavingNotificationToggleType("");
+    }
+  }
+
   function chooseCompletedDelivery(deliveryId) {
     const delivery = completedDeliveries.find(
       (candidate) => String(candidate.id) === deliveryId,
@@ -542,7 +699,16 @@ export default function TwilioSettingsPage({
       <Breadcrumbs
         items={[
           { label: "Admin", onClick: () => onPageChange?.("admin") },
-          { label: "Twilio Messaging" },
+          activeView === "menu"
+            ? { label: "Twilio Messaging" }
+            : {
+                label: "Twilio Messaging",
+                onClick: () => setActiveView("menu"),
+              },
+          ...(activeView === "tests"
+            ? [{ label: "Text Notification Dashboard" }]
+            : []),
+          ...(activeView === "settings" ? [{ label: "Settings" }] : []),
         ]}
       />
 
@@ -552,30 +718,39 @@ export default function TwilioSettingsPage({
             Admin
           </p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-            Twilio Messaging
+            {activeView === "tests"
+              ? "Text Notification Dashboard"
+              : activeView === "settings"
+                ? "Twilio Settings"
+                : "Twilio Messaging"}
           </h1>
           <p className="mt-2 max-w-3xl text-base font-semibold text-slate-500 sm:text-lg">
-            Manage customer text settings for potential deliveries, scheduled
-            order summaries, deliveries, and Will Call orders.
+            {activeView === "tests"
+              ? "Preview and test every customer text notification from one place."
+              : activeView === "settings"
+                ? "Manage the Twilio connection, templates, attachments, and live notification switches."
+                : "Choose the notification test dashboard or manage Twilio settings."}
           </p>
         </div>
 
-        <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <input
-            type="checkbox"
-            checked={Boolean(settings.enabled)}
-            onChange={(event) => updateSetting("enabled", event.target.checked)}
-            className="h-5 w-5 accent-[#FC2C38]"
-          />
-          <span>
-            <span className="block text-sm font-black text-slate-950">
-              Customer texting
+        {activeView === "settings" ? (
+          <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <input
+              type="checkbox"
+              checked={Boolean(settings.enabled)}
+              onChange={(event) => updateSetting("enabled", event.target.checked)}
+              className="h-5 w-5 accent-[#FC2C38]"
+            />
+            <span>
+              <span className="block text-sm font-black text-slate-950">
+                Customer texting
+              </span>
+              <span className="block text-xs font-bold text-slate-500">
+                {settings.enabled ? "Enabled" : "Not live yet"}
+              </span>
             </span>
-            <span className="block text-xs font-bold text-slate-500">
-              {settings.enabled ? "Enabled" : "Not live yet"}
-            </span>
-          </span>
-        </label>
+          </label>
+        ) : null}
       </div>
 
       {isLoading ? (
@@ -584,7 +759,79 @@ export default function TwilioSettingsPage({
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-5">
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <section
+            hidden={activeView !== "menu"}
+            style={activeView === "menu" ? undefined : { display: "none" }}
+            className="grid gap-5 lg:grid-cols-2"
+          >
+            <button
+              type="button"
+              onClick={() => setActiveView("tests")}
+              className="group min-h-64 rounded-3xl border border-slate-200 bg-white p-7 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-red-300 hover:shadow-lg"
+            >
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-[#FC2C38] transition group-hover:bg-[#FC2C38] group-hover:text-white">
+                <MessageSquareText className="h-7 w-7" aria-hidden="true" />
+              </span>
+              <span className="mt-8 block text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                Test center
+              </span>
+              <span className="mt-2 block text-2xl font-black text-slate-950">
+                Text Notification Dashboard
+              </span>
+              <span className="mt-3 block max-w-xl text-sm font-semibold leading-6 text-slate-500">
+                Preview all six customer notifications and send individual tests
+                to your own phone.
+              </span>
+              <span className="mt-7 inline-flex items-center gap-2 text-sm font-black text-slate-950">
+                Open dashboard
+                <span aria-hidden="true">→</span>
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveView("settings")}
+              className="group min-h-64 rounded-3xl border border-slate-200 bg-white p-7 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg"
+            >
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 transition group-hover:bg-blue-700 group-hover:text-white">
+                <Settings2 className="h-7 w-7" aria-hidden="true" />
+              </span>
+              <span className="mt-8 block text-xs font-black uppercase tracking-[0.18em] text-blue-700">
+                Configuration
+              </span>
+              <span className="mt-2 block text-2xl font-black text-slate-950">
+                Settings
+              </span>
+              <span className="mt-3 block max-w-xl text-sm font-semibold leading-6 text-slate-500">
+                Manage the Twilio connection, live switches, templates, and the
+                standard delivery photo.
+              </span>
+              <span className="mt-7 inline-flex items-center gap-2 text-sm font-black text-slate-950">
+                Open settings
+                <span aria-hidden="true">→</span>
+              </span>
+            </button>
+          </section>
+
+          <div
+            hidden={activeView === "menu"}
+            style={activeView === "menu" ? { display: "none" } : undefined}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveView("menu")}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to Twilio Messaging
+            </button>
+          </div>
+
+          <section
+            hidden={activeView !== "settings"}
+            style={activeView === "settings" ? undefined : { display: "none" }}
+            className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+          >
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
                 <Smartphone className="h-6 w-6" aria-hidden="true" />
@@ -679,7 +926,11 @@ export default function TwilioSettingsPage({
             </div>
           </section>
 
-          <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm sm:p-6">
+          <section
+            hidden={activeView !== "settings"}
+            style={activeView === "settings" ? undefined : { display: "none" }}
+            className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm sm:p-6"
+          >
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-amber-700 shadow-sm">
                 <KeyRound className="h-6 w-6" aria-hidden="true" />
@@ -720,7 +971,11 @@ export default function TwilioSettingsPage({
             </div>
           </section>
 
-          <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm sm:p-6">
+          <section
+            hidden={activeView !== "tests"}
+            style={activeView === "tests" ? undefined : { display: "none" }}
+            className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm sm:p-6"
+          >
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div className="flex items-start gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-700 shadow-sm">
@@ -767,7 +1022,310 @@ export default function TwilioSettingsPage({
             </div>
           </section>
 
-          <section className="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-sm sm:p-6">
+          <section
+            hidden={activeView !== "tests"}
+            style={activeView === "tests" ? undefined : { display: "none" }}
+            className="overflow-hidden rounded-3xl border border-slate-300 bg-slate-950 shadow-sm"
+          >
+            <div className="flex flex-col gap-4 border-b border-slate-800 px-5 py-5 sm:px-6 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FC2C38] text-white shadow-sm">
+                  <MessageSquareText className="h-6 w-6" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-red-400">
+                    Twilio test center
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black text-white">
+                    Notification test dashboard
+                  </h2>
+                  <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-300">
+                    Preview and send one real test message at a time. Tests work
+                    even when that notification is disabled and never change an
+                    order, delivery, or live automation.
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs font-black leading-5 text-amber-200">
+                Each Send test button sends one SMS or MMS to the number below.
+              </div>
+            </div>
+
+            <div className="bg-white p-5 sm:p-6">
+              <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2 xl:grid-cols-3">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Test mobile number
+                  </span>
+                  <input
+                    value={notificationTestDraft.toPhoneNumber}
+                    onChange={(event) =>
+                      updateNotificationTestDraft(
+                        "toPhoneNumber",
+                        event.target.value,
+                      )
+                    }
+                    placeholder="Your mobile number"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none transition focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Contact name
+                  </span>
+                  <input
+                    value={notificationTestDraft.customer}
+                    onChange={(event) =>
+                      updateNotificationTestDraft("customer", event.target.value)
+                    }
+                    placeholder="Jordan"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none transition focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Business name
+                  </span>
+                  <input
+                    value={notificationTestDraft.business}
+                    onChange={(event) =>
+                      updateNotificationTestDraft("business", event.target.value)
+                    }
+                    placeholder="ABC Construction"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none transition focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Order number
+                  </span>
+                  <input
+                    value={notificationTestDraft.order}
+                    onChange={(event) =>
+                      updateNotificationTestDraft("order", event.target.value)
+                    }
+                    placeholder="123-456"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none transition focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Date or timing
+                  </span>
+                  <input
+                    value={notificationTestDraft.date}
+                    onChange={(event) =>
+                      updateNotificationTestDraft("date", event.target.value)
+                    }
+                    placeholder="Monday, November 23, 2026"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none transition focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Delivery address
+                  </span>
+                  <input
+                    value={notificationTestDraft.address}
+                    onChange={(event) =>
+                      updateNotificationTestDraft("address", event.target.value)
+                    }
+                    placeholder="123 Test Jobsite, Boise, ID"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none transition focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                  />
+                </label>
+
+                <label className="block md:col-span-2 xl:col-span-3">
+                  <span className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                    Sample order-summary link
+                  </span>
+                  <input
+                    value={notificationTestDraft.summaryUrl}
+                    onChange={(event) =>
+                      updateNotificationTestDraft("summaryUrl", event.target.value)
+                    }
+                    placeholder="https://dispatch.capitallumber.co"
+                    inputMode="url"
+                    className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-950 outline-none transition focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                  />
+                  <span className="mt-2 block text-xs font-bold text-slate-500">
+                    This checks the order-summary message and clickable link. It
+                    does not generate a new customer PDF.
+                  </span>
+                </label>
+              </div>
+
+              {notificationTestError ? (
+                <div
+                  role="alert"
+                  className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700"
+                >
+                  {notificationTestError}
+                </div>
+              ) : null}
+
+              {!settings.enabled ? (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-900">
+                  <span className="font-black">Master customer texting is off.</span>{" "}
+                  You can still test every message and set its individual switch,
+                  but automatic customer texts remain paused until Customer
+                  Texting is enabled in Settings.
+                </div>
+              ) : null}
+
+              <div className="mt-6 grid gap-6 xl:grid-cols-2">
+                {templateFields.map((field) => {
+                  const result = notificationTestResults[field.messageType];
+                  const toggleResult =
+                    notificationToggleResults[field.messageType];
+                  const isSending =
+                    sendingNotificationTestType === field.messageType;
+                  const isSavingToggle =
+                    savingNotificationToggleType === field.messageType;
+                  const isEnabled = Boolean(settings[field.enabledKey]);
+
+                  return (
+                    <article
+                      key={`test-${field.messageType}`}
+                      className="relative flex flex-col overflow-hidden rounded-3xl border-2 border-slate-200 bg-slate-50 p-5 shadow-md"
+                    >
+                      <span
+                        className={
+                          isEnabled
+                            ? "absolute inset-x-0 top-0 h-1.5 bg-emerald-500"
+                            : "absolute inset-x-0 top-0 h-1.5 bg-slate-300"
+                        }
+                        aria-hidden="true"
+                      />
+                      <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4 pt-1">
+                        <div>
+                          <p className="text-lg font-black text-slate-950">
+                            {field.title}
+                          </p>
+                          <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                            {field.description}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
+                            {isSavingToggle
+                              ? "Saving…"
+                              : isEnabled
+                                ? "On"
+                                : "Off"}
+                          </span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={isEnabled}
+                            aria-label={`${isEnabled ? "Turn off" : "Turn on"} ${field.title}`}
+                            onClick={() => handleNotificationToggle(field)}
+                            disabled={Boolean(savingNotificationToggleType)}
+                            className={
+                              isEnabled
+                                ? "mt-1 flex h-8 w-14 items-center rounded-full bg-emerald-600 p-1 transition disabled:cursor-wait disabled:opacity-50"
+                                : "mt-1 flex h-8 w-14 items-center rounded-full bg-slate-300 p-1 transition disabled:cursor-wait disabled:opacity-50"
+                            }
+                          >
+                            <span
+                              className={
+                                isEnabled
+                                  ? "h-6 w-6 translate-x-6 rounded-full bg-white shadow-sm transition"
+                                  : "h-6 w-6 translate-x-0 rounded-full bg-white shadow-sm transition"
+                              }
+                            />
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="mt-4 text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                        Customer message preview
+                      </p>
+                      <div className="mt-2 min-h-32 flex-1 whitespace-pre-wrap rounded-2xl border border-slate-300 bg-white p-4 text-sm font-semibold leading-6 text-slate-950 shadow-sm">
+                        {fillTemplateTestPreview(
+                          settings[field.templateKey],
+                          notificationTestDraft,
+                        ) || "Add a template below to preview this message."}
+                      </div>
+
+                      {field.messageType === "deliveryComplete" &&
+                      settings.deliveryCompleteGlobalPhoto?.url ? (
+                        <div className="mt-3 flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 p-2.5">
+                          <img
+                            src={settings.deliveryCompleteGlobalPhoto.url}
+                            alt="Standard delivery-complete test attachment"
+                            className="h-12 w-12 rounded-lg border border-violet-200 bg-white object-cover"
+                          />
+                          <p className="text-xs font-black text-violet-800">
+                            The standard all-deliveries photo will be attached to
+                            this MMS test.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={() => handleNotificationTemplateTest(field)}
+                        disabled={Boolean(sendingNotificationTestType)}
+                        className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-50"
+                      >
+                        {isSending ? (
+                          <LoaderCircle
+                            className="h-4 w-4 animate-spin"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <Send className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        {isSending ? "Sending test…" : `Send ${field.title} test`}
+                      </button>
+
+                      {toggleResult ? (
+                        <div
+                          role={
+                            toggleResult.status === "error" ? "alert" : "status"
+                          }
+                          className={
+                            toggleResult.status === "error"
+                              ? "mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700"
+                              : "mt-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800"
+                          }
+                        >
+                          {toggleResult.message}
+                        </div>
+                      ) : null}
+
+                      {result ? (
+                        <div
+                          role={result.status === "error" ? "alert" : "status"}
+                          className={
+                            result.status === "error"
+                              ? "mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700"
+                              : "mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-800"
+                          }
+                        >
+                          {result.message}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section
+            hidden={activeView !== "settings"}
+            style={activeView === "settings" ? undefined : { display: "none" }}
+            className="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-sm sm:p-6"
+          >
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-violet-700 shadow-sm">
                 <ImagePlus className="h-6 w-6" aria-hidden="true" />
@@ -883,7 +1441,11 @@ export default function TwilioSettingsPage({
             ) : null}
           </section>
 
-          <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm sm:p-6">
+          <section
+            hidden={activeView !== "tests"}
+            style={activeView === "tests" ? undefined : { display: "none" }}
+            className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm sm:p-6"
+          >
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-700 shadow-sm">
                 <CheckCircle2 className="h-6 w-6" aria-hidden="true" />
@@ -971,7 +1533,7 @@ export default function TwilioSettingsPage({
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
                     Message preview
                   </p>
-                  <div className="mt-3 min-h-28 flex-1 rounded-2xl bg-slate-950 p-4 text-sm font-semibold leading-6 text-white">
+                  <div className="mt-3 min-h-28 flex-1 rounded-2xl border border-slate-200 bg-white p-4 text-sm font-semibold leading-6 text-slate-950 shadow-inner">
                     {deliveryCompletePreview ||
                       "Select a delivery to preview the customer message."}
                   </div>
@@ -1041,7 +1603,11 @@ export default function TwilioSettingsPage({
             )}
           </section>
 
-          <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <section
+            hidden={activeView !== "settings"}
+            style={activeView === "settings" ? undefined : { display: "none" }}
+            className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"
+          >
             <div className="flex items-start gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700">
                 <MessageSquareText className="h-6 w-6" aria-hidden="true" />
@@ -1108,7 +1674,11 @@ export default function TwilioSettingsPage({
             </div>
           ) : null}
 
-          <div className="sticky bottom-4 z-10 flex justify-end rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+          <div
+            hidden={activeView !== "settings"}
+            style={activeView === "settings" ? undefined : { display: "none" }}
+            className="sticky bottom-4 z-10 flex justify-end rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur"
+          >
             <button
               type="submit"
               disabled={isSaving}
@@ -1119,7 +1689,11 @@ export default function TwilioSettingsPage({
             </button>
           </div>
 
-          <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900">
+          <div
+            hidden={activeView !== "settings"}
+            style={activeView === "settings" ? undefined : { display: "none" }}
+            className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900"
+          >
             <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
             The Auth Token stays server-side. Message logs store the message
             type, sender, provider status, and a masked phone number—not the

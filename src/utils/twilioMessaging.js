@@ -27,6 +27,35 @@ export async function sendTwilioTestMessage(toPhoneNumber) {
   });
 }
 
+export async function sendTwilioNotificationTestMessage({
+  messageType,
+  messageTemplate,
+  toPhoneNumber,
+  customer,
+  business,
+  order,
+  date,
+  address,
+  summaryUrl,
+}) {
+  if (!SUPPORTED_CUSTOMER_MESSAGE_TYPES.has(messageType)) {
+    throw new Error("Choose a supported customer message type.");
+  }
+
+  return callTwilioSender({
+    messageType,
+    messageTemplate,
+    toPhoneNumber,
+    customer,
+    business,
+    order,
+    date,
+    address,
+    summaryUrl,
+    templateTest: true,
+  });
+}
+
 export async function sendTwilioCustomerMessage({
   messageType,
   toPhoneNumber,

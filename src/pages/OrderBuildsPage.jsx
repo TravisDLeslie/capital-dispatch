@@ -43,6 +43,40 @@ function getStockItems(build) {
   return (build.items || []).filter((item) => item.path === "inStock");
 }
 
+function getHandoffBadge(build) {
+  const handoffType = String(
+    build?.handoffType || build?.orderMethod || "",
+  )
+    .trim()
+    .toLowerCase();
+
+  if (
+    handoffType === "delivery" ||
+    handoffType === "customerdelivery" ||
+    build?.linkedDeliveryId
+  ) {
+    return {
+      key: "delivery",
+      label: "Delivery",
+      className: "border-red-200 bg-red-50 text-[#FC2C38]",
+    };
+  }
+
+  if (
+    !handoffType ||
+    handoffType === "willcall" ||
+    handoffType === "will call"
+  ) {
+    return {
+      key: "willCall",
+      label: "Will Call",
+      className: "border-blue-200 bg-blue-50 text-blue-700",
+    };
+  }
+
+  return null;
+}
+
 function formatOrderNumber(value) {
   const digits = String(value || "").replace(/\D/g, "").slice(0, 6);
 
@@ -77,6 +111,7 @@ function matchesOrderSearch(build, query) {
     build.customerName,
     build.phoneNumber,
     build.deliveryAddress,
+    getHandoffBadge(build)?.label,
     ...items.flatMap((item) => [
       item.itemNumber,
       item.description,
@@ -691,6 +726,7 @@ export default function OrderBuildsPage({
           visibleBuilds.map(({ build, lifecycle }) => {
             const waitingItems = getWaitingItems(build);
             const stockItems = getStockItems(build);
+            const handoffBadge = getHandoffBadge(build);
             const isExpanded = expandedBuildIds.has(build.id);
             const processedOrder = salesOrdersById.get(
               String(build.orderId || "").trim(),
@@ -717,6 +753,18 @@ export default function OrderBuildsPage({
                         <p className="text-sm font-black uppercase tracking-[0.12em] text-[#FC2C38]">
                           Order {build.orderNumber || "No order #"}
                         </p>
+                        {handoffBadge ? (
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] ${handoffBadge.className}`}
+                          >
+                            {handoffBadge.key === "delivery" ? (
+                              <Truck className="h-3.5 w-3.5" aria-hidden="true" />
+                            ) : (
+                              <Warehouse className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
+                            {handoffBadge.label}
+                          </span>
+                        ) : null}
                         <h2 className="truncate text-lg font-black tracking-tight text-slate-950">
                           {build.businessName || build.customerName || "No customer"}
                         </h2>

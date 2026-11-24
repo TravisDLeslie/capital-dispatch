@@ -151,6 +151,28 @@ function getReceivingLocation(checkIn) {
   return getString(checkIn?.poLocation) || getString(checkIn?.location);
 }
 
+function getCheckInOrderInfo(checkIn) {
+  const assignment =
+    checkIn?.orderAssignment && typeof checkIn.orderAssignment === "object"
+      ? checkIn.orderAssignment
+      : checkIn?.customer && typeof checkIn.customer === "object"
+        ? checkIn.customer
+        : {};
+  const isStock = getString(assignment?.type).toLowerCase() === "stock";
+  const orderNumber =
+    getString(assignment?.internalReference) ||
+    getString(checkIn?.sourceTheirTruckOrderNumber) ||
+    getString(checkIn?.orderNumber);
+  const orderName = isStock
+    ? "Stock"
+    : getString(assignment?.jobName) ||
+      getString(assignment?.businessName) ||
+      getString(checkIn?.sourceTheirTruckCustomerName) ||
+      getString(checkIn?.customerName);
+
+  return { isStock, orderNumber, orderName };
+}
+
 function getDeliveryPhotos(delivery) {
   const { photos, add } = buildPhotoList();
 
@@ -268,6 +290,13 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
     const vendor = getString(checkIn?.vendor);
     const checkedInBy = getString(checkIn?.checkedInBy);
     const receivingLocation = getReceivingLocation(checkIn);
+    const { isStock, orderNumber, orderName } =
+      getCheckInOrderInfo(checkIn);
+    const orderLabel = isStock
+      ? "Stock"
+      : orderNumber
+        ? `Order ${orderNumber}`
+        : orderName;
     const receivingTruck =
       getString(checkIn?.receivingTruckLabel) ||
       getString(checkIn?.receivingTruckType);
@@ -277,8 +306,12 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
       type: "checkin",
       timestamp,
       title: "Material checked in",
-      message: poNumber ? `PO ${poNumber}` : "Receiving check-in complete",
+      message:
+        [poNumber ? `PO ${poNumber}` : "", orderLabel]
+          .filter(Boolean)
+          .join(" · ") || "Receiving check-in complete",
       detail: [
+        !isStock && orderName ? orderName : "",
         vendor,
         receivingLocation ? `Location: ${receivingLocation}` : "",
         checkedInBy ? `Checked in by ${checkedInBy}` : "",
@@ -286,12 +319,18 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
         .filter(Boolean)
         .join(" · "),
       summary: `${poNumber ? `PO ${poNumber}` : "Material"} was checked into receiving${
+        orderLabel ? ` for ${orderLabel}` : ""
+      }${
+        !isStock && orderName ? ` · ${orderName}` : ""
+      }${
         receivingLocation ? ` at ${receivingLocation}` : ""
       }${
         checkedInBy ? ` by ${checkedInBy}` : ""
       }.`,
       facts: getFacts([
         { label: "PO number", value: poNumber },
+        { label: "Order number", value: orderNumber },
+        { label: "Order name", value: orderName },
         { label: "Supplier", value: vendor },
         { label: "Location", value: receivingLocation },
         { label: "Checked in by", value: checkedInBy },
