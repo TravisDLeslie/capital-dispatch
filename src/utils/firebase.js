@@ -1,10 +1,8 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import {
-  getFirestore,
   initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
+  memoryLocalCache,
 } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getStorage } from "firebase/storage";
@@ -49,16 +47,13 @@ function createFirestoreDatabase(app) {
     return null;
   }
 
-  try {
-    return initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager(),
-      }),
-    });
-  } catch (error) {
-    console.warn("Firebase persistent cache unavailable:", error);
-    return getFirestore(app);
-  }
+  // Keep Firestore's working set in memory instead of IndexedDB/localStorage.
+  // Mobile Safari can reject persistent cache writes when its per-site storage
+  // quota is full, which previously prevented an otherwise-valid employee from
+  // completing sign-in and saving their profile.
+  return initializeFirestore(app, {
+    localCache: memoryLocalCache(),
+  });
 }
 
 export const db = createFirestoreDatabase(firebaseApp);
