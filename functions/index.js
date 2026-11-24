@@ -1591,6 +1591,239 @@ exports.submitCustomerQuoteRequest = onCall(
   },
 );
 
+exports.updateMyCustomerQuoteRequest = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    const context = await getVerifiedCustomerPortalContext(request);
+    const requestId = String(request.data?.requestId || "").trim();
+    const submittedItems = Array.isArray(request.data?.items)
+      ? request.data.items
+      : [];
+    const deliveryNeeded = request.data?.deliveryNeeded === true;
+    const deliveryAddress = String(request.data?.deliveryAddress || "").trim();
+    const neededBy = String(request.data?.neededBy || "").trim();
+    const notes = String(request.data?.notes || "").trim();
+    const allowedTimelines = new Set([
+      "as-soon-as-possible",
+      "within-one-week",
+      "within-two-weeks",
+      "this-month",
+      "flexible",
+    ]);
+
+    if (!requestId || !/^[A-Za-z0-9_-]{10,80}$/.test(requestId)) {
+      throw new HttpsError("invalid-argument", "Choose a valid quote request.");
+    }
+    if (submittedItems.length === 0 || submittedItems.length > 30) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Add between 1 and 30 items to your quote request.",
+      );
+    }
+
+    const itemNumbers = new Set();
+    const items = submittedItems.map((item) => {
+      const itemNumber = String(item?.itemNumber || "").trim();
+      const description = String(item?.description || "").trim();
+      const brand = String(item?.brand || "").trim();
+      const groupSection = String(item?.groupSection || "").trim();
+      const quantity = Number(item?.quantity);
+
+      if (
+        !itemNumber ||
+        itemNumber.length > 60 ||
+        !description ||
+        description.length > 300 ||
+        brand.length > 120 ||
+        groupSection.length > 160 ||
+        !Number.isFinite(quantity) ||
+        quantity <= 0 ||
+        quantity > 100000 ||
+        itemNumbers.has(itemNumber)
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Review the selected items and quantities.",
+        );
+      }
+
+      itemNumbers.add(itemNumber);
+      return {
+        itemNumber,
+        description,
+        brand,
+        groupSection,
+        quantity: Math.round(quantity * 100) / 100,
+      };
+    });
+
+    if (!allowedTimelines.has(neededBy)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Choose how soon you need the material.",
+      );
+    }
+    if (deliveryNeeded && (!deliveryAddress || deliveryAddress.length > 300)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter the delivery address for this quote.",
+      );
+    }
+    if (notes.length > 1200) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Keep quote notes under 1,200 characters.",
+      );
+    }
+
+    const quoteReference = context.firestore.doc(
+      `customerQuoteRequests/${requestId}`,
+    );
+    const updatedAtIso = new Date().toISOString();
+    let responseReference = "";
+
+    await context.firestore.runTransaction(async (transaction) => {
+      const quoteSnapshot = await transaction.get(quoteReference);
+
+      if (!quoteSnapshot.exists) {
+        throw new HttpsError("not-found", "That quote request no longer exists.");
+      }
+
+      const quoteData = quoteSnapshot.data() || {};
+      if (String(quoteData.customerUid || "") !== context.userId) {
+        throw new HttpsError(
+          "permission-denied",
+          "You can only update quote requests from your account.",
+        );
+      }
+
+      responseReference = String(quoteData.reference || "").trim();
+      const previousItems = Array.isArray(quoteData.items)
+        ? quoteData.items.slice(0, 30)
+        : [];
+      const previousDraft =
+        quoteData.pricingDraft && typeof quoteData.pricingDraft === "object"
+          ? quoteData.pricingDraft
+          : {};
+      const previousDraftPrices = Array.isArray(previousDraft.itemPrices)
+        ? previousDraft.itemPrices
+        : [];
+      const carriedPrices = new Map();
+
+      previousItems.forEach((item, index) => {
+        const itemNumber = String(item?.itemNumber || "").trim();
+        const rawPrice =
+          previousDraftPrices[index] ?? item?.unitPrice ?? null;
+        const unitPrice = Number(rawPrice);
+        carriedPrices.set(
+          itemNumber,
+          rawPrice === null ||
+            rawPrice === undefined ||
+            rawPrice === "" ||
+            !Number.isFinite(unitPrice)
+            ? null
+            : unitPrice,
+        );
+      });
+
+      if (quoteData.pricingPublished === true) {
+        const previousVersion = Math.max(
+          1,
+          Number(quoteData.pricingVersion) || 1,
+        );
+        transaction.set(
+          quoteReference
+            .collection("pricingVersions")
+            .doc(`v${String(previousVersion).padStart(4, "0")}`),
+          {
+            version: previousVersion,
+            items: previousItems,
+            publicNote: String(quoteData.publicNote || "").trim(),
+            taxRate: Number(quoteData.taxRate) || 0,
+            deliveryCharge: Number(quoteData.deliveryCharge) || 0,
+            materialSubtotal: Number(quoteData.materialSubtotal) || 0,
+            subtotal: Number(quoteData.subtotal) || 0,
+            taxAmount: Number(quoteData.taxAmount) || 0,
+            total: Number(quoteData.total) || 0,
+            publishedAt:
+              quoteData.pricingPublishedAt ||
+              quoteData.reviewedAt ||
+              FieldValue.serverTimestamp(),
+            publishedBy: String(quoteData.reviewedBy || "").trim(),
+          },
+          { merge: true },
+        );
+      }
+
+      const draftDeliveryCharge =
+        previousDraft.deliveryCharge ?? quoteData.deliveryCharge ?? null;
+      const draftTaxRate = previousDraft.taxRate ?? quoteData.taxRate ?? null;
+      const draftPublicNote = String(
+        previousDraft.publicNote || quoteData.publicNote || "",
+      ).trim();
+      const updatedAt = FieldValue.serverTimestamp();
+
+      transaction.set(
+        quoteReference,
+        {
+          status: "new",
+          items,
+          deliveryNeeded,
+          deliveryAddress: deliveryNeeded ? deliveryAddress : "",
+          neededBy,
+          notes,
+          pricingPublished: false,
+          pricingPublishedAt: FieldValue.delete(),
+          pricingDraft: {
+            itemPrices: items.map(
+              (item) => carriedPrices.get(item.itemNumber) ?? null,
+            ),
+            deliveryCharge: draftDeliveryCharge,
+            taxRate: draftTaxRate,
+            publicNote: draftPublicNote,
+            savedAt: updatedAt,
+            savedBy: context.email,
+          },
+          pricingDraftHasChanges: true,
+          publicNote: "",
+          taxRate: 0,
+          deliveryCharge: 0,
+          materialSubtotal: 0,
+          subtotal: 0,
+          taxAmount: 0,
+          total: 0,
+          reviewedAt: FieldValue.delete(),
+          reviewedBy: FieldValue.delete(),
+          customerUpdatedAt: updatedAt,
+          customerUpdateCount:
+            Math.max(0, Number(quoteData.customerUpdateCount) || 0) + 1,
+          updatedAt,
+        },
+        { merge: true },
+      );
+    });
+
+    logger.info("Customer quote request updated by customer", {
+      requestId,
+      reference: responseReference,
+      customerUid: context.userId,
+      itemCount: items.length,
+      deliveryNeeded,
+    });
+
+    return {
+      requestId,
+      reference: responseReference,
+      status: "new",
+      validityDays: 14,
+      updatedAt: updatedAtIso,
+    };
+  },
+);
+
 exports.listCustomerQuoteRequests = onCall(
   {
     region: "us-central1",
@@ -1656,6 +1889,16 @@ exports.listCustomerQuoteRequests = onCall(
           publicNote: String(requestData.publicNote || "").trim(),
           pricingPublished: requestData.pricingPublished === true,
           pricingVersion: Math.max(0, Number(requestData.pricingVersion) || 0),
+          pricingRevision: Math.max(0, Number(requestData.pricingRevision) || 0),
+          latestPricingRevisionTitle: String(
+            requestData.latestPricingRevisionTitle || "",
+          ).trim(),
+          latestPricingRevisionAt: customerPortalDateToIso(
+            requestData.latestPricingRevisionAt,
+          ),
+          latestPricingRevisionBy: String(
+            requestData.latestPricingRevisionBy || "",
+          ).trim(),
           pricingDraftHasChanges: requestData.pricingDraftHasChanges === true,
           pricingDraft: {
             itemPrices: Array.isArray(pricingDraftData.itemPrices)
@@ -1693,6 +1936,83 @@ exports.listCustomerQuoteRequests = onCall(
   },
 );
 
+exports.listCustomerQuotePricingVersions = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    const { firestore } = await getCustomerPortalQuoteReviewer(request);
+    const requestId = String(request.data?.requestId || "").trim();
+
+    if (!requestId || !/^[A-Za-z0-9_-]{10,80}$/.test(requestId)) {
+      throw new HttpsError("invalid-argument", "Choose a valid quote request.");
+    }
+
+    const quoteReference = firestore.doc(`customerQuoteRequests/${requestId}`);
+    const quoteSnapshot = await quoteReference.get();
+    if (!quoteSnapshot.exists) {
+      throw new HttpsError("not-found", "That quote request no longer exists.");
+    }
+
+    const versionsSnapshot = await quoteReference
+      .collection("pricingVersions")
+      .orderBy("revision", "desc")
+      .limit(50)
+      .get();
+
+    return {
+      versions: versionsSnapshot.docs.map((versionDocument) => {
+        const versionData = versionDocument.data() || {};
+        return {
+          id: versionDocument.id,
+          revision: Math.max(1, Number(versionData.revision) || 1),
+          customerVersion: Math.max(
+            0,
+            Number(versionData.customerVersion) || 0,
+          ),
+          type: String(versionData.type || "draft").trim(),
+          title: String(versionData.title || "Pricing update").trim(),
+          note: String(versionData.note || "").trim(),
+          status: String(versionData.status || "").trim(),
+          items: Array.isArray(versionData.items)
+            ? versionData.items.slice(0, 30).map((item) => ({
+                itemNumber: String(item?.itemNumber || "").trim(),
+                description: String(item?.description || "").trim(),
+                quantity: Number(item?.quantity) || 0,
+                unitPrice:
+                  item?.unitPrice === null || item?.unitPrice === undefined
+                    ? null
+                    : Number(item.unitPrice),
+                lineTotal:
+                  item?.lineTotal === null || item?.lineTotal === undefined
+                    ? null
+                    : Number(item.lineTotal),
+              }))
+            : [],
+          publicNote: String(versionData.publicNote || "").trim(),
+          internalNote: String(versionData.internalNote || "").trim(),
+          taxRate:
+            versionData.taxRate === null || versionData.taxRate === undefined
+              ? null
+              : Number(versionData.taxRate),
+          deliveryCharge:
+            versionData.deliveryCharge === null ||
+            versionData.deliveryCharge === undefined
+              ? null
+              : Number(versionData.deliveryCharge),
+          materialSubtotal: Number(versionData.materialSubtotal) || 0,
+          subtotal: Number(versionData.subtotal) || 0,
+          taxAmount: Number(versionData.taxAmount) || 0,
+          total: Number(versionData.total) || 0,
+          createdAt: customerPortalDateToIso(versionData.createdAt),
+          createdBy: String(versionData.createdBy || "").trim(),
+        };
+      }),
+    };
+  },
+);
+
 exports.updateCustomerQuoteRequest = onCall(
   {
     region: "us-central1",
@@ -1704,6 +2024,8 @@ exports.updateCustomerQuoteRequest = onCall(
     const requestId = String(request.data?.requestId || "").trim();
     const status = String(request.data?.status || "").trim();
     const internalNote = String(request.data?.internalNote || "").trim();
+    const versionTitle = String(request.data?.versionTitle || "").trim();
+    const versionNote = String(request.data?.versionNote || "").trim();
     const publishPricing = request.data?.publishPricing === true;
     const savePricingDraft = request.data?.savePricingDraft === true;
     const allowedStatuses = new Set(["new", "reviewing", "quoted", "closed"]);
@@ -1719,6 +2041,12 @@ exports.updateCustomerQuoteRequest = onCall(
       throw new HttpsError(
         "invalid-argument",
         "Keep the internal quote note under 800 characters.",
+      );
+    }
+    if (versionTitle.length > 80 || versionNote.length > 400) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Keep the version title under 80 characters and its note under 400 characters.",
       );
     }
 
@@ -1741,6 +2069,15 @@ exports.updateCustomerQuoteRequest = onCall(
       reviewedBy: reviewerEmail,
       updatedAt: reviewedAt,
     };
+    const currentPricingRevision = Math.max(
+      0,
+      Number(quoteData.pricingRevision) || 0,
+      Number(quoteData.pricingVersion) || 0,
+    );
+    const nextPricingRevision = savePricingDraft
+      ? currentPricingRevision + 1
+      : currentPricingRevision;
+    let pricingRevisionSnapshot = null;
 
     if (savePricingDraft) {
       const draftItems = Array.isArray(request.data?.draftItems)
@@ -1852,6 +2189,60 @@ exports.updateCustomerQuoteRequest = onCall(
       quoteUpdate.pricingDraftHasChanges =
         quoteData.pricingPublished === true &&
         draftPricingSignature !== publishedPricingSignature;
+
+      const revisionItems = existingItems.map((item, index) => {
+        const unitPrice = draftItemPrices[index];
+        const quantity = Number(item?.quantity) || 0;
+        return {
+          ...item,
+          unitPrice,
+          lineTotal:
+            unitPrice === null ? null : roundCurrency(quantity * unitPrice),
+        };
+      });
+      const revisionMaterialSubtotal = roundCurrency(
+        revisionItems.reduce(
+          (sum, item) => sum + (Number(item.lineTotal) || 0),
+          0,
+        ),
+      );
+      const revisionDeliveryCharge =
+        draftDeliveryCharge === null ? 0 : roundCurrency(draftDeliveryCharge);
+      const revisionTaxRate = draftTaxRate === null ? 0 : draftTaxRate;
+      const revisionSubtotal = roundCurrency(
+        revisionMaterialSubtotal + revisionDeliveryCharge,
+      );
+      const revisionTaxAmount = roundCurrency(
+        revisionSubtotal * (revisionTaxRate / 100),
+      );
+
+      Object.assign(quoteUpdate, {
+        pricingRevision: nextPricingRevision,
+        latestPricingRevisionTitle:
+          versionTitle || (publishPricing ? "Sent to customer" : "Pricing update"),
+        latestPricingRevisionAt: reviewedAt,
+        latestPricingRevisionBy: reviewerEmail,
+      });
+      pricingRevisionSnapshot = {
+        revision: nextPricingRevision,
+        customerVersion: 0,
+        type: publishPricing ? "published" : "draft",
+        title:
+          versionTitle || (publishPricing ? "Sent to customer" : "Pricing update"),
+        note: versionNote,
+        status,
+        items: revisionItems,
+        publicNote: draftPublicNote,
+        internalNote,
+        taxRate: revisionTaxRate,
+        deliveryCharge: revisionDeliveryCharge,
+        materialSubtotal: revisionMaterialSubtotal,
+        subtotal: revisionSubtotal,
+        taxAmount: revisionTaxAmount,
+        total: roundCurrency(revisionSubtotal + revisionTaxAmount),
+        createdAt: reviewedAt,
+        createdBy: reviewerEmail,
+      };
     }
 
     if (publishPricing) {
@@ -1958,6 +2349,21 @@ exports.updateCustomerQuoteRequest = onCall(
         pricingDraftHasChanges: false,
       });
 
+      if (pricingRevisionSnapshot) {
+        Object.assign(pricingRevisionSnapshot, {
+          customerVersion: nextPricingVersion,
+          type: "published",
+          items: publishedItems,
+          publicNote,
+          taxRate,
+          deliveryCharge: roundCurrency(deliveryCharge),
+          materialSubtotal,
+          subtotal,
+          taxAmount,
+          total,
+        });
+      }
+
       const writeBatch = firestore.batch();
       if (quoteData.pricingPublished === true && !quoteData.pricingVersion) {
         writeBatch.set(
@@ -1997,6 +2403,24 @@ exports.updateCustomerQuoteRequest = onCall(
           publishedBy: reviewerEmail,
         },
       );
+      if (pricingRevisionSnapshot) {
+        writeBatch.set(
+          quoteReference
+            .collection("pricingVersions")
+            .doc(`revision-${String(nextPricingRevision).padStart(6, "0")}`),
+          pricingRevisionSnapshot,
+        );
+      }
+      writeBatch.set(quoteReference, quoteUpdate, { merge: true });
+      await writeBatch.commit();
+    } else if (pricingRevisionSnapshot) {
+      const writeBatch = firestore.batch();
+      writeBatch.set(
+        quoteReference
+          .collection("pricingVersions")
+          .doc(`revision-${String(nextPricingRevision).padStart(6, "0")}`),
+        pricingRevisionSnapshot,
+      );
       writeBatch.set(quoteReference, quoteUpdate, { merge: true });
       await writeBatch.commit();
     } else {
@@ -2014,6 +2438,7 @@ exports.updateCustomerQuoteRequest = onCall(
       requestId,
       status: quoteUpdate.status,
       pricingPublished: publishPricing || quoteSnapshot.data()?.pricingPublished === true,
+      pricingRevision: nextPricingRevision,
       total: publishPricing ? quoteUpdate.total : Number(quoteSnapshot.data()?.total) || 0,
     };
   },

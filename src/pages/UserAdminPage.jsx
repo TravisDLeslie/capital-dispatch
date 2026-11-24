@@ -9,6 +9,7 @@ import {
   Building2,
   ChevronDown,
   ClipboardList,
+  History,
   Mail,
   MapPin,
   PackageCheck,
@@ -26,6 +27,7 @@ import PageContainer from "../components/PageContainer";
 import { auth } from "../utils/firebase";
 import {
   listCustomerAccountRequests,
+  listCustomerQuotePricingVersions,
   listCustomerQuoteRequests,
   reviewCustomerAccountRequest,
   updateCustomerQuoteRequest,
@@ -452,6 +454,8 @@ function getQuoteRequestDraft(quoteRequest) {
   return {
     status: quoteRequest.status || "new",
     internalNote: quoteRequest.internalNote || "",
+    versionTitle: "",
+    versionNote: "",
     publicNote: hasSavedPricingDraft
       ? savedPricingDraft.publicNote || ""
       : quoteRequest.publicNote || "",
@@ -590,6 +594,10 @@ export default function UserAdminPage({
   const [savingQuoteRequestId, setSavingQuoteRequestId] = useState("");
   const [publishingQuoteRequestId, setPublishingQuoteRequestId] = useState("");
   const [pricingValidationRequestId, setPricingValidationRequestId] = useState("");
+  const [quotePricingVersions, setQuotePricingVersions] = useState({});
+  const [openQuotePricingHistory, setOpenQuotePricingHistory] = useState({});
+  const [expandedQuoteRequests, setExpandedQuoteRequests] = useState({});
+  const [loadingQuotePricingHistoryId, setLoadingQuotePricingHistoryId] = useState("");
   const [quoteSearch, setQuoteSearch] = useState("");
   const [quoteStatusFilter, setQuoteStatusFilter] = useState("all");
   const [quoteResultLimit, setQuoteResultLimit] = useState(20);
@@ -728,6 +736,43 @@ export default function UserAdminPage({
     }
   }
 
+  async function toggleQuotePricingHistory(quoteRequest) {
+    const requestId = quoteRequest.id;
+    const isOpen = Boolean(openQuotePricingHistory[requestId]);
+    if (isOpen) {
+      setOpenQuotePricingHistory((current) => ({
+        ...current,
+        [requestId]: false,
+      }));
+      return;
+    }
+
+    setOpenQuotePricingHistory((current) => ({
+      ...current,
+      [requestId]: true,
+    }));
+    if (quotePricingVersions[requestId]) return;
+
+    setLoadingQuotePricingHistoryId(requestId);
+    try {
+      const versions = await listCustomerQuotePricingVersions(requestId);
+      setQuotePricingVersions((current) => ({
+        ...current,
+        [requestId]: versions,
+      }));
+    } catch (historyError) {
+      console.error("Unable to load quote pricing history:", historyError);
+      setError(
+        getCustomerPortalAdminError(
+          historyError,
+          "Unable to load the pricing version history.",
+        ),
+      );
+    } finally {
+      setLoadingQuotePricingHistoryId("");
+    }
+  }
+
   function updateQuoteRequestDraft(requestId, field, value) {
     setQuoteRequestDrafts((currentDrafts) => ({
       ...currentDrafts,
@@ -793,7 +838,7 @@ export default function UserAdminPage({
       setSavingQuoteRequestId(quoteRequest.id);
     }
     try {
-      await updateCustomerQuoteRequest({
+      const saveResult = await updateCustomerQuoteRequest({
         requestId: quoteRequest.id,
         status: publishPricing ? "quoted" : draft.status || "new",
         internalNote: draft.internalNote?.trim() || "",
@@ -831,13 +876,24 @@ export default function UserAdminPage({
           ? Number(draft.deliveryCharge) || 0
           : 0,
         publicNote: draft.publicNote?.trim() || "",
+        versionTitle: draft.versionTitle?.trim() || "",
+        versionNote: draft.versionNote?.trim() || "",
       });
       setMessage(
         publishPricing
           ? `Pricing Version ${Math.max(1, Number(quoteRequest.pricingVersion) + 1 || 1)} sent to the customer for ${quoteRequest.reference || "quote request"}.`
-          : `Saved the internal update and pricing draft for ${quoteRequest.reference || "quote request"}.`,
+          : `Saved Pricing Version ${Math.max(1, Number(saveResult?.pricingRevision) || Number(quoteRequest.pricingRevision) + 1 || 1)} for ${quoteRequest.reference || "quote request"}.`,
       );
       if (publishPricing) setPricingValidationRequestId("");
+      setQuotePricingVersions((current) => {
+        const nextVersions = { ...current };
+        delete nextVersions[quoteRequest.id];
+        return nextVersions;
+      });
+      setOpenQuotePricingHistory((current) => ({
+        ...current,
+        [quoteRequest.id]: false,
+      }));
       await loadQuoteRequests({ quiet: true });
     } catch (saveError) {
       console.error("Unable to update customer quote request:", saveError);
@@ -1570,10 +1626,11 @@ export default function UserAdminPage({
               const isSaving = savingQuoteRequestId === quoteRequest.id;
               const isPublishing = publishingQuoteRequestId === quoteRequest.id;
               const pricingSummary = getQuotePricingSummary(quoteRequest, draft);
+              const isExpanded = Boolean(expandedQuoteRequests[quoteRequest.id]);
 
               return (
                 <section key={quoteRequest.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                  <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className={`flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between ${isExpanded ? "border-b border-slate-200" : ""}`}>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">{quoteRequest.reference || "Quote request"}</p>
@@ -1584,7 +1641,7 @@ export default function UserAdminPage({
                       {quoteRequest.createdAt ? <p className="mt-2 text-xs font-semibold text-slate-400">Submitted {formatCustomerRequestDate(quoteRequest.createdAt)}</p> : null}
                     </div>
 
-                    <div className="shrink-0 lg:w-[460px]">
+                    <div className="shrink-0 lg:w-[520px]">
                       <div className="mb-2 flex justify-start lg:justify-end">
                         <span
                           className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] ${
@@ -1595,12 +1652,12 @@ export default function UserAdminPage({
                                 : "bg-slate-100 text-slate-600"
                           }`}
                         >
-                          {quoteRequest.pricingPublished
-                            ? `Quote Version ${Math.max(1, Number(quoteRequest.pricingVersion) || 1)}${quoteRequest.pricingDraftHasChanges ? " · Unsent changes" : ""}`
-                            : "Pricing Draft"}
+                          {quoteRequest.pricingRevision || quoteRequest.pricingVersion
+                            ? `V${Math.max(1, Number(quoteRequest.pricingRevision) || Number(quoteRequest.pricingVersion) || 1)}${quoteRequest.pricingDraftHasChanges ? " · Unsent changes" : ""}`
+                            : "Draft"}
                         </span>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
                         <div className="rounded-2xl bg-slate-50 p-4">
                           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Account</p>
                           <p className="mt-1 text-sm font-black text-slate-800">{quoteRequest.accountNumber || "Not linked yet"}</p>
@@ -1609,11 +1666,31 @@ export default function UserAdminPage({
                           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Needed</p>
                           <p className="mt-1 text-sm font-black text-slate-800">{quoteTimelineLabels[quoteRequest.neededBy] || quoteRequest.neededBy || "Not provided"}</p>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedQuoteRequests((current) => ({
+                              ...current,
+                              [quoteRequest.id]: !isExpanded,
+                            }))
+                          }
+                          className="inline-flex min-h-16 items-center justify-center gap-2 rounded-2xl border border-violet-200 bg-white px-4 text-sm font-black text-violet-700 transition hover:bg-violet-50"
+                          aria-expanded={isExpanded}
+                          aria-controls={`quote-details-${quoteRequest.id}`}
+                        >
+                          {isExpanded ? "Collapse" : "Open quote"}
+                          <ChevronDown
+                            className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                            aria-hidden="true"
+                          />
+                        </button>
                       </div>
                     </div>
                   </div>
 
+                  {isExpanded ? (
                   <div className="grid gap-5 p-5 xl:grid-cols-[1fr_360px]">
+                    <span id={`quote-details-${quoteRequest.id}`} className="sr-only">Quote details</span>
                     <div>
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
@@ -1690,6 +1767,14 @@ export default function UserAdminPage({
                             </div>
                             <p className="mt-1 text-sm font-semibold text-slate-600">Enter unit prices, delivery, and tax. Save keeps a private draft; Send creates a new customer-visible version.</p>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleQuotePricingHistory(quoteRequest)}
+                            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-black text-violet-700 transition hover:bg-violet-100"
+                          >
+                            <History className="h-4 w-4" aria-hidden="true" />
+                            {openQuotePricingHistory[quoteRequest.id] ? "Hide history" : `Pricing history${quoteRequest.pricingRevision ? ` (${quoteRequest.pricingRevision})` : ""}`}
+                          </button>
                         </div>
 
                         <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_260px]">
@@ -1730,6 +1815,54 @@ export default function UserAdminPage({
                             </div>
                           </div>
                         </div>
+
+                        {openQuotePricingHistory[quoteRequest.id] ? (
+                          <div className="mt-4 border-t border-violet-200 pt-4">
+                            {loadingQuotePricingHistoryId === quoteRequest.id ? (
+                              <p className="text-sm font-bold text-slate-500">Loading pricing versions…</p>
+                            ) : (quotePricingVersions[quoteRequest.id] || []).length === 0 ? (
+                              <p className="text-sm font-bold text-slate-500">No saved pricing versions yet.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {(quotePricingVersions[quoteRequest.id] || []).map((version) => (
+                                  <div key={version.id} className="rounded-2xl border border-violet-100 bg-white p-3 shadow-sm">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                      <div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-violet-700">Version {version.revision}</span>
+                                          {version.type === "published" ? <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-emerald-700">Sent to customer{version.customerVersion ? ` · V${version.customerVersion}` : ""}</span> : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-slate-600">Internal draft</span>}
+                                        </div>
+                                        <p className="mt-2 text-sm font-black text-slate-950">{version.title || "Pricing update"}</p>
+                                        {version.note ? <p className="mt-1 whitespace-pre-wrap text-xs font-semibold leading-5 text-slate-600">{version.note}</p> : null}
+                                        <p className="mt-2 text-[11px] font-semibold text-slate-400">{version.createdAt ? formatCustomerRequestDate(version.createdAt) : "Time unavailable"}{version.createdBy ? ` · ${version.createdBy}` : ""}</p>
+                                      </div>
+                                      <p className="text-lg font-black text-slate-950">{formatQuoteCurrency(version.total)}</p>
+                                    </div>
+                                    <details className="mt-3 border-t border-slate-100 pt-3">
+                                      <summary className="cursor-pointer text-xs font-black text-violet-700">View saved prices</summary>
+                                      <div className="mt-3 space-y-2">
+                                        {(version.items || []).map((item, itemIndex) => (
+                                          <div key={`${version.id}-${item.itemNumber}-${itemIndex}`} className="grid gap-1 rounded-xl bg-slate-50 px-3 py-2 text-xs sm:grid-cols-[70px_1fr_70px_90px] sm:items-center">
+                                            <span className="font-black text-slate-500">{item.itemNumber || `Item ${itemIndex + 1}`}</span>
+                                            <span className="font-bold text-slate-800">{item.description || "Item description unavailable"}</span>
+                                            <span className="font-bold text-slate-600 sm:text-right">Qty {item.quantity}</span>
+                                            <span className="font-black text-slate-950 sm:text-right">{item.unitPrice === null || item.unitPrice === undefined ? "Not priced" : `${formatQuoteCurrency(item.unitPrice)} ea.`}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <dl className="mt-3 ml-auto grid max-w-xs gap-1 text-xs font-bold text-slate-600">
+                                        <div className="flex justify-between gap-4"><dt>Material</dt><dd>{formatQuoteCurrency(version.materialSubtotal)}</dd></div>
+                                        <div className="flex justify-between gap-4"><dt>Delivery</dt><dd>{formatQuoteCurrency(version.deliveryCharge)}</dd></div>
+                                        <div className="flex justify-between gap-4"><dt>Tax{version.taxRate !== null && version.taxRate !== undefined ? ` (${Number(version.taxRate).toFixed(2)}%)` : ""}</dt><dd>{formatQuoteCurrency(version.taxAmount)}</dd></div>
+                                        <div className="flex justify-between gap-4 border-t border-slate-200 pt-1 font-black text-slate-950"><dt>Total</dt><dd>{formatQuoteCurrency(version.total)}</dd></div>
+                                      </dl>
+                                    </details>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1762,7 +1895,18 @@ export default function UserAdminPage({
                         <span className="mb-1 block text-xs font-black text-slate-600">Internal note</span>
                         <textarea value={draft.internalNote || ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "internalNote", event.target.value)} maxLength={800} rows={4} placeholder="Who is preparing this quote, follow-up details, or outcome…" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
                       </label>
-                      <button type="button" onClick={() => saveQuoteRequest(quoteRequest)} disabled={isSaving || isPublishing} className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-wait disabled:bg-slate-400">{isSaving ? "Saving…" : "Save update & pricing draft"}</button>
+                      <div className="mt-4 rounded-2xl border border-violet-200 bg-white p-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-700">New pricing version</p>
+                        <label className="mt-3 block">
+                          <span className="mb-1 block text-xs font-black text-slate-600">Version title <span className="font-semibold text-slate-400">(optional)</span></span>
+                          <input value={draft.versionTitle || ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "versionTitle", event.target.value)} maxLength={80} placeholder="Example: Updated framing package" className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                        </label>
+                        <label className="mt-3 block">
+                          <span className="mb-1 block text-xs font-black text-slate-600">Version note <span className="font-semibold text-slate-400">(internal)</span></span>
+                          <textarea value={draft.versionNote || ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "versionNote", event.target.value)} maxLength={400} rows={2} placeholder="What changed in this version?" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                        </label>
+                      </div>
+                      <button type="button" onClick={() => saveQuoteRequest(quoteRequest)} disabled={isSaving || isPublishing} className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-wait disabled:bg-slate-400">{isSaving ? "Saving version…" : "Save new pricing version"}</button>
                       <button type="button" onClick={() => saveQuoteRequest(quoteRequest, { publishPricing: true })} disabled={isSaving || isPublishing} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-wait disabled:bg-slate-400">
                         <Send className="h-4 w-4" aria-hidden="true" />
                         {isPublishing ? "Sending pricing…" : quoteRequest.pricingPublished ? `Send as Version ${Math.max(2, Number(quoteRequest.pricingVersion) + 1 || 2)}` : "Send pricing to customer"}
@@ -1770,6 +1914,7 @@ export default function UserAdminPage({
                       {quoteRequest.reviewedAt ? <p className="mt-3 text-xs font-semibold leading-5 text-slate-400">Last updated {formatCustomerRequestDate(quoteRequest.reviewedAt)}{quoteRequest.reviewedBy ? ` by ${quoteRequest.reviewedBy}` : ""}</p> : null}
                     </aside>
                   </div>
+                  ) : null}
                 </section>
                 );
               })}

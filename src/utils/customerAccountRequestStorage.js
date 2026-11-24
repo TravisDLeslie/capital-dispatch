@@ -98,6 +98,20 @@ export async function submitCustomerQuoteRequest(quoteRequest) {
   return response.data;
 }
 
+export async function updateMyCustomerQuoteRequest(quoteRequest) {
+  if (!functions) {
+    throw new Error("Quote updates are temporarily unavailable.");
+  }
+
+  const updateQuote = httpsCallable(
+    functions,
+    "updateMyCustomerQuoteRequest",
+  );
+  const response = await updateQuote(quoteRequest);
+
+  return response.data;
+}
+
 export async function listMyCustomerQuoteRequests() {
   if (!functions) {
     throw new Error("Your quote history is temporarily unavailable.");
@@ -125,6 +139,22 @@ export async function listCustomerQuoteRequests() {
   return Array.isArray(response.data?.requests) ? response.data.requests : [];
 }
 
+export async function listCustomerQuotePricingVersions(requestId) {
+  if (!functions) {
+    throw new Error("Quote pricing history is temporarily unavailable.");
+  }
+
+  const listVersions = httpsCallable(
+    functions,
+    "listCustomerQuotePricingVersions",
+  );
+  const response = await listVersions({ requestId });
+
+  return Array.isArray(response.data?.versions)
+    ? response.data.versions
+    : [];
+}
+
 export async function updateCustomerQuoteRequest({
   requestId,
   status,
@@ -139,6 +169,8 @@ export async function updateCustomerQuoteRequest({
   taxRate = 0,
   deliveryCharge = 0,
   publicNote = "",
+  versionTitle = "",
+  versionNote = "",
 }) {
   if (!functions) {
     throw new Error("Customer quote requests are temporarily unavailable.");
@@ -159,6 +191,8 @@ export async function updateCustomerQuoteRequest({
     taxRate,
     deliveryCharge,
     publicNote,
+    versionTitle,
+    versionNote,
   });
 
   return response.data;

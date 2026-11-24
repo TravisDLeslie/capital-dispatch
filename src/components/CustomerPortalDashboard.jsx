@@ -31,6 +31,7 @@ import {
   getCustomerPortalProfile,
   listMyCustomerQuoteRequests,
   submitCustomerQuoteRequest,
+  updateMyCustomerQuoteRequest,
   updateCustomerPortalProfile,
 } from "../utils/customerAccountRequestStorage";
 
@@ -235,6 +236,7 @@ export default function CustomerPortalDashboard({
   const [quoteHistoryError, setQuoteHistoryError] = useState("");
   const [showAllQuoteHistory, setShowAllQuoteHistory] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState(null);
+  const [editingQuote, setEditingQuote] = useState(null);
   const catalogSearchRef = useRef(null);
 
   useEffect(() => {
@@ -327,11 +329,55 @@ export default function CustomerPortalDashboard({
     .split(/\s+/)[0];
   const accountIsLinked = profile.status === "approved";
 
-  function openQuote() {
-    setView("quote");
+  function resetQuoteBuilder() {
+    setEditingQuote(null);
+    setQuoteItems([]);
+    setCatalogSearch("");
+    setIsAddingQuoteItem(false);
+    setDeliveryNeeded(false);
+    setDeliveryAddress(profile.address || "");
+    setNeededBy("");
+    setQuoteNotes("");
+    setQuoteStatus("idle");
     setQuoteError("");
     setQuoteConfirmation(null);
-    setIsAddingQuoteItem(false);
+  }
+
+  function openQuote() {
+    resetQuoteBuilder();
+    setView("quote");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => catalogSearchRef.current?.focus());
+    });
+  }
+
+  function editExistingQuote(quote) {
+    setEditingQuote(quote);
+    setQuoteItems(
+      (quote.items || []).map((item) => ({
+        itemNumber: item.itemNumber,
+        description: item.description,
+        brand: item.brand || "",
+        groupSection: item.groupSection || "",
+        quantity: Number(item.quantity) || 1,
+      })),
+    );
+    setDeliveryNeeded(quote.deliveryNeeded === true);
+    setDeliveryAddress(
+      quote.deliveryNeeded
+        ? quote.deliveryAddress || profile.address || ""
+        : profile.address || "",
+    );
+    setNeededBy(quote.neededBy || "");
+    setQuoteNotes(quote.notes || "");
+    setCatalogSearch("");
+    setIsAddingQuoteItem(true);
+    setQuoteStatus("idle");
+    setQuoteError("");
+    setQuoteConfirmation(null);
+    setSelectedQuote(null);
+    setView("quote");
     window.scrollTo({ top: 0, behavior: "smooth" });
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => catalogSearchRef.current?.focus());
@@ -444,7 +490,7 @@ export default function CustomerPortalDashboard({
     setQuoteStatus("submitting");
 
     try {
-      const result = await submitCustomerQuoteRequest({
+      const quotePayload = {
         items: quoteItems.map((item) => ({
           itemNumber: item.itemNumber,
           description: item.description,
@@ -456,31 +502,49 @@ export default function CustomerPortalDashboard({
         deliveryAddress: deliveryNeeded ? deliveryAddress.trim() : "",
         neededBy,
         notes: quoteNotes.trim(),
-      });
+      };
+      const result = editingQuote
+        ? await updateMyCustomerQuoteRequest({
+            requestId: editingQuote.id,
+            ...quotePayload,
+          })
+        : await submitCustomerQuoteRequest(quotePayload);
+      const updatedQuote = {
+        ...(editingQuote || {}),
+        id: result.requestId || editingQuote?.id || result.reference,
+        reference: result.reference || editingQuote?.reference,
+        status: result.status || "new",
+        validityDays: result.validityDays || editingQuote?.validityDays || 14,
+        createdAt:
+          editingQuote?.createdAt || result.createdAt || new Date().toISOString(),
+        updatedAt: result.updatedAt || result.createdAt || new Date().toISOString(),
+        reviewedAt: "",
+        items: quotePayload.items,
+        deliveryNeeded,
+        deliveryAddress: quotePayload.deliveryAddress,
+        neededBy,
+        notes: quotePayload.notes,
+        pricingPublished: false,
+        pricingVersion: 0,
+        publicNote: "",
+        taxRate: 0,
+        deliveryCharge: 0,
+        materialSubtotal: 0,
+        subtotal: 0,
+        taxAmount: 0,
+        total: 0,
+      };
       setQuoteHistory((currentQuotes) => [
-        {
-          id: result.requestId || result.reference,
-          reference: result.reference,
-          status: result.status || "new",
-          validityDays: result.validityDays || 14,
-          createdAt: result.createdAt || new Date().toISOString(),
-          updatedAt: result.createdAt || new Date().toISOString(),
-          reviewedAt: "",
-          items: quoteItems.map((item) => ({
-            itemNumber: item.itemNumber,
-            description: item.description,
-            quantity: Number(item.quantity),
-          })),
-          deliveryNeeded,
-          deliveryAddress: deliveryNeeded ? deliveryAddress.trim() : "",
-          neededBy,
-        },
+        updatedQuote,
         ...currentQuotes.filter(
-          (quote) => quote.reference !== result.reference,
+          (quote) =>
+            quote.id !== updatedQuote.id &&
+            quote.reference !== updatedQuote.reference,
         ),
       ]);
       setQuoteHistoryStatus("loaded");
-      setQuoteConfirmation(result);
+      setQuoteConfirmation({ ...result, updated: Boolean(editingQuote) });
+      setEditingQuote(null);
       setQuoteItems([]);
       setCatalogSearch("");
       setIsAddingQuoteItem(false);
@@ -491,9 +555,12 @@ export default function CustomerPortalDashboard({
       setQuoteStatus("submitted");
     } catch (error) {
       console.error("Unable to submit quote request:", error);
-      setQuoteError(
-        customerErrorMessage(error, "We could not submit your quote request."),
-      );
+      setQuoteError(customerErrorMessage(
+        error,
+        editingQuote
+          ? "We could not update your quote request."
+          : "We could not submit your quote request.",
+      ));
       setQuoteStatus("error");
     }
   }
@@ -930,10 +997,16 @@ export default function CustomerPortalDashboard({
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">Material request</p>
-                    <h2 className="mt-2 text-2xl font-black sm:text-3xl">Build your quote</h2>
-                    <p className="mt-1 text-sm font-semibold text-slate-500">Search our item catalog. Material pricing is prepared by our team; delivery estimates appear after you enter an address.</p>
+                    <h2 className="mt-2 text-2xl font-black sm:text-3xl">
+                      {editingQuote ? `Update ${editingQuote.reference}` : "Build your quote"}
+                    </h2>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">
+                      {editingQuote
+                        ? "Add material, change quantities, or update the request details. Capital Lumber will review the changes and refresh pricing."
+                        : "Search our item catalog. Material pricing is prepared by our team; delivery estimates appear after you enter an address."}
+                    </p>
                   </div>
-                  <button type="button" onClick={() => setView("dashboard")} className="flex items-center gap-2 text-sm font-black text-slate-500 hover:text-slate-950"><ArrowLeft className="h-4 w-4" /> Back</button>
+                  <button type="button" onClick={() => { resetQuoteBuilder(); setView("dashboard"); }} className="flex items-center gap-2 text-sm font-black text-slate-500 hover:text-slate-950"><ArrowLeft className="h-4 w-4" /> Back</button>
                 </div>
               </div>
               <div className="p-6 sm:p-8">
@@ -941,7 +1014,9 @@ export default function CustomerPortalDashboard({
 
                 <div className={`${quoteItems.length === 0 ? "mt-8" : ""} flex items-center justify-between gap-4`}>
                   <div><p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Selected material</p><h3 className="mt-1 text-xl font-black">{quoteItems.length} {quoteItems.length === 1 ? "item" : "items"}</h3></div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">No pricing shown</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
+                    {editingQuote ? "Pricing will be refreshed" : "No pricing shown"}
+                  </span>
                 </div>
                 <div className="mt-4 grid gap-3">
                   {quoteItems.length === 0 ? (
@@ -991,10 +1066,12 @@ export default function CustomerPortalDashboard({
               <textarea id="quote-notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} maxLength={1200} rows={4} placeholder="Sizes, substitutions, project details, or questions…" className="mt-2 w-full resize-y rounded-2xl border border-slate-200 p-4 text-sm font-semibold outline-none focus:border-slate-900 focus:ring-4 focus:ring-slate-100" />
 
               {quoteError ? <div role="alert" className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold leading-5 text-red-700">{quoteError}</div> : null}
-              {quoteConfirmation ? <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-bold text-emerald-800"><div className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5" /> Quote request received</div><p className="mt-2 text-xs font-semibold leading-5 text-emerald-700">Reference {quoteConfirmation.reference}. Our team will review your material list and contact you.</p></div> : null}
+              {quoteConfirmation ? <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-bold text-emerald-800"><div className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5" /> {quoteConfirmation.updated ? "Quote updated" : "Quote request received"}</div><p className="mt-2 text-xs font-semibold leading-5 text-emerald-700">Reference {quoteConfirmation.reference}. Our team will review your material list and contact you.</p></div> : null}
 
               <button type="submit" disabled={quoteStatus === "submitting" || quoteItems.length === 0} className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#FC2C38] px-5 py-4 text-base font-black text-white shadow-lg transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300">
-                {quoteStatus === "submitting" ? "Sending request…" : "Request quote"}
+                {quoteStatus === "submitting"
+                  ? editingQuote ? "Saving changes…" : "Sending request…"
+                  : editingQuote ? "Save quote changes" : "Request quote"}
                 {quoteStatus !== "submitting" ? <ArrowRight className="h-5 w-5" /> : null}
               </button>
               <p className="mt-3 text-center text-xs font-semibold leading-5 text-slate-500">Material pricing is prepared by our team. Any delivery price shown is an estimate and will be confirmed with your quote.</p>
@@ -1069,14 +1146,24 @@ export default function CustomerPortalDashboard({
                   </div>
 
                   <div className="mt-6 overflow-hidden rounded-3xl border border-slate-200">
-                    <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+                    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
                       <div>
                         <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">Requested material</p>
                         <h3 className="mt-1 text-xl font-black text-slate-950">Full item list</h3>
                       </div>
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
-                        {selectedQuote.items?.length || 0} {(selectedQuote.items?.length || 0) === 1 ? "item" : "items"}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
+                          {selectedQuote.items?.length || 0} {(selectedQuote.items?.length || 0) === 1 ? "item" : "items"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => editExistingQuote(selectedQuote)}
+                          className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-black text-white transition hover:bg-[#FC2C38]"
+                        >
+                          <Plus className="h-4 w-4" aria-hidden="true" />
+                          Add or change items
+                        </button>
+                      </div>
                     </div>
                     <div className="divide-y divide-slate-100">
                       {(selectedQuote.items || []).map((item, index) => (
