@@ -1416,6 +1416,7 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-route-planner",
       "deliveries-history",
       "sales",
+      "quote-requests",
       "order-flow",
       "order-builds",
       "sales-orders",
@@ -1483,6 +1484,7 @@ function getAllowedPageIdsForRole(role: string) {
       "deliveries-route-planner",
       "deliveries-history",
       "sales",
+      "quote-requests",
       "order-flow",
       "order-builds",
       "sales-orders",
@@ -1573,6 +1575,7 @@ function getAllowedPageIds(
       pageIds.some((pageId) =>
         [
           "sales-orders",
+          "quote-requests",
           "customers-add",
           "customers-view",
           "sales-tools",
@@ -2428,6 +2431,7 @@ export default function App() {
   const canReadSales = effectiveAllowedPageIds.some((pageId) =>
     [
       "sales",
+      "quote-requests",
       "order-flow",
       "sales-orders",
       "customers-add",
@@ -9248,6 +9252,18 @@ export default function App() {
             currentUserProfile={userProfile}
             onUpdateUserProfile={handleUpdateUserProfile}
             onPageChange={navigateToPage}
+          />
+        );
+
+      case "quote-requests":
+        return (
+          <UserAdminPage
+            users={users}
+            vendors={activeVendors}
+            currentUserProfile={userProfile}
+            onUpdateUserProfile={handleUpdateUserProfile}
+            onPageChange={navigateToPage}
+            quoteRequestsOnly
           />
         );
 

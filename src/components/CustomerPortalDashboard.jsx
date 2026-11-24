@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import AddressAutocompleteInput from "./AddressAutocompleteInput";
+import DeliveryPriceEstimate from "./DeliveryPriceEstimate";
 import capitalLumberLogo from "../assets/logo-black-text.svg";
 import { inventoryCatalogItems } from "../data/inventoryCatalog";
 import {
@@ -223,6 +224,7 @@ export default function CustomerPortalDashboard({
   const [quoteHistoryStatus, setQuoteHistoryStatus] = useState("loading");
   const [quoteHistoryError, setQuoteHistoryError] = useState("");
   const [showAllQuoteHistory, setShowAllQuoteHistory] = useState(false);
+  const [selectedQuote, setSelectedQuote] = useState(null);
   const catalogSearchRef = useRef(null);
 
   useEffect(() => {
@@ -255,6 +257,23 @@ export default function CustomerPortalDashboard({
       isActive = false;
     };
   }, [currentUser?.email]);
+
+  useEffect(() => {
+    if (!selectedQuote) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setSelectedQuote(null);
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [selectedQuote]);
 
   useEffect(() => {
     let isActive = true;
@@ -767,9 +786,11 @@ export default function CustomerPortalDashboard({
                         )?.label;
 
                         return (
-                          <article
+                          <button
+                            type="button"
                             key={quote.id || quote.reference}
-                            className="flex min-h-56 flex-col rounded-3xl border border-slate-200 bg-slate-50 p-5"
+                            onClick={() => setSelectedQuote(quote)}
+                            className="group flex min-h-56 flex-col rounded-3xl border border-slate-200 bg-slate-50 p-5 text-left transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-red-100"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div>
@@ -821,7 +842,11 @@ export default function CustomerPortalDashboard({
                                 {getQuoteValidityLabel(quote)}
                               </span>
                             </div>
-                          </article>
+                            <span className="mt-4 flex items-center justify-end gap-1 text-xs font-black text-[#FC2C38]">
+                              View full details
+                              <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" aria-hidden="true" />
+                            </span>
+                          </button>
                         );
                         })}
                     </div>
@@ -895,7 +920,7 @@ export default function CustomerPortalDashboard({
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">Material request</p>
                     <h2 className="mt-2 text-2xl font-black sm:text-3xl">Build your quote</h2>
-                    <p className="mt-1 text-sm font-semibold text-slate-500">Search our item catalog. Pricing is prepared by our team and is not shown here.</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">Search our item catalog. Material pricing is prepared by our team; delivery estimates appear after you enter an address.</p>
                   </div>
                   <button type="button" onClick={() => setView("dashboard")} className="flex items-center gap-2 text-sm font-black text-slate-500 hover:text-slate-950"><ArrowLeft className="h-4 w-4" /> Back</button>
                 </div>
@@ -945,7 +970,7 @@ export default function CustomerPortalDashboard({
               </fieldset>
 
               {deliveryNeeded ? (
-                <div className="mt-5"><label htmlFor="quote-delivery-address" className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Delivery address</label><div className="relative mt-2 rounded-2xl border border-slate-200"><MapPin className="pointer-events-none absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400" /><AddressAutocompleteInput id="quote-delivery-address" value={deliveryAddress} onChange={setDeliveryAddress} onPlaceSelected={(_place, address) => setDeliveryAddress(address)} autoComplete="off" enableLocalFallback showStatus={false} placeholder="Start typing a delivery address…" className="w-full rounded-2xl border-0 bg-transparent py-4 pl-12 pr-4 text-sm font-bold outline-none" /></div><p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{profileDraft.address || profile.address ? "Auto-filled from your saved address. Start typing to change it, then select the complete Google address." : "Start typing, then select the complete address from Google's suggestions."}</p></div>
+                <div className="mt-5"><label htmlFor="quote-delivery-address" className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Delivery address</label><div className="relative mt-2 rounded-2xl border border-slate-200"><MapPin className="pointer-events-none absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-slate-400" /><AddressAutocompleteInput id="quote-delivery-address" value={deliveryAddress} onChange={setDeliveryAddress} onPlaceSelected={(_place, address) => setDeliveryAddress(address)} autoComplete="off" enableLocalFallback showStatus={false} placeholder="Start typing a delivery address…" className="w-full rounded-2xl border-0 bg-transparent py-4 pl-12 pr-4 text-sm font-bold outline-none" /></div><p className="mt-2 text-xs font-semibold leading-5 text-slate-500">{profileDraft.address || profile.address ? "Auto-filled from your saved address. Start typing to change it, then select the complete Google address." : "Start typing, then select the complete address from Google's suggestions."}</p><DeliveryPriceEstimate address={deliveryAddress} compact /></div>
               ) : null}
 
               <label htmlFor="quote-timeline" className="mt-5 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">How soon do you need it?</label>
@@ -961,10 +986,159 @@ export default function CustomerPortalDashboard({
                 {quoteStatus === "submitting" ? "Sending request…" : "Request quote"}
                 {quoteStatus !== "submitting" ? <ArrowRight className="h-5 w-5" /> : null}
               </button>
-              <p className="mt-3 text-center text-xs font-semibold leading-5 text-slate-500">No pricing is displayed or finalized online. A Capital Lumber team member will follow up.</p>
+              <p className="mt-3 text-center text-xs font-semibold leading-5 text-slate-500">Material pricing is prepared by our team. Any delivery price shown is an estimate and will be confirmed with your quote.</p>
             </aside>
           </form>
         ) : null}
+
+        {selectedQuote ? (() => {
+          const selectedStatus =
+            QUOTE_STATUS_DETAILS[selectedQuote.status] || QUOTE_STATUS_DETAILS.new;
+          const selectedTiming = TIMELINE_OPTIONS.find(
+            (option) => option.value === selectedQuote.neededBy,
+          )?.label || "Timing not provided";
+
+          return (
+            <div
+              className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="customer-quote-detail-title"
+            >
+              <button
+                type="button"
+                aria-label="Close quote details"
+                className="absolute inset-0 cursor-default"
+                onClick={() => setSelectedQuote(null)}
+              />
+              <section className="relative z-10 max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-t-[2rem] bg-white shadow-2xl sm:rounded-[2rem]">
+                <header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-200 bg-white/95 px-6 py-5 backdrop-blur sm:px-8 sm:py-6">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#FC2C38]">
+                        Quote details
+                      </p>
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${selectedStatus.className}`}>
+                        {selectedStatus.label}
+                      </span>
+                    </div>
+                    <h2 id="customer-quote-detail-title" className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
+                      {selectedQuote.reference || "Quote request"}
+                    </h2>
+                    <p className="mt-1 text-sm font-bold text-slate-500">
+                      Submitted {formatQuoteDate(selectedQuote.createdAt, { day: "numeric", hour: "numeric", minute: "2-digit" })}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedQuote(null)}
+                    className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-slate-200 text-slate-500 transition hover:border-slate-950 hover:text-slate-950"
+                    aria-label="Close quote details"
+                  >
+                    <X className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </header>
+
+                <div className="p-6 sm:p-8">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl bg-slate-950 p-4 text-white">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Status</p>
+                      <p className="mt-2 text-base font-black">{selectedStatus.label}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-100 p-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Fulfillment</p>
+                      <p className="mt-2 text-base font-black text-slate-900">
+                        {selectedQuote.deliveryNeeded ? "Delivery" : "Customer pickup"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-100 p-4">
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Quote validity</p>
+                      <p className="mt-2 text-base font-black text-slate-900">{getQuoteValidityLabel(selectedQuote)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 overflow-hidden rounded-3xl border border-slate-200">
+                    <div className="flex items-center justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">Requested material</p>
+                        <h3 className="mt-1 text-xl font-black text-slate-950">Full item list</h3>
+                      </div>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
+                        {selectedQuote.items?.length || 0} {(selectedQuote.items?.length || 0) === 1 ? "item" : "items"}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {(selectedQuote.items || []).map((item, index) => (
+                        <div key={`${selectedQuote.id}-${item.itemNumber}-${index}`} className="grid gap-3 px-5 py-4 sm:grid-cols-[90px_1fr_auto] sm:items-center sm:px-6">
+                          <span className="w-fit rounded-xl bg-red-50 px-3 py-2 text-sm font-black text-[#FC2C38]">
+                            Qty {item.quantity}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-sm font-black text-slate-950">{item.description}</p>
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              Item {item.itemNumber || "number unavailable"}
+                              {item.brand ? ` · ${item.brand}` : ""}
+                            </p>
+                          </div>
+                          {item.groupSection ? (
+                            <span className="text-xs font-black text-slate-400">{item.groupSection}</span>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-3xl border border-slate-200 p-5">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-slate-600">
+                          {selectedQuote.deliveryNeeded ? <Truck className="h-5 w-5" /> : <Store className="h-5 w-5" />}
+                        </span>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Fulfillment details</p>
+                          <p className="mt-1 text-sm font-black text-slate-900">{selectedTiming}</p>
+                        </div>
+                      </div>
+                      {selectedQuote.deliveryNeeded ? (
+                        <>
+                          <p className="mt-4 flex items-start gap-2 text-sm font-bold leading-6 text-slate-600">
+                            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#FC2C38]" aria-hidden="true" />
+                            {selectedQuote.deliveryAddress || "Delivery address not provided"}
+                          </p>
+                          <DeliveryPriceEstimate
+                            address={selectedQuote.deliveryAddress}
+                            compact
+                          />
+                        </>
+                      ) : (
+                        <p className="mt-4 text-sm font-bold leading-6 text-slate-600">Material will be picked up at Capital Lumber.</p>
+                      )}
+                    </div>
+
+                    <div className="rounded-3xl border border-slate-200 p-5">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-slate-600">
+                          <FileText className="h-5 w-5" aria-hidden="true" />
+                        </span>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Project notes</p>
+                          <p className="mt-1 text-sm font-black text-slate-900">Your request details</p>
+                        </div>
+                      </div>
+                      <p className="mt-4 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-600">
+                        {selectedQuote.notes || "No additional project notes were included."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 rounded-2xl bg-blue-50 px-5 py-4 text-sm font-bold leading-6 text-blue-900">
+                    Material pricing is prepared by the Capital Lumber team and will be shared with you directly. Questions? Call 208-343-5481.
+                  </div>
+                </div>
+              </section>
+            </div>
+          );
+        })() : null}
 
         <footer className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-6 text-center text-xs font-semibold text-slate-500 sm:flex-row sm:text-left">
           <p>Need help? Call Capital Lumber at 208-343-5481.</p>

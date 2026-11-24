@@ -66,6 +66,11 @@ const navigationItems = [
     label: "Sales",
   },
   {
+    group: "Quote Requests",
+    id: "quote-requests",
+    label: "Quote Requests",
+  },
+  {
     group: "Documents",
     id: "documents",
     label: "Documents",
@@ -107,6 +112,7 @@ const navigationGroupOrder = [
   "Yard Tasks",
   "Yard Documents",
   "Sales",
+  "Quote Requests",
   "Suppliers",
   "Documents",
   "Accounting",
@@ -123,6 +129,7 @@ const navigationGroupSections = {
   "Yard Tasks": "Operations",
   "Yard Documents": "Operations",
   Sales: "Customers & Suppliers",
+  "Quote Requests": "Customers & Suppliers",
   Suppliers: "Customers & Suppliers",
   Documents: "Resources",
   Accounting: "Resources",
@@ -372,6 +379,10 @@ function getCurrentPageGroup(currentPage) {
     return "Sales";
   }
 
+  if (currentPage === "quote-requests") {
+    return "Quote Requests";
+  }
+
   if (
     [
       "documents",
@@ -442,6 +453,10 @@ function getNavGroupIcon(group) {
 
   if (group === "Sales") {
     return UsersRound;
+  }
+
+  if (group === "Quote Requests") {
+    return ClipboardList;
   }
 
   if (group === "Suppliers") {
@@ -524,6 +539,7 @@ export default function AppHeader({
     South: false,
     Deliveries: false,
     Sales: false,
+    "Quote Requests": false,
     Suppliers: false,
     Documents: false,
     Accounting: false,
@@ -560,6 +576,7 @@ export default function AppHeader({
       South: false,
       Deliveries: false,
       Sales: false,
+      "Quote Requests": false,
       Suppliers: false,
       Documents: false,
       Accounting: false,
@@ -610,6 +627,7 @@ export default function AppHeader({
         South: false,
         Deliveries: false,
         Sales: false,
+        "Quote Requests": false,
         Documents: false,
         Accounting: false,
         Admin: false,
@@ -1015,6 +1033,7 @@ export default function AppHeader({
         "South",
         "Deliveries",
         "Sales",
+        "Quote Requests",
         "Accounting",
         "Admin",
         "Fleet",

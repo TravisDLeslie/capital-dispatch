@@ -19,6 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
+import DeliveryPriceEstimate from "../components/DeliveryPriceEstimate";
 import PageContainer from "../components/PageContainer";
 import { auth } from "../utils/firebase";
 import {
@@ -152,6 +153,7 @@ const permissionGroups = [
     title: "Sales",
     permissions: [
       { id: "sales", label: "Sales" },
+      { id: "quote-requests", label: "Quote Requests" },
       { id: "sales-orders", label: "Sales Orders" },
       { id: "customers-add", label: "Add Customer" },
       { id: "customers-view", label: "View Customers" },
@@ -306,6 +308,7 @@ const legacyRolePermissionPresets = {
     "po-calendar",
     "trace",
     "sales",
+    "quote-requests",
     "sales-orders",
     "customers-add",
     "customers-view",
@@ -482,8 +485,11 @@ export default function UserAdminPage({
   currentUserProfile,
   onUpdateUserProfile,
   onPageChange,
+  quoteRequestsOnly = false,
 }) {
-  const [adminView, setAdminView] = useState("employees");
+  const [adminView, setAdminView] = useState(
+    quoteRequestsOnly ? "quotes" : "employees",
+  );
   const [drafts, setDrafts] = useState({});
   const [savingUserId, setSavingUserId] = useState("");
   const [deletingUserId, setDeletingUserId] = useState("");
@@ -535,9 +541,11 @@ export default function UserAdminPage({
   ).length;
 
   useEffect(() => {
-    loadCustomerPortalRequests();
+    if (!quoteRequestsOnly) {
+      loadCustomerPortalRequests();
+    }
     loadQuoteRequests();
-  }, []);
+  }, [quoteRequestsOnly]);
 
   async function loadCustomerPortalRequests({ quiet = false } = {}) {
     if (!quiet) setIsLoadingCustomerRequests(true);
@@ -939,103 +947,113 @@ export default function UserAdminPage({
   return (
     <PageContainer>
       <Breadcrumbs
-        items={[
-          { label: "Admin", onClick: () => onPageChange?.("admin") },
-          { label: "User Access" },
-        ]}
+        items={
+          quoteRequestsOnly
+            ? [
+                { label: "Sales", onClick: () => onPageChange?.("sales") },
+                { label: "Quote Requests" },
+              ]
+            : [
+                { label: "Admin", onClick: () => onPageChange?.("admin") },
+                { label: "User Access" },
+              ]
+        }
       />
 
       <div className="mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#FC2C38]">
-          Admin
+          {quoteRequestsOnly ? "Sales" : "Admin"}
         </p>
 
         <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-900">
-          User Access
+          {quoteRequestsOnly ? "Quote Requests" : "User Access"}
         </h1>
 
         <p className="mt-2 text-lg text-slate-500">
-          Manage employee and supplier access, and manually connect customer
-          portal emails to the correct account on file.
+          {quoteRequestsOnly
+            ? "Review customer material requests, delivery details, and quote status."
+            : "Manage employee and supplier access, and manually connect customer portal emails to the correct account on file."}
         </p>
       </div>
 
-      <div className="mb-6 inline-flex flex-wrap rounded-2xl border border-slate-200 bg-slate-100 p-1.5">
-        <button
-          type="button"
-          onClick={() => setAdminView("employees")}
-          className={`rounded-xl px-5 py-3 text-sm font-black transition ${
-            adminView === "employees"
-              ? "bg-slate-950 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-950"
-          }`}
-        >
-          Employees
-          <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-xs">
-            {employeeUsers.length}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setAdminView("suppliers")}
-          className={`rounded-xl px-5 py-3 text-sm font-black transition ${
-            adminView === "suppliers"
-              ? "bg-slate-950 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-950"
-          }`}
-        >
-          Suppliers
-          <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-xs">
-            {supplierUsers.length}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setAdminView("customers")}
-          className={`rounded-xl px-5 py-3 text-sm font-black transition ${
-            adminView === "customers"
-              ? "bg-slate-950 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-950"
-          }`}
-        >
-          Customer Portal
-          {pendingCustomerRequestCount > 0 ? (
-            <span className="ml-2 rounded-full bg-[#FC2C38] px-2 py-0.5 text-xs text-white">
-              {pendingCustomerRequestCount}
+      {!quoteRequestsOnly ? (
+        <div className="mb-6 inline-flex flex-wrap rounded-2xl border border-slate-200 bg-slate-100 p-1.5">
+          <button
+            type="button"
+            onClick={() => setAdminView("employees")}
+            className={`rounded-xl px-5 py-3 text-sm font-black transition ${
+              adminView === "employees"
+                ? "bg-slate-950 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-950"
+            }`}
+          >
+            Employees
+            <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-xs">
+              {employeeUsers.length}
             </span>
-          ) : null}
-        </button>
-        <button
-          type="button"
-          onClick={() => setAdminView("quotes")}
-          className={`rounded-xl px-5 py-3 text-sm font-black transition ${
-            adminView === "quotes"
-              ? "bg-slate-950 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-950"
-          }`}
-        >
-          Quote Requests
-          {openQuoteRequestCount > 0 ? (
-            <span className="ml-2 rounded-full bg-[#FC2C38] px-2 py-0.5 text-xs text-white">
-              {openQuoteRequestCount}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdminView("suppliers")}
+            className={`rounded-xl px-5 py-3 text-sm font-black transition ${
+              adminView === "suppliers"
+                ? "bg-slate-950 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-950"
+            }`}
+          >
+            Suppliers
+            <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-xs">
+              {supplierUsers.length}
             </span>
-          ) : null}
-        </button>
-        <button
-          type="button"
-          onClick={() => setAdminView("removed")}
-          className={`rounded-xl px-5 py-3 text-sm font-black transition ${
-            adminView === "removed"
-              ? "bg-slate-950 text-white shadow-sm"
-              : "text-slate-600 hover:text-slate-950"
-          }`}
-        >
-          Removed
-          <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-xs">
-            {removedUsers.length}
-          </span>
-        </button>
-      </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdminView("customers")}
+            className={`rounded-xl px-5 py-3 text-sm font-black transition ${
+              adminView === "customers"
+                ? "bg-slate-950 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-950"
+            }`}
+          >
+            Customer Portal
+            {pendingCustomerRequestCount > 0 ? (
+              <span className="ml-2 rounded-full bg-[#FC2C38] px-2 py-0.5 text-xs text-white">
+                {pendingCustomerRequestCount}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdminView("quotes")}
+            className={`rounded-xl px-5 py-3 text-sm font-black transition ${
+              adminView === "quotes"
+                ? "bg-slate-950 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-950"
+            }`}
+          >
+            Quote Requests
+            {openQuoteRequestCount > 0 ? (
+              <span className="ml-2 rounded-full bg-[#FC2C38] px-2 py-0.5 text-xs text-white">
+                {openQuoteRequestCount}
+              </span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAdminView("removed")}
+            className={`rounded-xl px-5 py-3 text-sm font-black transition ${
+              adminView === "removed"
+                ? "bg-slate-950 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-950"
+            }`}
+          >
+            Removed
+            <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-xs">
+              {removedUsers.length}
+            </span>
+          </button>
+        </div>
+      ) : null}
 
       {message ? (
         <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
@@ -1342,6 +1360,12 @@ export default function UserAdminPage({
                             {quoteRequest.deliveryNeeded ? <p className="mt-1 flex items-start gap-1.5 text-sm font-semibold text-slate-600"><MapPin className="mt-0.5 h-4 w-4 shrink-0" /> {quoteRequest.deliveryAddress || "Address not provided"}</p> : null}
                           </div>
                         </div>
+                        {quoteRequest.deliveryNeeded ? (
+                          <DeliveryPriceEstimate
+                            address={quoteRequest.deliveryAddress}
+                            compact
+                          />
+                        ) : null}
                         {quoteRequest.notes ? <div className="mt-3 border-t border-slate-200 pt-3"><p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Customer notes</p><p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-700">{quoteRequest.notes}</p></div> : null}
                       </div>
                     </div>

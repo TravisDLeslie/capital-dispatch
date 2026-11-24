@@ -361,6 +361,45 @@ async function getCustomerPortalAdmin(request) {
   };
 }
 
+async function getCustomerPortalQuoteReviewer(request) {
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Sign in before reviewing customer quote requests.",
+    );
+  }
+
+  const firestore = getFirestore();
+  const email = normalizedEmail(request.auth.token.email);
+  const profileSnapshot = await firestore.doc(`users/${request.auth.uid}`).get();
+  const profile = profileSnapshot.data() || {};
+  const permissions = Array.isArray(profile.permissions)
+    ? profile.permissions
+    : [];
+  const isBootstrapSuperAdmin = email === BOOTSTRAP_SUPER_ADMIN_EMAIL;
+  const canReviewQuotes =
+    isBootstrapSuperAdmin ||
+    (profile.status === "approved" &&
+      (["admin", "superAdmin"].includes(profile.role) ||
+        profile.role === "sales" ||
+        profile.workView === "sales" ||
+        permissions.includes("quote-requests")));
+
+  if (!canReviewQuotes) {
+    throw new HttpsError(
+      "permission-denied",
+      "Your account does not have access to customer quote requests.",
+    );
+  }
+
+  return {
+    email,
+    firestore,
+    profile,
+    userId: request.auth.uid,
+  };
+}
+
 function customerPortalDateToIso(value) {
   if (!value) return "";
   if (typeof value === "string") return value;
@@ -1273,6 +1312,8 @@ exports.getCustomerPortalProfile = onCall(
             ? requestData.items.slice(0, 30).map((item) => ({
                 itemNumber: String(item?.itemNumber || "").trim(),
                 description: String(item?.description || "").trim(),
+                brand: String(item?.brand || "").trim(),
+                groupSection: String(item?.groupSection || "").trim(),
                 quantity: Number(item?.quantity) || 0,
               }))
             : [];
@@ -1287,6 +1328,7 @@ exports.getCustomerPortalProfile = onCall(
               requestData.deliveryAddress || "",
             ).trim(),
             neededBy: String(requestData.neededBy || "").trim(),
+            notes: String(requestData.notes || "").trim(),
             validityDays: Number(requestData.validityDays) || 14,
             createdAt: customerPortalDateToIso(requestData.createdAt),
             updatedAt: customerPortalDateToIso(requestData.updatedAt),
@@ -1527,7 +1569,7 @@ exports.listCustomerQuoteRequests = onCall(
     cors: true,
   },
   async (request) => {
-    const { firestore } = await getCustomerPortalAdmin(request);
+    const { firestore } = await getCustomerPortalQuoteReviewer(request);
     const requestsSnapshot = await firestore
       .collection("customerQuoteRequests")
       .orderBy("createdAt", "desc")
@@ -1584,7 +1626,7 @@ exports.updateCustomerQuoteRequest = onCall(
   },
   async (request) => {
     const { email: reviewerEmail, firestore } =
-      await getCustomerPortalAdmin(request);
+      await getCustomerPortalQuoteReviewer(request);
     const requestId = String(request.data?.requestId || "").trim();
     const status = String(request.data?.status || "").trim();
     const internalNote = String(request.data?.internalNote || "").trim();
