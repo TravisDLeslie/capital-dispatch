@@ -790,7 +790,8 @@ export default function CustomerPortalDashboard({
                             type="button"
                             key={quote.id || quote.reference}
                             onClick={() => setSelectedQuote(quote)}
-                            className="group flex min-h-56 flex-col rounded-3xl border border-slate-200 bg-slate-50 p-5 text-left transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-red-100"
+                            aria-label={`View full details for ${quote.reference || "quote request"}`}
+                            className="group flex min-h-56 cursor-pointer flex-col rounded-3xl border border-slate-200 bg-slate-50 p-5 text-left transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-white hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-red-100"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div>
@@ -842,7 +843,7 @@ export default function CustomerPortalDashboard({
                                 {getQuoteValidityLabel(quote)}
                               </span>
                             </div>
-                            <span className="mt-4 flex items-center justify-end gap-1 text-xs font-black text-[#FC2C38]">
+                            <span className="mt-4 flex items-center justify-center gap-1 rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-black text-white transition group-hover:bg-[#FC2C38]">
                               View full details
                               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" aria-hidden="true" />
                             </span>
@@ -1100,16 +1101,10 @@ export default function CustomerPortalDashboard({
                         </div>
                       </div>
                       {selectedQuote.deliveryNeeded ? (
-                        <>
-                          <p className="mt-4 flex items-start gap-2 text-sm font-bold leading-6 text-slate-600">
-                            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#FC2C38]" aria-hidden="true" />
-                            {selectedQuote.deliveryAddress || "Delivery address not provided"}
-                          </p>
-                          <DeliveryPriceEstimate
-                            address={selectedQuote.deliveryAddress}
-                            compact
-                          />
-                        </>
+                        <p className="mt-4 flex items-start gap-2 text-sm font-bold leading-6 text-slate-600">
+                          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#FC2C38]" aria-hidden="true" />
+                          {selectedQuote.deliveryAddress || "Delivery address not provided"}
+                        </p>
                       ) : (
                         <p className="mt-4 text-sm font-bold leading-6 text-slate-600">Material will be picked up at Capital Lumber.</p>
                       )}
@@ -1130,6 +1125,32 @@ export default function CustomerPortalDashboard({
                       </p>
                     </div>
                   </div>
+
+                  {selectedQuote.deliveryNeeded ? (
+                    <section className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50/40 p-5 sm:p-6">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">
+                            Delivery estimate
+                          </p>
+                          <h3 className="mt-1 text-xl font-black text-slate-950">
+                            Distance, drive time, and delivery rates
+                          </h3>
+                          <p className="mt-2 flex items-start gap-2 text-sm font-bold leading-6 text-slate-600">
+                            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#FC2C38]" aria-hidden="true" />
+                            {selectedQuote.deliveryAddress || "Delivery address not provided"}
+                          </p>
+                        </div>
+                        <span className="w-fit rounded-full bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-800 shadow-sm">
+                          Estimate only
+                        </span>
+                      </div>
+                      <DeliveryPriceEstimate
+                        address={selectedQuote.deliveryAddress}
+                        className="mt-4"
+                      />
+                    </section>
+                  ) : null}
 
                   <div className="mt-6 rounded-2xl bg-blue-50 px-5 py-4 text-sm font-bold leading-6 text-blue-900">
                     Material pricing is prepared by the Capital Lumber team and will be shared with you directly. Questions? Call 208-343-5481.
