@@ -69,6 +69,30 @@ const calendarDayFullDragType = "application/x-delivery-day-full";
 const deliveryGroupHoldMs = 650;
 const calendarRouteMetricsCache = new Map();
 
+function detectIPadDevice() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const userAgent = String(navigator.userAgent || "");
+  const platform = String(navigator.platform || "");
+
+  return (
+    /iPad/i.test(userAgent) ||
+    (platform === "MacIntel" && Number(navigator.maxTouchPoints) > 1)
+  );
+}
+
+function useIsIPadDevice() {
+  const [isIPadDevice, setIsIPadDevice] = useState(detectIPadDevice);
+
+  useEffect(() => {
+    setIsIPadDevice(detectIPadDevice());
+  }, []);
+
+  return isIPadDevice;
+}
+
 const timelineHourMarks = Array.from({ length: 12 }, (_, index) => {
   const minutes = timelineStartMinutes + index * 60;
   const hours = Math.floor(minutes / 60);
@@ -1426,6 +1450,7 @@ function DayFullDragTile({
   disabled,
   isDragging,
   requiresCode = true,
+  showDragHandle = false,
   onDragStart,
   onDragEnd,
   onPointerDown,
@@ -1470,7 +1495,12 @@ function DayFullDragTile({
             Drag to a date{requiresCode ? " · code required" : ""}
           </p>
         </div>
-        <GripVertical className="h-5 w-5 shrink-0 opacity-50" aria-hidden="true" />
+        {showDragHandle ? (
+          <GripVertical
+            className="h-5 w-5 shrink-0 opacity-50"
+            aria-hidden="true"
+          />
+        ) : null}
       </div>
     </section>
   );
@@ -1549,6 +1579,7 @@ function DeliveryDateTbdTray({
   onSelectDelivery,
   deliveryDirectionsById = {},
   canMoveDeliveries,
+  showDragHandles = false,
   deliveryDrag,
   embedded = false,
 }) {
@@ -1656,7 +1687,7 @@ function DeliveryDateTbdTray({
                 canMoveDeliveries ? "cursor-grab active:cursor-grabbing" : ""
               } ${draggedDeliveryId === delivery.id ? "opacity-40" : ""}`}
             >
-              {canMoveDeliveries ? (
+              {canMoveDeliveries && showDragHandles ? (
                 <button
                   type="button"
                   onClick={(event) => event.stopPropagation()}
@@ -1676,7 +1707,9 @@ function DeliveryDateTbdTray({
               <button
                 type="button"
                 onClick={() => onSelectDelivery(delivery)}
-                className="w-full rounded-2xl border border-blue-200 bg-white p-3 pr-12 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-blue-100"
+                className={`w-full rounded-2xl border border-blue-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-blue-100 ${
+                  showDragHandles ? "pr-12" : ""
+                }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -1687,7 +1720,11 @@ function DeliveryDateTbdTray({
                       Order {delivery.orderNumber || "—"}
                     </p>
                   </div>
-                  <span className="mr-7 flex shrink-0 items-center gap-1.5 self-start">
+                  <span
+                    className={`flex shrink-0 items-center gap-1.5 self-start ${
+                      showDragHandles ? "mr-7" : ""
+                    }`}
+                  >
                     <span
                       className={`rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] ${
                         needsDispatch
@@ -2340,6 +2377,7 @@ function DeliveryWeekView({
   onSelectDay,
   onSelectDelivery,
   canMoveDeliveries,
+  showDragHandles = false,
   deliveryDrag,
   dayFullDropDateKey = "",
   onDayFullDragOver,
@@ -2644,7 +2682,7 @@ function DeliveryWeekView({
                           }`}
                         />
                       ) : null}
-                      {canMoveDeliveries ? (
+                      {canMoveDeliveries && showDragHandles ? (
                         <button
                           type="button"
                           onClick={(event) => event.stopPropagation()}
@@ -2675,7 +2713,9 @@ function DeliveryWeekView({
                         direction={deliveryDirectionsById[delivery.id]}
                         onClick={() => onSelectDelivery(delivery)}
                         compact
-                        showDragHandle={canMoveDeliveries}
+                        showDragHandle={
+                          canMoveDeliveries && showDragHandles
+                        }
                         groupMeta={groupMeta}
                         isGroupTarget={
                           groupTargetDeliveryId === delivery.id &&
@@ -2753,6 +2793,7 @@ function DeliveryMonthView({
   onSelectDay,
   onSelectDelivery,
   canMoveDeliveries,
+  showDragHandles = false,
   deliveryDrag,
   dayFullDropDateKey = "",
   onDayFullDragOver,
@@ -3072,7 +3113,7 @@ function DeliveryMonthView({
                               }`}
                             />
                           ) : null}
-                          {canMoveDeliveries ? (
+                          {canMoveDeliveries && showDragHandles ? (
                             <button
                               type="button"
                               onClick={(event) => event.stopPropagation()}
@@ -3103,7 +3144,9 @@ function DeliveryMonthView({
                             direction={deliveryDirectionsById[delivery.id]}
                             onClick={() => onSelectDelivery(delivery)}
                             compact
-                            showDragHandle={canMoveDeliveries}
+                            showDragHandle={
+                              canMoveDeliveries && showDragHandles
+                            }
                             groupMeta={groupMeta}
                             isGroupTarget={
                               groupTargetDeliveryId === delivery.id &&
@@ -4152,6 +4195,7 @@ export default function DeliveryCalendarPage({
   onUpdateCalendarBlockOffs,
   onPageChange,
 }) {
+  const isIPadDevice = useIsIPadDevice();
   const [dispatchNotes, setDispatchNotes] = useState([]);
   const baseDeliveries = useMemo(
     () =>
@@ -5638,6 +5682,7 @@ export default function DeliveryCalendarPage({
               disabled={isUpdatingDayLock}
               isDragging={isDayFullTileDragging}
               requiresCode={dayLockCodeRequired}
+              showDragHandle={isIPadDevice}
               onDragStart={handleDayFullDragStart}
               onDragEnd={resetDayFullDrag}
               onPointerDown={handleDayFullPointerDown}
@@ -5651,6 +5696,7 @@ export default function DeliveryCalendarPage({
             onSelectDelivery={openDeliveryFromCalendar}
             deliveryDirectionsById={deliveryDirectionsById}
             canMoveDeliveries={canMoveCalendarDeliveries}
+            showDragHandles={isIPadDevice}
             deliveryDrag={calendarDeliveryDrag}
             embedded
           />
@@ -5667,6 +5713,7 @@ export default function DeliveryCalendarPage({
           onSelectDay={selectDay}
           onSelectDelivery={openDeliveryFromCalendar}
           canMoveDeliveries={canMoveCalendarDeliveries}
+          showDragHandles={isIPadDevice}
           deliveryDrag={calendarDeliveryDrag}
           dayFullDropDateKey={dayFullDropDateKey}
           onDayFullDragOver={handleDayFullDragOver}
@@ -5686,6 +5733,7 @@ export default function DeliveryCalendarPage({
           onSelectDay={selectDay}
           onSelectDelivery={openDeliveryFromCalendar}
           canMoveDeliveries={canMoveCalendarDeliveries}
+          showDragHandles={isIPadDevice}
           deliveryDrag={calendarDeliveryDrag}
           dayFullDropDateKey={dayFullDropDateKey}
           onDayFullDragOver={handleDayFullDragOver}
