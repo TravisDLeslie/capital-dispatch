@@ -1,13 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getIdTokenResult,
   GoogleAuthProvider,
   reauthenticateWithPopup,
 } from "firebase/auth";
-import { ChevronDown, Trash2 } from "lucide-react";
+import {
+  BadgeCheck,
+  Building2,
+  ChevronDown,
+  ClipboardList,
+  Mail,
+  MapPin,
+  PackageCheck,
+  RefreshCw,
+  Trash2,
+  Truck,
+  UserRoundCheck,
+  XCircle,
+} from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
 import PageContainer from "../components/PageContainer";
 import { auth } from "../utils/firebase";
+import {
+  listCustomerAccountRequests,
+  listCustomerQuoteRequests,
+  reviewCustomerAccountRequest,
+  updateCustomerQuoteRequest,
+} from "../utils/customerAccountRequestStorage";
 import { deleteSupplierAccount } from "../utils/userStorage";
 
 const roles = [
@@ -335,6 +354,81 @@ function getStatusClass(status) {
   return "bg-amber-100 text-amber-700";
 }
 
+function getCustomerRequestStatus(status) {
+  if (status === "approved") {
+    return {
+      label: "Account linked",
+      className: "bg-emerald-100 text-emerald-700",
+    };
+  }
+  if (status === "rejected") {
+    return {
+      label: "Not linked",
+      className: "bg-red-100 text-red-700",
+    };
+  }
+  if (status === "pendingAccountReview") {
+    return {
+      label: "Ready to verify",
+      className: "bg-blue-100 text-blue-700",
+    };
+  }
+
+  return {
+    label: "Email not verified",
+    className: "bg-amber-100 text-amber-700",
+  };
+}
+
+function formatCustomerRequestDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+}
+
+const quoteStatusOptions = [
+  { value: "new", label: "New request" },
+  { value: "reviewing", label: "Reviewing" },
+  { value: "quoted", label: "Quote prepared" },
+  { value: "closed", label: "Closed" },
+];
+
+const quoteTimelineLabels = {
+  "as-soon-as-possible": "As soon as possible",
+  "within-one-week": "Within one week",
+  "within-two-weeks": "Within two weeks",
+  "this-month": "Sometime this month",
+  flexible: "Timing is flexible",
+};
+
+function getQuoteStatus(status) {
+  if (status === "quoted") {
+    return { label: "Quote prepared", className: "bg-emerald-100 text-emerald-700" };
+  }
+  if (status === "closed") {
+    return { label: "Closed", className: "bg-slate-200 text-slate-600" };
+  }
+  if (status === "reviewing") {
+    return { label: "Reviewing", className: "bg-blue-100 text-blue-700" };
+  }
+  return { label: "New request", className: "bg-amber-100 text-amber-700" };
+}
+
+function getCustomerPortalAdminError(error, fallbackMessage) {
+  const message = String(error?.message || "").trim();
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    !message ||
+    normalizedMessage === "internal" ||
+    normalizedMessage.includes("functions/internal")
+  ) {
+    return fallbackMessage;
+  }
+
+  return message.replace(/^Firebase:\s*/i, "");
+}
+
 function getUserPermissions(user) {
   if (Array.isArray(user.permissions)) {
     return user.permissions.filter(
@@ -389,6 +483,7 @@ export default function UserAdminPage({
   onUpdateUserProfile,
   onPageChange,
 }) {
+  const [adminView, setAdminView] = useState("employees");
   const [drafts, setDrafts] = useState({});
   const [savingUserId, setSavingUserId] = useState("");
   const [deletingUserId, setDeletingUserId] = useState("");
@@ -396,12 +491,217 @@ export default function UserAdminPage({
   const [error, setError] = useState("");
   const [openAccessPanels, setOpenAccessPanels] = useState({});
   const [openAccessGroups, setOpenAccessGroups] = useState({});
+  const [customerRequests, setCustomerRequests] = useState([]);
+  const [customerRequestDrafts, setCustomerRequestDrafts] = useState({});
+  const [isLoadingCustomerRequests, setIsLoadingCustomerRequests] =
+    useState(true);
+  const [reviewingCustomerRequestId, setReviewingCustomerRequestId] =
+    useState("");
+  const [quoteRequests, setQuoteRequests] = useState([]);
+  const [quoteRequestDrafts, setQuoteRequestDrafts] = useState({});
+  const [isLoadingQuoteRequests, setIsLoadingQuoteRequests] = useState(true);
+  const [savingQuoteRequestId, setSavingQuoteRequestId] = useState("");
   const vendorList = Array.isArray(vendors) ? vendors : [];
   const driverNameOptions = getUniqueOptions(
     users
       .filter(isActiveEmployee)
       .map(getProfileDisplayName),
   );
+  const removedUsers = users.filter((user) => user.status === "disabled");
+  const supplierUsers = users.filter(
+    (user) =>
+      user.status !== "disabled" &&
+      (user.role === "supplier" || user.workView === "supplier"),
+  );
+  const employeeUsers = users.filter(
+    (user) =>
+      user.status !== "disabled" &&
+      user.role !== "supplier" &&
+      user.workView !== "supplier",
+  );
+  const visibleAccessUsers =
+    adminView === "suppliers"
+      ? supplierUsers
+      : adminView === "removed"
+        ? removedUsers
+        : employeeUsers;
+
+  const pendingCustomerRequestCount = customerRequests.filter(
+    (customerRequest) =>
+      !["approved", "rejected"].includes(customerRequest.status),
+  ).length;
+  const openQuoteRequestCount = quoteRequests.filter((quoteRequest) =>
+    ["new", "reviewing"].includes(quoteRequest.status),
+  ).length;
+
+  useEffect(() => {
+    loadCustomerPortalRequests();
+    loadQuoteRequests();
+  }, []);
+
+  async function loadCustomerPortalRequests({ quiet = false } = {}) {
+    if (!quiet) setIsLoadingCustomerRequests(true);
+
+    try {
+      const savedRequests = await listCustomerAccountRequests();
+      setCustomerRequests(savedRequests);
+      setCustomerRequestDrafts(
+        Object.fromEntries(
+          savedRequests.map((customerRequest) => [
+            customerRequest.id,
+            {
+              verifiedAccountNumber:
+                customerRequest.verifiedAccountNumber ||
+                customerRequest.requestedAccountNumber ||
+                "",
+              reviewNotes: customerRequest.reviewNotes || "",
+            },
+          ]),
+        ),
+      );
+    } catch (loadError) {
+      console.error("Unable to load customer portal requests:", loadError);
+      setError(
+        getCustomerPortalAdminError(
+          loadError,
+          "Unable to load customer portal requests. Check the deployed functions.",
+        ),
+      );
+    } finally {
+      setIsLoadingCustomerRequests(false);
+    }
+  }
+
+  async function loadQuoteRequests({ quiet = false } = {}) {
+    if (!quiet) setIsLoadingQuoteRequests(true);
+
+    try {
+      const savedRequests = await listCustomerQuoteRequests();
+      setQuoteRequests(savedRequests);
+      setQuoteRequestDrafts(
+        Object.fromEntries(
+          savedRequests.map((quoteRequest) => [
+            quoteRequest.id,
+            {
+              status: quoteRequest.status || "new",
+              internalNote: quoteRequest.internalNote || "",
+            },
+          ]),
+        ),
+      );
+    } catch (loadError) {
+      console.error("Unable to load customer quote requests:", loadError);
+      setError(
+        getCustomerPortalAdminError(
+          loadError,
+          "Unable to load customer quote requests. Check the deployed functions.",
+        ),
+      );
+    } finally {
+      setIsLoadingQuoteRequests(false);
+    }
+  }
+
+  function updateQuoteRequestDraft(requestId, field, value) {
+    setQuoteRequestDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [requestId]: {
+        ...(currentDrafts[requestId] || {}),
+        [field]: value,
+      },
+    }));
+    setMessage("");
+    setError("");
+  }
+
+  async function saveQuoteRequest(quoteRequest) {
+    const draft = quoteRequestDrafts[quoteRequest.id] || {};
+    setSavingQuoteRequestId(quoteRequest.id);
+    setMessage("");
+    setError("");
+
+    try {
+      await updateCustomerQuoteRequest({
+        requestId: quoteRequest.id,
+        status: draft.status || "new",
+        internalNote: draft.internalNote?.trim() || "",
+      });
+      setMessage(`Updated ${quoteRequest.reference || "quote request"}.`);
+      await loadQuoteRequests({ quiet: true });
+    } catch (saveError) {
+      console.error("Unable to update customer quote request:", saveError);
+      setError(
+        getCustomerPortalAdminError(
+          saveError,
+          "Unable to update that customer quote request.",
+        ),
+      );
+    } finally {
+      setSavingQuoteRequestId("");
+    }
+  }
+
+  function updateCustomerRequestDraft(requestId, field, value) {
+    setCustomerRequestDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [requestId]: {
+        ...(currentDrafts[requestId] || {}),
+        [field]: value,
+      },
+    }));
+    setMessage("");
+    setError("");
+  }
+
+  async function reviewCustomerRequest(customerRequest, decision) {
+    const draft = customerRequestDrafts[customerRequest.id] || {};
+
+    if (decision === "approve" && !customerRequest.emailVerified) {
+      setError("The customer must verify their email before you can link an account.");
+      return;
+    }
+    if (decision === "approve" && !draft.verifiedAccountNumber?.trim()) {
+      setError("Enter the account number you verified in your records.");
+      return;
+    }
+    if (
+      decision === "reject" &&
+      !window.confirm(
+        `Mark ${customerRequest.email || "this request"} as not linked? They can still sign in, but will not receive account-specific access.`,
+      )
+    ) {
+      return;
+    }
+
+    setReviewingCustomerRequestId(customerRequest.id);
+    setMessage("");
+    setError("");
+
+    try {
+      await reviewCustomerAccountRequest({
+        requestId: customerRequest.id,
+        decision,
+        verifiedAccountNumber: draft.verifiedAccountNumber?.trim() || "",
+        reviewNotes: draft.reviewNotes?.trim() || "",
+      });
+      setMessage(
+        decision === "approve"
+          ? `Linked ${customerRequest.email} to account ${draft.verifiedAccountNumber.trim()}.`
+          : `Left ${customerRequest.email} unlinked.`,
+      );
+      await loadCustomerPortalRequests({ quiet: true });
+    } catch (reviewError) {
+      console.error("Unable to review customer portal request:", reviewError);
+      setError(
+        getCustomerPortalAdminError(
+          reviewError,
+          "Unable to update that customer portal request.",
+        ),
+      );
+    } finally {
+      setReviewingCustomerRequestId("");
+    }
+  }
 
   function getDraft(user) {
     const role = getPresetRole(user.role || "pending");
@@ -655,8 +955,86 @@ export default function UserAdminPage({
         </h1>
 
         <p className="mt-2 text-lg text-slate-500">
-          Approve new sign-ins and assign what each person can see.
+          Manage employee and supplier access, and manually connect customer
+          portal emails to the correct account on file.
         </p>
+      </div>
+
+      <div className="mb-6 inline-flex flex-wrap rounded-2xl border border-slate-200 bg-slate-100 p-1.5">
+        <button
+          type="button"
+          onClick={() => setAdminView("employees")}
+          className={`rounded-xl px-5 py-3 text-sm font-black transition ${
+            adminView === "employees"
+              ? "bg-slate-950 text-white shadow-sm"
+              : "text-slate-600 hover:text-slate-950"
+          }`}
+        >
+          Employees
+          <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-xs">
+            {employeeUsers.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setAdminView("suppliers")}
+          className={`rounded-xl px-5 py-3 text-sm font-black transition ${
+            adminView === "suppliers"
+              ? "bg-slate-950 text-white shadow-sm"
+              : "text-slate-600 hover:text-slate-950"
+          }`}
+        >
+          Suppliers
+          <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-xs">
+            {supplierUsers.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setAdminView("customers")}
+          className={`rounded-xl px-5 py-3 text-sm font-black transition ${
+            adminView === "customers"
+              ? "bg-slate-950 text-white shadow-sm"
+              : "text-slate-600 hover:text-slate-950"
+          }`}
+        >
+          Customer Portal
+          {pendingCustomerRequestCount > 0 ? (
+            <span className="ml-2 rounded-full bg-[#FC2C38] px-2 py-0.5 text-xs text-white">
+              {pendingCustomerRequestCount}
+            </span>
+          ) : null}
+        </button>
+        <button
+          type="button"
+          onClick={() => setAdminView("quotes")}
+          className={`rounded-xl px-5 py-3 text-sm font-black transition ${
+            adminView === "quotes"
+              ? "bg-slate-950 text-white shadow-sm"
+              : "text-slate-600 hover:text-slate-950"
+          }`}
+        >
+          Quote Requests
+          {openQuoteRequestCount > 0 ? (
+            <span className="ml-2 rounded-full bg-[#FC2C38] px-2 py-0.5 text-xs text-white">
+              {openQuoteRequestCount}
+            </span>
+          ) : null}
+        </button>
+        <button
+          type="button"
+          onClick={() => setAdminView("removed")}
+          className={`rounded-xl px-5 py-3 text-sm font-black transition ${
+            adminView === "removed"
+              ? "bg-slate-950 text-white shadow-sm"
+              : "text-slate-600 hover:text-slate-950"
+          }`}
+        >
+          Removed
+          <span className="ml-2 rounded-full bg-white/15 px-2 py-0.5 text-xs">
+            {removedUsers.length}
+          </span>
+        </button>
       </div>
 
       {message ? (
@@ -671,8 +1049,346 @@ export default function UserAdminPage({
         </div>
       ) : null}
 
+      {adminView === "customers" ? (
+        <div className="space-y-4">
+          <section className="flex flex-col gap-4 rounded-3xl border border-blue-200 bg-blue-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white">
+                <UserRoundCheck className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  Customer portal accounts
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
+                  Customers can sign in as soon as their email is verified.
+                  Link the verified email to the account number in your records
+                  before showing account-specific pricing or private account data.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => loadCustomerPortalRequests()}
+              disabled={isLoadingCustomerRequests}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-100 disabled:cursor-wait disabled:opacity-60"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${
+                  isLoadingCustomerRequests ? "animate-spin" : ""
+                }`}
+                aria-hidden="true"
+              />
+              Refresh
+            </button>
+          </section>
+
+          {isLoadingCustomerRequests ? (
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">
+              Loading customer portal accounts…
+            </div>
+          ) : customerRequests.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
+              <Building2 className="mx-auto h-9 w-9 text-slate-300" />
+              <p className="mt-3 text-lg font-black text-slate-800">
+                No customer requests yet
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">
+                New customer portal registrations will appear here, separate
+                from employee access.
+              </p>
+            </div>
+          ) : (
+            customerRequests.map((customerRequest) => {
+              const status = getCustomerRequestStatus(customerRequest.status);
+              const draft = customerRequestDrafts[customerRequest.id] || {};
+              const isReviewing =
+                reviewingCustomerRequestId === customerRequest.id;
+
+              return (
+                <section
+                  key={customerRequest.id}
+                  className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
+                >
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-xl font-black text-slate-950">
+                          {customerRequest.businessName || "Customer account"}
+                        </h2>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.1em] ${status.className}`}
+                        >
+                          {status.label}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black ${
+                            customerRequest.emailVerified
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                        >
+                          {customerRequest.emailVerified ? (
+                            <BadgeCheck className="h-4 w-4" />
+                          ) : (
+                            <Mail className="h-4 w-4" />
+                          )}
+                          {customerRequest.emailVerified
+                            ? "Email verified"
+                            : "Waiting for email verification"}
+                        </span>
+                      </div>
+
+                      <p className="mt-2 font-bold text-slate-700">
+                        {customerRequest.name || "Name not provided"}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                        {customerRequest.email} · {customerRequest.phone}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                        {customerRequest.address}
+                      </p>
+                      {customerRequest.createdAt ? (
+                        <p className="mt-2 text-xs font-semibold text-slate-400">
+                          Requested {formatCustomerRequestDate(customerRequest.createdAt)}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:w-[650px]">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                          Customer submitted
+                        </p>
+                        <p className="mt-2 text-lg font-black text-slate-950">
+                          {customerRequest.hasExistingAccount
+                            ? customerRequest.requestedAccountNumber || "No number"
+                            : "New account request"}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          Treat this as a lead only—verify it against your own records.
+                        </p>
+                      </div>
+                      <label className="block rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                        <span className="text-xs font-black uppercase tracking-[0.14em] text-blue-700">
+                          Verified account on file
+                        </span>
+                        <input
+                          type="text"
+                          value={draft.verifiedAccountNumber || ""}
+                          onChange={(event) =>
+                            updateCustomerRequestDraft(
+                              customerRequest.id,
+                              "verifiedAccountNumber",
+                              event.target.value,
+                            )
+                          }
+                          placeholder="Enter verified account #"
+                          className="mt-2 w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-black text-slate-950 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </label>
+                      <label className="block sm:col-span-2">
+                        <span className="mb-1 block text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                          Internal verification note
+                        </span>
+                        <input
+                          type="text"
+                          value={draft.reviewNotes || ""}
+                          onChange={(event) =>
+                            updateCustomerRequestDraft(
+                              customerRequest.id,
+                              "reviewNotes",
+                              event.target.value,
+                            )
+                          }
+                          maxLength={500}
+                          placeholder="Example: matched in Spruce by business name and phone"
+                          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-bold text-slate-900 outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {customerRequest.reviewedAt ? (
+                    <p className="mt-4 text-xs font-semibold text-slate-400">
+                      Last reviewed {formatCustomerRequestDate(customerRequest.reviewedAt)}
+                      {customerRequest.reviewedBy
+                        ? ` by ${customerRequest.reviewedBy}`
+                        : ""}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap justify-end gap-2">
+                    {customerRequest.status !== "rejected" ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          reviewCustomerRequest(customerRequest, "reject")
+                        }
+                        disabled={isReviewing}
+                        className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-3 text-sm font-black text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        Leave unlinked
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        reviewCustomerRequest(customerRequest, "approve")
+                      }
+                      disabled={isReviewing || !customerRequest.emailVerified}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                    >
+                      <BadgeCheck className="h-4 w-4" />
+                      {isReviewing
+                        ? "Saving…"
+                        : customerRequest.status === "approved"
+                          ? "Update account link"
+                          : "Verify and link account"}
+                    </button>
+                  </div>
+                </section>
+              );
+            })
+          )}
+        </div>
+      ) : adminView === "quotes" ? (
+        <div className="space-y-4">
+          <section className="flex flex-col gap-4 rounded-3xl border border-violet-200 bg-violet-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-4">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-violet-600 text-white">
+                <ClipboardList className="h-6 w-6" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="text-xl font-black text-slate-950">Customer quote requests</h2>
+                <p className="mt-1 max-w-3xl text-sm font-semibold leading-6 text-slate-600">
+                  Every request submitted from the customer portal appears here with its material list, quantity, timing, and delivery details.
+                </p>
+              </div>
+            </div>
+            <button type="button" onClick={() => loadQuoteRequests()} disabled={isLoadingQuoteRequests} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-100 disabled:cursor-wait disabled:opacity-60">
+              <RefreshCw className={`h-4 w-4 ${isLoadingQuoteRequests ? "animate-spin" : ""}`} aria-hidden="true" />
+              Refresh
+            </button>
+          </section>
+
+          {isLoadingQuoteRequests ? (
+            <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">Loading customer quote requests…</div>
+          ) : quoteRequests.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
+              <ClipboardList className="mx-auto h-9 w-9 text-slate-300" />
+              <p className="mt-3 text-lg font-black text-slate-800">No quote requests yet</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">New customer portal quote requests will appear here automatically.</p>
+            </div>
+          ) : (
+            quoteRequests.map((quoteRequest) => {
+              const status = getQuoteStatus(quoteRequest.status);
+              const draft = quoteRequestDrafts[quoteRequest.id] || {
+                status: quoteRequest.status || "new",
+                internalNote: quoteRequest.internalNote || "",
+              };
+              const isSaving = savingQuoteRequestId === quoteRequest.id;
+
+              return (
+                <section key={quoteRequest.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                  <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-[#FC2C38]">{quoteRequest.reference || "Quote request"}</p>
+                        <span className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.1em] ${status.className}`}>{status.label}</span>
+                      </div>
+                      <h2 className="mt-2 text-2xl font-black text-slate-950">{quoteRequest.businessName || quoteRequest.name || "Customer quote"}</h2>
+                      <p className="mt-1 text-sm font-semibold text-slate-500">{quoteRequest.name || "Contact not provided"} · {quoteRequest.email || "No email"} · {quoteRequest.phone || "No phone"}</p>
+                      {quoteRequest.createdAt ? <p className="mt-2 text-xs font-semibold text-slate-400">Submitted {formatCustomerRequestDate(quoteRequest.createdAt)}</p> : null}
+                    </div>
+
+                    <div className="grid shrink-0 gap-2 sm:grid-cols-2 lg:w-[460px]">
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Account</p>
+                        <p className="mt-1 text-sm font-black text-slate-800">{quoteRequest.accountNumber || "Not linked yet"}</p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Needed</p>
+                        <p className="mt-1 text-sm font-black text-slate-800">{quoteTimelineLabels[quoteRequest.neededBy] || quoteRequest.neededBy || "Not provided"}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-5 p-5 xl:grid-cols-[1fr_360px]">
+                    <div>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <PackageCheck className="h-5 w-5 text-violet-600" />
+                          <h3 className="font-black text-slate-950">Requested material</h3>
+                        </div>
+                        <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black text-violet-700">{quoteRequest.items?.length || 0} items</span>
+                      </div>
+                      <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
+                        {(quoteRequest.items || []).map((item) => (
+                          <div key={`${quoteRequest.id}-${item.itemNumber}`} className="grid gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:grid-cols-[110px_1fr_100px] sm:items-center">
+                            <p className="text-xs font-black uppercase tracking-[0.1em] text-[#FC2C38]">{item.itemNumber}</p>
+                            <p className="text-sm font-bold text-slate-800">{item.description}</p>
+                            <p className="text-sm font-black text-slate-950 sm:text-right">Qty {item.quantity}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-start gap-3">
+                          {quoteRequest.deliveryNeeded ? <Truck className="mt-0.5 h-5 w-5 shrink-0 text-[#FC2C38]" /> : <PackageCheck className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />}
+                          <div>
+                            <p className="text-sm font-black text-slate-950">{quoteRequest.deliveryNeeded ? "Delivery requested" : "Customer pickup"}</p>
+                            {quoteRequest.deliveryNeeded ? <p className="mt-1 flex items-start gap-1.5 text-sm font-semibold text-slate-600"><MapPin className="mt-0.5 h-4 w-4 shrink-0" /> {quoteRequest.deliveryAddress || "Address not provided"}</p> : null}
+                          </div>
+                        </div>
+                        {quoteRequest.notes ? <div className="mt-3 border-t border-slate-200 pt-3"><p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Customer notes</p><p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-700">{quoteRequest.notes}</p></div> : null}
+                      </div>
+                    </div>
+
+                    <aside className="h-fit rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Internal follow-up</p>
+                      <label className="mt-4 block">
+                        <span className="mb-1 block text-xs font-black text-slate-600">Status</span>
+                        <select value={draft.status || "new"} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "status", event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100">
+                          {quoteStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="mt-4 block">
+                        <span className="mb-1 block text-xs font-black text-slate-600">Internal note</span>
+                        <textarea value={draft.internalNote || ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "internalNote", event.target.value)} maxLength={800} rows={4} placeholder="Who is preparing this quote, follow-up details, or outcome…" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                      </label>
+                      <button type="button" onClick={() => saveQuoteRequest(quoteRequest)} disabled={isSaving} className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-wait disabled:bg-slate-400">{isSaving ? "Saving…" : "Save quote status"}</button>
+                      {quoteRequest.reviewedAt ? <p className="mt-3 text-xs font-semibold leading-5 text-slate-400">Last updated {formatCustomerRequestDate(quoteRequest.reviewedAt)}{quoteRequest.reviewedBy ? ` by ${quoteRequest.reviewedBy}` : ""}</p> : null}
+                    </aside>
+                  </div>
+                </section>
+              );
+            })
+          )}
+        </div>
+      ) : (
       <div className="space-y-4">
-        {users.map((user) => {
+        {visibleAccessUsers.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
+            <Building2 className="mx-auto h-9 w-9 text-slate-300" />
+            <p className="mt-3 text-lg font-black text-slate-800">
+              {adminView === "suppliers"
+                ? "No supplier accounts yet"
+                : adminView === "removed"
+                  ? "No removed accounts"
+                  : "No employee accounts yet"}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-slate-500">
+              {adminView === "suppliers"
+                ? "Supplier portal accounts will appear here after they register or are invited."
+                : adminView === "removed"
+                  ? "Disabled employee and supplier accounts will appear here."
+                  : "Employee accounts will appear here after they sign in or are added."}
+            </p>
+          </div>
+        ) : null}
+        {visibleAccessUsers.map((user) => {
           const draft = getDraft(user);
           const hasChanges =
             draft.role !== (user.role || "pending") ||
@@ -1067,6 +1783,7 @@ export default function UserAdminPage({
           );
         })}
       </div>
+      )}
     </PageContainer>
   );
 }

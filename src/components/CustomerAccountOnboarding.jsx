@@ -13,8 +13,13 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import AddressAutocompleteInput from "./AddressAutocompleteInput";
+import CustomerPortalDashboard from "./CustomerPortalDashboard";
 import capitalLumberLogo from "../assets/logo-black-text.svg";
-import { submitCustomerAccountRequest } from "../utils/customerAccountRequestStorage";
+import {
+  submitCustomerAccountRequest,
+  verifyCustomerPortalEmail,
+} from "../utils/customerAccountRequestStorage";
 import {
   completeCustomerPortalSignIn,
   getStoredCustomerPortalEmail,
@@ -155,8 +160,12 @@ export default function CustomerAccountOnboarding({
   );
   const [signInStatus, setSignInStatus] = useState("idle");
   const [signInError, setSignInError] = useState("");
-  const [verifiedEmail, setVerifiedEmail] = useState("");
+  const [accountLink, setAccountLink] = useState({
+    status: "",
+    accountNumber: "",
+  });
   const hasHandledEmailLink = useRef(false);
+  const hasLoadedPortalStatus = useRef(false);
 
   const progressLabel = useMemo(() => {
     if (step === "account-question") return "Step 1 of 2";
@@ -168,8 +177,20 @@ export default function CustomerAccountOnboarding({
 
   useEffect(() => {
     if (customerAuthUser && !isCustomerPortalEmailLink()) {
-      setVerifiedEmail(customerAuthUser.email || "");
       setStep("verified");
+      if (!hasLoadedPortalStatus.current) {
+        hasLoadedPortalStatus.current = true;
+        verifyCustomerPortalEmail()
+          .then((verification) => {
+            setAccountLink({
+              status: verification?.status || "",
+              accountNumber: verification?.accountNumber || "",
+            });
+          })
+          .catch((error) => {
+            console.error("Unable to refresh customer account status:", error);
+          });
+      }
       return;
     }
 
@@ -199,9 +220,13 @@ export default function CustomerAccountOnboarding({
     try {
       const result = await completeCustomerPortalSignIn(email);
       const completedEmail = result.user?.email || email;
-      setVerifiedEmail(completedEmail);
       setSignInEmail(completedEmail);
       setSignInStatus("verified");
+      setAccountLink({
+        status: result.verification?.status || "",
+        accountNumber: result.verification?.accountNumber || "",
+      });
+      hasLoadedPortalStatus.current = true;
       setStep("verified");
       cleanEmailLinkFromAddressBar();
     } catch (error) {
@@ -243,7 +268,8 @@ export default function CustomerAccountOnboarding({
 
     try {
       await signOutCustomerPortal();
-      setVerifiedEmail("");
+      setAccountLink({ status: "", accountNumber: "" });
+      hasLoadedPortalStatus.current = false;
       setSignInEmail("");
       setSignInStatus("idle");
       setStep("account-question");
@@ -273,6 +299,18 @@ export default function CustomerAccountOnboarding({
     setErrors((currentErrors) => ({
       ...currentErrors,
       [name]: "",
+    }));
+    setSubmitError("");
+  }
+
+  function handleAddressChange(address) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      address,
+    }));
+    setErrors((currentErrors) => ({
+      ...currentErrors,
+      address: "",
     }));
     setSubmitError("");
   }
@@ -361,6 +399,17 @@ export default function CustomerAccountOnboarding({
     setStep("sign-in");
   }
 
+  if (customerAuthUser && step === "verified") {
+    return (
+      <CustomerPortalDashboard
+        accountLink={accountLink}
+        currentUser={customerAuthUser}
+        onBackToEmployeeLogin={onBackToEmployeeLogin}
+        onSignOut={handleCustomerSignOut}
+      />
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#F8F7F5] text-slate-950">
       <header className="border-b border-slate-200 bg-white">
@@ -388,13 +437,6 @@ export default function CustomerAccountOnboarding({
                 Customer sign in
               </button>
             )}
-            <button
-              type="button"
-              onClick={onBackToEmployeeLogin}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:border-slate-400 hover:text-slate-950 sm:px-4 sm:text-sm"
-            >
-              Employee sign in
-            </button>
           </div>
         </div>
       </header>
@@ -536,37 +578,6 @@ export default function CustomerAccountOnboarding({
             </form>
           ) : null}
 
-          {step === "verified" ? (
-            <div className="p-6 text-center sm:p-10">
-              <span className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-emerald-700">
-                <ShieldCheck className="h-8 w-8" aria-hidden="true" />
-              </span>
-              <p className="mt-6 text-xs font-black uppercase tracking-[0.2em] text-emerald-700">
-                Email verified
-              </p>
-              <h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
-                You&apos;re securely signed in.
-              </h2>
-              <p className="mx-auto mt-3 max-w-md text-sm font-semibold leading-6 text-slate-600">
-                Signed in as {verifiedEmail || customerAuthUser?.email}. Your
-                email is verified. Capital Lumber will connect your customer
-                account after reviewing your information.
-              </p>
-              <button
-                type="button"
-                onClick={handleCustomerSignOut}
-                className="mt-7 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
-              >
-                Sign out
-              </button>
-              {signInError ? (
-                <p className="mt-4 text-sm font-bold text-red-600">
-                  {signInError}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
           {step === "account-question" ? (
             <div className="p-5 sm:p-7">
               <p className="text-sm font-black uppercase tracking-[0.16em] text-slate-500">
@@ -680,16 +691,50 @@ export default function CustomerAccountOnboarding({
                   placeholder="Your company"
                 />
                 <div className="sm:col-span-2">
-                  <Field
-                    id="address"
-                    label="Business or billing address"
-                    icon={MapPin}
-                    value={form.address}
-                    onChange={handleFieldChange}
-                    error={errors.address}
-                    autoComplete="street-address"
-                    placeholder="Street, city, state, ZIP"
-                  />
+                  <div>
+                    <label
+                      className="mb-2 block text-xs font-black uppercase tracking-[0.14em] text-slate-600"
+                      htmlFor="address"
+                    >
+                      Business or billing address
+                    </label>
+                    <span
+                      className={`relative block rounded-2xl border bg-white transition focus-within:ring-4 ${
+                        errors.address
+                          ? "border-red-400 focus-within:border-red-500 focus-within:ring-red-100"
+                          : "border-slate-200 focus-within:border-slate-900 focus-within:ring-slate-100"
+                      }`}
+                    >
+                      <MapPin
+                        className={`pointer-events-none absolute left-4 top-1/2 z-10 h-5 w-5 -translate-y-1/2 ${
+                          errors.address ? "text-red-500" : "text-slate-400"
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <AddressAutocompleteInput
+                        id="address"
+                        value={form.address}
+                        onChange={handleAddressChange}
+                        autoComplete="off"
+                        enableLocalFallback
+                        placeholder="Start typing your address…"
+                        showStatus={false}
+                        className="w-full rounded-2xl border-0 bg-transparent py-4 pl-12 pr-4 text-base font-bold text-slate-900 outline-none placeholder:font-semibold placeholder:text-slate-400"
+                      />
+                    </span>
+                    {errors.address ? (
+                      <span
+                        id="address-error"
+                        className="mt-1.5 block text-sm font-bold text-red-600"
+                      >
+                        {errors.address}
+                      </span>
+                    ) : (
+                      <span className="mt-1.5 block text-xs font-semibold text-slate-500">
+                        Start typing, then choose the complete address from the list.
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <Field
                   id="phone"
@@ -793,6 +838,18 @@ export default function CustomerAccountOnboarding({
           ) : null}
         </section>
       </section>
+
+      <footer className="border-t border-slate-200 bg-white/70">
+        <div className="mx-auto flex max-w-6xl items-center justify-center px-4 py-5 sm:px-6 lg:px-8">
+          <button
+            type="button"
+            onClick={onBackToEmployeeLogin}
+            className="text-[11px] font-bold text-slate-400 transition hover:text-slate-700"
+          >
+            Employee sign in
+          </button>
+        </div>
+      </footer>
     </main>
   );
 }

@@ -328,6 +328,143 @@ async function getTwilioCaller(request, { adminOnly = false } = {}) {
   };
 }
 
+async function getCustomerPortalAdmin(request) {
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Sign in before reviewing customer portal accounts.",
+    );
+  }
+
+  const firestore = getFirestore();
+  const email = normalizedEmail(request.auth.token.email);
+  const profileSnapshot = await firestore.doc(`users/${request.auth.uid}`).get();
+  const profile = profileSnapshot.data() || {};
+  const isBootstrapSuperAdmin = email === BOOTSTRAP_SUPER_ADMIN_EMAIL;
+  const isApprovedAdmin =
+    isBootstrapSuperAdmin ||
+    (profile.status === "approved" &&
+      ["admin", "superAdmin"].includes(profile.role));
+
+  if (!isApprovedAdmin) {
+    throw new HttpsError(
+      "permission-denied",
+      "Only an approved administrator can review customer portal accounts.",
+    );
+  }
+
+  return {
+    email,
+    firestore,
+    profile,
+    userId: request.auth.uid,
+  };
+}
+
+function customerPortalDateToIso(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value?.toDate === "function") {
+    return value.toDate().toISOString();
+  }
+  return "";
+}
+
+function selectCustomerAccountRequestDocument(documents, accountRequestId = "") {
+  const sortedDocuments = [...documents].sort((firstDocument, secondDocument) => {
+    const firstData = firstDocument.data() || {};
+    const secondData = secondDocument.data() || {};
+    const firstDate = customerPortalDateToIso(
+      firstData.createdAt || firstData.updatedAt,
+    );
+    const secondDate = customerPortalDateToIso(
+      secondData.createdAt || secondData.updatedAt,
+    );
+    return secondDate.localeCompare(firstDate);
+  });
+
+  return (
+    sortedDocuments.find((document) => document.id === accountRequestId) ||
+    sortedDocuments.find(
+      (document) => String(document.data()?.status || "").trim() === "approved",
+    ) ||
+    sortedDocuments[0] ||
+    null
+  );
+}
+
+async function getVerifiedCustomerPortalContext(request) {
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "Use the secure link in your email to sign in.",
+    );
+  }
+
+  const email = normalizedEmail(request.auth.token.email);
+  const emailIsVerified = request.auth.token.email_verified === true;
+
+  if (!email || !emailIsVerified) {
+    throw new HttpsError(
+      "permission-denied",
+      "Your email address has not been verified.",
+    );
+  }
+
+  const firestore = getFirestore();
+  const portalUserReference = firestore.doc(
+    `customerPortalUsers/${request.auth.uid}`,
+  );
+  const [portalUserSnapshot, accountRequestsSnapshot] = await Promise.all([
+    portalUserReference.get(),
+    firestore
+      .collection("customerAccountRequests")
+      .where("email", "==", email)
+      .limit(20)
+      .get(),
+  ]);
+  const portalUser = portalUserSnapshot.data() || {};
+  const accountRequestDocument = selectCustomerAccountRequestDocument(
+    accountRequestsSnapshot.docs,
+    portalUser.accountRequestId,
+  );
+  const accountRequest = accountRequestDocument?.data() || {};
+
+  return {
+    accountRequest,
+    accountRequestDocument,
+    email,
+    firestore,
+    portalUser,
+    portalUserExists: portalUserSnapshot.exists,
+    portalUserReference,
+    userId: request.auth.uid,
+  };
+}
+
+function getSafeCustomerPortalProfile(context) {
+  const { accountRequest, email, portalUser } = context;
+
+  return {
+    email,
+    status: String(
+      portalUser.status || accountRequest.status || "emailVerified",
+    ).trim(),
+    accountNumber: String(
+      portalUser.accountNumber ||
+        accountRequest.verifiedAccountNumber ||
+        accountRequest.accountNumber ||
+        "",
+    ).trim(),
+    name: String(portalUser.name || accountRequest.name || "").trim(),
+    businessName: String(
+      portalUser.businessName || accountRequest.businessName || "",
+    ).trim(),
+    phone: String(portalUser.phone || accountRequest.phone || "").trim(),
+    address: String(portalUser.address || accountRequest.address || "").trim(),
+  };
+}
+
 async function writeTwilioMessageLog(data) {
   try {
     await getFirestore().collection(TWILIO_MESSAGE_LOG_COLLECTION).add({
@@ -1018,7 +1155,27 @@ exports.verifyCustomerPortalEmail = onCall(
       `customerPortalUsers/${request.auth.uid}`,
     );
     const customerPortalUser = await customerPortalUserReference.get();
+    const existingPortalUser = customerPortalUser.data() || {};
+    const linkedAccountRequestDocument = selectCustomerAccountRequestDocument(
+      matchingRequests.docs,
+      existingPortalUser.accountRequestId,
+    );
+    const linkedAccountRequest = linkedAccountRequestDocument?.data() || {};
     const batch = firestore.batch();
+    const requestStatuses = matchingRequests.docs.map((requestDocument) =>
+      String(requestDocument.data()?.status || "").trim(),
+    );
+    const hasApprovedRequest = requestStatuses.includes("approved");
+    const hasPendingRequest = requestStatuses.some((status) =>
+      ["pendingVerification", "pendingAccountReview"].includes(status),
+    );
+    const existingPortalStatus = String(existingPortalUser.status || "").trim();
+    const portalStatus =
+      existingPortalStatus === "approved" || hasApprovedRequest
+        ? "approved"
+        : hasPendingRequest
+          ? "pendingAccountReview"
+          : existingPortalStatus || "emailVerified";
 
     matchingRequests.docs.forEach((requestDocument) => {
       const requestData = requestDocument.data() || {};
@@ -1044,9 +1201,22 @@ exports.verifyCustomerPortalEmail = onCall(
       {
         uid: request.auth.uid,
         email,
-        status: matchingRequests.empty
-          ? "emailVerified"
-          : "pendingAccountReview",
+        status: portalStatus,
+        accountRequestId: linkedAccountRequestDocument?.id || "",
+        name: String(
+          existingPortalUser.name || linkedAccountRequest.name || "",
+        ).trim(),
+        businessName: String(
+          existingPortalUser.businessName ||
+            linkedAccountRequest.businessName ||
+            "",
+        ).trim(),
+        address: String(
+          existingPortalUser.address || linkedAccountRequest.address || "",
+        ).trim(),
+        phone: String(
+          existingPortalUser.phone || linkedAccountRequest.phone || "",
+        ).trim(),
         emailVerifiedAt: FieldValue.serverTimestamp(),
         lastLoginAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -1067,10 +1237,610 @@ exports.verifyCustomerPortalEmail = onCall(
 
     return {
       email,
-      status: matchingRequests.empty
-        ? "emailVerified"
-        : "pendingAccountReview",
+      status: portalStatus,
+      accountNumber: String(
+        existingPortalUser.accountNumber ||
+          linkedAccountRequest.verifiedAccountNumber ||
+          linkedAccountRequest.accountNumber ||
+          "",
+      ).trim(),
       matchedRequests: matchingRequests.size,
+    };
+  },
+);
+
+exports.getCustomerPortalProfile = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    const context = await getVerifiedCustomerPortalContext(request);
+    const profile = getSafeCustomerPortalProfile(context);
+    let quoteRequests = [];
+
+    if (request.data?.includeQuoteHistory === true) {
+      const requestsSnapshot = await context.firestore
+        .collection("customerQuoteRequests")
+        .where("customerUid", "==", context.userId)
+        .limit(100)
+        .get();
+
+      quoteRequests = requestsSnapshot.docs
+        .map((requestDocument) => {
+          const requestData = requestDocument.data() || {};
+          const items = Array.isArray(requestData.items)
+            ? requestData.items.slice(0, 30).map((item) => ({
+                itemNumber: String(item?.itemNumber || "").trim(),
+                description: String(item?.description || "").trim(),
+                quantity: Number(item?.quantity) || 0,
+              }))
+            : [];
+
+          return {
+            id: requestDocument.id,
+            reference: String(requestData.reference || "").trim(),
+            status: String(requestData.status || "new").trim(),
+            items,
+            deliveryNeeded: requestData.deliveryNeeded === true,
+            deliveryAddress: String(
+              requestData.deliveryAddress || "",
+            ).trim(),
+            neededBy: String(requestData.neededBy || "").trim(),
+            validityDays: Number(requestData.validityDays) || 14,
+            createdAt: customerPortalDateToIso(requestData.createdAt),
+            updatedAt: customerPortalDateToIso(requestData.updatedAt),
+            reviewedAt: customerPortalDateToIso(requestData.reviewedAt),
+          };
+        })
+        .sort((firstRequest, secondRequest) =>
+          String(secondRequest.createdAt || "").localeCompare(
+            String(firstRequest.createdAt || ""),
+          ),
+        );
+    }
+
+    await context.portalUserReference.set(
+      {
+        uid: context.userId,
+        email: context.email,
+        accountRequestId:
+          context.accountRequestDocument?.id ||
+          context.portalUser.accountRequestId ||
+          "",
+        name: profile.name,
+        businessName: profile.businessName,
+        address: profile.address,
+        phone: profile.phone,
+        lastLoginAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(context.portalUserExists
+          ? {}
+          : { createdAt: FieldValue.serverTimestamp() }),
+      },
+      { merge: true },
+    );
+
+    return { profile, quoteRequests };
+  },
+);
+
+exports.updateCustomerPortalProfile = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    const context = await getVerifiedCustomerPortalContext(request);
+    const name = String(request.data?.name || "").trim();
+    const businessName = String(request.data?.businessName || "").trim();
+    const address = String(request.data?.address || "").trim();
+    const phone = normalizePhoneNumber(request.data?.phone);
+
+    if (!name || name.length > 120) {
+      throw new HttpsError("invalid-argument", "Enter your full name.");
+    }
+    if (!businessName || businessName.length > 160) {
+      throw new HttpsError("invalid-argument", "Enter your business name.");
+    }
+    if (!address || address.length > 300) {
+      throw new HttpsError("invalid-argument", "Enter your business address.");
+    }
+    if (!phone) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter a valid phone number with area code.",
+      );
+    }
+
+    const updatedAt = FieldValue.serverTimestamp();
+    const batch = context.firestore.batch();
+    const safeProfile = { name, businessName, address, phone };
+
+    batch.set(
+      context.portalUserReference,
+      {
+        ...safeProfile,
+        uid: context.userId,
+        email: context.email,
+        accountRequestId:
+          context.accountRequestDocument?.id ||
+          context.portalUser.accountRequestId ||
+          "",
+        updatedAt,
+        ...(context.portalUserExists ? {} : { createdAt: updatedAt }),
+      },
+      { merge: true },
+    );
+
+    if (context.accountRequestDocument) {
+      batch.set(
+        context.accountRequestDocument.ref,
+        { ...safeProfile, updatedAt },
+        { merge: true },
+      );
+    }
+
+    await batch.commit();
+
+    logger.info("Customer portal profile updated", {
+      uid: context.userId,
+      emailDomain: context.email.split("@")[1] || "",
+    });
+
+    return {
+      profile: {
+        ...getSafeCustomerPortalProfile(context),
+        ...safeProfile,
+      },
+    };
+  },
+);
+
+exports.submitCustomerQuoteRequest = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    const context = await getVerifiedCustomerPortalContext(request);
+    const submittedItems = Array.isArray(request.data?.items)
+      ? request.data.items
+      : [];
+    const deliveryNeeded = request.data?.deliveryNeeded === true;
+    const deliveryAddress = String(request.data?.deliveryAddress || "").trim();
+    const neededBy = String(request.data?.neededBy || "").trim();
+    const notes = String(request.data?.notes || "").trim();
+    const allowedTimelines = new Set([
+      "as-soon-as-possible",
+      "within-one-week",
+      "within-two-weeks",
+      "this-month",
+      "flexible",
+    ]);
+
+    if (submittedItems.length === 0 || submittedItems.length > 30) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Add between 1 and 30 items to your quote request.",
+      );
+    }
+
+    const items = submittedItems.map((item) => {
+      const itemNumber = String(item?.itemNumber || "").trim();
+      const description = String(item?.description || "").trim();
+      const brand = String(item?.brand || "").trim();
+      const groupSection = String(item?.groupSection || "").trim();
+      const quantity = Number(item?.quantity);
+
+      if (
+        !itemNumber ||
+        itemNumber.length > 60 ||
+        !description ||
+        description.length > 300 ||
+        brand.length > 120 ||
+        groupSection.length > 160 ||
+        !Number.isFinite(quantity) ||
+        quantity <= 0 ||
+        quantity > 100000
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Review the selected items and quantities.",
+        );
+      }
+
+      return {
+        itemNumber,
+        description,
+        brand,
+        groupSection,
+        quantity: Math.round(quantity * 100) / 100,
+      };
+    });
+
+    if (!allowedTimelines.has(neededBy)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Choose how soon you need the material.",
+      );
+    }
+    if (deliveryNeeded && (!deliveryAddress || deliveryAddress.length > 300)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter the delivery address for this quote.",
+      );
+    }
+    if (notes.length > 1200) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Keep quote notes under 1,200 characters.",
+      );
+    }
+
+    const profile = getSafeCustomerPortalProfile(context);
+    const requestId = randomUUID();
+    const reference = `Q-${requestId.slice(0, 8).toUpperCase()}`;
+
+    await context.firestore.doc(`customerQuoteRequests/${requestId}`).set({
+      reference,
+      status: "new",
+      validityDays: 14,
+      source: "customerPortal",
+      customerUid: context.userId,
+      email: context.email,
+      accountNumber: profile.accountNumber,
+      name: profile.name,
+      businessName: profile.businessName,
+      phone: profile.phone,
+      accountStatus: profile.status,
+      items,
+      deliveryNeeded,
+      deliveryAddress: deliveryNeeded ? deliveryAddress : "",
+      neededBy,
+      notes,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    logger.info("Customer quote request submitted", {
+      requestId,
+      reference,
+      customerUid: context.userId,
+      itemCount: items.length,
+      deliveryNeeded,
+    });
+
+    return {
+      requestId,
+      reference,
+      status: "new",
+      validityDays: 14,
+      createdAt: new Date().toISOString(),
+    };
+  },
+);
+
+exports.listCustomerQuoteRequests = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    const { firestore } = await getCustomerPortalAdmin(request);
+    const requestsSnapshot = await firestore
+      .collection("customerQuoteRequests")
+      .orderBy("createdAt", "desc")
+      .limit(250)
+      .get();
+
+    return {
+      requests: requestsSnapshot.docs.map((requestDocument) => {
+        const requestData = requestDocument.data() || {};
+        const items = Array.isArray(requestData.items)
+          ? requestData.items
+              .slice(0, 30)
+              .map((item) => ({
+                itemNumber: String(item?.itemNumber || "").trim(),
+                description: String(item?.description || "").trim(),
+                brand: String(item?.brand || "").trim(),
+                groupSection: String(item?.groupSection || "").trim(),
+                quantity: Number(item?.quantity) || 0,
+              }))
+          : [];
+
+        return {
+          id: requestDocument.id,
+          reference: String(requestData.reference || "").trim(),
+          status: String(requestData.status || "new").trim(),
+          accountNumber: String(requestData.accountNumber || "").trim(),
+          accountStatus: String(requestData.accountStatus || "").trim(),
+          name: String(requestData.name || "").trim(),
+          businessName: String(requestData.businessName || "").trim(),
+          phone: String(requestData.phone || "").trim(),
+          email: normalizedEmail(requestData.email),
+          items,
+          deliveryNeeded: requestData.deliveryNeeded === true,
+          deliveryAddress: String(
+            requestData.deliveryAddress || "",
+          ).trim(),
+          neededBy: String(requestData.neededBy || "").trim(),
+          notes: String(requestData.notes || "").trim(),
+          internalNote: String(requestData.internalNote || "").trim(),
+          createdAt: customerPortalDateToIso(requestData.createdAt),
+          updatedAt: customerPortalDateToIso(requestData.updatedAt),
+          reviewedAt: customerPortalDateToIso(requestData.reviewedAt),
+          reviewedBy: String(requestData.reviewedBy || "").trim(),
+        };
+      }),
+    };
+  },
+);
+
+exports.updateCustomerQuoteRequest = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    const { email: reviewerEmail, firestore } =
+      await getCustomerPortalAdmin(request);
+    const requestId = String(request.data?.requestId || "").trim();
+    const status = String(request.data?.status || "").trim();
+    const internalNote = String(request.data?.internalNote || "").trim();
+    const allowedStatuses = new Set(["new", "reviewing", "quoted", "closed"]);
+
+    if (!requestId || !/^[A-Za-z0-9_-]{10,80}$/.test(requestId)) {
+      throw new HttpsError("invalid-argument", "Choose a valid quote request.");
+    }
+    if (!allowedStatuses.has(status)) {
+      throw new HttpsError("invalid-argument", "Choose a valid quote status.");
+    }
+    if (internalNote.length > 800) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Keep the internal quote note under 800 characters.",
+      );
+    }
+
+    const quoteReference = firestore.doc(`customerQuoteRequests/${requestId}`);
+    const quoteSnapshot = await quoteReference.get();
+
+    if (!quoteSnapshot.exists) {
+      throw new HttpsError("not-found", "That quote request no longer exists.");
+    }
+
+    const reviewedAt = FieldValue.serverTimestamp();
+    await quoteReference.set(
+      {
+        status,
+        internalNote,
+        reviewedAt,
+        reviewedBy: reviewerEmail,
+        updatedAt: reviewedAt,
+      },
+      { merge: true },
+    );
+
+    logger.info("Customer quote request updated", {
+      requestId,
+      status,
+      reviewerEmail,
+    });
+
+    return { requestId, status };
+  },
+);
+
+exports.listCustomerAccountRequests = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    const { firestore } = await getCustomerPortalAdmin(request);
+    const requestsSnapshot = await firestore
+      .collection("customerAccountRequests")
+      .orderBy("createdAt", "desc")
+      .limit(250)
+      .get();
+    const portalUserIds = [
+      ...new Set(
+        requestsSnapshot.docs
+          .map((requestDocument) =>
+            String(requestDocument.data()?.emailVerifiedUid || "").trim(),
+          )
+          .filter(Boolean),
+      ),
+    ];
+    const portalUserSnapshots = await Promise.all(
+      portalUserIds.map((userId) =>
+        firestore.doc(`customerPortalUsers/${userId}`).get(),
+      ),
+    );
+    const portalUsers = new Map(
+      portalUserSnapshots.map((userSnapshot) => [
+        userSnapshot.id,
+        userSnapshot.data() || {},
+      ]),
+    );
+
+    return {
+      requests: requestsSnapshot.docs.map((requestDocument) => {
+        const requestData = requestDocument.data() || {};
+        const portalUser = portalUsers.get(requestData.emailVerifiedUid) || {};
+
+        return {
+          id: requestDocument.id,
+          hasExistingAccount: requestData.hasExistingAccount === true,
+          requestedAccountNumber: String(
+            requestData.accountNumber || "",
+          ).trim(),
+          verifiedAccountNumber: String(
+            requestData.verifiedAccountNumber ||
+              portalUser.accountNumber ||
+              "",
+          ).trim(),
+          name: String(requestData.name || "").trim(),
+          businessName: String(requestData.businessName || "").trim(),
+          address: String(requestData.address || "").trim(),
+          phone: String(requestData.phone || "").trim(),
+          email: normalizedEmail(requestData.email),
+          status: String(requestData.status || "pendingVerification").trim(),
+          emailVerified: Boolean(requestData.emailVerifiedUid),
+          emailVerifiedUid: String(requestData.emailVerifiedUid || "").trim(),
+          portalStatus: String(portalUser.status || "").trim(),
+          createdAt: customerPortalDateToIso(requestData.createdAt),
+          updatedAt: customerPortalDateToIso(requestData.updatedAt),
+          emailVerifiedAt: customerPortalDateToIso(
+            requestData.emailVerifiedAt,
+          ),
+          reviewedAt: customerPortalDateToIso(requestData.reviewedAt),
+          reviewedBy: String(requestData.reviewedBy || "").trim(),
+          reviewNotes: String(requestData.reviewNotes || "").trim(),
+        };
+      }),
+    };
+  },
+);
+
+exports.reviewCustomerAccountRequest = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    const { email: reviewerEmail, firestore, userId: reviewerId } =
+      await getCustomerPortalAdmin(request);
+    const requestId = String(request.data?.requestId || "").trim();
+    const decision = String(request.data?.decision || "").trim();
+    const verifiedAccountNumber = String(
+      request.data?.verifiedAccountNumber || "",
+    ).trim();
+    const reviewNotes = String(request.data?.reviewNotes || "").trim();
+
+    if (!requestId || !/^[A-Za-z0-9_-]{10,80}$/.test(requestId)) {
+      throw new HttpsError("invalid-argument", "Choose a valid customer request.");
+    }
+    if (!["approve", "reject"].includes(decision)) {
+      throw new HttpsError("invalid-argument", "Choose approve or reject.");
+    }
+    if (decision === "approve" && !verifiedAccountNumber) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Enter the Capital Lumber account number you verified.",
+      );
+    }
+    if (verifiedAccountNumber.length > 40 || reviewNotes.length > 500) {
+      throw new HttpsError(
+        "invalid-argument",
+        "The account number or review note is too long.",
+      );
+    }
+
+    const accountRequestReference = firestore.doc(
+      `customerAccountRequests/${requestId}`,
+    );
+
+    await firestore.runTransaction(async (transaction) => {
+      const accountRequestSnapshot = await transaction.get(
+        accountRequestReference,
+      );
+
+      if (!accountRequestSnapshot.exists) {
+        throw new HttpsError("not-found", "That customer request no longer exists.");
+      }
+
+      const accountRequest = accountRequestSnapshot.data() || {};
+      const customerUserId = String(
+        accountRequest.emailVerifiedUid || "",
+      ).trim();
+      let customerUserSnapshot = null;
+      let customerUser = {};
+
+      if (customerUserId) {
+        customerUserSnapshot = await transaction.get(
+          firestore.doc(`customerPortalUsers/${customerUserId}`),
+        );
+        customerUser = customerUserSnapshot.data() || {};
+      }
+
+      if (decision === "approve" && !customerUserId) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The customer must verify their email before the account can be linked.",
+        );
+      }
+
+      const reviewedAt = FieldValue.serverTimestamp();
+      const nextStatus = decision === "approve" ? "approved" : "rejected";
+      transaction.set(
+        accountRequestReference,
+        {
+          status: nextStatus,
+          verifiedAccountNumber:
+            decision === "approve" ? verifiedAccountNumber : "",
+          reviewNotes,
+          reviewedAt,
+          reviewedBy: reviewerEmail,
+          reviewedByUid: reviewerId,
+          updatedAt: reviewedAt,
+        },
+        { merge: true },
+      );
+
+      if (customerUserId) {
+        const customerUserReference = firestore.doc(
+          `customerPortalUsers/${customerUserId}`,
+        );
+        const requestEmail = normalizedEmail(accountRequest.email);
+
+        if (
+          decision === "approve" &&
+          normalizedEmail(customerUser.email) !== requestEmail
+        ) {
+          throw new HttpsError(
+            "failed-precondition",
+            "The verified login email does not match this account request.",
+          );
+        }
+
+        transaction.set(
+          customerUserReference,
+          {
+            uid: customerUserId,
+            email: requestEmail,
+            status: nextStatus,
+            accountNumber:
+              decision === "approve" ? verifiedAccountNumber : "",
+            accountRequestId: requestId,
+            name: String(accountRequest.name || "").trim(),
+            businessName: String(accountRequest.businessName || "").trim(),
+            phone: String(accountRequest.phone || "").trim(),
+            address: String(accountRequest.address || "").trim(),
+            reviewedAt,
+            reviewedBy: reviewerEmail,
+            updatedAt: reviewedAt,
+            ...(customerUserSnapshot.exists
+              ? {}
+              : { createdAt: reviewedAt }),
+          },
+          { merge: true },
+        );
+      }
+    });
+
+    logger.info("Customer portal account request reviewed", {
+      requestId,
+      decision,
+      reviewerEmail,
+    });
+
+    return {
+      requestId,
+      status: decision === "approve" ? "approved" : "rejected",
+      verifiedAccountNumber:
+        decision === "approve" ? verifiedAccountNumber : "",
     };
   },
 );

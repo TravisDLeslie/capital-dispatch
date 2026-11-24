@@ -725,6 +725,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Quote requests are submitted and reviewed through trusted server code.
+    match /customerQuoteRequests/{requestId} {
+      allow read, write: if false;
+    }
+
     match /orderBuilds/{orderBuildId} {
       allow read: if canAccessOrderBuilds() || isSales();
       allow create: if isSales();

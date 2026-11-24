@@ -69,7 +69,14 @@ export function loadGooglePlaces() {
     };
 
     window.gm_authFailure = () => {
-      reject(new Error("Google Maps authorization failed."));
+      const authorizationError = new Error("Google Maps authorization failed.");
+      googlePlacesPromise = null;
+      window.dispatchEvent(
+        new CustomEvent("capital-google-maps-auth-failure", {
+          detail: { message: authorizationError.message },
+        }),
+      );
+      reject(authorizationError);
     };
 
     const params = new URLSearchParams({

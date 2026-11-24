@@ -48,7 +48,12 @@ export default function AddressAutocompleteInput({
   const onChangeRef = useRef(onChange);
   const onPlaceSelectedRef = useRef(onPlaceSelected);
   const hasGooglePlacesKey = Boolean(getGoogleMapsApiKey());
-  const isLocalFallbackEnabled = Boolean(enableLocalFallback);
+  const [shouldUseLocalFallback, setShouldUseLocalFallback] = useState(
+    Boolean(enableLocalFallback && !hasGooglePlacesKey),
+  );
+  const isLocalFallbackEnabled = Boolean(
+    enableLocalFallback && shouldUseLocalFallback,
+  );
   const [inputValue, setInputValue] = useState(value || "");
   const [fallbackSuggestions, setFallbackSuggestions] = useState([]);
   const [fallbackStatus, setFallbackStatus] = useState("idle");
@@ -77,16 +82,68 @@ export default function AddressAutocompleteInput({
   }, [onPlaceSelected]);
 
   useEffect(() => {
+    if (
+      !enableLocalFallback ||
+      disabled ||
+      typeof window === "undefined" ||
+      !inputRef.current
+    ) {
+      return undefined;
+    }
+
+    const addressInput = inputRef.current;
+    const activateFallback = () => {
+      setShouldUseLocalFallback(true);
+      setPlacesStatus("fallback-ready");
+      globalThis.setTimeout(() => {
+        addressInput.removeAttribute("disabled");
+        addressInput.placeholder = placeholder;
+      }, 0);
+    };
+    const handleGoogleAuthFailure = () => activateFallback();
+    const attributeObserver = new MutationObserver(() => {
+      if (
+        addressInput.disabled ||
+        /something went wrong/i.test(addressInput.placeholder || "")
+      ) {
+        activateFallback();
+      }
+    });
+
+    window.addEventListener(
+      "capital-google-maps-auth-failure",
+      handleGoogleAuthFailure,
+    );
+    attributeObserver.observe(addressInput, {
+      attributes: true,
+      attributeFilter: ["disabled", "placeholder"],
+    });
+
+    return () => {
+      window.removeEventListener(
+        "capital-google-maps-auth-failure",
+        handleGoogleAuthFailure,
+      );
+      attributeObserver.disconnect();
+    };
+  }, [disabled, enableLocalFallback, placeholder]);
+
+  useEffect(() => {
     let listener = null;
     let isMounted = true;
 
-    if (isLocalFallbackEnabled) {
-      setPlacesStatus("fallback-ready");
+    if (!hasGooglePlacesKey) {
+      if (enableLocalFallback) {
+        setShouldUseLocalFallback(true);
+        setPlacesStatus("fallback-ready");
+      } else {
+        setPlacesStatus("missing-key");
+      }
       return () => {};
     }
 
-    if (!hasGooglePlacesKey) {
-      setPlacesStatus("missing-key");
+    if (isLocalFallbackEnabled) {
+      setPlacesStatus("fallback-ready");
       return () => {};
     }
 
@@ -137,7 +194,12 @@ export default function AddressAutocompleteInput({
       })
       .catch((placesError) => {
         console.warn("Unable to load Google Places:", placesError);
-        setPlacesStatus("error");
+        if (enableLocalFallback) {
+          setShouldUseLocalFallback(true);
+          setPlacesStatus("fallback-ready");
+        } else {
+          setPlacesStatus("error");
+        }
       });
 
     return () => {
@@ -146,7 +208,7 @@ export default function AddressAutocompleteInput({
         listener.remove();
       }
     };
-  }, [hasGooglePlacesKey, isLocalFallbackEnabled]);
+  }, [enableLocalFallback, hasGooglePlacesKey, isLocalFallbackEnabled]);
 
   useEffect(() => {
     if (!isLocalFallbackEnabled || !isFallbackOpen) {

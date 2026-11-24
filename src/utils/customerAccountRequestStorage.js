@@ -29,3 +29,113 @@ export async function verifyCustomerPortalEmail() {
 
   return response.data;
 }
+
+export async function listCustomerAccountRequests() {
+  if (!functions) {
+    throw new Error("Customer account requests are temporarily unavailable.");
+  }
+
+  const listRequests = httpsCallable(functions, "listCustomerAccountRequests");
+  const response = await listRequests();
+
+  return Array.isArray(response.data?.requests) ? response.data.requests : [];
+}
+
+export async function reviewCustomerAccountRequest({
+  requestId,
+  decision,
+  verifiedAccountNumber,
+  reviewNotes,
+}) {
+  if (!functions) {
+    throw new Error("Customer account requests are temporarily unavailable.");
+  }
+
+  const reviewRequest = httpsCallable(
+    functions,
+    "reviewCustomerAccountRequest",
+  );
+  const response = await reviewRequest({
+    requestId,
+    decision,
+    verifiedAccountNumber,
+    reviewNotes,
+  });
+
+  return response.data;
+}
+
+export async function getCustomerPortalProfile() {
+  if (!functions) {
+    throw new Error("Your customer profile is temporarily unavailable.");
+  }
+
+  const getProfile = httpsCallable(functions, "getCustomerPortalProfile");
+  const response = await getProfile();
+
+  return response.data?.profile || {};
+}
+
+export async function updateCustomerPortalProfile(profile) {
+  if (!functions) {
+    throw new Error("Your customer profile is temporarily unavailable.");
+  }
+
+  const updateProfile = httpsCallable(functions, "updateCustomerPortalProfile");
+  const response = await updateProfile(profile);
+
+  return response.data?.profile || {};
+}
+
+export async function submitCustomerQuoteRequest(quoteRequest) {
+  if (!functions) {
+    throw new Error("Quote requests are temporarily unavailable.");
+  }
+
+  const submitQuote = httpsCallable(functions, "submitCustomerQuoteRequest");
+  const response = await submitQuote(quoteRequest);
+
+  return response.data;
+}
+
+export async function listMyCustomerQuoteRequests() {
+  if (!functions) {
+    throw new Error("Your quote history is temporarily unavailable.");
+  }
+
+  const listRequests = httpsCallable(
+    functions,
+    "getCustomerPortalProfile",
+  );
+  const response = await listRequests({ includeQuoteHistory: true });
+
+  return Array.isArray(response.data?.quoteRequests)
+    ? response.data.quoteRequests
+    : [];
+}
+
+export async function listCustomerQuoteRequests() {
+  if (!functions) {
+    throw new Error("Customer quote requests are temporarily unavailable.");
+  }
+
+  const listRequests = httpsCallable(functions, "listCustomerQuoteRequests");
+  const response = await listRequests();
+
+  return Array.isArray(response.data?.requests) ? response.data.requests : [];
+}
+
+export async function updateCustomerQuoteRequest({
+  requestId,
+  status,
+  internalNote,
+}) {
+  if (!functions) {
+    throw new Error("Customer quote requests are temporarily unavailable.");
+  }
+
+  const updateRequest = httpsCallable(functions, "updateCustomerQuoteRequest");
+  const response = await updateRequest({ requestId, status, internalNote });
+
+  return response.data;
+}
