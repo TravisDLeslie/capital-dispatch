@@ -13,6 +13,7 @@ import {
   Mail,
   MapPin,
   PackageCheck,
+  Plus,
   RefreshCw,
   Search,
   Send,
@@ -24,6 +25,7 @@ import {
 import Breadcrumbs from "../components/Breadcrumbs";
 import DeliveryPriceEstimate from "../components/DeliveryPriceEstimate";
 import PageContainer from "../components/PageContainer";
+import { inventoryCatalogItems } from "../data/inventoryCatalog";
 import { auth } from "../utils/firebase";
 import {
   listCustomerAccountRequests,
@@ -409,6 +411,14 @@ const quoteTimelineLabels = {
 };
 
 const DEFAULT_QUOTE_TAX_RATE = 6;
+const QUOTE_ITEM_CATALOG = inventoryCatalogItems
+  .map((item) => ({
+    itemNumber: String(item.itemNumber || "").trim(),
+    description: String(item.description || "").trim(),
+    brand: String(item.brand || "").trim(),
+    groupSection: String(item.groupSection || "").trim(),
+  }))
+  .filter((item) => item.itemNumber && item.description);
 const quoteCurrencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -420,7 +430,7 @@ function formatQuoteCurrency(value) {
 }
 
 function getQuotePricingSummary(quoteRequest, draft) {
-  const materialSubtotal = (quoteRequest.items || []).reduce(
+  const materialSubtotal = (draft.items || quoteRequest.items || []).reduce(
     (total, item, index) => {
       const quantity = Math.max(0, Number(item.quantity) || 0);
       const unitPrice = Number(draft.itemPrices?.[index]);
@@ -447,11 +457,16 @@ function getQuotePricingSummary(quoteRequest, draft) {
 
 function getQuoteRequestDraft(quoteRequest) {
   const savedPricingDraft = quoteRequest.pricingDraft || {};
+  const draftItems =
+    Array.isArray(savedPricingDraft.items) && savedPricingDraft.items.length > 0
+      ? savedPricingDraft.items
+      : quoteRequest.items || [];
   const hasSavedPricingDraft =
     Array.isArray(savedPricingDraft.itemPrices) &&
-    savedPricingDraft.itemPrices.length === (quoteRequest.items || []).length;
+    savedPricingDraft.itemPrices.length === draftItems.length;
 
   return {
+    items: draftItems.map((item) => ({ ...item })),
     status: quoteRequest.status || "new",
     internalNote: quoteRequest.internalNote || "",
     versionTitle: "",
@@ -463,7 +478,7 @@ function getQuoteRequestDraft(quoteRequest) {
       ? savedPricingDraft.itemPrices.map((price) =>
           price === null || price === undefined ? "" : String(price),
         )
-      : (quoteRequest.items || []).map((item) =>
+      : draftItems.map((item) =>
           item.unitPrice === null || item.unitPrice === undefined
             ? ""
             : String(item.unitPrice),
@@ -590,6 +605,7 @@ export default function UserAdminPage({
     useState("");
   const [quoteRequests, setQuoteRequests] = useState([]);
   const [quoteRequestDrafts, setQuoteRequestDrafts] = useState({});
+  const [quoteItemSearches, setQuoteItemSearches] = useState({});
   const [isLoadingQuoteRequests, setIsLoadingQuoteRequests] = useState(true);
   const [savingQuoteRequestId, setSavingQuoteRequestId] = useState("");
   const [publishingQuoteRequestId, setPublishingQuoteRequestId] = useState("");
@@ -653,6 +669,10 @@ export default function UserAdminPage({
       quoteRequest.accountNumber,
       quoteRequest.deliveryAddress,
       ...(quoteRequest.items || []).flatMap((item) => [
+        item.itemNumber,
+        item.description,
+      ]),
+      ...(quoteRequest.pricingDraft?.items || []).flatMap((item) => [
         item.itemNumber,
         item.description,
       ]),
@@ -802,14 +822,81 @@ export default function UserAdminPage({
     setError("");
   }
 
+  function updateQuoteItemQuantity(requestId, itemIndex, value) {
+    setQuoteRequestDrafts((currentDrafts) => {
+      const currentDraft = currentDrafts[requestId] || {};
+      const items = [...(currentDraft.items || [])];
+      items[itemIndex] = { ...items[itemIndex], quantity: value };
+      return {
+        ...currentDrafts,
+        [requestId]: { ...currentDraft, items },
+      };
+    });
+    setMessage("");
+    setError("");
+  }
+
+  function removeQuoteItem(requestId, itemIndex) {
+    setQuoteRequestDrafts((currentDrafts) => {
+      const currentDraft = currentDrafts[requestId] || {};
+      return {
+        ...currentDrafts,
+        [requestId]: {
+          ...currentDraft,
+          items: (currentDraft.items || []).filter((_, index) => index !== itemIndex),
+          itemPrices: (currentDraft.itemPrices || []).filter(
+            (_, index) => index !== itemIndex,
+          ),
+        },
+      };
+    });
+    setMessage("");
+    setError("");
+  }
+
+  function addQuoteItem(requestId, catalogItem) {
+    setQuoteRequestDrafts((currentDrafts) => {
+      const currentDraft = currentDrafts[requestId] || {};
+      const items = currentDraft.items || [];
+      if (items.some((item) => item.itemNumber === catalogItem.itemNumber)) {
+        return currentDrafts;
+      }
+      return {
+        ...currentDrafts,
+        [requestId]: {
+          ...currentDraft,
+          items: [...items, { ...catalogItem, quantity: 1 }],
+          itemPrices: [...(currentDraft.itemPrices || []), ""],
+        },
+      };
+    });
+    setQuoteItemSearches((current) => ({ ...current, [requestId]: "" }));
+    setMessage("");
+    setError("");
+  }
+
   async function saveQuoteRequest(quoteRequest, { publishPricing = false } = {}) {
     const draft = quoteRequestDrafts[quoteRequest.id] || {};
+    const requestItems = draft.items || quoteRequest.items || [];
     setMessage("");
     setError("");
 
+    if (requestItems.length === 0) {
+      setError("Keep at least one material item on the quote.");
+      return;
+    }
+    if (
+      requestItems.some(
+        (item) => !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0,
+      )
+    ) {
+      setError("Enter a quantity greater than zero for every material item.");
+      return;
+    }
+
     if (publishPricing) {
       const itemPrices = draft.itemPrices || [];
-      const hasInvalidPrice = (quoteRequest.items || []).some((item, index) => {
+      const hasInvalidPrice = requestItems.some((item, index) => {
         const rawPrice = itemPrices[index];
         const price = Number(rawPrice);
         return rawPrice === "" || rawPrice === null || rawPrice === undefined || !Number.isFinite(price) || price < 0;
@@ -844,7 +931,14 @@ export default function UserAdminPage({
         internalNote: draft.internalNote?.trim() || "",
         publishPricing,
         savePricingDraft: true,
-        draftItems: (quoteRequest.items || []).map((item, index) => ({
+        requestItems: requestItems.map((item) => ({
+          itemNumber: item.itemNumber,
+          description: item.description,
+          brand: item.brand || "",
+          groupSection: item.groupSection || "",
+          quantity: Number(item.quantity),
+        })),
+        draftItems: requestItems.map((item, index) => ({
           itemNumber: item.itemNumber,
           unitPrice:
             draft.itemPrices?.[index] === "" ||
@@ -866,7 +960,7 @@ export default function UserAdminPage({
             : Number(draft.deliveryCharge),
         draftPublicNote: draft.publicNote?.trim() || "",
         pricedItems: publishPricing
-          ? (quoteRequest.items || []).map((item, index) => ({
+          ? requestItems.map((item, index) => ({
               itemNumber: item.itemNumber,
               unitPrice: Number(draft.itemPrices?.[index]),
             }))
@@ -1627,6 +1721,28 @@ export default function UserAdminPage({
               const isPublishing = publishingQuoteRequestId === quoteRequest.id;
               const pricingSummary = getQuotePricingSummary(quoteRequest, draft);
               const isExpanded = Boolean(expandedQuoteRequests[quoteRequest.id]);
+              const draftItems = draft.items || quoteRequest.items || [];
+              const itemSearch = quoteItemSearches[quoteRequest.id] || "";
+              const normalizedItemSearch = itemSearch.trim().toLowerCase();
+              const existingItemNumbers = new Set(
+                draftItems.map((item) => item.itemNumber),
+              );
+              const catalogMatches =
+                normalizedItemSearch.length >= 2
+                  ? QUOTE_ITEM_CATALOG.filter(
+                      (item) =>
+                        !existingItemNumbers.has(item.itemNumber) &&
+                        [
+                          item.itemNumber,
+                          item.description,
+                          item.brand,
+                          item.groupSection,
+                        ]
+                          .join(" ")
+                          .toLowerCase()
+                          .includes(normalizedItemSearch),
+                    ).slice(0, 8)
+                  : [];
 
               return (
                 <section key={quoteRequest.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -1697,10 +1813,10 @@ export default function UserAdminPage({
                           <PackageCheck className="h-5 w-5 text-violet-600" />
                           <h3 className="font-black text-slate-950">Requested material</h3>
                         </div>
-                        <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black text-violet-700">{quoteRequest.items?.length || 0} items</span>
+                        <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black text-violet-700">{draftItems.length} items</span>
                       </div>
                       <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
-                        {(quoteRequest.items || []).map((item, itemIndex) => {
+                        {draftItems.map((item, itemIndex) => {
                           const quantity = Math.max(0, Number(item.quantity) || 0);
                           const rawUnitPrice = draft.itemPrices?.[itemIndex];
                           const unitPrice = Number(rawUnitPrice);
@@ -1714,10 +1830,28 @@ export default function UserAdminPage({
                           const lineTotal = quantity * (Number.isFinite(unitPrice) ? unitPrice : 0);
 
                           return (
-                            <div key={`${quoteRequest.id}-${item.itemNumber}-${itemIndex}`} className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[90px_1fr_70px_135px_105px] sm:items-center">
+                            <div key={`${quoteRequest.id}-${item.itemNumber}-${itemIndex}`} className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[90px_1fr_100px_135px_105px_42px] sm:items-center">
                               <p className="text-xs font-black uppercase tracking-[0.1em] text-[#FC2C38]">{item.itemNumber}</p>
                               <p className="text-sm font-bold text-slate-800">{item.description}</p>
-                              <p className="text-sm font-black text-slate-950 sm:text-right">Qty {item.quantity}</p>
+                              <label>
+                                <span className="mb-1 block text-[10px] font-black uppercase tracking-[0.1em] text-slate-400 sm:sr-only">Quantity</span>
+                                <input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  inputMode="decimal"
+                                  value={item.quantity}
+                                  onChange={(event) =>
+                                    updateQuoteItemQuantity(
+                                      quoteRequest.id,
+                                      itemIndex,
+                                      event.target.value,
+                                    )
+                                  }
+                                  aria-label={`Quantity for ${item.description}`}
+                                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-right text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                                />
+                              </label>
                               <label>
                                 <span className={`mb-1 block text-[10px] font-black uppercase tracking-[0.1em] sm:sr-only ${hasUnitPriceError ? "text-red-600" : "text-slate-400"}`}>
                                   {hasUnitPriceError ? "Unit price required" : "Unit price"}
@@ -1747,9 +1881,63 @@ export default function UserAdminPage({
                                 <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">Line total</p>
                                 <p className="mt-1 text-sm font-black text-slate-950">{formatQuoteCurrency(lineTotal)}</p>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => removeQuoteItem(quoteRequest.id, itemIndex)}
+                                disabled={draftItems.length === 1}
+                                className="grid h-10 w-10 place-items-center rounded-xl text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                                aria-label={`Remove ${item.description}`}
+                                title={draftItems.length === 1 ? "A quote needs at least one item" : "Remove item"}
+                              >
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                              </button>
                             </div>
                           );
                         })}
+                      </div>
+
+                      <div className="relative mt-3 rounded-2xl border border-dashed border-violet-300 bg-violet-50/40 p-3">
+                        <label htmlFor={`add-quote-item-${quoteRequest.id}`} className="text-xs font-black uppercase tracking-[0.12em] text-violet-700">
+                          Add material to this quote
+                        </label>
+                        <span className="relative mt-2 block">
+                          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                          <input
+                            id={`add-quote-item-${quoteRequest.id}`}
+                            type="search"
+                            value={itemSearch}
+                            onChange={(event) =>
+                              setQuoteItemSearches((current) => ({
+                                ...current,
+                                [quoteRequest.id]: event.target.value,
+                              }))
+                            }
+                            placeholder="Search item number, description, or brand…"
+                            className="w-full rounded-xl border border-violet-200 bg-white py-3 pl-11 pr-4 text-sm font-bold text-slate-950 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                          />
+                        </span>
+                        {catalogMatches.length > 0 ? (
+                          <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                            {catalogMatches.map((catalogItem) => (
+                              <button
+                                key={catalogItem.itemNumber}
+                                type="button"
+                                onClick={() => addQuoteItem(quoteRequest.id, catalogItem)}
+                                className="flex w-full items-center justify-between gap-4 border-b border-slate-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-violet-50"
+                              >
+                                <span className="min-w-0">
+                                  <span className="block text-xs font-black uppercase tracking-[0.1em] text-violet-700">{catalogItem.itemNumber}</span>
+                                  <span className="mt-0.5 block truncate text-sm font-bold text-slate-800">{catalogItem.description}</span>
+                                </span>
+                                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-violet-600 text-white">
+                                  <Plus className="h-4 w-4" aria-hidden="true" />
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : normalizedItemSearch.length >= 2 ? (
+                          <p className="mt-2 text-sm font-bold text-slate-500">No additional catalog items match that search.</p>
+                        ) : null}
                       </div>
 
                       <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">

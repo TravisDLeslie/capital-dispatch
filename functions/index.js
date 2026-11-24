@@ -1711,9 +1711,12 @@ exports.updateMyCustomerQuoteRequest = onCall(
       const previousDraftPrices = Array.isArray(previousDraft.itemPrices)
         ? previousDraft.itemPrices
         : [];
+      const previousDraftItems = Array.isArray(previousDraft.items)
+        ? previousDraft.items
+        : previousItems;
       const carriedPrices = new Map();
 
-      previousItems.forEach((item, index) => {
+      previousDraftItems.forEach((item, index) => {
         const itemNumber = String(item?.itemNumber || "").trim();
         const rawPrice =
           previousDraftPrices[index] ?? item?.unitPrice ?? null;
@@ -1778,6 +1781,7 @@ exports.updateMyCustomerQuoteRequest = onCall(
           pricingPublished: false,
           pricingPublishedAt: FieldValue.delete(),
           pricingDraft: {
+            items,
             itemPrices: items.map(
               (item) => carriedPrices.get(item.itemNumber) ?? null,
             ),
@@ -1901,6 +1905,15 @@ exports.listCustomerQuoteRequests = onCall(
           ).trim(),
           pricingDraftHasChanges: requestData.pricingDraftHasChanges === true,
           pricingDraft: {
+            items: Array.isArray(pricingDraftData.items)
+              ? pricingDraftData.items.slice(0, 30).map((item) => ({
+                  itemNumber: String(item?.itemNumber || "").trim(),
+                  description: String(item?.description || "").trim(),
+                  brand: String(item?.brand || "").trim(),
+                  groupSection: String(item?.groupSection || "").trim(),
+                  quantity: Number(item?.quantity) || 0,
+                }))
+              : [],
             itemPrices: Array.isArray(pricingDraftData.itemPrices)
               ? pricingDraftData.itemPrices.slice(0, 30).map((price) =>
                   price === null || price === undefined || price === ""
@@ -2061,6 +2074,56 @@ exports.updateCustomerQuoteRequest = onCall(
     const existingItems = Array.isArray(quoteData.items)
       ? quoteData.items.slice(0, 30)
       : [];
+    const submittedRequestItems = Array.isArray(request.data?.requestItems)
+      ? request.data.requestItems
+      : [];
+    const draftMaterialItems =
+      savePricingDraft && submittedRequestItems.length > 0
+        ? (() => {
+            if (submittedRequestItems.length > 30) {
+              throw new HttpsError(
+                "invalid-argument",
+                "Keep the quote to 30 material items or fewer.",
+              );
+            }
+
+            const itemNumbers = new Set();
+            return submittedRequestItems.map((item, index) => {
+              const itemNumber = String(item?.itemNumber || "").trim();
+              const description = String(item?.description || "").trim();
+              const brand = String(item?.brand || "").trim();
+              const groupSection = String(item?.groupSection || "").trim();
+              const quantity = Number(item?.quantity);
+
+              if (
+                !itemNumber ||
+                itemNumber.length > 60 ||
+                !description ||
+                description.length > 300 ||
+                brand.length > 120 ||
+                groupSection.length > 160 ||
+                !Number.isFinite(quantity) ||
+                quantity <= 0 ||
+                quantity > 100000 ||
+                itemNumbers.has(itemNumber)
+              ) {
+                throw new HttpsError(
+                  "invalid-argument",
+                  `Review material item ${index + 1} and its quantity.`,
+                );
+              }
+
+              itemNumbers.add(itemNumber);
+              return {
+                itemNumber,
+                description,
+                brand,
+                groupSection,
+                quantity: Math.round(quantity * 100) / 100,
+              };
+            });
+          })()
+        : existingItems;
     const reviewedAt = FieldValue.serverTimestamp();
     const quoteUpdate = {
       status,
@@ -2089,7 +2152,10 @@ exports.updateCustomerQuoteRequest = onCall(
       const rawDraftTaxRate = request.data?.draftTaxRate;
       const rawDraftDeliveryCharge = request.data?.draftDeliveryCharge;
 
-      if (existingItems.length === 0 || draftItems.length !== existingItems.length) {
+      if (
+        draftMaterialItems.length === 0 ||
+        draftItems.length !== draftMaterialItems.length
+      ) {
         throw new HttpsError(
           "invalid-argument",
           "The pricing draft must match every requested item.",
@@ -2102,7 +2168,7 @@ exports.updateCustomerQuoteRequest = onCall(
         );
       }
 
-      const draftItemPrices = existingItems.map((item, index) => {
+      const draftItemPrices = draftMaterialItems.map((item, index) => {
         const draftItem = draftItems[index] || {};
         const submittedItemNumber = String(draftItem.itemNumber || "").trim();
         const existingItemNumber = String(item?.itemNumber || "").trim();
@@ -2160,6 +2226,7 @@ exports.updateCustomerQuoteRequest = onCall(
       }
 
       const pricingDraft = {
+        items: draftMaterialItems,
         itemPrices: draftItemPrices,
         deliveryCharge:
           draftDeliveryCharge === null ? null : roundCurrency(draftDeliveryCharge),
@@ -2169,6 +2236,10 @@ exports.updateCustomerQuoteRequest = onCall(
         savedBy: reviewerEmail,
       };
       const publishedPricingSignature = JSON.stringify({
+        items: existingItems.map((item) => ({
+          itemNumber: String(item?.itemNumber || "").trim(),
+          quantity: Number(item?.quantity) || 0,
+        })),
         itemPrices: existingItems.map((item) =>
           item?.unitPrice === null || item?.unitPrice === undefined
             ? null
@@ -2179,6 +2250,10 @@ exports.updateCustomerQuoteRequest = onCall(
         publicNote: String(quoteData.publicNote || "").trim(),
       });
       const draftPricingSignature = JSON.stringify({
+        items: draftMaterialItems.map((item) => ({
+          itemNumber: item.itemNumber,
+          quantity: item.quantity,
+        })),
         itemPrices: draftItemPrices,
         deliveryCharge: draftDeliveryCharge === null ? 0 : roundCurrency(draftDeliveryCharge),
         taxRate: draftTaxRate === null ? 0 : draftTaxRate,
@@ -2190,7 +2265,7 @@ exports.updateCustomerQuoteRequest = onCall(
         quoteData.pricingPublished === true &&
         draftPricingSignature !== publishedPricingSignature;
 
-      const revisionItems = existingItems.map((item, index) => {
+      const revisionItems = draftMaterialItems.map((item, index) => {
         const unitPrice = draftItemPrices[index];
         const quantity = Number(item?.quantity) || 0;
         return {
@@ -2253,7 +2328,10 @@ exports.updateCustomerQuoteRequest = onCall(
       const taxRate = Number(request.data?.taxRate);
       const deliveryCharge = Number(request.data?.deliveryCharge);
 
-      if (existingItems.length === 0 || pricedItems.length !== existingItems.length) {
+      if (
+        draftMaterialItems.length === 0 ||
+        pricedItems.length !== draftMaterialItems.length
+      ) {
         throw new HttpsError(
           "invalid-argument",
           "Enter a unit price for every requested item.",
@@ -2282,7 +2360,7 @@ exports.updateCustomerQuoteRequest = onCall(
         );
       }
 
-      const publishedItems = existingItems.map((item, index) => {
+      const publishedItems = draftMaterialItems.map((item, index) => {
         const submittedItem = pricedItems[index] || {};
         const submittedItemNumber = String(
           submittedItem.itemNumber || "",
@@ -2339,6 +2417,13 @@ exports.updateCustomerQuoteRequest = onCall(
         total,
         pricingVersion: nextPricingVersion,
         pricingDraft: {
+          items: publishedItems.map((item) => ({
+            itemNumber: item.itemNumber,
+            description: item.description,
+            brand: item.brand || "",
+            groupSection: item.groupSection || "",
+            quantity: item.quantity,
+          })),
           itemPrices: publishedItems.map((item) => item.unitPrice),
           deliveryCharge: roundCurrency(deliveryCharge),
           taxRate,
