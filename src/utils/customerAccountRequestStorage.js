@@ -129,13 +129,37 @@ export async function updateCustomerQuoteRequest({
   requestId,
   status,
   internalNote,
+  publishPricing = false,
+  savePricingDraft = false,
+  draftItems = [],
+  draftTaxRate = null,
+  draftDeliveryCharge = null,
+  draftPublicNote = "",
+  pricedItems = [],
+  taxRate = 0,
+  deliveryCharge = 0,
+  publicNote = "",
 }) {
   if (!functions) {
     throw new Error("Customer quote requests are temporarily unavailable.");
   }
 
   const updateRequest = httpsCallable(functions, "updateCustomerQuoteRequest");
-  const response = await updateRequest({ requestId, status, internalNote });
+  const response = await updateRequest({
+    requestId,
+    status,
+    internalNote,
+    publishPricing,
+    savePricingDraft,
+    draftItems,
+    draftTaxRate,
+    draftDeliveryCharge,
+    draftPublicNote,
+    pricedItems,
+    taxRate,
+    deliveryCharge,
+    publicNote,
+  });
 
   return response.data;
 }

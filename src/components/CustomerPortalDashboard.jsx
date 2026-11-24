@@ -92,6 +92,16 @@ function formatQuoteDate(value, options = {}) {
   }).format(date);
 }
 
+const customerCurrencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
+
+function formatCustomerCurrency(value) {
+  const amount = Number(value);
+  return customerCurrencyFormatter.format(Number.isFinite(amount) ? amount : 0);
+}
+
 function getQuoteValidityLabel(quote) {
   if (quote.status === "closed") return "Quote closed";
   if (quote.status !== "quoted") return "Valid for 2 weeks once issued";
@@ -839,8 +849,8 @@ export default function CustomerPortalDashboard({
                                 {quote.deliveryNeeded ? "Delivery" : "Customer pickup"}
                                 {timing ? ` · ${timing}` : ""}
                               </span>
-                              <span className={quote.status === "quoted" ? "text-emerald-700" : "text-slate-500"}>
-                                {getQuoteValidityLabel(quote)}
+                              <span className={quote.pricingPublished ? "text-base text-emerald-700" : quote.status === "quoted" ? "text-emerald-700" : "text-slate-500"}>
+                                {quote.pricingPublished ? `V${Math.max(1, Number(quote.pricingVersion) || 1)} · Total ${formatCustomerCurrency(quote.total)}` : getQuoteValidityLabel(quote)}
                               </span>
                             </div>
                             <span className="mt-4 flex items-center justify-center gap-1 rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-black text-white transition group-hover:bg-[#FC2C38]">
@@ -1070,24 +1080,65 @@ export default function CustomerPortalDashboard({
                     </div>
                     <div className="divide-y divide-slate-100">
                       {(selectedQuote.items || []).map((item, index) => (
-                        <div key={`${selectedQuote.id}-${item.itemNumber}-${index}`} className="grid gap-3 px-5 py-4 sm:grid-cols-[90px_1fr_auto] sm:items-center sm:px-6">
+                        <div key={`${selectedQuote.id}-${item.itemNumber}-${index}`} className={`grid gap-3 px-5 py-4 sm:items-center sm:px-6 ${selectedQuote.pricingPublished ? "sm:grid-cols-[90px_1fr_150px]" : "sm:grid-cols-[90px_1fr]"}`}>
                           <span className="w-fit rounded-xl bg-red-50 px-3 py-2 text-sm font-black text-[#FC2C38]">
                             Qty {item.quantity}
                           </span>
                           <div className="min-w-0">
                             <p className="text-sm font-black text-slate-950">{item.description}</p>
-                            <p className="mt-1 text-xs font-bold text-slate-500">
-                              Item {item.itemNumber || "number unavailable"}
-                              {item.brand ? ` · ${item.brand}` : ""}
-                            </p>
                           </div>
-                          {item.groupSection ? (
-                            <span className="text-xs font-black text-slate-400">{item.groupSection}</span>
+                          {selectedQuote.pricingPublished ? (
+                            <div className="sm:text-right">
+                              <p className="text-base font-black text-slate-950">{formatCustomerCurrency(item.lineTotal)}</p>
+                              <p className="mt-0.5 text-xs font-bold text-slate-400">{formatCustomerCurrency(item.unitPrice)} each</p>
+                            </div>
                           ) : null}
                         </div>
                       ))}
                     </div>
                   </div>
+
+                  {selectedQuote.pricingPublished ? (
+                    <section className="mt-6 overflow-hidden rounded-3xl border border-emerald-200 bg-emerald-50/40">
+                      <div className="border-b border-emerald-200 px-5 py-4 sm:px-6">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Quote ready</p>
+                            <h3 className="mt-1 text-xl font-black text-slate-950">Your pricing</h3>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700 shadow-sm">Version {Math.max(1, Number(selectedQuote.pricingVersion) || 1)}</span>
+                            <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-700 shadow-sm">Valid for 2 weeks</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid gap-5 p-5 sm:grid-cols-[1fr_280px] sm:p-6">
+                        <div>
+                          <p className="text-sm font-semibold leading-6 text-slate-600">
+                            Pricing includes the requested material{selectedQuote.deliveryNeeded ? ", delivery," : ""} and sales tax.
+                          </p>
+                          {selectedQuote.publicNote ? (
+                            <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
+                              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Message from Capital Lumber</p>
+                              <p className="mt-2 whitespace-pre-wrap text-sm font-semibold leading-6 text-slate-700">{selectedQuote.publicNote}</p>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="rounded-2xl bg-white p-4 shadow-sm">
+                          <dl className="space-y-2 text-sm font-bold text-slate-600">
+                            <div className="flex justify-between gap-3"><dt>Material</dt><dd>{formatCustomerCurrency(selectedQuote.materialSubtotal)}</dd></div>
+                            {selectedQuote.deliveryNeeded ? <div className="flex justify-between gap-3"><dt>Delivery</dt><dd>{formatCustomerCurrency(selectedQuote.deliveryCharge)}</dd></div> : null}
+                            <div className="flex justify-between gap-3 border-t border-slate-100 pt-2"><dt>Subtotal</dt><dd>{formatCustomerCurrency(selectedQuote.subtotal)}</dd></div>
+                            <div className="flex justify-between gap-3"><dt>Tax ({Number(selectedQuote.taxRate || 0).toFixed(2)}%)</dt><dd>{formatCustomerCurrency(selectedQuote.taxAmount)}</dd></div>
+                          </dl>
+                          <div className="mt-3 flex items-end justify-between gap-3 border-t-2 border-slate-950 pt-3">
+                            <span className="text-sm font-black uppercase tracking-[0.1em] text-slate-950">Total</span>
+                            <span className="text-2xl font-black text-slate-950">{formatCustomerCurrency(selectedQuote.total)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  ) : null}
 
                   <div className="mt-6 grid gap-4 sm:grid-cols-2">
                     <div className="rounded-3xl border border-slate-200 p-5">
@@ -1153,7 +1204,9 @@ export default function CustomerPortalDashboard({
                   ) : null}
 
                   <div className="mt-6 rounded-2xl bg-blue-50 px-5 py-4 text-sm font-bold leading-6 text-blue-900">
-                    Material pricing is prepared by the Capital Lumber team and will be shared with you directly. Questions? Call 208-343-5481.
+                    {selectedQuote.pricingPublished
+                      ? "Questions about this quote? Call Capital Lumber at 208-343-5481."
+                      : "Material pricing is prepared by the Capital Lumber team and will be shared here when it is ready. Questions? Call 208-343-5481."}
                   </div>
                 </div>
               </section>

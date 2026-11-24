@@ -13,6 +13,8 @@ import {
   MapPin,
   PackageCheck,
   RefreshCw,
+  Search,
+  Send,
   Trash2,
   Truck,
   UserRoundCheck,
@@ -404,6 +406,85 @@ const quoteTimelineLabels = {
   flexible: "Timing is flexible",
 };
 
+const DEFAULT_QUOTE_TAX_RATE = 6;
+const quoteCurrencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
+
+function formatQuoteCurrency(value) {
+  const amount = Number(value);
+  return quoteCurrencyFormatter.format(Number.isFinite(amount) ? amount : 0);
+}
+
+function getQuotePricingSummary(quoteRequest, draft) {
+  const materialSubtotal = (quoteRequest.items || []).reduce(
+    (total, item, index) => {
+      const quantity = Math.max(0, Number(item.quantity) || 0);
+      const unitPrice = Number(draft.itemPrices?.[index]);
+      return total + quantity * (Number.isFinite(unitPrice) ? unitPrice : 0);
+    },
+    0,
+  );
+  const deliveryCharge = quoteRequest.deliveryNeeded
+    ? Math.max(0, Number(draft.deliveryCharge) || 0)
+    : 0;
+  const subtotal = materialSubtotal + deliveryCharge;
+  const taxRate = Math.max(0, Number(draft.taxRate) || 0);
+  const taxAmount = subtotal * (taxRate / 100);
+
+  return {
+    deliveryCharge,
+    materialSubtotal,
+    subtotal,
+    taxAmount,
+    taxRate,
+    total: subtotal + taxAmount,
+  };
+}
+
+function getQuoteRequestDraft(quoteRequest) {
+  const savedPricingDraft = quoteRequest.pricingDraft || {};
+  const hasSavedPricingDraft =
+    Array.isArray(savedPricingDraft.itemPrices) &&
+    savedPricingDraft.itemPrices.length === (quoteRequest.items || []).length;
+
+  return {
+    status: quoteRequest.status || "new",
+    internalNote: quoteRequest.internalNote || "",
+    publicNote: hasSavedPricingDraft
+      ? savedPricingDraft.publicNote || ""
+      : quoteRequest.publicNote || "",
+    itemPrices: hasSavedPricingDraft
+      ? savedPricingDraft.itemPrices.map((price) =>
+          price === null || price === undefined ? "" : String(price),
+        )
+      : (quoteRequest.items || []).map((item) =>
+          item.unitPrice === null || item.unitPrice === undefined
+            ? ""
+            : String(item.unitPrice),
+        ),
+    deliveryCharge: hasSavedPricingDraft
+      ? savedPricingDraft.deliveryCharge === null ||
+        savedPricingDraft.deliveryCharge === undefined
+        ? ""
+        : String(savedPricingDraft.deliveryCharge)
+      : quoteRequest.deliveryCharge === null ||
+          quoteRequest.deliveryCharge === undefined
+        ? ""
+        : String(quoteRequest.deliveryCharge),
+    taxRate: hasSavedPricingDraft
+      ? savedPricingDraft.taxRate === null || savedPricingDraft.taxRate === undefined
+        ? String(DEFAULT_QUOTE_TAX_RATE)
+        : String(savedPricingDraft.taxRate)
+      : String(
+          quoteRequest.pricingPublished
+            ? Number(quoteRequest.taxRate) || 0
+            : DEFAULT_QUOTE_TAX_RATE,
+        ),
+  };
+}
+
 function getQuoteStatus(status) {
   if (status === "quoted") {
     return { label: "Quote prepared", className: "bg-emerald-100 text-emerald-700" };
@@ -507,6 +588,11 @@ export default function UserAdminPage({
   const [quoteRequestDrafts, setQuoteRequestDrafts] = useState({});
   const [isLoadingQuoteRequests, setIsLoadingQuoteRequests] = useState(true);
   const [savingQuoteRequestId, setSavingQuoteRequestId] = useState("");
+  const [publishingQuoteRequestId, setPublishingQuoteRequestId] = useState("");
+  const [pricingValidationRequestId, setPricingValidationRequestId] = useState("");
+  const [quoteSearch, setQuoteSearch] = useState("");
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState("all");
+  const [quoteResultLimit, setQuoteResultLimit] = useState(20);
   const vendorList = Array.isArray(vendors) ? vendors : [];
   const driverNameOptions = getUniqueOptions(
     users
@@ -539,6 +625,41 @@ export default function UserAdminPage({
   const openQuoteRequestCount = quoteRequests.filter((quoteRequest) =>
     ["new", "reviewing"].includes(quoteRequest.status),
   ).length;
+  const normalizedQuoteSearch = quoteSearch.trim().toLowerCase();
+  const quoteSearchDigits = normalizedQuoteSearch.replace(/\D/g, "");
+  const filteredQuoteRequests = quoteRequests.filter((quoteRequest) => {
+    if (
+      quoteStatusFilter !== "all" &&
+      quoteRequest.status !== quoteStatusFilter
+    ) {
+      return false;
+    }
+    if (!normalizedQuoteSearch) return true;
+
+    const searchableText = [
+      quoteRequest.reference,
+      quoteRequest.name,
+      quoteRequest.businessName,
+      quoteRequest.email,
+      quoteRequest.phone,
+      quoteRequest.accountNumber,
+      quoteRequest.deliveryAddress,
+      ...(quoteRequest.items || []).flatMap((item) => [
+        item.itemNumber,
+        item.description,
+      ]),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const searchableDigits = searchableText.replace(/\D/g, "");
+
+    return (
+      searchableText.includes(normalizedQuoteSearch) ||
+      (quoteSearchDigits.length >= 3 && searchableDigits.includes(quoteSearchDigits))
+    );
+  });
+  const displayedQuoteRequests = filteredQuoteRequests.slice(0, quoteResultLimit);
 
   useEffect(() => {
     if (!quoteRequestsOnly) {
@@ -590,10 +711,7 @@ export default function UserAdminPage({
         Object.fromEntries(
           savedRequests.map((quoteRequest) => [
             quoteRequest.id,
-            {
-              status: quoteRequest.status || "new",
-              internalNote: quoteRequest.internalNote || "",
-            },
+            getQuoteRequestDraft(quoteRequest),
           ]),
         ),
       );
@@ -622,19 +740,104 @@ export default function UserAdminPage({
     setError("");
   }
 
-  async function saveQuoteRequest(quoteRequest) {
+  function updateQuoteItemPrice(requestId, itemIndex, value) {
+    setQuoteRequestDrafts((currentDrafts) => {
+      const currentDraft = currentDrafts[requestId] || {};
+      const itemPrices = [...(currentDraft.itemPrices || [])];
+      itemPrices[itemIndex] = value;
+      return {
+        ...currentDrafts,
+        [requestId]: {
+          ...currentDraft,
+          itemPrices,
+        },
+      };
+    });
+    setMessage("");
+    setError("");
+  }
+
+  async function saveQuoteRequest(quoteRequest, { publishPricing = false } = {}) {
     const draft = quoteRequestDrafts[quoteRequest.id] || {};
-    setSavingQuoteRequestId(quoteRequest.id);
     setMessage("");
     setError("");
 
+    if (publishPricing) {
+      const itemPrices = draft.itemPrices || [];
+      const hasInvalidPrice = (quoteRequest.items || []).some((item, index) => {
+        const rawPrice = itemPrices[index];
+        const price = Number(rawPrice);
+        return rawPrice === "" || rawPrice === null || rawPrice === undefined || !Number.isFinite(price) || price < 0;
+      });
+      const taxRate = Number(draft.taxRate);
+      const deliveryCharge = Number(draft.deliveryCharge || 0);
+
+      if (hasInvalidPrice) {
+        setPricingValidationRequestId(quoteRequest.id);
+        setError("Enter a valid unit price for every requested item before sending the quote.");
+        return;
+      }
+      if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 25) {
+        setError("Enter a valid sales tax rate between 0% and 25%.");
+        return;
+      }
+      if (!Number.isFinite(deliveryCharge) || deliveryCharge < 0) {
+        setError("Enter a valid delivery charge.");
+        return;
+      }
+    }
+
+    if (publishPricing) {
+      setPublishingQuoteRequestId(quoteRequest.id);
+    } else {
+      setSavingQuoteRequestId(quoteRequest.id);
+    }
     try {
       await updateCustomerQuoteRequest({
         requestId: quoteRequest.id,
-        status: draft.status || "new",
+        status: publishPricing ? "quoted" : draft.status || "new",
         internalNote: draft.internalNote?.trim() || "",
+        publishPricing,
+        savePricingDraft: true,
+        draftItems: (quoteRequest.items || []).map((item, index) => ({
+          itemNumber: item.itemNumber,
+          unitPrice:
+            draft.itemPrices?.[index] === "" ||
+            draft.itemPrices?.[index] === null ||
+            draft.itemPrices?.[index] === undefined
+              ? null
+              : Number(draft.itemPrices[index]),
+        })),
+        draftTaxRate:
+          draft.taxRate === "" || draft.taxRate === null || draft.taxRate === undefined
+            ? null
+            : Number(draft.taxRate),
+        draftDeliveryCharge:
+          !quoteRequest.deliveryNeeded ||
+          draft.deliveryCharge === "" ||
+          draft.deliveryCharge === null ||
+          draft.deliveryCharge === undefined
+            ? null
+            : Number(draft.deliveryCharge),
+        draftPublicNote: draft.publicNote?.trim() || "",
+        pricedItems: publishPricing
+          ? (quoteRequest.items || []).map((item, index) => ({
+              itemNumber: item.itemNumber,
+              unitPrice: Number(draft.itemPrices?.[index]),
+            }))
+          : [],
+        taxRate: Number(draft.taxRate) || 0,
+        deliveryCharge: quoteRequest.deliveryNeeded
+          ? Number(draft.deliveryCharge) || 0
+          : 0,
+        publicNote: draft.publicNote?.trim() || "",
       });
-      setMessage(`Updated ${quoteRequest.reference || "quote request"}.`);
+      setMessage(
+        publishPricing
+          ? `Pricing Version ${Math.max(1, Number(quoteRequest.pricingVersion) + 1 || 1)} sent to the customer for ${quoteRequest.reference || "quote request"}.`
+          : `Saved the internal update and pricing draft for ${quoteRequest.reference || "quote request"}.`,
+      );
+      if (publishPricing) setPricingValidationRequestId("");
       await loadQuoteRequests({ quiet: true });
     } catch (saveError) {
       console.error("Unable to update customer quote request:", saveError);
@@ -646,6 +849,7 @@ export default function UserAdminPage({
       );
     } finally {
       setSavingQuoteRequestId("");
+      setPublishingQuoteRequestId("");
     }
   }
 
@@ -1291,6 +1495,57 @@ export default function UserAdminPage({
             </button>
           </section>
 
+          <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+              <label className="min-w-0 flex-1">
+                <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Search quote requests</span>
+                <span className="relative block">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                  <input
+                    type="search"
+                    value={quoteSearch}
+                    onChange={(event) => {
+                      setQuoteSearch(event.target.value);
+                      setQuoteResultLimit(20);
+                    }}
+                    placeholder="Customer, business, phone, email, account, quote, address, or item…"
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 py-3.5 pl-12 pr-4 text-sm font-bold text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-violet-600 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                  />
+                </span>
+              </label>
+              <label className="lg:w-56">
+                <span className="mb-1.5 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Status</span>
+                <select
+                  value={quoteStatusFilter}
+                  onChange={(event) => {
+                    setQuoteStatusFilter(event.target.value);
+                    setQuoteResultLimit(20);
+                  }}
+                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                >
+                  <option value="all">All statuses</option>
+                  {quoteStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-500">
+              <span>Showing {displayedQuoteRequests.length} of {filteredQuoteRequests.length} matching {filteredQuoteRequests.length === 1 ? "quote" : "quotes"}</span>
+              {quoteSearch || quoteStatusFilter !== "all" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuoteSearch("");
+                    setQuoteStatusFilter("all");
+                    setQuoteResultLimit(20);
+                  }}
+                  className="font-black text-violet-700 hover:text-violet-900"
+                >
+                  Clear filters
+                </button>
+              ) : null}
+            </div>
+          </section>
+
           {isLoadingQuoteRequests ? (
             <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500 shadow-sm">Loading customer quote requests…</div>
           ) : quoteRequests.length === 0 ? (
@@ -1299,14 +1554,22 @@ export default function UserAdminPage({
               <p className="mt-3 text-lg font-black text-slate-800">No quote requests yet</p>
               <p className="mt-1 text-sm font-semibold text-slate-500">New customer portal quote requests will appear here automatically.</p>
             </div>
+          ) : filteredQuoteRequests.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
+              <Search className="mx-auto h-9 w-9 text-slate-300" />
+              <p className="mt-3 text-lg font-black text-slate-800">No matching quote requests</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Try a different customer, phone number, quote number, item, or status.</p>
+            </div>
           ) : (
-            quoteRequests.map((quoteRequest) => {
+            <>
+              {displayedQuoteRequests.map((quoteRequest) => {
               const status = getQuoteStatus(quoteRequest.status);
               const draft = quoteRequestDrafts[quoteRequest.id] || {
-                status: quoteRequest.status || "new",
-                internalNote: quoteRequest.internalNote || "",
+                ...getQuoteRequestDraft(quoteRequest),
               };
               const isSaving = savingQuoteRequestId === quoteRequest.id;
+              const isPublishing = publishingQuoteRequestId === quoteRequest.id;
+              const pricingSummary = getQuotePricingSummary(quoteRequest, draft);
 
               return (
                 <section key={quoteRequest.id} className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -1321,14 +1584,31 @@ export default function UserAdminPage({
                       {quoteRequest.createdAt ? <p className="mt-2 text-xs font-semibold text-slate-400">Submitted {formatCustomerRequestDate(quoteRequest.createdAt)}</p> : null}
                     </div>
 
-                    <div className="grid shrink-0 gap-2 sm:grid-cols-2 lg:w-[460px]">
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Account</p>
-                        <p className="mt-1 text-sm font-black text-slate-800">{quoteRequest.accountNumber || "Not linked yet"}</p>
+                    <div className="shrink-0 lg:w-[460px]">
+                      <div className="mb-2 flex justify-start lg:justify-end">
+                        <span
+                          className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] ${
+                            quoteRequest.pricingDraftHasChanges
+                              ? "bg-amber-100 text-amber-800"
+                              : quoteRequest.pricingPublished
+                                ? "bg-violet-100 text-violet-700"
+                                : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {quoteRequest.pricingPublished
+                            ? `Quote Version ${Math.max(1, Number(quoteRequest.pricingVersion) || 1)}${quoteRequest.pricingDraftHasChanges ? " · Unsent changes" : ""}`
+                            : "Pricing Draft"}
+                        </span>
                       </div>
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Needed</p>
-                        <p className="mt-1 text-sm font-black text-slate-800">{quoteTimelineLabels[quoteRequest.neededBy] || quoteRequest.neededBy || "Not provided"}</p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="rounded-2xl bg-slate-50 p-4">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Account</p>
+                          <p className="mt-1 text-sm font-black text-slate-800">{quoteRequest.accountNumber || "Not linked yet"}</p>
+                        </div>
+                        <div className="rounded-2xl bg-slate-50 p-4">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Needed</p>
+                          <p className="mt-1 text-sm font-black text-slate-800">{quoteTimelineLabels[quoteRequest.neededBy] || quoteRequest.neededBy || "Not provided"}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1343,13 +1623,113 @@ export default function UserAdminPage({
                         <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-black text-violet-700">{quoteRequest.items?.length || 0} items</span>
                       </div>
                       <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
-                        {(quoteRequest.items || []).map((item) => (
-                          <div key={`${quoteRequest.id}-${item.itemNumber}`} className="grid gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:grid-cols-[110px_1fr_100px] sm:items-center">
-                            <p className="text-xs font-black uppercase tracking-[0.1em] text-[#FC2C38]">{item.itemNumber}</p>
-                            <p className="text-sm font-bold text-slate-800">{item.description}</p>
-                            <p className="text-sm font-black text-slate-950 sm:text-right">Qty {item.quantity}</p>
+                        {(quoteRequest.items || []).map((item, itemIndex) => {
+                          const quantity = Math.max(0, Number(item.quantity) || 0);
+                          const rawUnitPrice = draft.itemPrices?.[itemIndex];
+                          const unitPrice = Number(rawUnitPrice);
+                          const hasUnitPriceError =
+                            pricingValidationRequestId === quoteRequest.id &&
+                            (rawUnitPrice === "" ||
+                              rawUnitPrice === null ||
+                              rawUnitPrice === undefined ||
+                              !Number.isFinite(unitPrice) ||
+                              unitPrice < 0);
+                          const lineTotal = quantity * (Number.isFinite(unitPrice) ? unitPrice : 0);
+
+                          return (
+                            <div key={`${quoteRequest.id}-${item.itemNumber}-${itemIndex}`} className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[90px_1fr_70px_135px_105px] sm:items-center">
+                              <p className="text-xs font-black uppercase tracking-[0.1em] text-[#FC2C38]">{item.itemNumber}</p>
+                              <p className="text-sm font-bold text-slate-800">{item.description}</p>
+                              <p className="text-sm font-black text-slate-950 sm:text-right">Qty {item.quantity}</p>
+                              <label>
+                                <span className={`mb-1 block text-[10px] font-black uppercase tracking-[0.1em] sm:sr-only ${hasUnitPriceError ? "text-red-600" : "text-slate-400"}`}>
+                                  {hasUnitPriceError ? "Unit price required" : "Unit price"}
+                                </span>
+                                <span className="relative block">
+                                  <span className={`pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-black ${hasUnitPriceError ? "text-red-500" : "text-slate-400"}`}>$</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    inputMode="decimal"
+                                    value={rawUnitPrice ?? ""}
+                                    onChange={(event) => updateQuoteItemPrice(quoteRequest.id, itemIndex, event.target.value)}
+                                    placeholder="Required"
+                                    aria-label={`Unit price for ${item.description}`}
+                                    aria-invalid={hasUnitPriceError}
+                                    className={`w-full rounded-xl border py-2.5 pl-7 pr-3 text-right text-sm font-black outline-none placeholder:text-xs placeholder:font-black ${
+                                      hasUnitPriceError
+                                        ? "border-red-400 bg-red-50 text-red-950 placeholder:text-red-600 focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                                        : "border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-violet-600 focus:ring-4 focus:ring-violet-100"
+                                    }`}
+                                  />
+                                </span>
+                                {hasUnitPriceError ? <span className="mt-1 block text-right text-[10px] font-black uppercase tracking-[0.08em] text-red-600">Required</span> : null}
+                              </label>
+                              <div className="sm:text-right">
+                                <p className="text-[10px] font-black uppercase tracking-[0.1em] text-slate-400">Line total</p>
+                                <p className="mt-1 text-sm font-black text-slate-950">{formatQuoteCurrency(lineTotal)}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/60 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-xs font-black uppercase tracking-[0.14em] text-violet-700">Customer pricing</p>
+                              {quoteRequest.pricingPublished ? (
+                                <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] ${quoteRequest.pricingDraftHasChanges ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>
+                                  {quoteRequest.pricingDraftHasChanges
+                                    ? "Unsent pricing draft"
+                                    : `Version ${Math.max(1, Number(quoteRequest.pricingVersion) || 1)} sent`}
+                                </span>
+                              ) : <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">Draft</span>}
+                            </div>
+                            <p className="mt-1 text-sm font-semibold text-slate-600">Enter unit prices, delivery, and tax. Save keeps a private draft; Send creates a new customer-visible version.</p>
                           </div>
-                        ))}
+                        </div>
+
+                        <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_260px]">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {quoteRequest.deliveryNeeded ? (
+                              <label>
+                                <span className="mb-1 block text-xs font-black text-slate-600">Delivery charge</span>
+                                <span className="relative block">
+                                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-black text-slate-400">$</span>
+                                  <input type="number" min="0" step="0.01" inputMode="decimal" value={draft.deliveryCharge ?? ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "deliveryCharge", event.target.value)} placeholder="0.00" className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-7 pr-3 text-right text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                                </span>
+                              </label>
+                            ) : null}
+                            <label>
+                              <span className="mb-1 block text-xs font-black text-slate-600">Sales tax rate</span>
+                              <span className="relative block">
+                                <input type="number" min="0" max="25" step="0.01" inputMode="decimal" value={draft.taxRate ?? ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "taxRate", event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white py-3 pl-3 pr-8 text-right text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-black text-slate-400">%</span>
+                              </span>
+                            </label>
+                            <label className="sm:col-span-2">
+                              <span className="mb-1 block text-xs font-black text-slate-600">Note to customer <span className="font-semibold text-slate-400">(optional)</span></span>
+                              <textarea value={draft.publicNote || ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "publicNote", event.target.value)} maxLength={800} rows={3} placeholder="Pricing details, substitutions, or a short message for the customer…" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
+                            </label>
+                          </div>
+
+                          <div className="rounded-2xl bg-white p-4 shadow-sm">
+                            <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Quote total</p>
+                            <dl className="mt-3 space-y-2 text-sm font-bold text-slate-600">
+                              <div className="flex justify-between gap-3"><dt>Material</dt><dd>{formatQuoteCurrency(pricingSummary.materialSubtotal)}</dd></div>
+                              {quoteRequest.deliveryNeeded ? <div className="flex justify-between gap-3"><dt>Delivery</dt><dd>{formatQuoteCurrency(pricingSummary.deliveryCharge)}</dd></div> : null}
+                              <div className="flex justify-between gap-3 border-t border-slate-100 pt-2"><dt>Subtotal</dt><dd>{formatQuoteCurrency(pricingSummary.subtotal)}</dd></div>
+                              <div className="flex justify-between gap-3"><dt>Tax ({pricingSummary.taxRate.toFixed(2)}%)</dt><dd>{formatQuoteCurrency(pricingSummary.taxAmount)}</dd></div>
+                            </dl>
+                            <div className="mt-3 flex items-end justify-between gap-3 border-t-2 border-slate-950 pt-3">
+                              <span className="text-sm font-black uppercase tracking-[0.1em] text-slate-950">Total</span>
+                              <span className="text-2xl font-black text-slate-950">{formatQuoteCurrency(pricingSummary.total)}</span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1375,20 +1755,36 @@ export default function UserAdminPage({
                       <label className="mt-4 block">
                         <span className="mb-1 block text-xs font-black text-slate-600">Status</span>
                         <select value={draft.status || "new"} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "status", event.target.value)} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm font-black text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100">
-                          {quoteStatusOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                          {quoteStatusOptions.map((option) => <option key={option.value} value={option.value} disabled={option.value === "quoted" && !quoteRequest.pricingPublished}>{option.label}</option>)}
                         </select>
                       </label>
                       <label className="mt-4 block">
                         <span className="mb-1 block text-xs font-black text-slate-600">Internal note</span>
                         <textarea value={draft.internalNote || ""} onChange={(event) => updateQuoteRequestDraft(quoteRequest.id, "internalNote", event.target.value)} maxLength={800} rows={4} placeholder="Who is preparing this quote, follow-up details, or outcome…" className="w-full resize-y rounded-xl border border-slate-300 bg-white p-3 text-sm font-semibold text-slate-900 outline-none focus:border-violet-600 focus:ring-4 focus:ring-violet-100" />
                       </label>
-                      <button type="button" onClick={() => saveQuoteRequest(quoteRequest)} disabled={isSaving} className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-wait disabled:bg-slate-400">{isSaving ? "Saving…" : "Save quote status"}</button>
+                      <button type="button" onClick={() => saveQuoteRequest(quoteRequest)} disabled={isSaving || isPublishing} className="mt-4 w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:cursor-wait disabled:bg-slate-400">{isSaving ? "Saving…" : "Save update & pricing draft"}</button>
+                      <button type="button" onClick={() => saveQuoteRequest(quoteRequest, { publishPricing: true })} disabled={isSaving || isPublishing} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-4 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-wait disabled:bg-slate-400">
+                        <Send className="h-4 w-4" aria-hidden="true" />
+                        {isPublishing ? "Sending pricing…" : quoteRequest.pricingPublished ? `Send as Version ${Math.max(2, Number(quoteRequest.pricingVersion) + 1 || 2)}` : "Send pricing to customer"}
+                      </button>
                       {quoteRequest.reviewedAt ? <p className="mt-3 text-xs font-semibold leading-5 text-slate-400">Last updated {formatCustomerRequestDate(quoteRequest.reviewedAt)}{quoteRequest.reviewedBy ? ` by ${quoteRequest.reviewedBy}` : ""}</p> : null}
                     </aside>
                   </div>
                 </section>
-              );
-            })
+                );
+              })}
+              {displayedQuoteRequests.length < filteredQuoteRequests.length ? (
+                <div className="flex justify-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setQuoteResultLimit((currentLimit) => currentLimit + 20)}
+                    className="rounded-2xl border border-slate-300 bg-white px-6 py-3 text-sm font-black text-slate-800 shadow-sm transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-800"
+                  >
+                    Load 20 more quotes
+                  </button>
+                </div>
+              ) : null}
+            </>
           )}
         </div>
       ) : (
