@@ -52,6 +52,7 @@ import OrderDetailsModal from "./components/OrderDetailsModal";
 import ReceivingLocationPhotosModal from "./components/ReceivingLocationPhotosModal";
 import SectionHubPage from "./components/SectionHubPage";
 import LoginPage from "./components/LoginPage";
+import CustomerAccountOnboarding from "./components/CustomerAccountOnboarding";
 import {
   addCheckIn,
   deleteCheckIn,
@@ -2029,6 +2030,25 @@ function PullToRefresh() {
 }
 
 export default function App() {
+  const [isCustomerPortalActive, setIsCustomerPortalActive] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("portal") !== "employee";
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    function syncPortalFromUrl() {
+      setIsCustomerPortalActive(
+        new URLSearchParams(window.location.search).get("portal") !== "employee",
+      );
+    }
+
+    window.addEventListener("popstate", syncPortalFromUrl);
+    return () => window.removeEventListener("popstate", syncPortalFromUrl);
+  }, []);
+
   const [currentPage, setCurrentPage] =
     useState(() => {
       try {
@@ -2796,6 +2816,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const isCustomerEmailUser = currentUser?.providerData?.some(
+      (provider) => provider.providerId === "password",
+    );
+
+    if (isCustomerPortalActive || isCustomerEmailUser) {
+      setUserProfile(null);
+      setIsProfileLoading(false);
+
+      if (!isCustomerPortalActive && isCustomerEmailUser && auth) {
+        signOut(auth).catch((error) => {
+          console.error("Unable to close customer session:", error);
+        });
+      }
+
+      return;
+    }
+
     if (!currentUser) {
       setUserProfile(null);
       setIsProfileLoading(false);
@@ -2917,7 +2954,7 @@ export default function App() {
       window.clearTimeout(profileRestoreTimeout);
       unsubscribeFromUserProfile();
     };
-  }, [currentUser]);
+  }, [currentUser, isCustomerPortalActive]);
 
   useEffect(() => {
     if (
@@ -10139,6 +10176,32 @@ export default function App() {
     }
   }
 
+  if (isCustomerPortalActive) {
+    return (
+      <CustomerAccountOnboarding
+        currentUser={currentUser}
+        onBackToEmployeeLogin={async () => {
+          const isCustomerEmailUser = currentUser?.providerData?.some(
+            (provider) => provider.providerId === "password",
+          );
+
+          if (isCustomerEmailUser && auth) {
+            await signOut(auth);
+          }
+
+          const nextUrl = new URL(window.location.href);
+          nextUrl.searchParams.set("portal", "employee");
+          window.history.pushState(
+            {},
+            "",
+            `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
+          );
+          setIsCustomerPortalActive(false);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8F7F5]">
       <PullToRefresh />
@@ -10150,7 +10213,18 @@ export default function App() {
           </div>
         </div>
       ) : !currentUser ? (
-        <LoginPage />
+        <LoginPage
+          onOpenCustomerPortal={() => {
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.delete("portal");
+            window.history.pushState(
+              {},
+              "",
+              `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`,
+            );
+            setIsCustomerPortalActive(true);
+          }}
+        />
       ) : !isApproved ? (
         <PendingApproval
           currentUser={currentUser}

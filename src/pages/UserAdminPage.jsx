@@ -12,7 +12,7 @@ import { deleteSupplierAccount } from "../utils/userStorage";
 
 const roles = [
   { value: "pending", label: "Pending" },
-  { value: "customer", label: "Customer" },
+  { value: "customer", label: "General Employee" },
   { value: "supplier", label: "Supplier" },
   { value: "admin", label: "Admin" },
   { value: "superAdmin", label: "Super Admin" },

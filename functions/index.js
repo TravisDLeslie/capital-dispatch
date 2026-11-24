@@ -1,4 +1,4 @@
-const { randomBytes, randomUUID } = require("node:crypto");
+const { createHash, randomBytes, randomUUID } = require("node:crypto");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { FieldValue, getFirestore } = require("firebase-admin/firestore");
@@ -89,6 +89,103 @@ function normalizePhoneNumber(value) {
   }
 
   return "";
+}
+
+function normalizeCustomerAccountRequest(value) {
+  const requestData = value && typeof value === "object" ? value : {};
+  const hasExistingAccount = requestData.hasExistingAccount === true;
+  const accountNumber = String(requestData.accountNumber || "").trim();
+  const name = String(requestData.name || "").trim();
+  const businessName = String(requestData.businessName || "").trim();
+  const address = String(requestData.address || "").trim();
+  const phone = normalizePhoneNumber(requestData.phone);
+  const email = normalizedEmail(requestData.email);
+  const website = String(requestData.website || "").trim();
+
+  if (website) {
+    return { isSpam: true };
+  }
+
+  if (hasExistingAccount && (!accountNumber || accountNumber.length > 40)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Enter a valid Capital Lumber account number.",
+    );
+  }
+  if (!name || name.length > 120) {
+    throw new HttpsError("invalid-argument", "Enter your full name.");
+  }
+  if (!businessName || businessName.length > 160) {
+    throw new HttpsError("invalid-argument", "Enter your business name.");
+  }
+  if (!address || address.length > 300) {
+    throw new HttpsError("invalid-argument", "Enter your business address.");
+  }
+  if (!phone) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Enter a valid phone number with area code.",
+    );
+  }
+  if (
+    !email ||
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    throw new HttpsError("invalid-argument", "Enter a valid email address.");
+  }
+
+  return {
+    hasExistingAccount,
+    accountNumber: hasExistingAccount ? accountNumber : "",
+    name,
+    businessName,
+    address,
+    phone,
+    email,
+    isSpam: false,
+  };
+}
+
+async function enforceCustomerAccountRequestRateLimit(request, firestore) {
+  const sourceAddress = String(
+    request.rawRequest?.ip ||
+      request.rawRequest?.headers?.["x-forwarded-for"] ||
+      "unknown",
+  )
+    .split(",")[0]
+    .trim();
+  const sourceHash = createHash("sha256")
+    .update(`${sourceAddress}:customer-account-request`)
+    .digest("hex");
+  const rateLimitReference = firestore.doc(
+    `customerAccountRequestRateLimits/${sourceHash}`,
+  );
+  const now = Date.now();
+  const windowLengthMs = 15 * 60 * 1000;
+
+  await firestore.runTransaction(async (transaction) => {
+    const rateLimitSnapshot = await transaction.get(rateLimitReference);
+    const rateLimit = rateLimitSnapshot.data() || {};
+    const windowStartedAt = Number(rateLimit.windowStartedAt) || 0;
+    const isCurrentWindow = now - windowStartedAt < windowLengthMs;
+    const requestCount = isCurrentWindow
+      ? Number(rateLimit.requestCount) || 0
+      : 0;
+
+    if (requestCount >= 5) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Too many account requests were submitted. Try again later.",
+      );
+    }
+
+    transaction.set(rateLimitReference, {
+      requestCount: requestCount + 1,
+      windowStartedAt: isCurrentWindow ? windowStartedAt : now,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
 }
 
 function maskPhoneNumber(phoneNumber) {
@@ -847,6 +944,136 @@ async function getWillCallOrderBuildsForCheckIn(checkIn) {
 
   return [...matchingDocuments.values()];
 }
+
+exports.submitCustomerAccountRequest = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    const customerRequest = normalizeCustomerAccountRequest(request.data);
+
+    // Quietly accept honeypot submissions without storing them.
+    if (customerRequest.isSpam) {
+      return { reference: "RECEIVED" };
+    }
+
+    const firestore = getFirestore();
+    await enforceCustomerAccountRequestRateLimit(request, firestore);
+
+    const requestId = randomUUID();
+    const createdAt = new Date().toISOString();
+
+    await firestore.doc(`customerAccountRequests/${requestId}`).set({
+      ...customerRequest,
+      status: "pendingVerification",
+      source: "customerPortal",
+      createdAt,
+      updatedAt: createdAt,
+    });
+
+    logger.info("Customer portal account request submitted", {
+      requestId,
+      hasExistingAccount: customerRequest.hasExistingAccount,
+      emailDomain: customerRequest.email.split("@")[1] || "",
+    });
+
+    return {
+      reference: requestId.slice(0, 8).toUpperCase(),
+      status: "received",
+    };
+  },
+);
+
+exports.verifyCustomerPortalEmail = onCall(
+  {
+    region: "us-central1",
+    cors: true,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Open the secure link in your email to verify your address.",
+      );
+    }
+
+    const email = normalizedEmail(request.auth.token.email);
+    const emailIsVerified = request.auth.token.email_verified === true;
+
+    if (!email || !emailIsVerified) {
+      throw new HttpsError(
+        "permission-denied",
+        "Your email address has not been verified.",
+      );
+    }
+
+    const firestore = getFirestore();
+    const matchingRequests = await firestore
+      .collection("customerAccountRequests")
+      .where("email", "==", email)
+      .limit(20)
+      .get();
+    const customerPortalUserReference = firestore.doc(
+      `customerPortalUsers/${request.auth.uid}`,
+    );
+    const customerPortalUser = await customerPortalUserReference.get();
+    const batch = firestore.batch();
+
+    matchingRequests.docs.forEach((requestDocument) => {
+      const requestData = requestDocument.data() || {};
+      const currentStatus = String(requestData.status || "").trim();
+
+      batch.set(
+        requestDocument.ref,
+        {
+          status:
+            currentStatus === "pendingVerification"
+              ? "pendingAccountReview"
+              : currentStatus || "pendingAccountReview",
+          emailVerifiedAt: FieldValue.serverTimestamp(),
+          emailVerifiedUid: request.auth.uid,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+
+    batch.set(
+      customerPortalUserReference,
+      {
+        uid: request.auth.uid,
+        email,
+        status: matchingRequests.empty
+          ? "emailVerified"
+          : "pendingAccountReview",
+        emailVerifiedAt: FieldValue.serverTimestamp(),
+        lastLoginAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(customerPortalUser.exists
+          ? {}
+          : { createdAt: FieldValue.serverTimestamp() }),
+      },
+      { merge: true },
+    );
+
+    await batch.commit();
+
+    logger.info("Customer portal email verified", {
+      uid: request.auth.uid,
+      emailDomain: email.split("@")[1] || "",
+      matchedRequests: matchingRequests.size,
+    });
+
+    return {
+      email,
+      status: matchingRequests.empty
+        ? "emailVerified"
+        : "pendingAccountReview",
+      matchedRequests: matchingRequests.size,
+    };
+  },
+);
 
 exports.sendWillCallReadyMessages = onDocumentWritten(
   {

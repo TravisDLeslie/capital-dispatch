@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LogIn } from "lucide-react";
+import { ArrowRight, LogIn, UserRoundPlus } from "lucide-react";
 import {
   GoogleAuthProvider,
   signInWithPopup,
@@ -40,7 +40,7 @@ function getLoginErrorMessage(error) {
   }`;
 }
 
-export default function LoginPage() {
+export default function LoginPage({ onOpenCustomerPortal }) {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -90,8 +90,8 @@ export default function LoginPage() {
           </h1>
 
           <p className="mt-2 text-sm font-semibold text-slate-500">
-            Sign in with Google to view receiving, South runs, and
-            deliveries.
+            Employees can sign in to Capital Dispatch with their approved
+            Google account.
           </p>
         </div>
 
@@ -116,6 +116,36 @@ export default function LoginPage() {
         >
           <LogIn className="h-5 w-5" aria-hidden="true" />
           {isSubmitting ? "Signing in..." : "Continue with Google"}
+        </button>
+
+        <div className="my-6 flex items-center gap-3" aria-hidden="true">
+          <span className="h-px flex-1 bg-slate-200" />
+          <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">
+            Customers
+          </span>
+          <span className="h-px flex-1 bg-slate-200" />
+        </div>
+
+        <button
+          type="button"
+          onClick={onOpenCustomerPortal}
+          className="group flex w-full items-center gap-3 rounded-2xl border-2 border-slate-200 bg-white p-4 text-left transition hover:border-slate-950 hover:shadow-md"
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-700 transition group-hover:bg-slate-950 group-hover:text-white">
+            <UserRoundPlus className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-black text-slate-950">
+              Create a customer account
+            </span>
+            <span className="mt-0.5 block text-xs font-semibold text-slate-500">
+              New and existing Capital Lumber customers
+            </span>
+          </span>
+          <ArrowRight
+            className="h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-950"
+            aria-hidden="true"
+          />
         </button>
       </section>
     </main>

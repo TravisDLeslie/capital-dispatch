@@ -709,6 +709,22 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Customer onboarding is accepted only by the server-side callable.
+    // The customer-facing browser can neither read nor write these requests.
+    match /customerAccountRequests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /customerAccountRequestRateLimits/{rateLimitId} {
+      allow read, write: if false;
+    }
+
+    // Customer authentication records are managed only by trusted callables.
+    // They are intentionally separate from employee profiles and operations.
+    match /customerPortalUsers/{userId} {
+      allow read, write: if false;
+    }
+
     match /orderBuilds/{orderBuildId} {
       allow read: if canAccessOrderBuilds() || isSales();
       allow create: if isSales();
