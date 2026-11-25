@@ -38,6 +38,81 @@ function getString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function getDisplayValue(value) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
+function getActivityItems(record) {
+  if (Array.isArray(record?.materials) && record.materials.length > 0) {
+    return record.materials;
+  }
+  if (Array.isArray(record?.items) && record.items.length > 0) {
+    return record.items;
+  }
+  if (Array.isArray(record?.orderItems) && record.orderItems.length > 0) {
+    return record.orderItems;
+  }
+  return [];
+}
+
+function getActivityProducts(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item, index) => {
+      const description =
+        getString(item?.sourceDescription) ||
+        getString(item?.description) ||
+        getString(item?.materialDescription) ||
+        getString(item?.itemDescription) ||
+        getString(item?.name) ||
+        getString(item?.itemName) ||
+        getString(item?.itemNumber) ||
+        `Material ${index + 1}`;
+      const quantity = getDisplayValue(
+        item?.quantity ?? item?.qty ?? item?.amount,
+      ).replace(/^qty\s*/i, "");
+      const reference =
+        getString(item?.internalReference) ||
+        getString(item?.sku) ||
+        getString(item?.itemNumber) ||
+        getString(item?.itemNo);
+      const location = getString(item?.location);
+
+      return {
+        id:
+          getString(item?.id) ||
+          [quantity, description, reference, index].filter(Boolean).join("-"),
+        description,
+        quantity,
+        reference,
+        location,
+      };
+    })
+    .filter((product) => product.description);
+}
+
+function formatProductLine(product) {
+  return [product?.quantity ? `Qty ${product.quantity}` : "", product?.description]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function getProductSummary(products, limit = 2) {
+  const productList = Array.isArray(products) ? products : [];
+  const visibleProducts = productList
+    .slice(0, limit)
+    .map(formatProductLine)
+    .filter(Boolean);
+  const hiddenCount = Math.max(productList.length - visibleProducts.length, 0);
+
+  return [
+    visibleProducts.join("; "),
+    hiddenCount > 0 ? `+${hiddenCount} more` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function formatActivityTime(timestamp) {
   if (!timestamp) return "Recorded activity";
 
@@ -246,13 +321,14 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
       const runId = getString(run?.id) || getString(run?.poNumber) || "south";
       const description =
         getString(item.description) || getString(item.itemNumber) || "Material";
-      const quantity = getString(item.quantity);
+      const quantity = getDisplayValue(item.quantity);
       const poNumber = getString(run?.poNumber);
       const vendor = getString(run?.vendor);
       const orderNumber = getString(item.orderNumber);
       const customerName =
         getString(item.customerName) || getString(run?.customerName);
       const driver = getString(run?.driver);
+      const products = getActivityProducts([item]);
 
       notifications.push({
         id: `south:${runId}:${itemId}:${timestamp || "picked"}`,
@@ -275,6 +351,7 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
           { label: "Customer", value: customerName },
           { label: "Driver", value: driver },
         ]),
+        products,
         photos: getSouthPickupPhotos(item),
       });
     });
@@ -302,6 +379,8 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
     const receivingTruck =
       getString(checkIn?.receivingTruckLabel) ||
       getString(checkIn?.receivingTruckType);
+    const products = getActivityProducts(getActivityItems(checkIn));
+    const productSummary = getProductSummary(products);
 
     notifications.push({
       id: `checkin:${checkInId}:${timestamp || "checked-in"}`,
@@ -309,7 +388,7 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
       timestamp,
       title: "Material checked in",
       message:
-        [poNumber ? `PO ${poNumber}` : "", orderLabel]
+        [productSummary, poNumber ? `PO ${poNumber}` : "", orderLabel]
           .filter(Boolean)
           .join(" · ") || "Receiving check-in complete",
       detail: [
@@ -328,7 +407,7 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
         receivingLocation ? ` at ${receivingLocation}` : ""
       }${
         checkedInBy ? ` by ${checkedInBy}` : ""
-      }.`,
+      }.${productSummary ? ` Products: ${productSummary}.` : ""}`,
       facts: getFacts([
         { label: "PO number", value: poNumber },
         { label: "Order number", value: orderNumber },
@@ -337,7 +416,12 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
         { label: "Location", value: receivingLocation },
         { label: "Checked in by", value: checkedInBy },
         { label: "Truck", value: receivingTruck },
+        {
+          label: "Product lines",
+          value: products.length ? String(products.length) : "",
+        },
       ]),
+      products,
       photos: getCheckInPhotos(checkIn),
     });
   });
@@ -365,6 +449,8 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
       const orderNumber = getString(delivery?.orderNumber);
       const customerName = getString(delivery?.customerName);
       const driver = getString(delivery?.driver);
+      const products = getActivityProducts(getActivityItems(delivery));
+      const productSummary = getProductSummary(products);
 
       notifications.push({
         id: `delivery:${deliveryId}:${timestamp || "complete"}`,
@@ -374,12 +460,16 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
         message: [orderNumber ? `Order ${orderNumber}` : "", customerName]
           .filter(Boolean)
           .join(" · ") || "Delivery completed",
-        detail: [getString(delivery?.address), driver ? `Driver ${driver}` : ""]
+        detail: [
+          productSummary,
+          getString(delivery?.address),
+          driver ? `Driver ${driver}` : "",
+        ]
           .filter(Boolean)
           .join(" · "),
         summary: `${orderNumber ? `Order ${orderNumber}` : "The delivery"} was marked delivered${
           customerName ? ` for ${customerName}` : ""
-        }.`,
+        }${productSummary ? `. Material: ${productSummary}` : ""}.`,
         facts: getFacts([
           { label: "Order", value: orderNumber },
           { label: "Customer", value: customerName },
@@ -392,6 +482,7 @@ function buildNotifications({ supplierRuns, checkIns, deliveries }) {
               getString(delivery?.vehicleBadge),
           },
         ]),
+        products,
         photos: getDeliveryPhotos(delivery),
       });
     },
@@ -852,6 +943,62 @@ export default function ActivityNotificationBell({
                         </div>
                       ))}
                     </dl>
+                  ) : null}
+
+                  {selectedNotification.products?.length > 0 ? (
+                    <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-3">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">
+                            Products
+                          </p>
+                          <p className="mt-1 text-sm font-bold text-slate-700">
+                            Material included with this activity
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
+                          {selectedNotification.products.length}{" "}
+                          {selectedNotification.products.length === 1
+                            ? "item"
+                            : "items"}
+                        </span>
+                      </div>
+
+                      <div className="divide-y divide-slate-100">
+                        {selectedNotification.products.map((product) => (
+                          <div
+                            key={product.id}
+                            className="flex items-start justify-between gap-4 px-5 py-3.5"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-extrabold leading-5 text-slate-950">
+                                {product.description}
+                              </p>
+                              {[product.reference, product.location]
+                                .filter(Boolean).length > 0 ? (
+                                <p className="mt-1 text-xs font-bold text-slate-500">
+                                  {[
+                                    product.reference
+                                      ? `Item ${product.reference}`
+                                      : "",
+                                    product.location
+                                      ? `Location ${product.location}`
+                                      : "",
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </p>
+                              ) : null}
+                            </div>
+                            {product.quantity ? (
+                              <span className="shrink-0 rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                                Qty {product.quantity}
+                              </span>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
                   ) : null}
 
                   {selectedNotification.photos?.length > 0 ? (
