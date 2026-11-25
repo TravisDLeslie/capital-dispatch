@@ -2499,7 +2499,7 @@ function DeliveryWeekView({
         </div>
       </div>
 
-      <div className="grid gap-px bg-slate-200 md:grid-cols-7">
+      <div className="grid gap-px bg-slate-200 md:grid-cols-[minmax(4rem,0.38fr)_repeat(6,minmax(0,1fr))]">
         {weekDays.map((day) => {
           const dayDeliveries = getCalendarDayDeliveries(
             deliveries,
@@ -2542,7 +2542,7 @@ function DeliveryWeekView({
                   handleDayDrop(event, day.dateKey);
                 }
               }}
-              className={`min-h-44 p-3 transition-colors ${
+              className={`min-h-48 p-3 transition-colors ${
                 dayFullDropDateKey === day.dateKey
                   ? "bg-slate-100 ring-4 ring-inset ring-slate-950"
                   : blockOff
@@ -2919,7 +2919,7 @@ function DeliveryMonthView({
 
       <div className="overflow-x-auto">
         <div className="min-w-[56rem]">
-          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+          <div className="grid grid-cols-[minmax(4rem,0.38fr)_repeat(6,minmax(0,1fr))] border-b border-slate-200 bg-slate-50">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
               (weekday) => (
                 <span
@@ -2931,7 +2931,7 @@ function DeliveryMonthView({
               ),
             )}
           </div>
-      <div className="grid grid-cols-7 gap-px bg-slate-200">
+          <div className="grid grid-cols-[minmax(4rem,0.38fr)_repeat(6,minmax(0,1fr))] gap-px bg-slate-200">
             {monthDays.map((day) => {
               const dayDeliveries = getCalendarDayDeliveries(
                 deliveries,
@@ -2974,7 +2974,7 @@ function DeliveryMonthView({
                       handleDayDrop(event, day.dateKey);
                     }
                   }}
-                  className={`min-h-36 p-2 transition-colors ${
+                  className={`min-h-40 p-2 transition-colors ${
                     dayFullDropDateKey === day.dateKey
                       ? "bg-slate-100 ring-4 ring-inset ring-slate-950"
                       : blockOff
