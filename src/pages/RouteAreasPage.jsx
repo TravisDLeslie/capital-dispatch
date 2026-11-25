@@ -698,6 +698,24 @@ export default function RouteAreasPage({ onPageChange }) {
                       aria-label={`Use ${color}`}
                     />
                   ))}
+                  <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-xl bg-white px-2.5 text-[10px] font-black uppercase tracking-[0.1em] text-slate-700 shadow-sm ring-2 ring-inset ring-slate-200 transition hover:bg-slate-50 focus-within:ring-slate-950">
+                    <span
+                      className="h-6 w-6 rounded-lg border-2 border-white shadow-sm ring-1 ring-slate-200"
+                      style={{ backgroundColor: draftColor }}
+                      aria-hidden="true"
+                    />
+                    <span>Custom</span>
+                    <span className="font-mono text-[9px] text-slate-500">
+                      {draftColor.toUpperCase()}
+                    </span>
+                    <input
+                      type="color"
+                      value={draftColor}
+                      onChange={(event) => setDraftColor(event.target.value)}
+                      className="sr-only"
+                      aria-label="Choose a custom map color"
+                    />
+                  </label>
                 </div>
               </div>
 
