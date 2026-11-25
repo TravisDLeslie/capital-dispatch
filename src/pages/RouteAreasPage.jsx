@@ -548,7 +548,7 @@ export default function RouteAreasPage({ onPageChange }) {
         </div>
       ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[22rem_minmax(0,1fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[22rem_minmax(0,1fr)]">
         <aside className="space-y-4">
           <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
