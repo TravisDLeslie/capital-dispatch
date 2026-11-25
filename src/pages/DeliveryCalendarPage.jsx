@@ -5295,7 +5295,7 @@ export default function DeliveryCalendarPage({
   }
 
   return (
-    <PageContainer>
+    <PageContainer className="max-w-[96rem] 2xl:max-w-[104rem]">
       <Breadcrumbs
         items={[
           { label: "Deliveries", onClick: () => onPageChange?.("deliveries") },
