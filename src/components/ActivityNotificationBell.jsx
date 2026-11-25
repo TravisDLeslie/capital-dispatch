@@ -3,6 +3,8 @@ import {
   Bell,
   CheckCheck,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   PackageCheck,
   Warehouse,
   X,
@@ -442,6 +444,8 @@ export default function ActivityNotificationBell({
   const storageKey = `capital-lumber-activity-alerts:${currentUserKey || "user"}`;
   const [isOpen, setIsOpen] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  const [isPhotoViewerOpen, setIsPhotoViewerOpen] = useState(false);
   const [activityState, setActivityState] = useState(() =>
     getStoredState(storageKey),
   );
@@ -481,6 +485,11 @@ export default function ActivityNotificationBell({
 
     function handleKeyDown(event) {
       if (event.key === "Escape") {
+        if (isPhotoViewerOpen) {
+          setIsPhotoViewerOpen(false);
+          return;
+        }
+
         setIsOpen(false);
         setSelectedNotification(null);
       }
@@ -493,7 +502,32 @@ export default function ActivityNotificationBell({
       document.removeEventListener("pointerdown", handleOutsidePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [isPhotoViewerOpen]);
+
+  useEffect(() => {
+    setSelectedPhotoIndex(0);
+    setIsPhotoViewerOpen(false);
+  }, [selectedNotification?.id]);
+
+  useEffect(() => {
+    const photoCount = selectedNotification?.photos?.length || 0;
+
+    if (photoCount < 2) return undefined;
+
+    function handlePhotoKeyDown(event) {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+
+      event.preventDefault();
+      setSelectedPhotoIndex((current) =>
+        event.key === "ArrowRight"
+          ? (current + 1) % photoCount
+          : (current - 1 + photoCount) % photoCount,
+      );
+    }
+
+    document.addEventListener("keydown", handlePhotoKeyDown);
+    return () => document.removeEventListener("keydown", handlePhotoKeyDown);
+  }, [selectedNotification]);
 
   function saveActivityState(updater) {
     setActivityState((current) => {
@@ -542,6 +576,8 @@ export default function ActivityNotificationBell({
 
   function openNotification(notification) {
     markRead(notification.id);
+    setSelectedPhotoIndex(0);
+    setIsPhotoViewerOpen(false);
     setSelectedNotification(notification);
     setIsOpen(false);
   }
@@ -830,32 +866,95 @@ export default function ActivityNotificationBell({
                           </p>
                         </div>
                         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
-                          {selectedNotification.photos.length}
+                          {selectedPhotoIndex + 1} of {selectedNotification.photos.length}
                         </span>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {selectedNotification.photos.map((photo, index) => (
-                          <a
-                            key={`${photo.id}:${photo.url}`}
-                            href={photo.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="group/photo overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-                            aria-label={`Open ${photo.label || `photo ${index + 1}`}`}
-                          >
-                            <img
-                              src={photo.url}
-                              alt={photo.label || `Activity photo ${index + 1}`}
-                              className="h-32 w-full object-cover transition duration-200 group-hover/photo:scale-[1.02]"
-                              loading="lazy"
-                            />
-                            <p className="truncate px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">
-                              {photo.label || `Photo ${index + 1}`}
-                            </p>
-                          </a>
-                        ))}
+                      <div className="relative mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
+                        <button
+                          type="button"
+                          onClick={() => setIsPhotoViewerOpen(true)}
+                          className="block w-full cursor-zoom-in"
+                          aria-label={`Expand ${selectedNotification.photos[selectedPhotoIndex].label || `photo ${selectedPhotoIndex + 1}`} slideshow`}
+                        >
+                          <img
+                            src={selectedNotification.photos[selectedPhotoIndex].url}
+                            alt={
+                              selectedNotification.photos[selectedPhotoIndex]
+                                .label ||
+                              `Activity photo ${selectedPhotoIndex + 1}`
+                            }
+                            className="h-[min(46vh,390px)] w-full object-contain"
+                          />
+                        </button>
+
+                        {selectedNotification.photos.length > 1 ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedPhotoIndex((current) =>
+                                  (current - 1 +
+                                    selectedNotification.photos.length) %
+                                  selectedNotification.photos.length,
+                                )
+                              }
+                              className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-slate-950 shadow-lg transition hover:scale-105 hover:bg-white"
+                              aria-label="Previous photo"
+                            >
+                              <ChevronLeft className="h-6 w-6" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedPhotoIndex((current) =>
+                                  (current + 1) %
+                                  selectedNotification.photos.length,
+                                )
+                              }
+                              className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-slate-950 shadow-lg transition hover:scale-105 hover:bg-white"
+                              aria-label="Next photo"
+                            >
+                              <ChevronRight className="h-6 w-6" />
+                            </button>
+                          </>
+                        ) : null}
+
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/90 to-transparent px-4 pb-3 pt-10">
+                          <p className="text-xs font-black uppercase tracking-[0.14em] text-white">
+                            {selectedNotification.photos[selectedPhotoIndex]
+                              .label || `Photo ${selectedPhotoIndex + 1}`}
+                          </p>
+                        </div>
                       </div>
+
+                      {selectedNotification.photos.length > 1 ? (
+                        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                          {selectedNotification.photos.map((photo, index) => (
+                            <button
+                              key={`${photo.id}:${photo.url}`}
+                              type="button"
+                              onClick={() => setSelectedPhotoIndex(index)}
+                              className={`relative h-16 w-20 shrink-0 overflow-hidden rounded-xl border-2 transition ${
+                                index === selectedPhotoIndex
+                                  ? "border-[#FF2D36] shadow-sm"
+                                  : "border-transparent opacity-70 hover:opacity-100"
+                              }`}
+                              aria-label={`Show ${photo.label || `photo ${index + 1}`}`}
+                              aria-current={
+                                index === selectedPhotoIndex ? "true" : undefined
+                              }
+                            >
+                              <img
+                                src={photo.url}
+                                alt=""
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
                     </section>
                   ) : null}
 
@@ -872,6 +971,111 @@ export default function ActivityNotificationBell({
               </section>
             );
           })()}
+        </div>
+      ) : null}
+
+      {selectedNotification?.photos?.length > 0 && isPhotoViewerOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex flex-col bg-slate-950/95 px-4 py-4 backdrop-blur-md sm:px-8 sm:py-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setIsPhotoViewerOpen(false);
+            }
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Expanded activity photo slideshow"
+        >
+          <div className="flex items-center justify-between gap-4 text-white">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/60">
+                Delivery photos
+              </p>
+              <p className="mt-1 truncate text-sm font-black">
+                {selectedNotification.photos[selectedPhotoIndex].label ||
+                  `Photo ${selectedPhotoIndex + 1}`}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black">
+                {selectedPhotoIndex + 1} of {selectedNotification.photos.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsPhotoViewerOpen(false)}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Close expanded slideshow"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+          </div>
+
+          <div className="relative mt-4 flex min-h-0 flex-1 items-center justify-center">
+            <img
+              src={selectedNotification.photos[selectedPhotoIndex].url}
+              alt={
+                selectedNotification.photos[selectedPhotoIndex].label ||
+                `Delivery photo ${selectedPhotoIndex + 1}`
+              }
+              className="max-h-full max-w-full rounded-2xl object-contain shadow-2xl"
+            />
+
+            {selectedNotification.photos.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedPhotoIndex((current) =>
+                      (current - 1 + selectedNotification.photos.length) %
+                      selectedNotification.photos.length,
+                    )
+                  }
+                  className="absolute left-0 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-slate-950 shadow-xl transition hover:scale-105 sm:left-3"
+                  aria-label="Previous expanded photo"
+                >
+                  <ChevronLeft className="h-7 w-7" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSelectedPhotoIndex((current) =>
+                      (current + 1) % selectedNotification.photos.length,
+                    )
+                  }
+                  className="absolute right-0 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-slate-950 shadow-xl transition hover:scale-105 sm:right-3"
+                  aria-label="Next expanded photo"
+                >
+                  <ChevronRight className="h-7 w-7" />
+                </button>
+              </>
+            ) : null}
+          </div>
+
+          {selectedNotification.photos.length > 1 ? (
+            <div className="mx-auto mt-4 flex max-w-full gap-2 overflow-x-auto rounded-2xl bg-white/5 p-2">
+              {selectedNotification.photos.map((photo, index) => (
+                <button
+                  key={`expanded:${photo.id}:${photo.url}`}
+                  type="button"
+                  onClick={() => setSelectedPhotoIndex(index)}
+                  className={`h-16 w-20 shrink-0 overflow-hidden rounded-xl border-2 transition ${
+                    index === selectedPhotoIndex
+                      ? "border-white opacity-100"
+                      : "border-transparent opacity-50 hover:opacity-90"
+                  }`}
+                  aria-label={`Show expanded ${photo.label || `photo ${index + 1}`}`}
+                  aria-current={index === selectedPhotoIndex ? "true" : undefined}
+                >
+                  <img
+                    src={photo.url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

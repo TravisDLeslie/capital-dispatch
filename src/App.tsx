@@ -32,9 +32,11 @@ import {
   Percent,
   Plus,
   ReceiptText,
+  RefreshCw,
   Route,
   Search,
   ShieldCheck,
+  LoaderCircle,
   Trees,
   Truck,
   UserRound,
@@ -266,6 +268,7 @@ const QueuedUpcomingDeliveriesPage = lazy(
   () => import("./pages/QueuedUpcomingDeliveriesPage"),
 );
 const DeliverySettingsPage = lazy(() => import("./pages/DeliverySettingsPage"));
+const RouteAreasPage = lazy(() => import("./pages/RouteAreasPage"));
 const TwilioSettingsPage = lazy(() => import("./pages/TwilioSettingsPage"));
 const DeliveriesPage = lazy(() => import("./pages/DeliveriesPage"));
 const EmailListPage = lazy(() => import("./pages/EmailListPage"));
@@ -312,6 +315,7 @@ const PROTECTED_OFFICE_PAGE_IDS = new Set([
   "user-admin",
   "email-list",
   "delivery-settings",
+  "route-areas",
   "twilio-settings",
   "vendor-settings",
   "sales-report",
@@ -1439,6 +1443,7 @@ function getAllowedPageIdsForRole(role: string) {
       "user-admin",
       "email-list",
       "delivery-settings",
+      "route-areas",
       "twilio-settings",
       "vendor-settings",
       "pod-pickups",
@@ -1505,6 +1510,7 @@ function getAllowedPageIdsForRole(role: string) {
       "admin",
       "email-list",
       "delivery-settings",
+      "route-areas",
       "twilio-settings",
       "vendor-settings",
       "sales-report",
@@ -1719,6 +1725,103 @@ function PageLoadingFallback() {
             <div className="h-24 animate-pulse rounded-2xl bg-slate-50" />
             <div className="h-24 animate-pulse rounded-2xl bg-slate-50" />
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecordsLoadingStatus({ isReceiving }: { isReceiving: boolean }) {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const isTakingLonger = elapsedSeconds >= 8;
+  const isSignificantlyDelayed = elapsedSeconds >= 18;
+  const title = isReceiving
+    ? isTakingLonger
+      ? "Receiving is still syncing"
+      : "Loading Receiving records"
+    : isTakingLonger
+      ? "Records are still syncing"
+      : "Updating app records";
+  const description = isReceiving
+    ? "Connecting to check-ins, South pickups, Their Truck POs, and yard tasks."
+    : "Connecting to the latest records for this page.";
+
+  return (
+    <div
+      className={`mt-3 overflow-hidden rounded-2xl border px-4 py-3 shadow-sm ${
+        isSignificantlyDelayed
+          ? "border-amber-300 bg-amber-50"
+          : "border-blue-200 bg-blue-50/80"
+      }`}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+            isSignificantlyDelayed
+              ? "bg-amber-100 text-amber-700"
+              : "bg-blue-100 text-blue-700"
+          }`}
+        >
+          <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <p
+              className={`text-sm font-black ${
+                isSignificantlyDelayed ? "text-amber-950" : "text-slate-900"
+              }`}
+            >
+              {title}
+            </p>
+            {isTakingLonger ? (
+              <span className="text-xs font-bold tabular-nums text-slate-500">
+                {elapsedSeconds}s
+              </span>
+            ) : null}
+          </div>
+
+          <p className="mt-0.5 text-xs font-semibold leading-5 text-slate-600 sm:text-sm">
+            {description}
+          </p>
+
+          {isTakingLonger ? (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p
+                className={`text-xs font-bold ${
+                  isSignificantlyDelayed ? "text-amber-800" : "text-blue-700"
+                }`}
+              >
+                {isSignificantlyDelayed
+                  ? "This is taking longer than usual. Check the connection, then retry if needed."
+                  : "A larger record sync can take a few extra seconds. You can stay on this page."}
+              </p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-black text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50"
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                Retry loading
+              </button>
+            </div>
+          ) : (
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-blue-100">
+              <div className="h-full w-2/3 animate-pulse rounded-full bg-blue-500" />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -2464,6 +2567,7 @@ export default function App() {
       "user-admin",
       "email-list",
       "delivery-settings",
+      "route-areas",
       "twilio-settings",
       "vendor-settings",
       "sales-report",
@@ -8992,6 +9096,19 @@ export default function App() {
                   onClick: () => setCurrentPage("delivery-settings"),
                 }
               : null,
+            effectiveAllowedPageIds.includes("route-areas")
+              ? {
+                  icon: MapPin,
+                  label: "Routing",
+                  title: "Route Areas",
+                  description:
+                    "Draw named map zones and categorize delivery addresses for route planning.",
+                  metric: "Map",
+                  metricLabel: "Zones",
+                  tone: "dispatch",
+                  onClick: () => setCurrentPage("route-areas"),
+                }
+              : null,
             effectiveAllowedPageIds.includes("twilio-settings")
               ? {
                   icon: MessageSquareText,
@@ -9301,6 +9418,9 @@ export default function App() {
             onPageChange={navigateToPage}
           />
         );
+
+      case "route-areas":
+        return <RouteAreasPage onPageChange={navigateToPage} />;
 
       case "twilio-settings":
         return (
@@ -10317,9 +10437,12 @@ export default function App() {
               ) : null}
 
               {isLoading ? (
-                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600">
-                  Loading records...
-                </div>
+                <RecordsLoadingStatus
+                  isReceiving={
+                    currentPage === "receiving" ||
+                    effectiveWorkView === "receiving"
+                  }
+                />
               ) : null}
             </div>
 

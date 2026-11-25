@@ -56,7 +56,14 @@ import {
 } from "../utils/deliverySchedule";
 import { isDeliveryComplete } from "../utils/deliveryStatus";
 import { subscribeToDispatchNotes } from "../utils/dispatchNoteStorage";
-import { getCompassDirection } from "../utils/routeDirection";
+import {
+  getCompassDirection,
+  getPolylineDestinationCoordinate,
+} from "../utils/routeDirection";
+import {
+  getRouteAreaForCoordinate,
+  subscribeToRouteAreas,
+} from "../utils/routeAreaStorage";
 import { formatCustomerName } from "../utils/textFormatters";
 
 const timelineStartMinutes = 6 * 60;
@@ -307,6 +314,31 @@ function CompassDirectionBadge({ direction, address = "" }) {
       aria-label={hoverLabel}
     >
       {direction}
+    </span>
+  );
+}
+
+function RouteAreaBadge({ area, address = "" }) {
+  if (!area?.name) {
+    return null;
+  }
+
+  const hoverLabel = address
+    ? `${area.name} route area · ${address}`
+    : `${area.name} route area`;
+
+  return (
+    <span
+      className="inline-flex min-w-0 shrink items-center gap-1 text-[9px] font-black uppercase tracking-[0.06em] text-slate-950"
+      title={hoverLabel}
+      aria-label={hoverLabel}
+    >
+      <span
+        className="h-1.5 w-1.5 shrink-0 rounded-full"
+        style={{ backgroundColor: area.color || "#2563EB" }}
+        aria-hidden="true"
+      />
+      <span className="max-w-20 truncate">{area.name}</span>
     </span>
   );
 }
@@ -923,6 +955,9 @@ function useDeliveryRouteMetrics(deliveries) {
 
           const routeMetrics = {
             direction: getCompassDirection(routeData.encodedPolyline),
+            destinationCoordinate: getPolylineDestinationCoordinate(
+              routeData.encodedPolyline,
+            ),
             durationSeconds: Number(routeData.durationSeconds) || 0,
             durationText: String(routeData.durationText || "").trim(),
             distanceText: String(routeData.distanceText || "").trim(),
@@ -1067,6 +1102,7 @@ function DeliveryStatusOverview({
   statusFilter,
   onSelectDelivery,
   deliveryDirectionsById = {},
+  deliveryRouteAreasById = {},
 }) {
   const sections = [
     {
@@ -1173,6 +1209,10 @@ function DeliveryStatusOverview({
                     <span className="text-left sm:text-right">
                       <span className="mb-1 flex items-center gap-1.5 sm:justify-end">
                         <DeliveryNotesBadge delivery={delivery} />
+                        <RouteAreaBadge
+                          area={deliveryRouteAreasById[delivery.id]}
+                          address={delivery.address}
+                        />
                         <CompassDirectionBadge
                           direction={deliveryDirectionsById[delivery.id]}
                           address={delivery.address}
@@ -1211,6 +1251,7 @@ function CalendarDeliveryButton({
   delivery,
   onClick,
   direction = "",
+  routeArea = null,
   compact = false,
   showDragHandle = false,
   isGroupTarget = false,
@@ -1318,6 +1359,7 @@ function CalendarDeliveryButton({
         </span>
         <span className="flex shrink-0 items-center gap-1">
           <DeliveryNotesBadge delivery={delivery} />
+          <RouteAreaBadge area={routeArea} address={delivery.address} />
           <CompassDirectionBadge
             direction={direction}
             address={delivery.address}
@@ -1578,6 +1620,7 @@ function DeliveryDateTbdTray({
   deliveries,
   onSelectDelivery,
   deliveryDirectionsById = {},
+  deliveryRouteAreasById = {},
   canMoveDeliveries,
   showDragHandles = false,
   deliveryDrag,
@@ -1735,6 +1778,10 @@ function DeliveryDateTbdTray({
                       {needsDispatch ? "Needs dispatch" : "Assigned"}
                     </span>
                     <DeliveryNotesBadge delivery={delivery} />
+                    <RouteAreaBadge
+                      area={deliveryRouteAreasById[delivery.id]}
+                      address={delivery.address}
+                    />
                     <CompassDirectionBadge
                       direction={deliveryDirectionsById[delivery.id]}
                       address={delivery.address}
@@ -2371,6 +2418,7 @@ function useCalendarDeliveryDrag({
 function DeliveryWeekView({
   deliveries,
   deliveryDirectionsById = {},
+  deliveryRouteAreasById = {},
   blockedDatesByKey = new Map(),
   selectedDate,
   onNavigate,
@@ -2711,6 +2759,7 @@ function DeliveryWeekView({
                       <CalendarDeliveryButton
                         delivery={delivery}
                         direction={deliveryDirectionsById[delivery.id]}
+                        routeArea={deliveryRouteAreasById[delivery.id]}
                         onClick={() => onSelectDelivery(delivery)}
                         compact
                         showDragHandle={
@@ -2786,6 +2835,7 @@ function DeliveryWeekView({
 function DeliveryMonthView({
   deliveries,
   deliveryDirectionsById = {},
+  deliveryRouteAreasById = {},
   blockedDatesByKey = new Map(),
   monthDate,
   selectedDate,
@@ -3142,6 +3192,7 @@ function DeliveryMonthView({
                           <CalendarDeliveryButton
                             delivery={delivery}
                             direction={deliveryDirectionsById[delivery.id]}
+                            routeArea={deliveryRouteAreasById[delivery.id]}
                             onClick={() => onSelectDelivery(delivery)}
                             compact
                             showDragHandle={
@@ -4197,6 +4248,7 @@ export default function DeliveryCalendarPage({
 }) {
   const isIPadDevice = useIsIPadDevice();
   const [dispatchNotes, setDispatchNotes] = useState([]);
+  const [routeAreas, setRouteAreas] = useState([]);
   const baseDeliveries = useMemo(
     () =>
       Array.isArray(deliveries)
@@ -4223,6 +4275,18 @@ export default function DeliveryCalendarPage({
       },
     );
   }, [canViewDispatchNotes]);
+  useEffect(
+    () =>
+      subscribeToRouteAreas(
+        setRouteAreas,
+        (routeAreaError) =>
+          console.warn(
+            "Unable to load delivery calendar route areas:",
+            routeAreaError,
+          ),
+      ),
+    [],
+  );
   const dispatchNotesByDeliveryId = useMemo(
     () =>
       dispatchNotes.reduce((notesByDeliveryId, note) => {
@@ -4406,6 +4470,21 @@ export default function DeliveryCalendarPage({
       ),
     [deliveryRouteMetricsById],
   );
+  const deliveryRouteAreasById = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(deliveryRouteMetricsById)
+          .map(([deliveryId, routeMetrics]) => [
+            deliveryId,
+            getRouteAreaForCoordinate(
+              routeAreas,
+              routeMetrics?.destinationCoordinate,
+            ),
+          ])
+          .filter(([, routeArea]) => routeArea),
+      ),
+    [deliveryRouteMetricsById, routeAreas],
+  );
   const needsDispatchDeliveries = useMemo(
     () => dayDeliveries.filter(deliveryNeedsDispatch),
     [dayDeliveries],
@@ -4484,6 +4563,9 @@ export default function DeliveryCalendarPage({
     : [];
   const selectedDeliveryRouteMetrics = selectedTimelineDelivery
     ? deliveryRouteMetricsById[selectedTimelineDelivery.id] || null
+    : null;
+  const selectedDeliveryRouteArea = selectedTimelineDelivery
+    ? deliveryRouteAreasById[selectedTimelineDelivery.id] || null
     : null;
   const selectedDeliveryDriveMinutes = selectedDeliveryRouteMetrics?.durationSeconds
     ? Math.max(
@@ -5695,6 +5777,7 @@ export default function DeliveryCalendarPage({
             deliveries={dateTbdDeliveries}
             onSelectDelivery={openDeliveryFromCalendar}
             deliveryDirectionsById={deliveryDirectionsById}
+            deliveryRouteAreasById={deliveryRouteAreasById}
             canMoveDeliveries={canMoveCalendarDeliveries}
             showDragHandles={isIPadDevice}
             deliveryDrag={calendarDeliveryDrag}
@@ -5707,6 +5790,7 @@ export default function DeliveryCalendarPage({
         <DeliveryWeekView
           deliveries={safeDeliveries}
           deliveryDirectionsById={deliveryDirectionsById}
+          deliveryRouteAreasById={deliveryRouteAreasById}
           blockedDatesByKey={blockedDatesByKey}
           selectedDate={selectedDate}
           onNavigate={navigateSelectedDate}
@@ -5726,6 +5810,7 @@ export default function DeliveryCalendarPage({
         <DeliveryMonthView
           deliveries={safeDeliveries}
           deliveryDirectionsById={deliveryDirectionsById}
+          deliveryRouteAreasById={deliveryRouteAreasById}
           blockedDatesByKey={blockedDatesByKey}
           monthDate={calendarMonth}
           selectedDate={selectedDate}
@@ -5932,6 +6017,7 @@ export default function DeliveryCalendarPage({
               statusFilter={statusFilter}
               onSelectDelivery={selectTimelineDelivery}
               deliveryDirectionsById={deliveryDirectionsById}
+              deliveryRouteAreasById={deliveryRouteAreasById}
             />
 
             {statusFilter !== "needsDispatch" && scheduledDeliveries.length > 0 ? (
@@ -6212,13 +6298,18 @@ export default function DeliveryCalendarPage({
               )}
 
               <div className="flex items-center justify-end gap-3">
-                {selectedDeliveryRouteMetrics?.direction ? (
+                {selectedDeliveryRouteArea || selectedDeliveryRouteMetrics?.direction ? (
                   <div
                     className="min-w-0 text-right"
                     title={selectedTimelineDelivery.address || undefined}
                   >
                     <p className="text-sm font-black uppercase tracking-[0.08em] text-slate-950">
-                      {selectedDeliveryRouteMetrics.direction}
+                      {[
+                        selectedDeliveryRouteArea?.name,
+                        selectedDeliveryRouteMetrics?.direction,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                       {selectedDeliveryDriveMinutes
                         ? ` · ${selectedDeliveryDriveMinutes} min`
                         : ""}

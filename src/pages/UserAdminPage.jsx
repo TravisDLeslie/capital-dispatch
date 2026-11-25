@@ -200,6 +200,7 @@ const permissionGroups = [
       { id: "user-admin", label: "User Access" },
       { id: "email-list", label: "Email List" },
       { id: "delivery-settings", label: "Delivery Settings" },
+      { id: "route-areas", label: "Route Areas" },
       { id: "twilio-settings", label: "Twilio Messaging" },
       { id: "vendor-settings", label: "Vendor Settings" },
       { id: "sales-report", label: "Sales Pulse" },

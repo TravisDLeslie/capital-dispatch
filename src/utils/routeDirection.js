@@ -53,6 +53,10 @@ function getPolylineEndpoints(encodedPolyline) {
   return firstPoint && lastPoint ? { firstPoint, lastPoint } : null;
 }
 
+export function getPolylineDestinationCoordinate(encodedPolyline) {
+  return getPolylineEndpoints(encodedPolyline)?.lastPoint || null;
+}
+
 export function getCompassDirection(encodedPolyline) {
   const endpoints = getPolylineEndpoints(encodedPolyline);
 
