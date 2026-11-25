@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
+  ChevronDown,
   Edit3,
   LocateFixed,
   MapPinned,
@@ -167,6 +168,7 @@ export default function RouteAreasPage({ onPageChange }) {
   const didPanMapRef = useRef(false);
   const lastWheelZoomAtRef = useRef(0);
   const [areas, setAreas] = useState([]);
+  const [areZonesExpanded, setAreZonesExpanded] = useState(false);
   const [mapCenter, setMapCenter] = useState(DEFAULT_MAP_CENTER);
   const [mapZoom, setMapZoom] = useState(11);
   const [isPanning, setIsPanning] = useState(false);
@@ -572,65 +574,100 @@ export default function RouteAreasPage({ onPageChange }) {
             </div>
 
             {areas.length > 0 ? (
-              <div className="mt-4 space-y-2">
-                {areas.map((area) => (
-                  <div
-                    key={area.id}
-                    className={`rounded-2xl border p-3 ${
-                      editingAreaId === area.id
-                        ? "border-blue-400 bg-blue-50"
-                        : "border-slate-200 bg-slate-50"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => focusMapToPoints(area.points)}
-                      className="flex w-full items-center gap-3 text-left"
-                    >
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setAreZonesExpanded((isExpanded) => !isExpanded)}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left transition hover:bg-slate-100"
+                  aria-expanded={areZonesExpanded}
+                >
+                  <span className="flex -space-x-2" aria-hidden="true">
+                    {areas.slice(0, 4).map((area) => (
                       <span
-                        className="h-9 w-9 shrink-0 rounded-xl border-4 border-white shadow-sm"
+                        key={area.id}
+                        className="h-7 w-7 rounded-full border-2 border-white shadow-sm"
                         style={{ backgroundColor: area.color }}
-                        aria-hidden="true"
                       />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-black text-slate-950">
-                          {area.name}
-                        </span>
-                        <span className="block text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
-                          {area.points.length} boundary points · {area.active ? "Active" : "Paused"}
-                        </span>
-                      </span>
-                    </button>
-                    <div className="mt-3 flex gap-2 border-t border-slate-200 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => startEditing(area)}
-                        disabled={isSaving}
-                        className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-white px-2 text-xs font-black text-slate-700 ring-1 ring-inset ring-slate-200 hover:bg-slate-100 disabled:opacity-50"
+                    ))}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-black text-slate-950">
+                      {areas.length} saved zone{areas.length === 1 ? "" : "s"}
+                    </span>
+                    <span className="block text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                      {activeAreaCount} active · {areZonesExpanded ? "Hide list" : "Show and edit"}
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={`h-5 w-5 shrink-0 text-slate-500 transition-transform ${
+                      areZonesExpanded ? "rotate-180" : ""
+                    }`}
+                    aria-hidden="true"
+                  />
+                </button>
+
+                {areZonesExpanded ? (
+                  <div className="mt-3 space-y-2">
+                    {areas.map((area) => (
+                      <div
+                        key={area.id}
+                        className={`rounded-2xl border p-3 ${
+                          editingAreaId === area.id
+                            ? "border-blue-400 bg-blue-50"
+                            : "border-slate-200 bg-slate-50"
+                        }`}
                       >
-                        <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleArea(area)}
-                        disabled={isSaving}
-                        className="inline-flex min-h-9 flex-1 items-center justify-center rounded-lg bg-white px-2 text-xs font-black text-slate-700 ring-1 ring-inset ring-slate-200 hover:bg-slate-100 disabled:opacity-50"
-                      >
-                        {area.active ? "Pause" : "Activate"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteArea(area)}
-                        disabled={isSaving}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white text-red-600 ring-1 ring-inset ring-red-200 hover:bg-red-50 disabled:opacity-50"
-                        aria-label={`Remove ${area.name}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => focusMapToPoints(area.points)}
+                          className="flex w-full items-center gap-3 text-left"
+                        >
+                          <span
+                            className="h-9 w-9 shrink-0 rounded-xl border-4 border-white shadow-sm"
+                            style={{ backgroundColor: area.color }}
+                            aria-hidden="true"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-black text-slate-950">
+                              {area.name}
+                            </span>
+                            <span className="block text-[10px] font-black uppercase tracking-[0.1em] text-slate-500">
+                              {area.points.length} boundary points · {area.active ? "Active" : "Paused"}
+                            </span>
+                          </span>
+                        </button>
+                        <div className="mt-3 flex gap-2 border-t border-slate-200 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => startEditing(area)}
+                            disabled={isSaving}
+                            className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-white px-2 text-xs font-black text-slate-700 ring-1 ring-inset ring-slate-200 hover:bg-slate-100 disabled:opacity-50"
+                          >
+                            <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleArea(area)}
+                            disabled={isSaving}
+                            className="inline-flex min-h-9 flex-1 items-center justify-center rounded-lg bg-white px-2 text-xs font-black text-slate-700 ring-1 ring-inset ring-slate-200 hover:bg-slate-100 disabled:opacity-50"
+                          >
+                            {area.active ? "Pause" : "Activate"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteArea(area)}
+                            disabled={isSaving}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-white text-red-600 ring-1 ring-inset ring-red-200 hover:bg-red-50 disabled:opacity-50"
+                            aria-label={`Remove ${area.name}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : null}
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border-2 border-dashed border-slate-200 px-4 py-8 text-center">
