@@ -218,6 +218,8 @@ export function getVehicleCoordinates(vehicle) {
     "gps.lat",
     "position.latitude",
     "position.lat",
+    "stats.location.latitude",
+    "stats.location.lat",
   ]);
   const longitude = getFirstVehicleValue(vehicle, [
     "longitude",
@@ -238,6 +240,9 @@ export function getVehicleCoordinates(vehicle) {
     "position.longitude",
     "position.lng",
     "position.lon",
+    "stats.location.longitude",
+    "stats.location.lng",
+    "stats.location.lon",
   ]);
 
   if (!latitude || !longitude) {
@@ -259,6 +264,8 @@ export function getVehicleLocationLabel(vehicle) {
     "lastLocation.formattedAddress",
     "currentLocation.address",
     "currentLocation.formattedAddress",
+    "stats.location.address",
+    "stats.location.formattedAddress",
     "place",
     "place.name",
   ]);
@@ -290,6 +297,10 @@ export function getVehicleLastUpdated(vehicle) {
     "currentLocation.updatedAt",
     "currentLocation.timestamp",
     "currentLocation.time",
+    "stats.lastUpdated",
+    "stats.location.updatedAt",
+    "stats.location.timestamp",
+    "stats.location.time",
   ]);
 
   if (!rawDate) {

@@ -255,6 +255,7 @@ const DeliveryRoutePlannerPage = lazy(
   () => import("./pages/DeliveryRoutePlannerPage"),
 );
 const DeliveryDispatchPage = lazy(() => import("./pages/DeliveryDispatchPage"));
+const DispatchTrucksPage = lazy(() => import("./pages/DispatchTrucksPage"));
 const DispatchPage = lazyPageWithReload(
   "dispatch",
   () =>
@@ -3399,7 +3400,8 @@ export default function App() {
     if (
       !isApproved ||
       effectiveAllowedPageIds.length === 0 ||
-      effectiveAllowedPageIds.includes(currentPage)
+      effectiveAllowedPageIds.includes(currentPage) ||
+      (currentPage === "dispatch-trucks" && canReadDispatch)
     ) {
       return;
     }
@@ -3411,10 +3413,14 @@ export default function App() {
     }
 
     setCurrentPage(effectiveAllowedPageIds[0]);
-  }, [currentPage, effectiveAllowedPageIds, isApproved]);
+  }, [canReadDispatch, currentPage, effectiveAllowedPageIds, isApproved]);
 
   useEffect(() => {
-    if (!isApproved || !effectiveAllowedPageIds.includes(currentPage)) {
+    if (
+      !isApproved ||
+      (!effectiveAllowedPageIds.includes(currentPage) &&
+        !(currentPage === "dispatch-trucks" && canReadDispatch))
+    ) {
       return;
     }
 
@@ -3423,7 +3429,7 @@ export default function App() {
     } catch {
       // Ignore storage cleanup failures.
     }
-  }, [currentPage, effectiveAllowedPageIds, isApproved]);
+  }, [canReadDispatch, currentPage, effectiveAllowedPageIds, isApproved]);
 
   useEffect(() => {
     if (!PROTECTED_OFFICE_PAGE_IDS.has(currentPage)) {
@@ -9186,7 +9192,10 @@ export default function App() {
       );
     }
 
-    if (!effectiveAllowedPageIds.includes(currentPage)) {
+    if (
+      !effectiveAllowedPageIds.includes(currentPage) &&
+      !(currentPage === "dispatch-trucks" && canReadDispatch)
+    ) {
       return (
         <SectionHubPage
           title="Dashboard"
@@ -9522,6 +9531,11 @@ export default function App() {
               }
             />
           </FeatureErrorBoundary>
+        ) : null;
+
+      case "dispatch-trucks":
+        return canReadDispatch ? (
+          <DispatchTrucksPage onPageChange={navigateToPage} />
         ) : null;
 
       case "today":

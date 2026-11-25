@@ -239,7 +239,7 @@ function getCurrentPageLabel(currentPage) {
     return "Yard Documents";
   }
 
-  if (currentPage === "dispatch") {
+  if (["dispatch", "dispatch-trucks"].includes(currentPage)) {
     return "Dispatch";
   }
 
@@ -355,7 +355,7 @@ function getCurrentPageGroup(currentPage) {
     return "Yard Documents";
   }
 
-  if (currentPage === "dispatch") {
+  if (["dispatch", "dispatch-trucks"].includes(currentPage)) {
     return "Dispatch";
   }
 
@@ -702,6 +702,30 @@ export default function AppHeader({
     ].filter(Boolean);
   }
 
+  function getDispatchDropdownLinks() {
+    const dispatchAllowed =
+      !allowedPageIds || allowedPageIds.includes("dispatch");
+
+    if (!dispatchAllowed) {
+      return [];
+    }
+
+    return [
+      {
+        id: "dispatch-board",
+        label: "Dispatch Board",
+        pageId: "dispatch",
+        isActive: currentPage === "dispatch",
+      },
+      {
+        id: "dispatch-trucks",
+        label: "Trucks",
+        pageId: "dispatch-trucks",
+        isActive: currentPage === "dispatch-trucks",
+      },
+    ];
+  }
+
   function getSalesDropdownLinks() {
     const pageAllowed = (pageId) =>
       !allowedPageIds || allowedPageIds.includes(pageId);
@@ -1009,6 +1033,8 @@ export default function AppHeader({
       const groupIsActive = currentPageGroup === group;
       const southDropdownLinks =
         group === "South" ? getSouthDropdownLinks() : [];
+      const dispatchDropdownLinks =
+        group === "Dispatch" ? getDispatchDropdownLinks() : [];
       const deliveriesDropdownLinks =
         group === "Deliveries" ? getDeliveriesDropdownLinks() : [];
       const salesDropdownLinks =
@@ -1017,6 +1043,10 @@ export default function AppHeader({
         group === "Accounting" ? getAccountingDropdownLinks() : [];
       const shouldShowSouthDropdown =
         group === "South" && isGroupOpen && southDropdownLinks.length > 0;
+      const shouldShowDispatchDropdown =
+        group === "Dispatch" &&
+        isGroupOpen &&
+        dispatchDropdownLinks.length > 0;
       const shouldShowDeliveriesDropdown =
         group === "Deliveries" &&
         isGroupOpen &&
@@ -1042,6 +1072,7 @@ export default function AppHeader({
         "Fleet",
       ].includes(group);
       const hasExpandedChildren =
+        shouldShowDispatchDropdown ||
         shouldShowSouthDropdown ||
         shouldShowDeliveriesDropdown ||
         shouldShowSalesDropdown ||
@@ -1102,6 +1133,7 @@ export default function AppHeader({
                   : "gap-3 px-3 py-2.5 text-[15px]"
               }`}
               aria-expanded={
+                shouldShowDispatchDropdown ||
                 shouldShowSouthDropdown ||
                 shouldShowDeliveriesDropdown ||
                 shouldShowSalesDropdown ||
@@ -1123,7 +1155,8 @@ export default function AppHeader({
               </span>
             </button>
 
-            {(group === "South" && southDropdownLinks.length > 0) ||
+            {(group === "Dispatch" && dispatchDropdownLinks.length > 0) ||
+            (group === "South" && southDropdownLinks.length > 0) ||
             (group === "Deliveries" &&
               deliveriesDropdownLinks.length > 0) ||
             (group === "Sales" && salesDropdownLinks.length > 0) ||
@@ -1167,6 +1200,43 @@ export default function AppHeader({
               </button>
             ) : null}
           </div>
+
+          {shouldShowDispatchDropdown ? (
+            <div
+              className={
+                isMobile
+                  ? "mt-3 space-y-2 pl-5"
+                  : "ml-5 mt-2 space-y-1 border-l border-white/20"
+              }
+            >
+              {dispatchDropdownLinks.map((link) => (
+                <button
+                  key={link.id}
+                  type="button"
+                  onClick={() => handlePageChange(link.pageId)}
+                  className={`flex w-full items-center gap-3 rounded-xl text-left font-black transition ${
+                    isMobile
+                      ? "px-4 py-2.5 text-sm"
+                      : "gap-2 rounded-l-none py-2 pl-3 pr-3 text-[13px]"
+                  } ${
+                    link.isActive
+                      ? "bg-[#FC2C38] text-white shadow-sm"
+                      : "text-white/80 hover:bg-white/10 hover:text-white"
+                  }`}
+                >
+                  {!isMobile ? (
+                    <span
+                      aria-hidden="true"
+                      className="relative -ml-3 h-px w-4 shrink-0 bg-white/25 after:absolute after:-left-[2px] after:-top-[2px] after:h-1 after:w-1 after:rounded-full after:bg-white/45"
+                    />
+                  ) : null}
+                  <span className="min-w-0 flex-1 truncate">
+                    {link.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {shouldShowSouthDropdown ? (
             <div
