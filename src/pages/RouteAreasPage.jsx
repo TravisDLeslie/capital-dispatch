@@ -98,6 +98,38 @@ function mapPixelToGeoPoint(x, y, center, zoom) {
   );
 }
 
+function getVisibleMapTiles(center, zoom) {
+  const tileSize = 256;
+  const tileCount = 2 ** zoom;
+  const centerPoint = toWorldPoint(center, zoom);
+  const topLeft = {
+    x: centerPoint.x - MAP_WIDTH / 2,
+    y: centerPoint.y - MAP_HEIGHT / 2,
+  };
+  const startTileX = Math.floor(topLeft.x / tileSize) - 1;
+  const endTileX = Math.ceil((topLeft.x + MAP_WIDTH) / tileSize) + 1;
+  const startTileY = Math.max(0, Math.floor(topLeft.y / tileSize) - 1);
+  const endTileY = Math.min(
+    tileCount - 1,
+    Math.ceil((topLeft.y + MAP_HEIGHT) / tileSize) + 1,
+  );
+  const tiles = [];
+
+  for (let tileY = startTileY; tileY <= endTileY; tileY += 1) {
+    for (let tileX = startTileX; tileX <= endTileX; tileX += 1) {
+      const wrappedTileX = ((tileX % tileCount) + tileCount) % tileCount;
+      tiles.push({
+        key: `${zoom}-${tileX}-${tileY}`,
+        url: `https://tile.openstreetmap.org/${zoom}/${wrappedTileX}/${tileY}.png`,
+        left: tileX * tileSize - topLeft.x,
+        top: tileY * tileSize - topLeft.y,
+      });
+    }
+  }
+
+  return tiles;
+}
+
 function getMapFocus(points) {
   if (!points.length) {
     return { center: DEFAULT_MAP_CENTER, zoom: 11 };
@@ -135,15 +167,8 @@ export default function RouteAreasPage({ onPageChange }) {
   const didPanMapRef = useRef(false);
   const lastWheelZoomAtRef = useRef(0);
   const [areas, setAreas] = useState([]);
-  const [mapReady, setMapReady] = useState(false);
-  const [mapImageFailed, setMapImageFailed] = useState(false);
-  const [loadedMapSnapshot, setLoadedMapSnapshot] = useState(null);
   const [mapCenter, setMapCenter] = useState(DEFAULT_MAP_CENTER);
   const [mapZoom, setMapZoom] = useState(11);
-  const [mapRequestView, setMapRequestView] = useState({
-    center: DEFAULT_MAP_CENTER,
-    zoom: 11,
-  });
   const [isPanning, setIsPanning] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [editingAreaId, setEditingAreaId] = useState("");
@@ -163,16 +188,11 @@ export default function RouteAreasPage({ onPageChange }) {
     [],
   );
 
-  const staticMapUrl = useMemo(() => {
-    const params = new URLSearchParams({
-      center: `${mapRequestView.center.latitude},${mapRequestView.center.longitude}`,
-      zoom: String(mapRequestView.zoom),
-      size: `${MAP_WIDTH}x${MAP_HEIGHT}`,
-      scale: "2",
-      maptype: "roadmap",
-    });
-    return `/api/maps/static?${params.toString()}`;
-  }, [mapRequestView]);
+  const mapReady = true;
+  const visibleMapTiles = useMemo(
+    () => getVisibleMapTiles(mapCenter, mapZoom),
+    [mapCenter, mapZoom],
+  );
 
   const renderedAreas = useMemo(
     () =>
@@ -192,33 +212,6 @@ export default function RouteAreasPage({ onPageChange }) {
       ),
     [draftPoints, mapCenter, mapZoom],
   );
-
-  const loadedMapTransform = useMemo(() => {
-    if (!loadedMapSnapshot) return "translate(0%, 0%) scale(1)";
-
-    const snapshotCenter = toWorldPoint(loadedMapSnapshot.center, mapZoom);
-    const currentCenter = toWorldPoint(mapCenter, mapZoom);
-    const xOffset = snapshotCenter.x - currentCenter.x;
-    const yOffset = snapshotCenter.y - currentCenter.y;
-    const scale = 2 ** (mapZoom - loadedMapSnapshot.zoom);
-
-    return `translate(${(xOffset / MAP_WIDTH) * 100}%, ${(yOffset / MAP_HEIGHT) * 100}%) scale(${scale})`;
-  }, [loadedMapSnapshot, mapCenter, mapZoom]);
-
-  useEffect(() => {
-    setMapImageFailed(false);
-  }, [staticMapUrl]);
-
-  useEffect(() => {
-    const refreshTimer = window.setTimeout(() => {
-      setMapRequestView({
-        center: mapCenter,
-        zoom: mapZoom,
-      });
-    }, 180);
-
-    return () => window.clearTimeout(refreshTimer);
-  }, [mapCenter, mapZoom]);
 
   const activeAreaCount = useMemo(
     () => areas.filter((area) => area.active).length,
@@ -781,68 +774,24 @@ export default function RouteAreasPage({ onPageChange }) {
             onPointerUp={handleMapPointerUp}
             onPointerCancel={handleMapPointerUp}
           >
-            {loadedMapSnapshot ? (
-              <img
-                src={loadedMapSnapshot.url}
-                alt="Treasure Valley route planning map"
-                className="absolute inset-0 h-full w-full select-none object-fill will-change-transform"
-                style={{
-                  transform: loadedMapTransform,
-                  transformOrigin: "center",
-                  transition: isPanning ? "none" : "transform 180ms ease-out",
-                }}
-                draggable="false"
-              />
-            ) : !mapImageFailed ? (
-              <img
-                key={staticMapUrl}
-                src={staticMapUrl}
-                alt="Treasure Valley route planning map"
-                className="absolute inset-0 h-full w-full select-none object-fill"
-                draggable="false"
-                onLoad={() => {
-                  setLoadedMapSnapshot({
-                    url: staticMapUrl,
-                    center: mapRequestView.center,
-                    zoom: mapRequestView.zoom,
-                  });
-                  setMapReady(true);
-                }}
-                onError={() => {
-                  setMapReady(false);
-                  setMapImageFailed(true);
-                }}
-              />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center p-8 text-center">
-                <div>
-                  <MapPinned className="mx-auto h-10 w-10 text-slate-400" aria-hidden="true" />
-                  <p className="mt-3 text-lg font-black text-slate-800">Map preview unavailable</p>
-                  <p className="mt-1 max-w-md text-sm font-semibold text-slate-500">
-                    The secure map service did not respond. Refresh the page or try again in a moment.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {loadedMapSnapshot?.url !== staticMapUrl ? (
-              <img
-                key={staticMapUrl}
-                src={staticMapUrl}
-                alt=""
-                className="pointer-events-none absolute h-px w-px opacity-0"
-                aria-hidden="true"
-                onLoad={() => {
-                  setLoadedMapSnapshot({
-                    url: staticMapUrl,
-                    center: mapRequestView.center,
-                    zoom: mapRequestView.zoom,
-                  });
-                  setMapReady(true);
-                }}
-                onError={() => setMapImageFailed(true)}
-              />
-            ) : null}
+            <div className="pointer-events-none absolute inset-0 overflow-hidden bg-[#e8e6df]">
+              {visibleMapTiles.map((tile) => (
+                <img
+                  key={tile.key}
+                  src={tile.url}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute select-none"
+                  style={{
+                    left: `${(tile.left / MAP_WIDTH) * 100}%`,
+                    top: `${(tile.top / MAP_HEIGHT) * 100}%`,
+                    width: `${(256 / MAP_WIDTH) * 100}%`,
+                    height: `${(256 / MAP_HEIGHT) * 100}%`,
+                  }}
+                  draggable="false"
+                />
+              ))}
+            </div>
 
             <svg
               viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
@@ -949,14 +898,16 @@ export default function RouteAreasPage({ onPageChange }) {
                 Zoom {mapZoom} · scroll to fine-tune
               </span>
             </div>
-
-            {!loadedMapSnapshot && !mapReady && !mapImageFailed ? (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-100/70">
-                <div className="rounded-full bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-lg">
-                  Loading route map…
-                </div>
-              </div>
-            ) : null}
+            <a
+              href="https://www.openstreetmap.org/copyright"
+              target="_blank"
+              rel="noreferrer"
+              data-map-controls
+              onClick={(event) => event.stopPropagation()}
+              className="absolute bottom-2 right-2 rounded bg-white/90 px-2 py-1 text-[10px] font-bold text-slate-600 shadow-sm"
+            >
+              © OpenStreetMap contributors
+            </a>
           </div>
         </section>
       </div>
