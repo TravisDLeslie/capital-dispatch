@@ -1,7 +1,7 @@
 import { callBouncieApi } from "./_shared.js";
 
 export default async function handler(_request, response) {
-  const result = await callBouncieApi("/vehicles");
+  const result = await callBouncieApi("/vehicles?limit=100&skip=0");
 
   if (result.error) {
     response.status(result.status || 500).json({

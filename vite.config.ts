@@ -40,6 +40,46 @@ async function readJsonBody(request: import('node:http').IncomingMessage) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'))
 }
 
+async function proxyProductionJsonRoute(
+  routePath: string,
+  request: import('node:http').IncomingMessage,
+  response: import('node:http').ServerResponse,
+) {
+  const requestUrl = new URL(request.url || '/', 'http://localhost')
+  const productionUrl = new URL(
+    routePath,
+    'https://dispatch.capitallumber.co',
+  )
+  productionUrl.search = requestUrl.search
+
+  try {
+    const productionResponse = await fetch(productionUrl, {
+      headers: {
+        Accept: 'application/json',
+      },
+    })
+    const responseBody = await productionResponse.text()
+
+    response.statusCode = productionResponse.status
+    response.setHeader(
+      'Content-Type',
+      productionResponse.headers.get('content-type') || 'application/json',
+    )
+    response.end(responseBody)
+  } catch (proxyError) {
+    response.statusCode = 502
+    response.setHeader('Content-Type', 'application/json')
+    response.end(
+      JSON.stringify({
+        error:
+          proxyError instanceof Error
+            ? proxyError.message
+            : 'Unable to reach the production Bouncie service.',
+      }),
+    )
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
@@ -62,6 +102,22 @@ export default defineConfig(({ mode }) => {
       {
         name: 'capital-local-maps-api',
         configureServer(server) {
+          server.middlewares.use('/api/bouncie/status', (request, response) =>
+            proxyProductionJsonRoute(
+              '/api/bouncie/status',
+              request,
+              response,
+            ),
+          )
+
+          server.middlewares.use('/api/bouncie/vehicles', (request, response) =>
+            proxyProductionJsonRoute(
+              '/api/bouncie/vehicles',
+              request,
+              response,
+            ),
+          )
+
           server.middlewares.use('/api/maps/route', async (request, response) => {
             const requestUrl = new URL(
               request.url || '/',
