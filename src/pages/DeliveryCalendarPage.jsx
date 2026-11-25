@@ -2434,6 +2434,11 @@ function DeliveryWeekView({
 }) {
   const weekDays = getWeekDays(selectedDate);
   const today = getTodayDateValue();
+  const hasSaturdayDeliveries = weekDays.some(
+    (day) =>
+      day.date.getDay() === 6 &&
+      getCalendarDayDeliveries(deliveries, day.dateKey).length > 0,
+  );
   const [expandedDayKey, setExpandedDayKey] = useState("");
   const {
     draggedDeliveryId,
@@ -2499,7 +2504,13 @@ function DeliveryWeekView({
         </div>
       </div>
 
-      <div className="grid gap-px bg-slate-200 md:grid-cols-[minmax(4rem,0.38fr)_repeat(6,minmax(0,1fr))]">
+      <div
+        className={`grid gap-px bg-slate-200 ${
+          hasSaturdayDeliveries
+            ? "md:grid-cols-[minmax(4rem,0.38fr)_repeat(6,minmax(0,1fr))]"
+            : "md:grid-cols-[minmax(4rem,0.38fr)_repeat(5,minmax(0,1fr))_minmax(4rem,0.38fr)]"
+        }`}
+      >
         {weekDays.map((day) => {
           const dayDeliveries = getCalendarDayDeliveries(
             deliveries,
@@ -2852,6 +2863,14 @@ function DeliveryMonthView({
 }) {
   const monthDays = getRollingCalendarMonthDays(monthDate);
   const today = getTodayDateValue();
+  const hasSaturdayDeliveries = monthDays.some(
+    (day) =>
+      day.date.getDay() === 6 &&
+      getCalendarDayDeliveries(deliveries, day.dateKey).length > 0,
+  );
+  const monthGridColumnsClass = hasSaturdayDeliveries
+    ? "grid-cols-[minmax(4rem,0.38fr)_repeat(6,minmax(0,1fr))]"
+    : "grid-cols-[minmax(4rem,0.38fr)_repeat(5,minmax(0,1fr))_minmax(4rem,0.38fr)]";
   const [expandedDayKey, setExpandedDayKey] = useState("");
   const {
     draggedDeliveryId,
@@ -2919,7 +2938,9 @@ function DeliveryMonthView({
 
       <div className="overflow-x-auto">
         <div className="min-w-[56rem]">
-          <div className="grid grid-cols-[minmax(4rem,0.38fr)_repeat(6,minmax(0,1fr))] border-b border-slate-200 bg-slate-50">
+          <div
+            className={`grid border-b border-slate-200 bg-slate-50 ${monthGridColumnsClass}`}
+          >
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
               (weekday) => (
                 <span
@@ -2931,7 +2952,7 @@ function DeliveryMonthView({
               ),
             )}
           </div>
-          <div className="grid grid-cols-[minmax(4rem,0.38fr)_repeat(6,minmax(0,1fr))] gap-px bg-slate-200">
+          <div className={`grid gap-px bg-slate-200 ${monthGridColumnsClass}`}>
             {monthDays.map((day) => {
               const dayDeliveries = getCalendarDayDeliveries(
                 deliveries,
