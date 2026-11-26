@@ -25,7 +25,9 @@ import {
   getVehicleLastUpdated,
   getVehicleLocationLabel,
   getVehicleName,
+  getVehicleYearMakeModel,
 } from "../utils/bouncieVehicleFormatters";
+import { subscribeToBouncieVehicleSettings } from "../utils/bouncieVehicleStorage";
 
 const MAP_WIDTH = 1100;
 const MAP_HEIGHT = 640;
@@ -348,6 +350,41 @@ function getApiErrorMessage(value, fallbackMessage) {
   return fallbackMessage;
 }
 
+function normalizeVehicleIdentifier(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function findVehicleSetting(vehicle, vehicleId, vehicleSettings) {
+  const vehicleVin = normalizeVehicleIdentifier(
+    getFirstVehicleValue(vehicle, ["vin", "vehicle.vin"]),
+  );
+  const vehicleImei = normalizeVehicleIdentifier(
+    getFirstVehicleValue(vehicle, ["imei", "device.imei"]),
+  );
+  const vehicleName = normalizeVehicleIdentifier(getVehicleName(vehicle));
+
+  return (
+    vehicleSettings.find((setting) => setting.id === vehicleId) ||
+    vehicleSettings.find((setting) => {
+      const settingVin = normalizeVehicleIdentifier(setting.vin);
+      const settingImei = normalizeVehicleIdentifier(setting.imei);
+      const settingName = normalizeVehicleIdentifier(
+        setting.bouncieName || setting.nickname || setting.title,
+      );
+
+      return (
+        (vehicleVin && settingVin === vehicleVin) ||
+        (vehicleImei && settingImei === vehicleImei) ||
+        (vehicleName && settingName === vehicleName)
+      );
+    }) ||
+    null
+  );
+}
+
 function DailyTruckHistoryPanel({
   dailyTripTotals,
   historyDate,
@@ -482,6 +519,7 @@ export default function DispatchTrucksPage({ onPageChange }) {
   const mapPanRef = useRef(null);
   const didFitInitialVehiclesRef = useRef(false);
   const [vehicles, setVehicles] = useState([]);
+  const [vehicleSettings, setVehicleSettings] = useState([]);
   const [selectedVehicleId, setSelectedVehicleId] = useState("");
   const [mapCenter, setMapCenter] = useState(DEFAULT_MAP_CENTER);
   const [mapZoom, setMapZoom] = useState(10);
@@ -494,18 +532,54 @@ export default function DispatchTrucksPage({ onPageChange }) {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
 
-  const vehicleTitles = useMemo(
+  const vehicleDisplayDetails = useMemo(
     () =>
-      vehicles.map(
-        (vehicle) =>
-          getVehicleDefaultAppTitle(vehicle) || getVehicleName(vehicle),
-      ),
-    [vehicles],
+      vehicles.map((vehicle, index) => {
+        const vehicleId = getVehicleKey(vehicle, index);
+        const setting = findVehicleSetting(
+          vehicle,
+          vehicleId,
+          vehicleSettings,
+        );
+        const bouncieNickname = getVehicleName(vehicle);
+        const alias =
+          setting?.title || getVehicleDefaultAppTitle(vehicle) || "";
+        const title =
+          setting?.nickname ||
+          bouncieNickname ||
+          alias ||
+          "Bouncie Vehicle";
+
+        return {
+          alias: alias !== title ? alias : "",
+          badgeSource: setting?.badge || alias || title,
+          photoDataUrl: String(setting?.photoDataUrl || "").trim(),
+          setting,
+          title,
+          yearMakeModel:
+            setting?.yearMakeModel ||
+            [setting?.year, setting?.make, setting?.model]
+              .filter(Boolean)
+              .join(" ") ||
+            getVehicleYearMakeModel(vehicle),
+        };
+      }),
+    [vehicleSettings, vehicles],
+  );
+
+  const vehicleTitles = useMemo(
+    () => vehicleDisplayDetails.map((vehicleDetail) => vehicleDetail.title),
+    [vehicleDisplayDetails],
   );
 
   const vehicleBadges = useMemo(
-    () => getUniqueVehicleBadgeTexts(vehicleTitles),
-    [vehicleTitles],
+    () =>
+      getUniqueVehicleBadgeTexts(
+        vehicleDisplayDetails.map(
+          (vehicleDetail) => vehicleDetail.badgeSource,
+        ),
+      ),
+    [vehicleDisplayDetails],
   );
 
   const truckRows = useMemo(
@@ -515,17 +589,21 @@ export default function DispatchTrucksPage({ onPageChange }) {
           const coordinates = normalizeCoordinates(vehicle);
           const speed = getVehicleSpeed(vehicle);
           const isMoving = speed > 1 || getVehicleEngineRunning(vehicle);
+          const displayDetail = vehicleDisplayDetails[index];
 
           return {
+            alias: displayDetail.alias,
             badge: vehicleBadges[index],
             coordinates,
             id: getVehicleKey(vehicle, index),
             isMoving,
             lastUpdated: getVehicleLastUpdated(vehicle),
             location: getVehicleLocationLabel(vehicle),
+            photoDataUrl: displayDetail.photoDataUrl,
             speed,
             title: vehicleTitles[index],
             vehicle,
+            yearMakeModel: displayDetail.yearMakeModel,
           };
         })
         .sort((firstTruck, secondTruck) => {
@@ -535,7 +613,7 @@ export default function DispatchTrucksPage({ onPageChange }) {
 
           return firstTruck.title.localeCompare(secondTruck.title);
         }),
-    [vehicleBadges, vehicleTitles, vehicles],
+    [vehicleBadges, vehicleDisplayDetails, vehicleTitles, vehicles],
   );
 
   const trucksWithLocations = useMemo(
@@ -639,6 +717,20 @@ export default function DispatchTrucksPage({ onPageChange }) {
 
     return () => window.clearInterval(refreshTimer);
   }, []);
+
+  useEffect(
+    () =>
+      subscribeToBouncieVehicleSettings(
+        setVehicleSettings,
+        (settingsError) => {
+          console.error(
+            "Unable to sync Bouncie vehicle settings:",
+            settingsError,
+          );
+        },
+      ),
+    [],
+  );
 
   useEffect(() => {
     if (didFitInitialVehiclesRef.current || trucksWithLocations.length === 0) {
@@ -921,8 +1013,19 @@ export default function DispatchTrucksPage({ onPageChange }) {
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <span className={`flex h-11 min-w-11 items-center justify-center rounded-xl px-2 text-xs font-black text-white ${truckRow.isMoving ? "bg-emerald-600" : "bg-slate-800"}`}>
-                          {truckRow.badge}
+                        <span className={`relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-white text-xs font-black text-white shadow-sm ${truckRow.isMoving ? "bg-emerald-600" : "bg-slate-800"}`}>
+                          {truckRow.photoDataUrl ? (
+                            <img
+                              src={truckRow.photoDataUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Truck className="h-6 w-6" aria-hidden="true" />
+                          )}
+                          <span className={`absolute bottom-0.5 right-0.5 rounded-md px-1.5 py-0.5 text-[8px] font-black text-white shadow-sm ${truckRow.isMoving ? "bg-emerald-700" : "bg-slate-950"}`}>
+                            {truckRow.badge}
+                          </span>
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center justify-between gap-2">
@@ -931,6 +1034,13 @@ export default function DispatchTrucksPage({ onPageChange }) {
                               {truckRow.isMoving ? "Moving" : "Parked"}
                             </span>
                           </span>
+                          {truckRow.alias || truckRow.yearMakeModel ? (
+                            <span className="mt-0.5 block truncate text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                              {[truckRow.alias, truckRow.yearMakeModel]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          ) : null}
                           <span className="mt-1 block truncate text-xs font-semibold text-slate-500">
                             {truckRow.location || "Location not reported"}
                           </span>
@@ -961,11 +1071,33 @@ export default function DispatchTrucksPage({ onPageChange }) {
 
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.15em] text-[#FC2C38]">Dispatch map</p>
-              <h2 className="mt-1 text-xl font-black text-slate-950">
-                {selectedTruck ? selectedTruck.title : "All truck locations"}
-              </h2>
+            <div className="flex min-w-0 items-center gap-3">
+              {selectedTruck ? (
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-900 text-white shadow-sm">
+                  {selectedTruck.photoDataUrl ? (
+                    <img
+                      src={selectedTruck.photoDataUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Truck className="h-6 w-6" aria-hidden="true" />
+                  )}
+                </span>
+              ) : null}
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.15em] text-[#FC2C38]">Dispatch map</p>
+                <h2 className="mt-1 truncate text-xl font-black text-slate-950">
+                  {selectedTruck ? selectedTruck.title : "All truck locations"}
+                </h2>
+                {selectedTruck?.alias || selectedTruck?.yearMakeModel ? (
+                  <p className="mt-0.5 truncate text-xs font-bold text-slate-500">
+                    {[selectedTruck.alias, selectedTruck.yearMakeModel]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                ) : null}
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               {selectedTruck?.coordinates ? (
@@ -1062,8 +1194,19 @@ export default function DispatchTrucksPage({ onPageChange }) {
                   }}
                   title={`${truckRow.title} — ${truckRow.location || "location reported"}`}
                 >
-                  <span className={`flex min-h-11 min-w-11 items-center justify-center rounded-2xl border-4 border-white px-2 text-xs font-black text-white shadow-xl transition ${truckRow.isMoving ? "bg-emerald-600" : "bg-slate-900"} ${isSelected ? "scale-125 ring-4 ring-blue-400/50" : "hover:scale-110"}`}>
-                    {truckRow.badge}
+                  <span className={`relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border-4 border-white text-xs font-black text-white shadow-xl transition ${truckRow.isMoving ? "bg-emerald-600" : "bg-slate-900"} ${isSelected ? "scale-125 ring-4 ring-blue-400/50" : "hover:scale-110"}`}>
+                    {truckRow.photoDataUrl ? (
+                      <img
+                        src={truckRow.photoDataUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Truck className="h-5 w-5" aria-hidden="true" />
+                    )}
+                    <span className={`absolute bottom-0 right-0 rounded-tl-md px-1 py-0.5 text-[7px] font-black text-white ${truckRow.isMoving ? "bg-emerald-700" : "bg-slate-950"}`}>
+                      {truckRow.badge}
+                    </span>
                   </span>
                   <span className={`mx-auto block h-3 w-3 -translate-y-1 rotate-45 border-b-2 border-r-2 border-white ${truckRow.isMoving ? "bg-emerald-600" : "bg-slate-900"}`} />
                 </button>

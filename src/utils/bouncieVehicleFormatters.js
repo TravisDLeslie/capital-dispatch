@@ -92,6 +92,7 @@ export function getVehicleYearMakeModel(vehicle) {
 export function getVehicleName(vehicle) {
   return (
     getFirstVehicleValue(vehicle, [
+      "nickName",
       "nickname",
       "name",
       "displayName",
