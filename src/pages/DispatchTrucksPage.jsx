@@ -392,6 +392,8 @@ function DailyTruckHistoryPanel({
   isHistoryLoading,
   normalizedDailyTrips,
   onHistoryDateChange,
+  onSelectTrip,
+  selectedTripId,
 }) {
   return (
     <div className="mt-3 overflow-hidden rounded-2xl border border-blue-200 bg-blue-50/60">
@@ -402,22 +404,33 @@ function DailyTruckHistoryPanel({
               Daily history
             </p>
             <p className="mt-1 text-xs font-semibold text-slate-500">
-              Routes appear in blue on the map.
+              Select a route to fit it on the map.
             </p>
           </div>
-          <label className="min-w-0 max-w-[10.5rem]">
-            <span className="sr-only">History date</span>
-            <span className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-2 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
-              <CalendarDays className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
-              <input
-                type="date"
-                value={historyDate}
-                max={getTodayDateInputValue()}
-                onChange={(event) => onHistoryDateChange(event.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-xs font-black text-slate-900 outline-none"
-              />
-            </span>
-          </label>
+          <div className="flex flex-col items-end gap-2">
+            <label className="min-w-0 max-w-[10.5rem]">
+              <span className="sr-only">History date</span>
+              <span className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-2 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
+                <CalendarDays className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
+                <input
+                  type="date"
+                  value={historyDate}
+                  max={getTodayDateInputValue()}
+                  onChange={(event) => onHistoryDateChange(event.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-xs font-black text-slate-900 outline-none"
+                />
+              </span>
+            </label>
+            {selectedTripId ? (
+              <button
+                type="button"
+                onClick={() => onSelectTrip(null)}
+                className="text-[10px] font-black uppercase tracking-[0.08em] text-blue-700 transition hover:text-blue-900"
+              >
+                Show full day
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -456,15 +469,20 @@ function DailyTruckHistoryPanel({
         </div>
       ) : (
         <div className="space-y-2 px-3 pb-3">
-          {normalizedDailyTrips.map((trip, tripIndex) => {
+          {normalizedDailyTrips.map((trip) => {
             const startPoint = trip.coordinates[0] || null;
             const endPoint = trip.coordinates.at(-1) || null;
             const timeZone = typeof trip.timeZone === "string" ? trip.timeZone : "";
+            const isSelected = selectedTripId === trip.mapId;
 
             return (
               <article
-                key={trip.transactionId || `${trip.startTime}-${tripIndex}`}
-                className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+                key={trip.mapId}
+                className={`rounded-xl border bg-white p-3 shadow-sm transition ${
+                  isSelected
+                    ? "border-blue-500 ring-2 ring-blue-100"
+                    : "border-slate-200 hover:border-blue-300"
+                }`}
               >
                 <div className="flex items-center gap-2">
                   <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-blue-600 text-xs font-black text-white">
@@ -489,16 +507,19 @@ function DailyTruckHistoryPanel({
                     <Timer className="h-3 w-3" aria-hidden="true" />
                     {formatDuration(trip.durationMinutes)}
                   </span>
-                  {startPoint ? (
-                    <a
-                      href={`https://www.google.com/maps/dir/?api=1&origin=${startPoint.latitude},${startPoint.longitude}&destination=${endPoint?.latitude || startPoint.latitude},${endPoint?.longitude || startPoint.longitude}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-black text-slate-700 transition hover:bg-slate-50"
+                  {startPoint && endPoint ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectTrip(isSelected ? null : trip)}
+                      className={`flex items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-black transition ${
+                        isSelected
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-blue-200 bg-white text-blue-700 hover:bg-blue-50"
+                      }`}
                     >
-                      Route
-                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                    </a>
+                      <LocateFixed className="h-3 w-3" aria-hidden="true" />
+                      {isSelected ? "Showing" : "Route"}
+                    </button>
                   ) : (
                     <span className="rounded-lg bg-slate-100 px-2 py-1.5 text-center text-[10px] font-black text-slate-400">
                       No route
@@ -529,6 +550,7 @@ export default function DispatchTrucksPage({ onPageChange }) {
   const [lastRefreshedAt, setLastRefreshedAt] = useState("");
   const [historyDate, setHistoryDate] = useState(getTodayDateInputValue);
   const [dailyTrips, setDailyTrips] = useState([]);
+  const [selectedTripId, setSelectedTripId] = useState("");
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
 
@@ -627,10 +649,15 @@ export default function DispatchTrucksPage({ onPageChange }) {
   const normalizedDailyTrips = useMemo(
     () =>
       dailyTrips
-        .map((trip) => ({
+        .map((trip, tripIndex) => ({
           ...trip,
           coordinates: getTripCoordinates(trip),
           durationMinutes: getTripDurationMinutes(trip),
+          mapId: String(
+            trip.transactionId ||
+              trip.id ||
+              `${trip.startTime}-${trip.endTime}-${tripIndex}`,
+          ),
         }))
         .sort(
           (firstTrip, secondTrip) =>
@@ -652,6 +679,16 @@ export default function DispatchTrucksPage({ onPageChange }) {
       ),
     [normalizedDailyTrips],
   );
+  const selectedDailyTrip = useMemo(
+    () =>
+      normalizedDailyTrips.find((trip) => trip.mapId === selectedTripId) ||
+      null,
+    [normalizedDailyTrips, selectedTripId],
+  );
+  const visibleDailyTrips = useMemo(
+    () => (selectedDailyTrip ? [selectedDailyTrip] : normalizedDailyTrips),
+    [normalizedDailyTrips, selectedDailyTrip],
+  );
   const visibleMapTiles = useMemo(
     () => getVisibleMapTiles(mapCenter, mapZoom),
     [mapCenter, mapZoom],
@@ -666,15 +703,16 @@ export default function DispatchTrucksPage({ onPageChange }) {
   );
   const renderedTripPaths = useMemo(
     () =>
-      normalizedDailyTrips
+      visibleDailyTrips
         .map((trip) => ({
-          id: trip.transactionId,
+          id: trip.mapId,
+          isSelected: trip.mapId === selectedTripId,
           points: sampleTripCoordinates(trip.coordinates).map((point) =>
             geoPointToMapPixel(point, mapCenter, mapZoom),
           ),
         }))
         .filter((tripPath) => tripPath.points.length > 1),
-    [mapCenter, mapZoom, normalizedDailyTrips],
+    [mapCenter, mapZoom, selectedTripId, visibleDailyTrips],
   );
 
   async function loadVehicles({ showLoading = false } = {}) {
@@ -746,6 +784,8 @@ export default function DispatchTrucksPage({ onPageChange }) {
   }, [trucksWithLocations]);
 
   useEffect(() => {
+    setSelectedTripId("");
+
     if (!selectedTruckImei) {
       setDailyTrips([]);
       setHistoryError("");
@@ -835,12 +875,28 @@ export default function DispatchTrucksPage({ onPageChange }) {
   }
 
   function selectTruck(truckRow) {
+    setSelectedTripId("");
     setSelectedVehicleId(truckRow.id);
 
     if (truckRow.coordinates) {
       setMapCenter(truckRow.coordinates);
       setMapZoom((currentZoom) => Math.max(14, currentZoom));
     }
+  }
+
+  function selectHistoryTrip(trip) {
+    const nextTripId = trip?.mapId || "";
+    const routePoints = trip
+      ? trip.coordinates
+      : normalizedDailyTrips.flatMap((dailyTrip) => dailyTrip.coordinates);
+
+    setSelectedTripId(nextTripId);
+
+    if (routePoints.length === 0) return;
+
+    const focus = getMapFocus(routePoints);
+    setMapCenter(focus.center);
+    setMapZoom(focus.zoom);
   }
 
   function zoomMap(nextZoom) {
@@ -1060,6 +1116,8 @@ export default function DispatchTrucksPage({ onPageChange }) {
                         isHistoryLoading={isHistoryLoading}
                         normalizedDailyTrips={normalizedDailyTrips}
                         onHistoryDateChange={setHistoryDate}
+                        onSelectTrip={selectHistoryTrip}
+                        selectedTripId={selectedTripId}
                       />
                     ) : null}
                   </div>
@@ -1095,6 +1153,17 @@ export default function DispatchTrucksPage({ onPageChange }) {
                     {[selectedTruck.alias, selectedTruck.yearMakeModel]
                       .filter(Boolean)
                       .join(" · ")}
+                  </p>
+                ) : null}
+                {selectedDailyTrip ? (
+                  <p className="mt-1 text-[10px] font-black uppercase tracking-[0.08em] text-blue-700">
+                    Viewing route · {formatTripTime(
+                      selectedDailyTrip.startTime,
+                      selectedDailyTrip.timeZone,
+                    )} – {formatTripTime(
+                      selectedDailyTrip.endTime,
+                      selectedDailyTrip.timeZone,
+                    )}
                   </p>
                 ) : null}
               </div>
@@ -1166,11 +1235,11 @@ export default function DispatchTrucksPage({ onPageChange }) {
                       .map((point) => `${point.x},${point.y}`)
                       .join(" ")}
                     fill="none"
-                    stroke="#2563eb"
+                    stroke={tripPath.isSelected ? "#1d4ed8" : "#2563eb"}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    strokeOpacity="0.78"
-                    strokeWidth="5"
+                    strokeOpacity={tripPath.isSelected ? "0.95" : "0.72"}
+                    strokeWidth={tripPath.isSelected ? "7" : "5"}
                   />
                 ))}
               </svg>
