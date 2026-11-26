@@ -469,7 +469,7 @@ function DailyTruckHistoryPanel({
         </div>
       ) : (
         <div className="space-y-2 px-3 pb-3">
-          {normalizedDailyTrips.map((trip) => {
+          {normalizedDailyTrips.map((trip, tripIndex) => {
             const startPoint = trip.coordinates[0] || null;
             const endPoint = trip.coordinates.at(-1) || null;
             const timeZone = typeof trip.timeZone === "string" ? trip.timeZone : "";
