@@ -884,6 +884,14 @@ export default function DispatchTrucksPage({ onPageChange }) {
     }
   }
 
+  function collapseTruckHistory(truckRow) {
+    if (selectedVehicleId !== truckRow.id) return;
+
+    setSelectedTripId("");
+    setSelectedVehicleId("");
+    fitAllTrucks();
+  }
+
   function selectHistoryTrip(trip) {
     const nextTripId = trip?.mapId || "";
     const routePoints = trip
@@ -1062,6 +1070,12 @@ export default function DispatchTrucksPage({ onPageChange }) {
                     <button
                       type="button"
                       onClick={() => selectTruck(truckRow)}
+                      onDoubleClick={() => collapseTruckHistory(truckRow)}
+                      title={
+                        isSelected
+                          ? "Double-click to collapse daily history"
+                          : `View ${truckRow.title}`
+                      }
                       className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
                         isSelected
                           ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100"
@@ -1255,6 +1269,10 @@ export default function DispatchTrucksPage({ onPageChange }) {
                   onClick={(event) => {
                     event.stopPropagation();
                     selectTruck(truckRow);
+                  }}
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    collapseTruckHistory(truckRow);
                   }}
                   className="absolute z-20 -translate-x-1/2 -translate-y-full"
                   style={{
