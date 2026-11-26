@@ -154,6 +154,9 @@ async function readApiJson(response, routeName) {
 }
 
 export default function BounciePage({ onPageChange }) {
+  const bouncieConnectUrl = import.meta.env.DEV
+    ? "https://dispatch.capitallumber.co/api/bouncie/auth/start"
+    : "/api/bouncie/auth/start";
   const [status, setStatus] = useState(null);
   const [vehicles, setVehicles] = useState([]);
   const [vehicleSettings, setVehicleSettings] = useState([]);
@@ -1014,7 +1017,7 @@ export default function BounciePage({ onPageChange }) {
 
           <div className="flex flex-col gap-2 sm:flex-row">
             <a
-              href="/api/bouncie/auth/start"
+              href={bouncieConnectUrl}
               className="flex items-center justify-center gap-2 rounded-xl bg-[#FC2C38] px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-red-600"
             >
               <ExternalLink
