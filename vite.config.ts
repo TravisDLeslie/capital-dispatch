@@ -118,6 +118,14 @@ export default defineConfig(({ mode }) => {
             ),
           )
 
+          server.middlewares.use('/api/bouncie/trips', (request, response) =>
+            proxyProductionJsonRoute(
+              '/api/bouncie/trips',
+              request,
+              response,
+            ),
+          )
+
           server.middlewares.use('/api/maps/route', async (request, response) => {
             const requestUrl = new URL(
               request.url || '/',

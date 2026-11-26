@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  CalendarDays,
   Clock3,
   ExternalLink,
+  Gauge,
   LocateFixed,
   MapPin,
   Minus,
   Navigation,
   Plus,
   RefreshCw,
+  Route,
+  Timer,
   Truck,
 } from "lucide-react";
 import Breadcrumbs from "../components/Breadcrumbs";
@@ -188,6 +192,139 @@ function formatRefreshTime(value) {
   });
 }
 
+function getTodayDateInputValue() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getDailyHistoryWindow(dateValue) {
+  const [year, month, day] = String(dateValue || "")
+    .split("-")
+    .map(Number);
+
+  if (!year || !month || !day) return null;
+
+  const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+  const end = new Date(year, month - 1, day + 1, 0, 0, 0, 0);
+
+  return {
+    startsAfter: start.toISOString(),
+    endsBefore: end.toISOString(),
+  };
+}
+
+function getVehicleImei(vehicle) {
+  return getFirstVehicleValue(vehicle, ["imei", "device.imei", "stats.imei"]);
+}
+
+function collectCoordinatePairs(value, coordinatePairs) {
+  if (!value) return;
+
+  if (Array.isArray(value)) {
+    if (
+      value.length >= 2 &&
+      Number.isFinite(Number(value[0])) &&
+      Number.isFinite(Number(value[1]))
+    ) {
+      coordinatePairs.push([Number(value[0]), Number(value[1])]);
+      return;
+    }
+
+    value.forEach((entry) => collectCoordinatePairs(entry, coordinatePairs));
+    return;
+  }
+
+  if (typeof value !== "object") return;
+
+  if (value.type === "FeatureCollection") {
+    collectCoordinatePairs(value.features, coordinatePairs);
+  } else if (value.type === "Feature") {
+    collectCoordinatePairs(value.geometry, coordinatePairs);
+  } else if (value.coordinates) {
+    collectCoordinatePairs(value.coordinates, coordinatePairs);
+  } else if (value.geometry) {
+    collectCoordinatePairs(value.geometry, coordinatePairs);
+  }
+}
+
+function getTripCoordinates(trip) {
+  let gps = trip?.gps;
+
+  if (typeof gps === "string") {
+    try {
+      gps = JSON.parse(gps);
+    } catch {
+      return [];
+    }
+  }
+
+  const coordinatePairs = [];
+  collectCoordinatePairs(gps, coordinatePairs);
+
+  return coordinatePairs
+    .map(([longitude, latitude]) => ({ latitude, longitude }))
+    .filter(
+      (point) =>
+        Math.abs(point.latitude) <= 90 && Math.abs(point.longitude) <= 180,
+    );
+}
+
+function sampleTripCoordinates(points, maximumPoints = 240) {
+  if (points.length <= maximumPoints) return points;
+
+  const step = Math.ceil(points.length / maximumPoints);
+  const sampledPoints = points.filter(
+    (_point, index) => index === 0 || index === points.length - 1 || index % step === 0,
+  );
+
+  return sampledPoints;
+}
+
+function formatTripTime(value, timeZone) {
+  if (!value) return "Time unavailable";
+
+  try {
+    return new Date(value).toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: timeZone || "America/Boise",
+    });
+  } catch {
+    return new Date(value).toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+}
+
+function getTripDurationMinutes(trip) {
+  const startTime = new Date(trip?.startTime).getTime();
+  const endTime = new Date(trip?.endTime).getTime();
+
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime)) return 0;
+
+  return Math.max(0, Math.round((endTime - startTime) / 60000));
+}
+
+function formatDuration(minutes) {
+  if (minutes < 60) return `${minutes} min`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  return remainingMinutes ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`;
+}
+
+function formatCoordinate(point) {
+  if (!point) return "Location unavailable";
+
+  return `${point.latitude.toFixed(4)}, ${point.longitude.toFixed(4)}`;
+}
+
 async function readApiJson(response, routeName) {
   const contentType = response.headers.get("content-type") || "";
 
@@ -213,6 +350,10 @@ export default function DispatchTrucksPage({ onPageChange }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastRefreshedAt, setLastRefreshedAt] = useState("");
+  const [historyDate, setHistoryDate] = useState(getTodayDateInputValue);
+  const [dailyTrips, setDailyTrips] = useState([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
   const vehicleTitles = useMemo(
     () =>
@@ -265,6 +406,35 @@ export default function DispatchTrucksPage({ onPageChange }) {
   const selectedTruck = truckRows.find(
     (truckRow) => truckRow.id === selectedVehicleId,
   );
+  const selectedTruckImei = getVehicleImei(selectedTruck?.vehicle);
+  const normalizedDailyTrips = useMemo(
+    () =>
+      dailyTrips
+        .map((trip) => ({
+          ...trip,
+          coordinates: getTripCoordinates(trip),
+          durationMinutes: getTripDurationMinutes(trip),
+        }))
+        .sort(
+          (firstTrip, secondTrip) =>
+            new Date(firstTrip.startTime).getTime() -
+            new Date(secondTrip.startTime).getTime(),
+        ),
+    [dailyTrips],
+  );
+  const dailyTripTotals = useMemo(
+    () =>
+      normalizedDailyTrips.reduce(
+        (totals, trip) => ({
+          distance: totals.distance + (Number(trip.distance) || 0),
+          durationMinutes: totals.durationMinutes + trip.durationMinutes,
+          idleMinutes:
+            totals.idleMinutes + Math.round((Number(trip.totalIdleDuration) || 0) / 60),
+        }),
+        { distance: 0, durationMinutes: 0, idleMinutes: 0 },
+      ),
+    [normalizedDailyTrips],
+  );
   const visibleMapTiles = useMemo(
     () => getVisibleMapTiles(mapCenter, mapZoom),
     [mapCenter, mapZoom],
@@ -276,6 +446,18 @@ export default function DispatchTrucksPage({ onPageChange }) {
         pixel: geoPointToMapPixel(truckRow.coordinates, mapCenter, mapZoom),
       })),
     [mapCenter, mapZoom, trucksWithLocations],
+  );
+  const renderedTripPaths = useMemo(
+    () =>
+      normalizedDailyTrips
+        .map((trip) => ({
+          id: trip.transactionId,
+          points: sampleTripCoordinates(trip.coordinates).map((point) =>
+            geoPointToMapPixel(point, mapCenter, mapZoom),
+          ),
+        }))
+        .filter((tripPath) => tripPath.points.length > 1),
+    [mapCenter, mapZoom, normalizedDailyTrips],
   );
 
   async function loadVehicles({ showLoading = false } = {}) {
@@ -331,6 +513,82 @@ export default function DispatchTrucksPage({ onPageChange }) {
     setMapCenter(focus.center);
     setMapZoom(focus.zoom);
   }, [trucksWithLocations]);
+
+  useEffect(() => {
+    if (!selectedTruckImei) {
+      setDailyTrips([]);
+      setHistoryError("");
+      setIsHistoryLoading(false);
+      return undefined;
+    }
+
+    const historyWindow = getDailyHistoryWindow(historyDate);
+
+    if (!historyWindow) {
+      setDailyTrips([]);
+      setHistoryError("Choose a valid history date.");
+      return undefined;
+    }
+
+    const abortController = new AbortController();
+
+    async function loadDailyHistory() {
+      setIsHistoryLoading(true);
+      setHistoryError("");
+
+      try {
+        const searchParams = new URLSearchParams({
+          imei: selectedTruckImei,
+          "starts-after": historyWindow.startsAfter,
+          "ends-before": historyWindow.endsBefore,
+        });
+        const historyResponse = await fetch(
+          `/api/bouncie/trips?${searchParams.toString()}`,
+          { signal: abortController.signal },
+        );
+        const historyData = await readApiJson(
+          historyResponse,
+          "Bouncie trips route",
+        );
+
+        if (!historyResponse.ok) {
+          throw new Error(historyData.error || "Unable to load truck history.");
+        }
+
+        setDailyTrips(
+          Array.isArray(historyData.trips) ? historyData.trips : [],
+        );
+      } catch (loadError) {
+        if (loadError.name === "AbortError") return;
+
+        console.error("Unable to load Bouncie truck history:", loadError);
+        setDailyTrips([]);
+        setHistoryError(
+          loadError.message || "Unable to load truck history.",
+        );
+      } finally {
+        if (!abortController.signal.aborted) {
+          setIsHistoryLoading(false);
+        }
+      }
+    }
+
+    loadDailyHistory();
+
+    return () => abortController.abort();
+  }, [historyDate, selectedTruckImei]);
+
+  useEffect(() => {
+    const historyPoints = normalizedDailyTrips.flatMap(
+      (trip) => trip.coordinates,
+    );
+
+    if (historyPoints.length === 0) return;
+
+    const focus = getMapFocus(historyPoints);
+    setMapCenter(focus.center);
+    setMapZoom(focus.zoom);
+  }, [normalizedDailyTrips]);
 
   function fitAllTrucks() {
     const focus = getMapFocus(
@@ -602,6 +860,30 @@ export default function DispatchTrucksPage({ onPageChange }) {
               />
             ))}
 
+            {renderedTripPaths.length > 0 ? (
+              <svg
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-10 h-full w-full"
+                viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+                preserveAspectRatio="none"
+              >
+                {renderedTripPaths.map((tripPath) => (
+                  <polyline
+                    key={tripPath.id}
+                    points={tripPath.points
+                      .map((point) => `${point.x},${point.y}`)
+                      .join(" ")}
+                    fill="none"
+                    stroke="#2563eb"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeOpacity="0.78"
+                    strokeWidth="5"
+                  />
+                ))}
+              </svg>
+            ) : null}
+
             {renderedTruckMarkers.map((truckRow) => {
               const isSelected = selectedVehicleId === truckRow.id;
 
@@ -656,6 +938,133 @@ export default function DispatchTrucksPage({ onPageChange }) {
             <span>Truck positions refresh every 30 seconds. Times shown are the last report received from Bouncie.</span>
             <span className="shrink-0 font-black text-slate-700">Zoom {mapZoom}</span>
           </div>
+
+          {selectedTruck ? (
+            <div className="border-t border-slate-200 px-4 py-5 sm:px-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.15em] text-blue-600">
+                    Daily truck history
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">
+                    {selectedTruck.title}
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Trips for the selected day are drawn in blue on the map.
+                  </p>
+                </div>
+
+                <label className="w-full max-w-xs">
+                  <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
+                    History date
+                  </span>
+                  <span className="flex min-h-12 items-center gap-2 rounded-2xl border border-slate-300 bg-white px-3 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
+                    <CalendarDays className="h-4 w-4 text-blue-600" aria-hidden="true" />
+                    <input
+                      type="date"
+                      value={historyDate}
+                      max={getTodayDateInputValue()}
+                      onChange={(event) => setHistoryDate(event.target.value)}
+                      className="min-w-0 flex-1 bg-transparent text-sm font-black text-slate-900 outline-none"
+                    />
+                  </span>
+                </label>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Trips</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950">{normalizedDailyTrips.length}</p>
+                </div>
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-blue-700">Miles driven</p>
+                  <p className="mt-1 text-2xl font-black text-blue-950">{dailyTripTotals.distance.toFixed(1)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Drive time</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950">{formatDuration(dailyTripTotals.durationMinutes)}</p>
+                </div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">Idle time</p>
+                  <p className="mt-1 text-2xl font-black text-amber-950">{formatDuration(dailyTripTotals.idleMinutes)}</p>
+                </div>
+              </div>
+
+              {historyError ? (
+                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
+                  {historyError}
+                </div>
+              ) : isHistoryLoading ? (
+                <div className="mt-4 flex min-h-32 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 text-sm font-black text-slate-500">
+                  <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Loading daily history…
+                </div>
+              ) : normalizedDailyTrips.length === 0 ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+                  <Route className="mx-auto h-7 w-7 text-slate-400" aria-hidden="true" />
+                  <p className="mt-3 text-sm font-black text-slate-700">No trips reported for this day</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">Choose another date to review this truck’s movement history.</p>
+                </div>
+              ) : (
+                <div className="mt-4 space-y-3">
+                  {normalizedDailyTrips.map((trip, tripIndex) => {
+                    const startPoint = trip.coordinates[0] || null;
+                    const endPoint = trip.coordinates.at(-1) || null;
+                    const timeZone = trip.timeZone || "America/Boise";
+
+                    return (
+                      <article
+                        key={trip.transactionId || `${trip.startTime}-${tripIndex}`}
+                        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                      >
+                        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span className="flex h-11 min-w-11 items-center justify-center rounded-xl bg-blue-600 text-sm font-black text-white">
+                              {tripIndex + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-base font-black text-slate-950">
+                                {formatTripTime(trip.startTime, timeZone)} – {formatTripTime(trip.endTime, timeZone)}
+                              </p>
+                              <p className="mt-1 truncate text-xs font-semibold text-slate-500">
+                                {formatCoordinate(startPoint)} → {formatCoordinate(endPoint)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                            <span className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
+                              <Route className="h-4 w-4" aria-hidden="true" />
+                              {(Number(trip.distance) || 0).toFixed(1)} mi
+                            </span>
+                            <span className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700">
+                              <Timer className="h-4 w-4" aria-hidden="true" />
+                              {formatDuration(trip.durationMinutes)}
+                            </span>
+                            <span className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700">
+                              <Gauge className="h-4 w-4" aria-hidden="true" />
+                              {Math.round(Number(trip.averageSpeed) || 0)} avg
+                            </span>
+                            {startPoint ? (
+                              <a
+                                href={`https://www.google.com/maps/dir/?api=1&origin=${startPoint.latitude},${startPoint.longitude}&destination=${endPoint?.latitude || startPoint.latitude},${endPoint?.longitude || startPoint.longitude}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                              >
+                                View route
+                                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                              </a>
+                            ) : null}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : null}
         </section>
       </div>
     </PageContainer>
