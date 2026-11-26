@@ -4,7 +4,6 @@ import {
   CalendarDays,
   Clock3,
   ExternalLink,
-  Gauge,
   LocateFixed,
   MapPin,
   Minus,
@@ -287,18 +286,22 @@ function sampleTripCoordinates(points, maximumPoints = 240) {
 function formatTripTime(value, timeZone) {
   if (!value) return "Time unavailable";
 
-  try {
-    return new Date(value).toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: timeZone || "America/Boise",
-    });
-  } catch {
-    return new Date(value).toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+  const tripDate = new Date(value);
+
+  if (Number.isNaN(tripDate.getTime())) return "Time unavailable";
+
+  const options = {
+    hour: "numeric",
+    minute: "2-digit",
+  };
+
+  // Bouncie can return a numeric offset such as "-0700", which Intl does not
+  // accept as a time-zone name. In that case the browser's local time is used.
+  if (typeof timeZone === "string" && timeZone.includes("/")) {
+    options.timeZone = timeZone;
   }
+
+  return tripDate.toLocaleTimeString([], options);
 }
 
 function getTripDurationMinutes(trip) {
@@ -335,6 +338,142 @@ async function readApiJson(response, routeName) {
   const responseText = await response.text();
   throw new Error(
     `${routeName} returned ${response.status} instead of JSON. ${responseText.slice(0, 120)}`,
+  );
+}
+
+function getApiErrorMessage(value, fallbackMessage) {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (value?.message && typeof value.message === "string") return value.message;
+
+  return fallbackMessage;
+}
+
+function DailyTruckHistoryPanel({
+  dailyTripTotals,
+  historyDate,
+  historyError,
+  isHistoryLoading,
+  normalizedDailyTrips,
+  onHistoryDateChange,
+}) {
+  return (
+    <div className="mt-3 overflow-hidden rounded-2xl border border-blue-200 bg-blue-50/60">
+      <div className="border-b border-blue-200 bg-white px-3 py-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-600">
+              Daily history
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              Routes appear in blue on the map.
+            </p>
+          </div>
+          <label className="min-w-0 max-w-[10.5rem]">
+            <span className="sr-only">History date</span>
+            <span className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-300 bg-white px-2 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
+              <CalendarDays className="h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
+              <input
+                type="date"
+                value={historyDate}
+                max={getTodayDateInputValue()}
+                onChange={(event) => onHistoryDateChange(event.target.value)}
+                className="min-w-0 flex-1 bg-transparent text-xs font-black text-slate-900 outline-none"
+              />
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 p-3">
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+          <p className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Trips</p>
+          <p className="mt-0.5 text-lg font-black text-slate-950">{normalizedDailyTrips.length}</p>
+        </div>
+        <div className="rounded-xl border border-blue-200 bg-white px-3 py-2">
+          <p className="text-[9px] font-black uppercase tracking-[0.1em] text-blue-700">Miles</p>
+          <p className="mt-0.5 text-lg font-black text-blue-950">{dailyTripTotals.distance.toFixed(1)}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+          <p className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-500">Drive time</p>
+          <p className="mt-0.5 text-sm font-black text-slate-950">{formatDuration(dailyTripTotals.durationMinutes)}</p>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-white px-3 py-2">
+          <p className="text-[9px] font-black uppercase tracking-[0.1em] text-amber-700">Idle time</p>
+          <p className="mt-0.5 text-sm font-black text-amber-950">{formatDuration(dailyTripTotals.idleMinutes)}</p>
+        </div>
+      </div>
+
+      {historyError ? (
+        <div className="mx-3 mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-xs font-black text-red-700">
+          {historyError}
+        </div>
+      ) : isHistoryLoading ? (
+        <div className="mx-3 mb-3 flex min-h-24 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs font-black text-slate-500">
+          <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Loading daily history…
+        </div>
+      ) : normalizedDailyTrips.length === 0 ? (
+        <div className="mx-3 mb-3 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-6 text-center">
+          <Route className="mx-auto h-6 w-6 text-slate-400" aria-hidden="true" />
+          <p className="mt-2 text-xs font-black text-slate-700">No trips reported for this day</p>
+        </div>
+      ) : (
+        <div className="space-y-2 px-3 pb-3">
+          {normalizedDailyTrips.map((trip, tripIndex) => {
+            const startPoint = trip.coordinates[0] || null;
+            const endPoint = trip.coordinates.at(-1) || null;
+            const timeZone = typeof trip.timeZone === "string" ? trip.timeZone : "";
+
+            return (
+              <article
+                key={trip.transactionId || `${trip.startTime}-${tripIndex}`}
+                className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-blue-600 text-xs font-black text-white">
+                    {tripIndex + 1}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-black text-slate-950">
+                      {formatTripTime(trip.startTime, timeZone)} – {formatTripTime(trip.endTime, timeZone)}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10px] font-semibold text-slate-500">
+                      Start {formatCoordinate(startPoint)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                  <span className="flex items-center justify-center gap-1 rounded-lg bg-blue-50 px-2 py-1.5 text-[10px] font-black text-blue-800">
+                    <Route className="h-3 w-3" aria-hidden="true" />
+                    {(Number(trip.distance) || 0).toFixed(1)} mi
+                  </span>
+                  <span className="flex items-center justify-center gap-1 rounded-lg bg-slate-100 px-2 py-1.5 text-[10px] font-black text-slate-700">
+                    <Timer className="h-3 w-3" aria-hidden="true" />
+                    {formatDuration(trip.durationMinutes)}
+                  </span>
+                  {startPoint ? (
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&origin=${startPoint.latitude},${startPoint.longitude}&destination=${endPoint?.latitude || startPoint.latitude},${endPoint?.longitude || startPoint.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-black text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Route
+                      <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                    </a>
+                  ) : (
+                    <span className="rounded-lg bg-slate-100 px-2 py-1.5 text-center text-[10px] font-black text-slate-400">
+                      No route
+                    </span>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -552,7 +691,12 @@ export default function DispatchTrucksPage({ onPageChange }) {
         );
 
         if (!historyResponse.ok) {
-          throw new Error(historyData.error || "Unable to load truck history.");
+          throw new Error(
+            getApiErrorMessage(
+              historyData.error,
+              "Unable to load truck history.",
+            ),
+          );
         }
 
         setDailyTrips(
@@ -744,13 +888,13 @@ export default function DispatchTrucksPage({ onPageChange }) {
         </div>
       </div>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[22rem_minmax(0,1fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[28rem_minmax(0,1fr)]">
         <aside className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-4 py-4">
             <p className="text-xs font-black uppercase tracking-[0.15em] text-[#FC2C38]">Bouncie vehicles</p>
             <h2 className="mt-1 text-xl font-black text-slate-950">Truck status</h2>
           </div>
-          <div className="max-h-[42rem] space-y-2 overflow-y-auto p-3">
+          <div className="max-h-[54rem] space-y-2 overflow-y-auto p-3">
             {isLoading && truckRows.length === 0 ? (
               <div className="flex min-h-44 items-center justify-center gap-2 text-sm font-black text-slate-500">
                 <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -762,39 +906,55 @@ export default function DispatchTrucksPage({ onPageChange }) {
                 <p className="mt-3 text-sm font-black text-slate-700">No Bouncie trucks found</p>
               </div>
             ) : (
-              truckRows.map((truckRow) => (
-                <button
-                  key={truckRow.id}
-                  type="button"
-                  onClick={() => selectTruck(truckRow)}
-                  className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
-                    selectedVehicleId === truckRow.id
-                      ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className={`flex h-11 min-w-11 items-center justify-center rounded-xl px-2 text-xs font-black text-white ${truckRow.isMoving ? "bg-emerald-600" : "bg-slate-800"}`}>
-                      {truckRow.badge}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-black text-slate-950">{truckRow.title}</span>
-                        <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] ${truckRow.isMoving ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
-                          {truckRow.isMoving ? "Moving" : "Parked"}
+              truckRows.map((truckRow) => {
+                const isSelected = selectedVehicleId === truckRow.id;
+
+                return (
+                  <div key={truckRow.id}>
+                    <button
+                      type="button"
+                      onClick={() => selectTruck(truckRow)}
+                      className={`w-full rounded-2xl border px-3 py-3 text-left transition ${
+                        isSelected
+                          ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100"
+                          : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className={`flex h-11 min-w-11 items-center justify-center rounded-xl px-2 text-xs font-black text-white ${truckRow.isMoving ? "bg-emerald-600" : "bg-slate-800"}`}>
+                          {truckRow.badge}
                         </span>
-                      </span>
-                      <span className="mt-1 block truncate text-xs font-semibold text-slate-500">
-                        {truckRow.location || "Location not reported"}
-                      </span>
-                      <span className="mt-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
-                        <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                        {truckRow.lastUpdated || "Report time unavailable"}
-                      </span>
-                    </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-black text-slate-950">{truckRow.title}</span>
+                            <span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-[0.08em] ${truckRow.isMoving ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                              {truckRow.isMoving ? "Moving" : "Parked"}
+                            </span>
+                          </span>
+                          <span className="mt-1 block truncate text-xs font-semibold text-slate-500">
+                            {truckRow.location || "Location not reported"}
+                          </span>
+                          <span className="mt-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                            <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                            {truckRow.lastUpdated || "Report time unavailable"}
+                          </span>
+                        </span>
+                      </div>
+                    </button>
+
+                    {isSelected ? (
+                      <DailyTruckHistoryPanel
+                        dailyTripTotals={dailyTripTotals}
+                        historyDate={historyDate}
+                        historyError={historyError}
+                        isHistoryLoading={isHistoryLoading}
+                        normalizedDailyTrips={normalizedDailyTrips}
+                        onHistoryDateChange={setHistoryDate}
+                      />
+                    ) : null}
                   </div>
-                </button>
-              ))
+                );
+              })
             )}
           </div>
         </aside>
@@ -939,132 +1099,6 @@ export default function DispatchTrucksPage({ onPageChange }) {
             <span className="shrink-0 font-black text-slate-700">Zoom {mapZoom}</span>
           </div>
 
-          {selectedTruck ? (
-            <div className="border-t border-slate-200 px-4 py-5 sm:px-6">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.15em] text-blue-600">
-                    Daily truck history
-                  </p>
-                  <h2 className="mt-1 text-2xl font-black text-slate-950">
-                    {selectedTruck.title}
-                  </h2>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                    Trips for the selected day are drawn in blue on the map.
-                  </p>
-                </div>
-
-                <label className="w-full max-w-xs">
-                  <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">
-                    History date
-                  </span>
-                  <span className="flex min-h-12 items-center gap-2 rounded-2xl border border-slate-300 bg-white px-3 shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100">
-                    <CalendarDays className="h-4 w-4 text-blue-600" aria-hidden="true" />
-                    <input
-                      type="date"
-                      value={historyDate}
-                      max={getTodayDateInputValue()}
-                      onChange={(event) => setHistoryDate(event.target.value)}
-                      className="min-w-0 flex-1 bg-transparent text-sm font-black text-slate-900 outline-none"
-                    />
-                  </span>
-                </label>
-              </div>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Trips</p>
-                  <p className="mt-1 text-2xl font-black text-slate-950">{normalizedDailyTrips.length}</p>
-                </div>
-                <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-blue-700">Miles driven</p>
-                  <p className="mt-1 text-2xl font-black text-blue-950">{dailyTripTotals.distance.toFixed(1)}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">Drive time</p>
-                  <p className="mt-1 text-2xl font-black text-slate-950">{formatDuration(dailyTripTotals.durationMinutes)}</p>
-                </div>
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-amber-700">Idle time</p>
-                  <p className="mt-1 text-2xl font-black text-amber-950">{formatDuration(dailyTripTotals.idleMinutes)}</p>
-                </div>
-              </div>
-
-              {historyError ? (
-                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-700">
-                  {historyError}
-                </div>
-              ) : isHistoryLoading ? (
-                <div className="mt-4 flex min-h-32 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 text-sm font-black text-slate-500">
-                  <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  Loading daily history…
-                </div>
-              ) : normalizedDailyTrips.length === 0 ? (
-                <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
-                  <Route className="mx-auto h-7 w-7 text-slate-400" aria-hidden="true" />
-                  <p className="mt-3 text-sm font-black text-slate-700">No trips reported for this day</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">Choose another date to review this truck’s movement history.</p>
-                </div>
-              ) : (
-                <div className="mt-4 space-y-3">
-                  {normalizedDailyTrips.map((trip, tripIndex) => {
-                    const startPoint = trip.coordinates[0] || null;
-                    const endPoint = trip.coordinates.at(-1) || null;
-                    const timeZone = trip.timeZone || "America/Boise";
-
-                    return (
-                      <article
-                        key={trip.transactionId || `${trip.startTime}-${tripIndex}`}
-                        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                      >
-                        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <span className="flex h-11 min-w-11 items-center justify-center rounded-xl bg-blue-600 text-sm font-black text-white">
-                              {tripIndex + 1}
-                            </span>
-                            <div className="min-w-0">
-                              <p className="text-base font-black text-slate-950">
-                                {formatTripTime(trip.startTime, timeZone)} – {formatTripTime(trip.endTime, timeZone)}
-                              </p>
-                              <p className="mt-1 truncate text-xs font-semibold text-slate-500">
-                                {formatCoordinate(startPoint)} → {formatCoordinate(endPoint)}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                            <span className="flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
-                              <Route className="h-4 w-4" aria-hidden="true" />
-                              {(Number(trip.distance) || 0).toFixed(1)} mi
-                            </span>
-                            <span className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700">
-                              <Timer className="h-4 w-4" aria-hidden="true" />
-                              {formatDuration(trip.durationMinutes)}
-                            </span>
-                            <span className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700">
-                              <Gauge className="h-4 w-4" aria-hidden="true" />
-                              {Math.round(Number(trip.averageSpeed) || 0)} avg
-                            </span>
-                            {startPoint ? (
-                              <a
-                                href={`https://www.google.com/maps/dir/?api=1&origin=${startPoint.latitude},${startPoint.longitude}&destination=${endPoint?.latitude || startPoint.latitude},${endPoint?.longitude || startPoint.longitude}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
-                              >
-                                View route
-                                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                              </a>
-                            ) : null}
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : null}
         </section>
       </div>
     </PageContainer>
